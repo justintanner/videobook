@@ -14,6 +14,7 @@
     "src/test-client.ts",
     "src/test-fetch-guard.ts",
     "src/test-goals.ts",
+    "src/test-legacy-goals.ts",
     "src/test-media-fixtures.ts",
     "src/test-short-stub.ts",
     "src/tools/xai-realtime-endpoint.ts"

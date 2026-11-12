@@ -2,20 +2,23 @@ import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { cancelChainRun, getChainRun, type ChainRunRecord } from "./chain-executor.js";
 import { coldOpenSource } from "./cold-open.js";
-import { emptyGoalEstimates, findGoalCell, goalContent, goalShortContent, requireGoalContent, requireGoalShortContent, saveGoal, writeGoalContent, writeGoalShortContent, type GoalRecord, type GoalStageOutput } from "./goal-store.js";
-import { GOAL_VIDEO_TOOL, refreshGoalPlanV3, type GoalGenerationStage } from "./goal-plan.js";
+import {
+  emptyGoalEstimates, findGoalCell, goalShortContent, legacyGoalText, requireGoalShortContent, saveGoal, writeGoalShortContent,
+  type GoalGenerationStage, type GoalRecord, type GoalStageOutput,
+} from "./goal-store.js";
 import { suggestedColdOpen } from "./lightning-defaults.js";
-import { mutateNotebook } from "./notebook-mutations.js";
-import { goalStageAttempts, goalStillStaleReason } from "./goal-stills.js";
+import { goalStageAttempts } from "./goal-stills.js";
 import { refreshGoalShortPlan } from "./goal-short-plan.js";
 import { readMainCharacter } from "./goal-short-character.js";
 import { currentShortClip, nextShortSegment, shortSegmentStale } from "./goal-short-runtime.js";
 
-export const LEGACY_GOAL_MESSAGE = "Goal mode now starts from character images. Start a new /goal.";
+export const LEGACY_GOAL_MESSAGE = "This goal was made by an earlier /goal. Its images and videos stay in the notebook. Start a new /goal.";
 const SHORT_STALE_MESSAGE = "The frame or an earlier clip changed after this clip was made.";
+const LEGACY_STAGES = ["frame", "storyboards", "videos"] as const;
+const ACTIVE_LEGACY_STATUSES = new Set(["planning", "review", "running"]);
 
 export function activeGoalStage(goal: GoalRecord): GoalGenerationStage {
-  return goal.stage === "assembly" ? "videos" : goal.stage;
+  return goal.stage === "frame" ? "frame" : "videos";
 }
 
 function outputString(outputs: Record<string, unknown> | null, key: string): string | null {
@@ -45,13 +48,13 @@ function goalChainSteps(engine: Engine, document: NotebookDocument, chainId: str
 }
 
 function stageOutputIndex(stepId: string): number {
-  if (stepId === "frame" || stepId === "scene" || stepId === "video") return 0;
+  if (stepId === "frame") return 0;
   return Number(/\d+$/u.exec(stepId)?.[0]) - 1;
 }
 
 function completedStageOutputs(engine: Engine, goal: GoalRecord, document: NotebookDocument): GoalStageOutput[] {
   return goalChainSteps(engine, document, goal.chainId).flatMap(step => {
-    if (step.status !== "completed" || !step.artifactId || step.id === "assemble") return [];
+    if (step.status !== "completed" || !step.artifactId) return [];
     const index = stageOutputIndex(step.id);
     if (!Number.isInteger(index) || index < 0) return [];
     const cell = document.cells.find(candidate => candidate.id === step.outputCellId);
@@ -70,18 +73,9 @@ function allGoalChainSteps(engine: Engine, document: NotebookDocument, chainId: 
   });
 }
 
-export async function writeGoalCombinationState(engine: Engine, goal: GoalRecord, error: string | null): Promise<GoalRecord> {
-  if (!goal.combined) return goal;
-  const updated = await mutateNotebook(engine, goal.notebookId, "goal_combine_complete", document => ({
-    ...document, cells: document.cells.map(cell => cell.id === goal.combined?.cellId ? { ...cell, inputs: { ...cell.inputs, state: error ? "error" : "completed" } } : cell),
-  }));
-  if (!updated.ok) throw new Error(updated.error.message);
-  return saveGoal(engine, { ...goal, combined: { ...goal.combined, status: error ? "failed" : "completed", error } });
-}
-
 export function reconcileFinish(engine: Engine, goal: GoalRecord): GoalRecord {
   const finish = goal.finish;
-  if ((goal.planVersion !== 3 && goal.planVersion !== 4) || !finish || finish.status !== "running") return goal;
+  if (goal.planVersion !== 4 || !finish || finish.status !== "running") return goal;
   const job = finish.jobId ? engine.jobs.queue.get(finish.jobId) : null;
   if (job && ["queued", "running", "completing"].includes(job.state)) return goal;
   if (job?.state === "done") {
@@ -96,7 +90,7 @@ export function reconcileFinish(engine: Engine, goal: GoalRecord): GoalRecord {
 }
 
 async function coldOpenReview(engine: Engine, goal: GoalRecord) {
-  if ((goal.planVersion !== 3 && goal.planVersion !== 4) || !goal.finish?.sourceArtifactId) return null;
+  if (goal.planVersion !== 4 || !goal.finish?.sourceArtifactId) return null;
   try {
     const source = await coldOpenSource(engine, goal.finish.sourceArtifactId, goal.finish.sourceObjectHash ?? undefined);
     const approved = goal.finish.status !== "review" && goal.finish.startSeconds != null && goal.finish.endSeconds != null;
@@ -127,17 +121,17 @@ async function settledShortStage(engine: Engine, goal: GoalRecord, next: GoalRec
   return { ...next, stage: goal.resumeStage ?? "videos", status: keepCompleted ? "completed" : "review", error: null, ...cleared, finish };
 }
 
+async function stopLegacyGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
+  if (!ACTIVE_LEGACY_STATUSES.has(goal.status)) return goal;
+  if (goal.chainId) cancelChainRun(engine, goal.chainId);
+  for (const jobId of [goal.planningJobId, goal.finish?.status === "running" ? goal.finish.jobId : null, goal.combined?.status === "running" ? goal.combined.jobId : null]) {
+    if (jobId) await engine.jobs.queue.abort(jobId, LEGACY_GOAL_MESSAGE);
+  }
+  return saveGoal(engine, { ...goal, status: "failed", error: LEGACY_GOAL_MESSAGE });
+}
+
 export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: NotebookDocument): Promise<GoalRecord> {
-  if (goal.planVersion === 1) {
-    if (!["planning", "review", "running"].includes(goal.status)) return goal;
-    if (goal.chainId) cancelChainRun(engine, goal.chainId);
-    if (goal.planningJobId) await engine.jobs.queue.abort(goal.planningJobId, LEGACY_GOAL_MESSAGE);
-    return saveGoal(engine, { ...goal, status: "failed", error: LEGACY_GOAL_MESSAGE });
-  }
-  if (goal.combined?.status === "running") {
-    const job = goal.combined.jobId ? engine.jobs.queue.get(goal.combined.jobId) : null;
-    if (!job || ["failed", "aborted"].includes(job.state)) goal = await writeGoalCombinationState(engine, goal, job?.error?.message ?? "Combining was interrupted. Retry the combined video.");
-  }
+  if (goal.planVersion !== 4) return stopLegacyGoal(engine, goal);
   if (["completed", "cancelled", "review"].includes(goal.status)) return goal;
   if (goal.status === "planning") {
     const job = goal.planningJobId ? engine.jobs.queue.get(goal.planningJobId) : null;
@@ -157,67 +151,56 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
     return step?.status === "completed" && step.artifactId ? { ...attempt, artifactId: step.artifactId, cellId: step.outputCellId } : attempt;
   });
   let next: GoalRecord = { ...goal, stages: { ...goal.stages, [stage]: { ...run, outputs, ...(attempts ? { attempts } : {}) } } };
-  const assembled = stage === "videos" && goal.assembly?.artifactIds && JSON.stringify(goal.assembly.artifactIds) === JSON.stringify(outputs.map(output => output.artifactId));
-  if (chain.status === "completed" && goal.planVersion === 4) {
+  if (chain.status === "completed") {
     next = await settledShortStage(engine, goal, next, stage, run.outputs, outputs);
-  } else if (chain.status === "completed" || assembled && !goal.resumeStage) {
-    const content = requireGoalContent(engine, goal);
-    if (goal.planVersion === 3) {
-      const cleared = { resumeStage: null, resumeStatus: null, resumeOutputs: null, resumeFinish: null };
-      if (outputs.length !== 1) next = { ...next, status: "failed", error: "The stage finished without all of its media outputs. Retry the stage.", ...cleared };
-      else if (stage === "videos") {
-        next = {
-          ...next, status: "review", error: null, ...cleared,
-          finish: { status: "review", sourceArtifactId: outputs[0]!.artifactId, finalArtifactId: null, error: null },
-        };
-      } else {
-        const previousScene = run.outputs[0]?.artifactId ?? null;
-        await writeGoalContent(engine, goal, { ...content, revision: content.revision + 1 });
-        const sceneChanged = previousScene !== null && previousScene !== outputs[0]!.artifactId;
-        const finish = sceneChanged ? null : goal.finish ?? goal.resumeFinish ?? null;
-        const keepCompleted = finish?.status === "completed" && Boolean(finish.finalArtifactId);
-        next = {
-          ...next, stage: goal.resumeStage ?? "videos", status: keepCompleted ? "completed" : "review", error: null, ...cleared,
-          finish,
-        };
-      }
-    } else {
-    const stagedPlan = content.plan && "shots" in content.plan ? content.plan : null;
-    const shotCount = stagedPlan?.shots.length ?? 0;
-    const expected = stage === "frame" ? 1 : stage === "storyboards" && stagedPlan && "frameContinuity" in stagedPlan && stagedPlan.frameContinuity ? 2 * shotCount : shotCount;
-    if (outputs.length !== expected) next = { ...next, status: "failed", error: "The stage finished without all of its media outputs. Retry the stage." };
-    else if (stage === "videos") {
-      next = { ...next, status: goal.assembly || expected === 1 || goal.resumeStage ? "completed" : "failed", error: goal.assembly || expected === 1 || goal.resumeStage ? null : "The finished clips still need to be assembled" };
-      if (goal.combined && JSON.stringify(run.outputs.map(output => output.artifactId)) !== JSON.stringify(outputs.map(output => output.artifactId))) next.combined = { ...goal.combined, status: "failed", error: "Video selection changed. Assemble the selected clips before combining again." };
-    }
-    else {
-      await writeGoalContent(engine, goal, { ...content, revision: content.revision + 1 });
-      next = { ...next, stage: goal.resumeStage ?? (stage === "frame" ? "storyboards" : "videos"), status: goal.resumeStatus ?? "review", error: null };
-    }
-    next = { ...next, resumeStage: null, resumeStatus: null, resumeOutputs: null };
-    }
   } else if (["failed", "interrupted", "cancelled"].includes(chain.status)) {
     next = { ...next, status: chain.status as "failed" | "interrupted" | "cancelled", error: chain.error,
       ...(goal.resumeOutputs ? { stages: { ...next.stages, [stage]: { ...next.stages[stage]!, outputs: goal.resumeOutputs } } } : {}),
     };
   } else {
-    next = { ...next, stage: chain.steps.some(step => step.id === "assemble" && step.status === "running") ? "assembly" : stage, status: "running", error: null };
+    next = { ...next, stage, status: "running", error: null };
   }
   return JSON.stringify(next) === JSON.stringify(goal) ? goal : saveGoal(engine, next);
 }
 
-export async function publicGoal(engine: Engine, goal: GoalRecord, document: NotebookDocument) {
+function legacyOutputs(engine: Engine, goal: GoalRecord, document: NotebookDocument) {
+  const address = (cellId: string | null) => {
+    const cell = cellId ? document.cells.find(candidate => candidate.id === cellId) : undefined;
+    return cell ? notebookGridTag(cell.slot) : null;
+  };
+  if (goal.planVersion === 1) {
+    return goalChainSteps(engine, document, goal.chainId).flatMap(step => step.status === "completed" && step.artifactId
+      ? [{ stage: "videos" as const, artifactId: step.artifactId, cellId: step.outputCellId, address: address(step.outputCellId) }] : []);
+  }
+  return LEGACY_STAGES.flatMap(stage => [...(goal.stages[stage]?.outputs ?? [])].sort((a, b) => a.index - b.index)
+    .map(output => ({ stage, artifactId: output.artifactId, cellId: output.cellId, address: address(output.cellId) })));
+}
+
+function legacyGoalSnapshot(engine: Engine, goal: GoalRecord, document: NotebookDocument) {
   const cell = findGoalCell(document, goal);
-  const short = goal.planVersion === 4 && cell ? goalShortContent(cell) : null;
+  const text = cell ? legacyGoalText(cell) : { title: null, brief: "" };
+  return {
+    kind: "video-goal" as const, legacy: true as const,
+    goalId: goal.goalId, bookId: goal.bookId, notebookId: goal.notebookId, cellId: goal.cellId, planVersion: goal.planVersion,
+    address: cell ? notebookGridTag(cell.slot) : null, title: text.title, brief: text.brief,
+    status: goal.status, error: goal.error, outputs: legacyOutputs(engine, goal, document),
+    finalArtifactId: goal.finish?.finalArtifactId ?? (goal.combined?.status === "completed" ? goal.combined.artifactId : null),
+    dismissedAt: goal.dismissedAt, createdAt: goal.createdAt, updatedAt: goal.updatedAt,
+  };
+}
+
+async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: NotebookDocument) {
+  const cell = findGoalCell(document, goal);
+  const short = cell ? goalShortContent(cell) : null;
   const content = short
-    ? { brief: short.brief, characters: [], revision: short.revision, plan: null, estimate: short.estimate }
-    : cell ? goalContent(cell) : { brief: "", characters: [], revision: 0, plan: null, estimate: emptyGoalEstimates() };
-  const stages = Object.fromEntries(await Promise.all(Object.entries(goal.stages).map(async ([stage, run]) => [stage, {
+    ? { brief: short.brief, revision: short.revision, estimate: short.estimate }
+    : { brief: "", revision: 0, estimate: emptyGoalEstimates() };
+  const stages = Object.fromEntries(Object.entries(goal.stages).map(([stage, run]) => [stage, {
     ...run,
-    ...(stage === "videos" ? { attempts: goalStageAttempts(engine, goal, "videos") } : {}),
-    outputs: await Promise.all(run.outputs.map(async output => {
+    ...(stage === "videos" ? { attempts: goalStageAttempts(goal, "videos") } : {}),
+    outputs: run.outputs.map(output => {
       const outputCell = document.cells.find(candidate => candidate.id === output.cellId);
-      const versions = goalStageAttempts(engine, goal, stage as GoalGenerationStage).filter(attempt => attempt.index === output.index).slice().reverse().map(attempt => {
+      const versions = goalStageAttempts(goal, stage as GoalGenerationStage).filter(attempt => attempt.index === output.index).slice().reverse().map(attempt => {
         const versionCell = document.cells.find(candidate => candidate.id === attempt.cellId);
         const step = getChainRun(engine, attempt.chainId)?.steps.find(candidate => candidate.id === attempt.stepId);
         return {
@@ -225,55 +208,24 @@ export async function publicGoal(engine: Engine, goal: GoalRecord, document: Not
           status: step?.status ?? "interrupted" as const, current: attempt.artifactId === output.artifactId,
         };
       });
-      const stagedPlan = content.plan && "version" in content.plan && content.plan.version === 2 ? content.plan : null;
-      const stale = stagedPlan && (stage === "frame" || stage === "storyboards" || stage === "videos")
-        ? await goalStillStaleReason(engine, goal, document, stagedPlan, content.characters, stage, output)
-        : short && stage === "videos" && shortSegmentStale(goal, output.index) ? SHORT_STALE_MESSAGE : null;
+      const stale = stage === "videos" && shortSegmentStale(goal, output.index) ? SHORT_STALE_MESSAGE : null;
       return { ...output, address: outputCell ? notebookGridTag(outputCell.slot) : null, versions, stale };
-    })),
+    }),
     steps: goalChainSteps(engine, document, run.chainId),
     allSteps: [...run.previousChainIds, run.chainId].flatMap(chainId => allGoalChainSteps(engine, document, chainId)),
-  }] satisfies [string, unknown])));
-  const shotPlan = content.plan && "shots" in content.plan ? content.plan : null;
-  const stillCount = shotPlan ? shotPlan.shots.length * ("frameContinuity" in shotPlan && shotPlan.frameContinuity ? 2 : 1) : 1;
-  const displayedPlan = content.plan && "version" in content.plan && content.plan.version === 3 ? refreshGoalPlanV3(content.plan, document) : content.plan;
-  const v3Plan = displayedPlan && "version" in displayedPlan && displayedPlan.version === 3;
-  const still = v3Plan
-    ? goal.stage === "videos" || goal.stage === "assembly" ? content.estimate.videos : content.estimate.frame
-    : goal.stage === "videos"
-      ? { ...content.estimate.storyboards, usd: content.estimate.storyboards.usd === null ? null : content.estimate.storyboards.usd / stillCount }
-      : content.estimate.frame;
+  }] satisfies [string, unknown]));
   return {
-    kind: "video-goal" as const, ...goal, ...content, plan: displayedPlan,
+    kind: "video-goal" as const, legacy: false as const, ...goal, ...content,
     ...(short?.plan ? { shortPlan: refreshGoalShortPlan(short.plan, document), mainCharacterReferences: readMainCharacter(engine).referenceArtifactIds.length } : {}),
     finish: goal.finish ?? null,
     finalArtifactId: goal.finish?.finalArtifactId ?? null,
     coldOpen: await coldOpenReview(engine, goal),
-    estimate: { ...content.estimate, still },
     address: cell ? notebookGridTag(cell.slot) : null,
-    assemblyStale: goalAssemblyStale(engine, goal),
     stages: stages as Partial<Record<GoalGenerationStage, NonNullable<typeof stages[string]>>>,
     steps: goalChainSteps(engine, document, goal.chainId),
   };
 }
 
-export function goalAssemblyStale(engine: Engine, goal: GoalRecord): boolean {
-  if (!goal.assembly) return false;
-  const clips = engine.sequences.getPrimary().clips;
-  const sources = goal.assembly.artifactIds ?? goal.clipIds.map(id => clips.find(clip => clip.clipId === id)?.source.artifactId ?? null);
-  return JSON.stringify(sources) !== JSON.stringify(completedGoalVideos(engine, goal));
-}
-
-export function completedGoalVideos(engine: Engine, goal: GoalRecord): string[] {
-  const run = goal.stages.videos;
-  const selected = new Map((run?.outputs ?? []).map(output => [output.index, output.artifactId]));
-  const chainId = run?.chainId ?? (goal.planVersion === 1 ? goal.chainId : null);
-  if (goal.status === "running" || selected.size === 0) {
-    for (const step of chainId ? getChainRun(engine, chainId)?.steps ?? [] : []) {
-      const id = outputString(step.outputs, "asset_id") ?? outputString(step.outputs, "vid_asset_id");
-      const index = stageOutputIndex(step.id);
-      if (step.tool === GOAL_VIDEO_TOOL && step.status === "completed" && id && Number.isInteger(index) && index >= 0) selected.set(index, id);
-    }
-  }
-  return [...selected.entries()].sort(([left], [right]) => left - right).map(([, id]) => id);
+export async function publicGoal(engine: Engine, goal: GoalRecord, document: NotebookDocument) {
+  return goal.planVersion === 4 ? shortGoalSnapshot(engine, goal, document) : legacyGoalSnapshot(engine, goal, document);
 }

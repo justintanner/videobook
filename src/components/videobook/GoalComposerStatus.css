@@ -69,15 +69,6 @@
   color: #b9a9f2;
 }
 
-.goal-status-style {
-  flex-shrink: 0;
-  padding: 2px 5px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  font-size: 10px;
-  line-height: 1.2;
-}
-
 .goal-status-kind {
   flex: 0 0 auto;
   color: #b9a9f2;
@@ -311,7 +302,6 @@
   .goal-status-kind { display: none; }
   .goal-status-flag { display: none; }
   .goal-status-button { gap: 4px; padding-inline: 4px; }
-  .goal-status-style { font-size: 9px; padding-inline: 3px; }
   .goal-status-action { display: none; }
   .goal-status-long { display: none; }
   .goal-status-short { display: inline; }

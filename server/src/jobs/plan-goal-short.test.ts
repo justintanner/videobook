@@ -17,7 +17,7 @@ import { shortTiming, SHORT_WORD_CEILINGS, type GoalShortDraft } from "../goal-s
 import { SHORT_AVOID, SHORT_RULES, shortBannedWords } from "../goal-short-rules.js";
 import { loadGuide } from "../tools/rewrite-prompt.js";
 import {
-  createGoalCell, emptyGoalEstimates, readGoal, readGoalCell, requireGoalShortContent, saveGoal, writeGoalShortContent, type GoalRecord,
+  createGoalShortCell, emptyGoalEstimates, readGoal, readGoalCell, requireGoalShortContent, saveGoal, type GoalRecord,
 } from "../goal-store.js";
 
 type ModelRequest = {
@@ -118,14 +118,13 @@ describe("plan_goal for a short", () => {
       extraReferences: [await reference(1)],
     };
     const goalId = uuidv7();
-    const cell = await createGoalCell(engine, notebookId, goalId, { brief, characters: [], revision: 1, plan: null, estimate: emptyGoalEstimates() });
+    const cell = await createGoalShortCell(engine, notebookId, goalId, { brief, revision: 1, draft, plan: null, estimate: emptyGoalEstimates() });
     const timestamp = new Date().toISOString();
     const goal = saveGoal(engine, {
       goalId, bookId: engine.book.get().bookId, notebookId, cellId: cell.id, requestId: goalId, status: "planning", planVersion: 4,
       stage: "frame", stages: {}, chainId: null, planningJobId: null, clipIds: [], trackId: null, assembly: null, error: null,
       dismissedAt: null, createdAt: timestamp, updatedAt: timestamp,
     });
-    await writeGoalShortContent(engine, goal, { brief, revision: 1, draft, plan: null, estimate: emptyGoalEstimates() });
     return goal;
   }
 

@@ -357,7 +357,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
     ...(regenerate ? stored : goal),
     stage, chainId: chain.chainId, status: "running", error: null,
     ...(regenerate ? { finish: null, resumeFinish: goal.finish ?? null } : stage === "videos" ? { finish: null } : {}),
-    resumeStage: regenerate ? goal.resumeStage ?? goal.stage : null,
+    resumeStage: regenerate ? goal.resumeStage ?? (goal.stage === "frame" ? "frame" : "videos") : null,
     resumeStatus: regenerate ? goal.status === "completed" || goal.resumeStatus === "completed" ? "completed" : "review" : null,
     resumeOutputs: regenerate ? previous?.outputs ?? [] : null,
     stages: { ...goal.stages, [stage]: {
@@ -382,7 +382,7 @@ export function selectShortVersion(engine: Engine, goal: GoalRecord, args: GoalA
   const index = z.number().int().nonnegative().parse(args.index);
   const artifactId = z.string().uuid().parse(args.artifact_id);
   const run = goal.stages[stage];
-  const attempts = goalStageAttempts(engine, goal, stage);
+  const attempts = goalStageAttempts(goal, stage);
   const attempt = attempts.find((item) => item.stage === stage && item.index === index && item.artifactId === artifactId);
   const step = attempt ? getChainRun(engine, attempt.chainId)?.steps.find((item) => item.id === attempt.stepId) : null;
   if (!run || !attempt || step?.status !== "completed") throw new Error("Choose a completed version of this goal's output");

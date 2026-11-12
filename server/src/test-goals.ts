@@ -1,58 +1,18 @@
 import { join } from "node:path";
 import sharp from "sharp";
-import { v7 as uuidv7 } from "uuid";
 import type { Engine } from "videobook-engine";
 import { expect } from "vitest";
-import { notebookGridTag } from "videobook-engine/notebook-grid";
-import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalPlanSchema, type GoalGenerationStage, type GoalPlan } from "./goal-plan.js";
-import { requireGoalContent, readGoal, saveGoal, type GoalStageOutput, type GoalStageRun } from "./goal-store.js";
-import { currentGoalCharacters } from "./goal-characters.js";
-import { preflightChainPlan } from "./chain-plan.js";
-import type { ChainRunRecord } from "./chain-executor.js";
 import { getChainRun } from "./chain-executor.js";
-import { getAllToolDefs } from "./tools/index.js";
-import { placeChainGeneration } from "./chain-generation.js";
 import { copyVideoFixture } from "./test-media-fixtures.js";
 import { probeVideo } from "./ffmpeg.js";
 import { registerMediaProbe } from "./notebook-media-ops.js";
 import { pauseBookQueueForTests, resumeBookQueueForTests } from "./queue.js";
 import { testBudget } from "./test-budget.js";
-import { goalAttemptFingerprints, goalStillAttempts } from "./goal-stills.js";
-import { extractVideoPoster } from "./video-poster.js";
 
-export function goalTestPlan(count = 3): GoalPlan {
-  return goalPlanSchema.parse({
-    version: 2, title: "The skateboard champion", continuity: "Character 1: terrier, red helmet. Character 2: tabby, blue scarf. Sunny park. Blue skateboard. Warm comic cinema.", aspectRatio: "9:16",
-    frame: { prompt: "Both characters stand beside the skateboard in the sunny park, full bodies visible." },
-    shots: Array.from({ length: count }, (_, index) => ({
-      title: `Park adventure ${index + 1}`, storyboardPrompt: "1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.",
-      videoPrompt: `Roll, stop. Birds, squeaky wheels. Action ${index + 1}.`, durationSeconds: 10,
-    })),
-  });
-}
-
-export function goalTestSimplePlan(count = 1): GoalPlan {
-  return goalPlanSchema.parse({
-    ...goalTestPlan(count), imageModel: "nano-banana-2-1", storyboardLayout: "six-panel", referenceRoles: ["scene", "character"], style: { id: "source", options: {} },
-    continuity: "Keep the source street, lighting and camera. Reference 2 replaces the interviewer.",
-    frame: { prompt: "Reference 2 interviews the woman in Reference 1; giant microphone." },
-    shots: goalTestPlan(count).shots.map(shot => ({ ...shot, durationSeconds: 20, storyboardPrompt: "Wide hook; interviewer raises microphone; woman responds; microphone grows; both react; beach payoff.", videoPrompt: "Natural gestures, lively timing. Street ambience, brief dialogue. No music." })),
-  });
-}
-
-async function goalTestImage(engine: Engine, label: string, color = "#cf593b", storyboardAspect?: GoalPlan["aspectRatio"], panelCount = 4): Promise<string> {
+async function goalTestImage(engine: Engine, label: string, color: string): Promise<string> {
   const created = await engine.artifacts.create("image", label);
   if (!created.ok) throw new Error(created.error.message);
-  const [width, height] = storyboardAspect === "16:9" ? [640, 360] : storyboardAspect === "1:1" ? [480, 480] : [360, 640];
-  const panels = ["#cf593b", "#2878b4", "#659653", "#9d70bc", "#c89840", "#378c83"].slice(0, panelCount).map((fill, index) => {
-    const x = (index % 2) * width / 2;
-    const y = Math.floor(index / 2) * height / (panelCount / 2);
-    return `<g transform="translate(${x} ${y})"><rect x="4" y="4" width="${width / 2 - 8}" height="${height / (panelCount / 2) - 8}" fill="${fill}"/><text x="16" y="34" fill="white" font-size="24">${index + 1}</text><circle cx="${width / 8 + index * 12}" cy="${height / 4}" r="18" fill="#f5ead9"/></g>`;
-  }).join("");
-  const bytes = storyboardAspect
-    ? await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#f5ead9"/>${panels}</svg>`)).png().toBuffer()
-    : await sharp({ create: { width: 96, height: 128, channels: 3, background: color } }).png().toBuffer();
-  const written = await engine.files.write(created.value.artifactId, "original.png", bytes);
+  const written = await engine.files.write(created.value.artifactId, "original.png", await sharp({ create: { width: 96, height: 128, channels: 3, background: color } }).png().toBuffer());
   if (!written.ok) throw new Error(written.error.message);
   return created.value.artifactId;
 }
@@ -69,89 +29,7 @@ export async function goalTestCharacters(engine: Engine, notebookId: string): Pr
   return ids;
 }
 
-export async function goalTestVideo(engine: Engine, root: string, color: string, size = { width: 160, height: 90 }): Promise<string> {
-  const path = join(root, `${uuidv7()}.mp4`);
-  await copyVideoFixture({ ...size, durationSec: 4, fps: 10, source: "color", color, audio: { frequency: 440 } }, path);
-  const created = await engine.artifacts.create("video", color);
-  if (!created.ok) throw new Error(created.error.message);
-  const artifactId = created.value.artifactId;
-  const written = await engine.files.writeFromPath(artifactId, "original.mp4", path);
-  if (!written.ok) throw new Error(written.error.message);
-  const probe = await probeVideo(path);
-  const metadata = await engine.metadata.artifacts.write(artifactId, "original", { duration: probe.duration, width: probe.width, height: probe.height, fps: probe.fps, hasAudio: probe.hasAudio });
-  if (!metadata.ok) throw new Error(metadata.error.message);
-  const manifest = await engine.files.manifest(artifactId);
-  if (!manifest.ok) throw new Error(manifest.error.message);
-  const stream = probe.videoStream!;
-  const registered = await engine.streams.register({ artifactId, sourcePath: "original.mp4", objectHash: manifest.value.files[0]!.objectHash, streamIndex: stream.index, kind: "video", codec: stream.codec, timeBase: stream.timeBase, durationTicks: stream.durationTicks, video: stream.video });
-  if (!registered.ok) throw new Error(registered.error.message);
-  const poster = await engine.files.write(artifactId, "original.jpg", await extractVideoPoster(path, probe.duration));
-  if (!poster.ok) throw new Error(poster.error.message);
-  return artifactId;
-}
-
-export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalGenerationStage, options: { failedIndex?: number; indexes?: number[]; videoIds?: string[]; legacy?: boolean; revise?: { index: number; feedback: string } } = {}): Promise<string> {
-  const goal = readGoal(engine, goalId);
-  const content = requireGoalContent(engine, goal);
-  const plan = goalPlanSchema.parse(content.plan);
-  const document = engine.notebooks.read(goal.notebookId);
-  if (!document.ok) throw new Error(document.error.message);
-  const characters = currentGoalCharacters(document.value, content.characters);
-  const address = (output: GoalStageOutput | undefined): string | undefined => {
-    const cell = document.value.cells.find(cell => cell.id === output?.cellId);
-    return cell ? notebookGridTag(cell.slot) : undefined;
-  };
-  const frame = address(goal.stages.frame?.outputs[0]) ?? characters[0]!.address;
-  const storyboards = plan.shots.map((_, index) => address(goal.stages.storyboards?.outputs.find(output => output.index === index)) ?? frame);
-  const endings = plan.frameContinuity ? plan.shots.map((_, index) => address(goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length)) ?? frame) : [];
-  const revise = options.revise;
-  const parent = revise ? goal.stages[stage]?.outputs.find(output => output.index === revise.index) : null;
-  const steps = revise && stage !== "videos" ? [compileReviseStillStep(plan, characters, stage, revise.index, address(parent!)!, revise.feedback, stage === "storyboards" ? frame : undefined)]
-    : stage === "frame" ? compileFrameSteps(plan, characters)
-    : stage === "storyboards" ? compileStoryboardSteps(plan, characters, frame, options.indexes)
-      : compileVideoSteps(goalId, plan, storyboards, endings, { frame, characters, indexes: options.indexes, feedback: revise?.feedback, assemble: !goal.stages.videos?.outputs.length });
-  const defs = getAllToolDefs(engine);
-  const checked = await preflightChainPlan({ action: "run", version: 1, book_id: goal.bookId, notebook_id: goal.notebookId, steps }, {
-    engine, bookId: goal.bookId, notebookId: goal.notebookId, toolSchemas: new Map(defs.map(def => [def.name, def.schema])), autoApplyTools: new Set(),
-    effectForTool: name => name === "assemble_goal" ? "mutation" : "generation",
-  });
-  if (!checked.ok) throw new Error(JSON.stringify(checked));
-  const chainId = uuidv7();
-  const timestamp = new Date().toISOString();
-  const records: ChainRunRecord["steps"] = [];
-  for (const [position, step] of checked.plan.steps.entries()) {
-    const index = step.id === "frame" ? 0 : Number(/\d+$/u.exec(step.id)?.[0]) - 1;
-    const fails = step.id === "assemble" || options.failedIndex === position;
-    const skipped = options.failedIndex !== undefined && position > options.failedIndex;
-    let outputs: Record<string, unknown> | null = null;
-    if (!fails && !skipped) {
-      const artifactId = options.videoIds?.[index] ?? await goalTestImage(engine, step.id, index % 2 ? "#2878b4" : "#cf593b", stage === "storyboards" && index < plan.shots.length ? plan.aspectRatio : undefined, plan.storyboardLayout === "six-panel" ? 6 : 4);
-      const placed = await placeChainGeneration({ engine, notebookId: goal.notebookId, tool: step.tool, placement: stage === "videos" ? "generate_video" : "generate_image", params: step.params, artifactId, runId: `${chainId}:${step.id}`, pins: step.pins });
-      outputs = { asset_id: artifactId, [stage === "videos" ? "vid_asset_id" : "img_asset_id"]: artifactId, cell_id: placed.outputCellId, address: placed.address, status: "completed" };
-    }
-    records.push({ id: step.id, tool: step.tool, params: step.params, pins: step.pins,
-      status: skipped ? "skipped" : fails ? "failed" : "completed", outputs, error: fails ? "Fixture stage interrupted" : null,
-      childJobIds: [], autoApply: false, effect: step.effect, requiresApproval: step.requiresApproval, review: null,
-      approval: step.requiresApproval ? { actor: "chat", approvedAt: timestamp, estimateUsd: null, estimateUnavailable: true } : null,
-    });
-  }
-  const failed = records.some(step => step.status === "failed");
-  const chain: ChainRunRecord = { kind: "chain-run", chainId, bookId: goal.bookId, notebookId: goal.notebookId, requestId: null, fingerprint: `fixture-${chainId}`, status: failed ? "failed" : "completed", createdAt: timestamp, updatedAt: timestamp, error: failed ? "Fixture stage interrupted" : null, autoApply: false, effect: "generation", awaitingStepId: null, steps: records };
-  const store = engine.settings.get<{ runs: Record<string, ChainRunRecord>; requestIndex: Record<string, string> }>("application.chain-runs.v1") ?? { runs: {}, requestIndex: {} };
-  const written = engine.settings.set("application.chain-runs.v1", { ...store, runs: { ...store.runs, [chainId]: chain } });
-  if (!written.ok) throw new Error(written.error.message);
-  const previous = goal.stages[stage];
-  const run: GoalStageRun = {
-    chainId, revision: content.revision, approvedAt: timestamp,
-    shotIndexes: revise ? [revise.index] : stage === "frame" ? [0] : options.indexes ?? plan.shots.map((_, index) => index),
-    outputs: previous?.outputs ?? [], previousChainIds: previous ? [...previous.previousChainIds, previous.chainId] : [],
-    ...(!options.legacy ? { attempts: goalStillAttempts(goal, plan, stage, chainId, steps, timestamp, revise?.feedback, plan.storyboardLayout === "six-panel" ? await goalAttemptFingerprints(engine, goal, plan, characters, stage, steps) : undefined) } : {}),
-  };
-  saveGoal(engine, { ...goal, status: "running", stage, chainId, stages: { ...goal.stages, [stage]: run }, ...(previous?.outputs.length && plan.storyboardLayout === "six-panel" ? { resumeStage: goal.stage, resumeStatus: goal.status === "completed" ? "completed" as const : "review" as const, resumeOutputs: previous.outputs } : {}), ...(stage === "videos" ? { clipIds: goal.clipIds.length === plan.shots.length ? goal.clipIds : plan.shots.map(() => uuidv7()), trackId: engine.sequences.getPrimary().tracks.find(track => track.kind === "video")!.trackId } : {}) });
-  return chainId;
-}
-
-export function goalProviderJob(engine: Engine, artifactId: string) {
+function goalProviderJob(engine: Engine, artifactId: string) {
   const job = engine.jobs.queue.list().find(item => item.artifactId === artifactId && item.type.startsWith("generate_"));
   if (!job) {
     const seen = engine.jobs.queue.list().map(item => `${item.type}:${item.state}:${item.artifactId ?? ""}`).join(", ");

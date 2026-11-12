@@ -19,7 +19,7 @@ import { createTestClient } from "../test-client.js";
 import { goalTestCharacters } from "../test-goals.js";
 import { copyVideoFixture } from "../test-media-fixtures.js";
 import { redirectFalStorage, SHORT_STUB_REFUSAL, startShortStub, type ShortStub } from "../test-short-stub.js";
-import type { GoalSnapshot } from "./goal.js";
+import type { ShortGoalSnapshot } from "./goal.js";
 
 const TWO_BEATS = 'he waits, 20 seconds, frame: "A bus stop at dusk." beat 1: "He waits under the shelter." beat 2: "He boards the bus."';
 const THREE_BEATS = 'he waits, 31 seconds, frame: "A bus stop at dusk." beat 1: "He waits." beat 2: "He checks the road." beat 3: "He boards the bus."';
@@ -95,10 +95,10 @@ describe("continuing a short with H3 Max Extend", () => {
   const raw = (args: Record<string, unknown>) => client.callTool({ name: "video_goal", arguments: { book_id: bookId, notebook_id: notebookId, ...args } });
   const textOf = (result: Awaited<ReturnType<typeof raw>>) => (result.content as Array<{ text: string }>)[0]!.text;
 
-  async function invoke(args: Record<string, unknown>): Promise<GoalSnapshot> {
+  async function invoke(args: Record<string, unknown>): Promise<ShortGoalSnapshot> {
     const result = await raw(args);
     expect(result.isError, textOf(result)).toBeFalsy();
-    return JSON.parse(textOf(result)) as GoalSnapshot;
+    return JSON.parse(textOf(result)) as ShortGoalSnapshot;
   }
 
   async function refusal(args: Record<string, unknown>): Promise<string> {
@@ -110,18 +110,18 @@ describe("continuing a short with H3 Max Extend", () => {
   const status = (goalId: string) => invoke({ action: "status", goal_id: goalId });
   const chainRuns = () => Object.keys(engine.settings.get<{ runs: Record<string, unknown> }>("application.chain-runs.v1")?.runs ?? {}).length;
   const extensions = () => stub.submissions.filter((submission) => submission.path === "/minimax/h3-max/extend-video");
-  const output = (goal: GoalSnapshot, index: number) => goal.stages.videos!.outputs.find((item) => item.index === index)!;
+  const output = (goal: ShortGoalSnapshot, index: number) => goal.stages.videos!.outputs.find((item) => item.index === index)!;
 
-  async function short(brief: string): Promise<GoalSnapshot> {
+  async function short(brief: string): Promise<ShortGoalSnapshot> {
     return status((await createShortGoal(engine, bookId, notebookId, { brief, requestId: uuidv7() })).goalId);
   }
 
-  async function settled(goal: GoalSnapshot): Promise<GoalSnapshot> {
+  async function settled(goal: ShortGoalSnapshot): Promise<ShortGoalSnapshot> {
     await waitForChainRun(engine, goal.chainId!, testBudget(90_000));
     return status(goal.goalId);
   }
 
-  async function approved(goal: GoalSnapshot): Promise<GoalSnapshot> {
+  async function approved(goal: ShortGoalSnapshot): Promise<ShortGoalSnapshot> {
     return settled(await invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision }));
   }
 

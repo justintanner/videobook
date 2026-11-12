@@ -3,7 +3,7 @@ import { SHORT_WORD_CEILINGS, type GoalShortPlan } from '../../../server/src/goa
 import { coldOpenRangeError } from '../../../server/src/cold-open-model'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import type { ColdOpenReview } from '@/videobook/cold-open-review'
-import { goalCanRetry, goalPlanSeconds, goalStillStale, goalStillVersions, shortEstimateText, type GoalSnapshot, type MainCharacterView } from '@/videobook/goals'
+import { goalCanRetry, goalPlanSeconds, goalStillStale, goalStillVersions, shortEstimateText, type GoalSnapshot, type MainCharacterView, type ShortGoalSnapshot } from '@/videobook/goals'
 import { ColdOpenBody } from './confirm/bodies/ColdOpenBody'
 import { GoalPromptInput } from './GoalPromptInput'
 import { GoalMedia } from './GoalStillCard'
@@ -12,7 +12,7 @@ type GoalAction = Record<string, unknown>
 type ShortTab = 'character' | 'frame' | 'video' | 'finish'
 type AssetResolver = (artifactId: string) => AssetRecord | null
 type ShortReviewProps = {
-  goal: GoalSnapshot
+  goal: ShortGoalSnapshot
   plan: GoalShortPlan
   disabled: boolean
   resolveAsset: AssetResolver
@@ -34,7 +34,12 @@ function AlwaysAdded({ lines }: { lines: readonly string[] }) {
   </div>
 }
 
-function nextSegment(goal: GoalSnapshot, plan: GoalShortPlan): number | null {
+function shortSnapshot(goal: GoalSnapshot): ShortGoalSnapshot {
+  if (goal.legacy) throw new Error('This goal was made by an earlier /goal. Start a new /goal.')
+  return goal
+}
+
+function nextSegment(goal: ShortGoalSnapshot, plan: GoalShortPlan): number | null {
   const index = plan.segments.findIndex((_, position) => !goal.stages.videos?.outputs.some(output => output.index === position) || goalStillStale(goal, 'videos', position))
   return index < 0 ? null : index
 }
@@ -77,7 +82,7 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
   const totalSeconds = goalPlanSeconds(plan)
   const beatLimit = Math.min(15, 60 - totalSeconds)
   const canAddBeat = plan.segments.length < 4 && beatLimit >= 2
-  const saved = async () => dirty ? onAction({ action: 'update', revision: goal.revision, plan: draft }) : goal
+  const saved = async () => dirty ? shortSnapshot(await onAction({ action: 'update', revision: goal.revision, plan: draft })) : goal
   const generate = (action: 'approve' | 'regenerate' | 'revise', stage: 'frame' | 'videos', index = 0, note?: string) => onRun(async () => {
     const current = await saved()
     await onAction({ action, revision: current.revision, stage, index, ...(note ? { feedback: note } : {}) })
@@ -146,7 +151,7 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
       {frameOutput && <GoalMedia artifactId={frameOutput.artifactId} cellId={frameOutput.cellId} label="Frame" resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
       {frameOutput && <div className="goal-versions" aria-label="Frame versions">{versions('frame', 0, 'Frame')}</div>}
       <label><span>Title</span><input aria-label="Short title" value={title} maxLength={120} disabled={disabled || finishing} onChange={event => setTitle(event.target.value)} /></label>
-      <GoalPromptInput label="Frame prompt" value={framePrompt} budget="frame" wordLimit={SHORT_WORD_CEILINGS.frame} disabled={disabled || finishing} onChange={setFramePrompt} />
+      <GoalPromptInput label="Frame prompt" value={framePrompt} wordLimit={SHORT_WORD_CEILINGS.frame} disabled={disabled || finishing} onChange={setFramePrompt} />
       <AlwaysAdded lines={[plan.rules.frame]} />
       {frameOutput && <label><span>Revise the frame</span><textarea aria-label="Frame feedback" value={feedback} maxLength={300} rows={2} disabled={disabled || !canGenerate} onChange={event => setFeedback(event.target.value)} /></label>}
       {!hasReference && <p role="status" className="goal-panel-warning">{NO_REFERENCE}</p>}
@@ -161,7 +166,7 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
         const state = stale ? 'Out of date' : output ? 'Ready' : running && goal.stage === 'videos' ? 'Waiting' : 'Not generated'
         return <li key={index} className="goal-short-segment" data-state={stale ? 'stale' : output ? 'done' : 'pending'}>
           <div className="goal-short-segment-head"><strong>Clip {index + 1}</strong><span>{segment.seconds}s</span><span>{state}</span><span>{shortEstimateText(goal.estimate.segments?.[index])}</span></div>
-          <GoalPromptInput label={`Beat ${index + 1}`} value={beats[index] ?? ''} budget="video" wordLimit={SHORT_WORD_CEILINGS.beat} disabled={disabled || finishing} onChange={value => setBeats(current => current.map((item, position) => position === index ? value : item))} />
+          <GoalPromptInput label={`Beat ${index + 1}`} value={beats[index] ?? ''} wordLimit={SHORT_WORD_CEILINGS.beat} disabled={disabled || finishing} onChange={value => setBeats(current => current.map((item, position) => position === index ? value : item))} />
           {stale && <p role="status" className="goal-panel-warning">{stale}</p>}
           {output && <div className="goal-versions" aria-label={`Clip ${index + 1} versions`}>{versions('videos', index, `Clip ${index + 1}`)}</div>}
           {output && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'videos', index)}>Regenerate clip {index + 1}</button>}
@@ -171,7 +176,7 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
       {!frameOutput && <p className="goal-panel-muted">Generate the frame before the clip.</p>}
       {canAddBeat && <fieldset className="goal-short-add">
         <legend>Add a beat</legend>
-        <GoalPromptInput label="New beat" value={beat.prompt} budget="video" wordLimit={SHORT_WORD_CEILINGS.beat} disabled={disabled || running} onChange={prompt => setBeat({ ...beat, prompt })} />
+        <GoalPromptInput label="New beat" value={beat.prompt} wordLimit={SHORT_WORD_CEILINGS.beat} disabled={disabled || running} onChange={prompt => setBeat({ ...beat, prompt })} />
         <label><span>Seconds</span><input aria-label="New beat seconds" type="number" min={2} max={beatLimit} value={beat.seconds} disabled={disabled || running} onChange={event => setBeat({ ...beat, seconds: Number(event.target.value) })} /></label>
         <button type="button" className="goal-panel-button" disabled={disabled || running || !beat.prompt.trim() || beat.seconds < 2 || beat.seconds > beatLimit || !Number.isInteger(beat.seconds)} onClick={() => onRun(async () => {
           const current = await saved()

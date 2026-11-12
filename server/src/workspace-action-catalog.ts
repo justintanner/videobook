@@ -37,10 +37,6 @@ export const WORKFLOW_TOOLS: Readonly<Record<string, { actionId: string; reason:
     actionId: "command.goal",
     reason: "Goal mode makes a real-looking short starring the book's main character, who never speaks. Review the character, then approve the opening frame, the base clip and each continuation separately, each with its own estimate; frame and clip versions stay selectable and revisable, and Finish adds the cold open and the saved watermark.",
   },
-  assemble_goal: {
-    actionId: "command.goal",
-    reason: "Goal mode appends its completed shots to the sequence in order.",
-  },
   list_workspace_actions: {
     actionId: "command.actions",
     reason: "Loads the Actions launcher and its typed forms.",

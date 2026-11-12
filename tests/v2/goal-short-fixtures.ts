@@ -1,8 +1,8 @@
 import { buildGoalShortPlan, type GoalShortPlan } from '../../server/src/goal-short-plan'
-import type { GoalSnapshot } from '../../src/videobook/goals'
+import type { LegacyGoalSnapshot, ShortGoalSnapshot } from '../../src/videobook/goals'
 
-type Stage = NonNullable<GoalSnapshot['stages']['frame']>
-type Step = GoalSnapshot['steps'][number]
+type Stage = NonNullable<ShortGoalSnapshot['stages']['frame']>
+type Step = ShortGoalSnapshot['steps'][number]
 type Output = Stage['outputs'][number]
 
 export const LOWER_BOUND = 'MiniMax H3 Max is priced per requested second, so this estimate is a lower bound.'
@@ -48,17 +48,32 @@ export function shortStage(stage: 'frame' | 'videos', outputs: readonly { index:
   }
 }
 
-export function shortGoalFixture(extra: Partial<GoalSnapshot> = {}, short: GoalShortPlan = shortPlanFixture()): GoalSnapshot {
+export function shortGoalFixture(extra: Partial<ShortGoalSnapshot> = {}, short: GoalShortPlan = shortPlanFixture()): ShortGoalSnapshot {
   return {
-    kind: 'video-goal', assemblyStale: false, planVersion: 4, stage: 'frame', stages: {}, goalId: 'short-1', bookId: 'book', notebookId: 'notebook',
-    cellId: 'short-tile', address: '@b1', requestId: 'request', brief: 'he waits for a bus', characters: [], revision: 2, plan: null, shortPlan: short,
+    kind: 'video-goal', legacy: false, planVersion: 4, stage: 'frame', stages: {}, goalId: 'short-1', bookId: 'book', notebookId: 'notebook',
+    cellId: 'short-tile', address: '@b1', requestId: 'request', brief: 'he waits for a bus', revision: 2, shortPlan: short,
     estimate: {
       frame: { usd: 0.21, warnings: [] }, storyboards: { usd: 0, warnings: [] }, videos: { usd: 1.2, warnings: [LOWER_BOUND] },
-      total: { usd: 1.41, warnings: [LOWER_BOUND] }, still: { usd: 0.21, warnings: [] },
+      total: { usd: 1.41, warnings: [LOWER_BOUND] },
       segments: short.segments.map(() => ({ usd: 0.6, warnings: [LOWER_BOUND] })),
     },
     status: 'review', error: null, chainId: null, planningJobId: null, clipIds: [], trackId: null, assembly: null, dismissedAt: null,
     createdAt: '2026-11-12T00:00:00Z', updatedAt: '2026-11-12T00:00:00Z', steps: [], finish: null, finalArtifactId: null, coldOpen: null,
+    ...extra,
+  }
+}
+
+export function legacyGoalFixture(extra: Partial<LegacyGoalSnapshot> = {}): LegacyGoalSnapshot {
+  return {
+    kind: 'video-goal', legacy: true, goalId: 'legacy-1', bookId: 'book', notebookId: 'notebook', cellId: 'legacy-tile', planVersion: 2,
+    address: '@b2', title: 'The skateboard champion', brief: '@a1@a2 make a funny video of a dog on a skateboard', status: 'completed', error: null,
+    outputs: [
+      { stage: 'frame', artifactId: 'frame-old', cellId: 'frame-cell', address: '@c1' },
+      { stage: 'storyboards', artifactId: 'board-old', cellId: 'board-cell', address: '@c2' },
+      { stage: 'videos', artifactId: 'video-old', cellId: 'video-cell', address: '@d1' },
+      { stage: 'videos', artifactId: 'video-gone', cellId: 'video-gone-cell', address: null },
+    ],
+    finalArtifactId: null, dismissedAt: null, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
     ...extra,
   }
 }

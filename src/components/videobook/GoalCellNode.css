@@ -199,11 +199,6 @@
   color: #b9a9f2;
 }
 
-.goal-tile-characters {
-  color: #8fb7a0;
-  font-size: 0.9em;
-}
-
 .goal-tile-thumbnails {
   display: flex;
   flex: 0 0 40px;

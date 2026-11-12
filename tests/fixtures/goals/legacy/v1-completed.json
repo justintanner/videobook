@@ -1,0 +1,269 @@
+{
+  "name": "v1-completed",
+  "store": "application.goals.v1",
+  "bookId": "01a1cf75-4d23-7693-932d-805a1ac242fa",
+  "notebookId": "01a1cf75-5794-70e4-9d44-a9d3b2afe65e",
+  "goalId": "01a1cf75-5916-77f3-9888-3e7e1de26835",
+  "record": {
+    "assembly": null,
+    "bookId": "01a1cf75-4d23-7693-932d-805a1ac242fa",
+    "cellId": "01a1cf75-592a-765f-8820-047b52280678",
+    "chainId": "01a1cf75-59aa-72fa-bd04-17e2fdc26209",
+    "clipIds": [],
+    "createdAt": "2026-11-12T11:12:16.662Z",
+    "dismissedAt": null,
+    "error": null,
+    "goalId": "01a1cf75-5916-77f3-9888-3e7e1de26835",
+    "notebookId": "01a1cf75-5794-70e4-9d44-a9d3b2afe65e",
+    "planningJobId": null,
+    "requestId": "01a1cf75-5914-76b6-9360-780bdd7d61a6",
+    "resumeOutputs": null,
+    "resumeStage": null,
+    "resumeStatus": null,
+    "status": "completed",
+    "trackId": null,
+    "updatedAt": "2026-11-12T11:12:17.060Z"
+  },
+  "cells": [
+    {
+      "id": "01a1cf75-583e-714c-8626-7d96724337b7",
+      "type": "image",
+      "label": "Character 1",
+      "slot": {
+        "row": 0,
+        "column": 0
+      },
+      "inputs": {},
+      "outputArtifactId": "01a1cf75-57c1-758f-bf31-8f617599b21a",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-58d1-738f-9f6b-51bfb24eca77",
+      "type": "image",
+      "label": "Character 2",
+      "slot": {
+        "row": 0,
+        "column": 1
+      },
+      "inputs": {},
+      "outputArtifactId": "01a1cf75-5873-7216-9c26-da4b99dde09e",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-592a-765f-8820-047b52280678",
+      "type": "goal",
+      "label": "The skateboard champion",
+      "slot": {
+        "row": 1,
+        "column": 0
+      },
+      "prompt": "@a1@a2 make a funny video of a dog on a skateboard, three 10s clips",
+      "inputs": {
+        "estimate": {
+          "usd": 3,
+          "warnings": []
+        },
+        "goalId": "01a1cf75-5916-77f3-9888-3e7e1de26835",
+        "plan": {
+          "aspectRatio": "9:16",
+          "continuity": "Character 1: terrier, red helmet. Character 2: tabby, blue scarf. Sunny park. Blue skateboard. Warm comic cinema.",
+          "shots": [
+            {
+              "durationSeconds": 10,
+              "prompt": "Roll, stop. Birds, squeaky wheels. Action 1.",
+              "title": "Park adventure 1"
+            },
+            {
+              "durationSeconds": 10,
+              "prompt": "Roll, stop. Birds, squeaky wheels. Action 2.",
+              "title": "Park adventure 2"
+            },
+            {
+              "durationSeconds": 10,
+              "prompt": "Roll, stop. Birds, squeaky wheels. Action 3.",
+              "title": "Park adventure 3"
+            }
+          ],
+          "title": "The skateboard champion"
+        },
+        "revision": 1
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-5a04-75ed-a51a-18ca4e2ae70d",
+      "type": "generate_image",
+      "label": "GPT Image 2.5 Sunburst Edit — Character 1: terrier, red helmet. Character 2: tabby, blue…",
+      "slot": {
+        "row": 1,
+        "column": 1
+      },
+      "prompt": "Character 1: terrier, red helmet. Character 2: tabby, blue scarf. Sunny park. Blue skateboard. Warm comic cinema.\n\nBoth characters stand beside the skateboard in the sunny park, full bodies visible.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 Character 1; @image2 Character 2.",
+      "provider": "kie",
+      "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+      "operation": "edit_image",
+      "tool": "generate_image",
+      "inputs": {
+        "chainRunId": "01a1cf75-59aa-72fa-bd04-17e2fdc26209:frame",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "background": "opaque",
+          "resolution": "2K"
+        }
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-5a05-76b9-b0cd-25e363d268ac",
+      "type": "image",
+      "label": "GPT Image 2.5 Sunburst Edit — Character 1: terrier, red helmet. Character 2: tabby, blue… image",
+      "slot": {
+        "row": 2,
+        "column": 0
+      },
+      "prompt": "Character 1: terrier, red helmet. Character 2: tabby, blue scarf. Sunny park. Blue skateboard. Warm comic cinema.\n\nBoth characters stand beside the skateboard in the sunny park, full bodies visible.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 Character 1; @image2 Character 2.",
+      "provider": "kie",
+      "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+      "tool": "generate_image",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:16.899Z",
+        "generationRunId": "01a1cf75-59aa-72fa-bd04-17e2fdc26209:frame",
+        "mediaRole": "generate-image-output",
+        "producerCellId": "01a1cf75-5a04-75ed-a51a-18ca4e2ae70d",
+        "state": "awaiting-output"
+      },
+      "outputArtifactId": "01a1cf75-59aa-72fa-bd04-1bc153fc3111",
+      "references": [],
+      "pinnedResults": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "01a1cf75-592a-765f-8820-0b58dcfd3351",
+      "source": "01a1cf75-583e-714c-8626-7d96724337b7",
+      "target": "01a1cf75-592a-765f-8820-047b52280678",
+      "targetInput": "character"
+    },
+    {
+      "id": "01a1cf75-592a-765f-8820-0c3f9f1ccab5",
+      "source": "01a1cf75-58d1-738f-9f6b-51bfb24eca77",
+      "target": "01a1cf75-592a-765f-8820-047b52280678",
+      "targetInput": "character_2"
+    },
+    {
+      "id": "01a1cf75-5a04-75ed-a51a-1c391d7cfd18",
+      "source": "01a1cf75-583e-714c-8626-7d96724337b7",
+      "target": "01a1cf75-5a04-75ed-a51a-18ca4e2ae70d",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-5a04-75ed-a51a-236b1fb4f568",
+      "source": "01a1cf75-58d1-738f-9f6b-51bfb24eca77",
+      "target": "01a1cf75-5a04-75ed-a51a-18ca4e2ae70d",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "01a1cf75-5a05-76b9-b0cd-2b803c8d8679",
+      "source": "01a1cf75-5a04-75ed-a51a-18ca4e2ae70d",
+      "target": "01a1cf75-5a05-76b9-b0cd-25e363d268ac",
+      "targetInput": "media"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifactId": "01a1cf75-57c1-758f-bf31-8f617599b21a",
+      "kind": "image",
+      "label": "Character 1"
+    },
+    {
+      "artifactId": "01a1cf75-5873-7216-9c26-da4b99dde09e",
+      "kind": "image",
+      "label": "Character 2"
+    },
+    {
+      "artifactId": "01a1cf75-59aa-72fa-bd04-1bc153fc3111",
+      "kind": "image",
+      "label": "frame"
+    }
+  ],
+  "chainRuns": {
+    "01a1cf75-59aa-72fa-bd04-17e2fdc26209": {
+      "autoApply": false,
+      "awaitingStepId": null,
+      "bookId": "01a1cf75-4d23-7693-932d-805a1ac242fa",
+      "chainId": "01a1cf75-59aa-72fa-bd04-17e2fdc26209",
+      "createdAt": "2026-11-12T11:12:16.810Z",
+      "effect": "generation",
+      "error": null,
+      "fingerprint": "fixture-01a1cf75-59aa-72fa-bd04-17e2fdc26209",
+      "kind": "chain-run",
+      "notebookId": "01a1cf75-5794-70e4-9d44-a9d3b2afe65e",
+      "requestId": null,
+      "status": "completed",
+      "steps": [
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:16.810Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [],
+          "effect": "generation",
+          "error": null,
+          "id": "frame",
+          "outputs": {
+            "address": "@b2",
+            "asset_id": "01a1cf75-59aa-72fa-bd04-1bc153fc3111",
+            "cell_id": "01a1cf75-5a05-76b9-b0cd-25e363d268ac",
+            "img_asset_id": "01a1cf75-59aa-72fa-bd04-1bc153fc3111",
+            "status": "completed"
+          },
+          "params": {
+            "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+            "options": {
+              "aspect_ratio": "9:16",
+              "background": "opaque",
+              "resolution": "2K"
+            },
+            "prompt": "Character 1: terrier, red helmet. Character 2: tabby, blue scarf. Sunny park. Blue skateboard. Warm comic cinema.\n\nBoth characters stand beside the skateboard in the sunny park, full bodies visible.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 Character 1; @image2 Character 2.",
+            "refs": {
+              "image": [
+                "@a1",
+                "@a2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-57c1-758f-bf31-8f617599b21a",
+              "cellId": "01a1cf75-583e-714c-8626-7d96724337b7",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-5873-7216-9c26-da4b99dde09e",
+              "cellId": "01a1cf75-58d1-738f-9f6b-51bfb24eca77",
+              "field": "refs.image",
+              "index": 1,
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "status": "completed",
+          "tool": "generate_image"
+        }
+      ],
+      "updatedAt": "2026-11-12T11:12:16.810Z"
+    }
+  }
+}

@@ -1,8 +1,7 @@
 import { findPrimaryMediaFile, type Engine } from "videobook-engine";
-import type { GoalCharacter } from "./goal-plan.js";
 import { mimeForImageFilename } from "./jobs/describe-image.js";
 
-export async function goalPlannerImages(engine: Engine, references: readonly GoalCharacter[]) {
+export async function goalPlannerImages(engine: Engine, references: readonly { artifactId: string; label: string }[]) {
   return Promise.all(references.map(async (reference, index) => {
     const manifest = await engine.files.manifest(reference.artifactId);
     const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, "image") : null;

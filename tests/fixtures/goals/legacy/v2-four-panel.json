@@ -1,0 +1,1048 @@
+{
+  "name": "v2-four-panel",
+  "store": "application.goals.v2",
+  "bookId": "01a1cf75-5b25-74d0-9b23-c1a67da1255f",
+  "notebookId": "01a1cf75-606d-73d5-9888-3ad089918a39",
+  "goalId": "01a1cf75-61c1-7622-844a-3f1518f3118b",
+  "record": {
+    "assembly": {
+      "artifactIds": [
+        "01a1cf75-65fa-72cb-87f7-641315977b80",
+        "01a1cf75-658b-732d-9f24-8c2ff0f471a3"
+      ],
+      "clipSnapshot": "[{\"clipId\":\"01a1cf75-688b-755c-9e04-e0374ea343e1\",\"trackId\":\"01a1cf75-5d0d-7419-b8c9-7e05c46594ad\",\"timelineStartFrame\":0,\"durationFrames\":120,\"enabled\":true,\"transform\":{\"fit\":\"fit\",\"positionX\":0,\"positionY\":0,\"scaleX\":1,\"scaleY\":1,\"anchorX\":0.5,\"anchorY\":0.5,\"rotationDegrees\":0,\"cropTop\":0,\"cropRight\":0,\"cropBottom\":0,\"cropLeft\":0,\"opacity\":1,\"blendMode\":\"normal\"},\"audio\":{\"gainDb\":0,\"muted\":false,\"fadeInFrames\":0,\"fadeOutFrames\":0},\"source\":{\"kind\":\"timed\",\"artifactId\":\"01a1cf75-65fa-72cb-87f7-641315977b80\",\"range\":{\"streamId\":\"01a1cf75-6701-7778-9e63-6b5883003b2a\",\"objectHash\":\"cd055150faa2cf44035c59a702d39f40e7b7eb2c10ba43268b0820aefa32c809\",\"startTick\":0,\"durationTicks\":40960,\"timeBase\":{\"numerator\":1,\"denominator\":10240}}},\"speed\":{\"numerator\":1,\"denominator\":1},\"reverse\":false,\"audioPolicy\":\"preserve-pitch\"},{\"clipId\":\"01a1cf75-688b-755c-9e04-e61bfaf17d2f\",\"trackId\":\"01a1cf75-5d0d-7419-b8c9-7e05c46594ad\",\"timelineStartFrame\":120,\"durationFrames\":120,\"enabled\":true,\"transform\":{\"fit\":\"fit\",\"positionX\":0,\"positionY\":0,\"scaleX\":1,\"scaleY\":1,\"anchorX\":0.5,\"anchorY\":0.5,\"rotationDegrees\":0,\"cropTop\":0,\"cropRight\":0,\"cropBottom\":0,\"cropLeft\":0,\"opacity\":1,\"blendMode\":\"normal\"},\"audio\":{\"gainDb\":0,\"muted\":false,\"fadeInFrames\":0,\"fadeOutFrames\":0},\"source\":{\"kind\":\"timed\",\"artifactId\":\"01a1cf75-658b-732d-9f24-8c2ff0f471a3\",\"range\":{\"streamId\":\"01a1cf75-6696-72d8-a9c6-9afc14733510\",\"objectHash\":\"0e0c437c812d44eef27ac130827417f213ef4aca93fc439b64c105b880696326\",\"startTick\":0,\"durationTicks\":40960,\"timeBase\":{\"numerator\":1,\"denominator\":10240}}},\"speed\":{\"numerator\":1,\"denominator\":1},\"reverse\":false,\"audioPolicy\":\"preserve-pitch\"}]",
+      "durationFrames": 240,
+      "sequenceId": "01a1cf75-5d05-7529-8e56-a8b360a27cff",
+      "startFrame": 0
+    },
+    "bookId": "01a1cf75-5b25-74d0-9b23-c1a67da1255f",
+    "cellId": "01a1cf75-61c7-77d7-aba6-98c75aec83b5",
+    "chainId": "01a1cf75-67f5-76bb-81bb-144b3d924074",
+    "clipIds": [
+      "01a1cf75-688b-755c-9e04-e0374ea343e1",
+      "01a1cf75-688b-755c-9e04-e61bfaf17d2f"
+    ],
+    "createdAt": "2026-11-12T11:12:18.881Z",
+    "dismissedAt": null,
+    "error": null,
+    "goalId": "01a1cf75-61c1-7622-844a-3f1518f3118b",
+    "notebookId": "01a1cf75-606d-73d5-9888-3ad089918a39",
+    "planningJobId": null,
+    "planVersion": 2,
+    "requestId": "01a1cf75-61c0-748c-872e-aee894868c53",
+    "resumeOutputs": null,
+    "resumeStage": null,
+    "resumeStatus": null,
+    "stage": "videos",
+    "stages": {
+      "frame": {
+        "approvedAt": "2026-11-12T11:12:19.027Z",
+        "attempts": [
+          {
+            "artifactId": "01a1cf75-6253-75c8-9c35-da125f601cbc",
+            "basePrompt": "Both characters stand beside the skateboard in the sunny park, full bodies visible.",
+            "cellId": "01a1cf75-62a6-72ea-8969-63a4a1b94e82",
+            "chainId": "01a1cf75-6253-75c8-9c35-d49609e4ef7e",
+            "createdAt": "2026-11-12T11:12:19.027Z",
+            "feedback": null,
+            "frameArtifactId": null,
+            "index": 0,
+            "parentArtifactId": null,
+            "stage": "frame",
+            "stepId": "frame"
+          }
+        ],
+        "chainId": "01a1cf75-6253-75c8-9c35-d49609e4ef7e",
+        "outputs": [
+          {
+            "address": "@c1",
+            "artifactId": "01a1cf75-6253-75c8-9c35-da125f601cbc",
+            "cellId": "01a1cf75-62a6-72ea-8969-63a4a1b94e82",
+            "index": 0,
+            "producerCellId": "01a1cf75-62a6-72ea-8969-55c2f20d5a07"
+          }
+        ],
+        "previousChainIds": [],
+        "revision": 1,
+        "shotIndexes": [
+          0
+        ]
+      },
+      "storyboards": {
+        "approvedAt": "2026-11-12T11:12:19.316Z",
+        "attempts": [
+          {
+            "artifactId": "01a1cf75-6374-762c-adcb-632f41359eae",
+            "basePrompt": "Shot 1: Park adventure 1 (10s). 1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.\nAction: Roll, stop. Birds, squeaky wheels. Action 1.",
+            "cellId": "01a1cf75-63e5-702f-bd47-1ede29c45dcd",
+            "chainId": "01a1cf75-6374-762c-adcb-5ff3ad6825e3",
+            "createdAt": "2026-11-12T11:12:19.316Z",
+            "feedback": null,
+            "frameArtifactId": "01a1cf75-6253-75c8-9c35-da125f601cbc",
+            "index": 0,
+            "parentArtifactId": null,
+            "stage": "storyboards",
+            "stepId": "storyboard1",
+            "storyboardLayout": "four-panel"
+          },
+          {
+            "artifactId": "01a1cf75-6427-7259-8473-0d949446a7e5",
+            "basePrompt": "Shot 2: Park adventure 2 (10s). 1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.\nAction: Roll, stop. Birds, squeaky wheels. Action 2.",
+            "cellId": "01a1cf75-6483-742b-901d-457aa70a8377",
+            "chainId": "01a1cf75-6374-762c-adcb-5ff3ad6825e3",
+            "createdAt": "2026-11-12T11:12:19.316Z",
+            "feedback": null,
+            "frameArtifactId": "01a1cf75-6253-75c8-9c35-da125f601cbc",
+            "index": 1,
+            "parentArtifactId": null,
+            "stage": "storyboards",
+            "stepId": "storyboard2",
+            "storyboardLayout": "four-panel"
+          }
+        ],
+        "chainId": "01a1cf75-6374-762c-adcb-5ff3ad6825e3",
+        "outputs": [
+          {
+            "address": "@c2",
+            "artifactId": "01a1cf75-6374-762c-adcb-632f41359eae",
+            "cellId": "01a1cf75-63e5-702f-bd47-1ede29c45dcd",
+            "index": 0,
+            "producerCellId": "01a1cf75-63e5-702f-bd47-0f8440b1c1f0"
+          },
+          {
+            "address": "@c3",
+            "artifactId": "01a1cf75-6427-7259-8473-0d949446a7e5",
+            "cellId": "01a1cf75-6483-742b-901d-457aa70a8377",
+            "index": 1,
+            "producerCellId": "01a1cf75-6483-742b-901d-342206519bcd"
+          }
+        ],
+        "previousChainIds": [],
+        "revision": 2,
+        "shotIndexes": [
+          0,
+          1
+        ]
+      },
+      "videos": {
+        "approvedAt": "2026-11-12T11:12:20.469Z",
+        "attempts": [
+          {
+            "artifactId": "01a1cf75-65fa-72cb-87f7-641315977b80",
+            "basePrompt": "Roll, stop. Birds, squeaky wheels. Action 1.",
+            "cellId": "01a1cf75-67f6-7409-a072-a4a2679bfb29",
+            "chainId": "01a1cf75-67f5-76bb-81bb-144b3d924074",
+            "createdAt": "2026-11-12T11:12:20.469Z",
+            "feedback": null,
+            "frameArtifactId": null,
+            "index": 0,
+            "parentArtifactId": null,
+            "stage": "videos",
+            "stepId": "shot1"
+          },
+          {
+            "artifactId": "01a1cf75-658b-732d-9f24-8c2ff0f471a3",
+            "basePrompt": "Roll, stop. Birds, squeaky wheels. Action 2.",
+            "cellId": "01a1cf75-683a-7518-80e8-477b488dadaf",
+            "chainId": "01a1cf75-67f5-76bb-81bb-144b3d924074",
+            "createdAt": "2026-11-12T11:12:20.469Z",
+            "feedback": null,
+            "frameArtifactId": null,
+            "index": 1,
+            "parentArtifactId": null,
+            "stage": "videos",
+            "stepId": "shot2"
+          }
+        ],
+        "chainId": "01a1cf75-67f5-76bb-81bb-144b3d924074",
+        "outputs": [
+          {
+            "address": "@d1",
+            "artifactId": "01a1cf75-65fa-72cb-87f7-641315977b80",
+            "cellId": "01a1cf75-67f6-7409-a072-a4a2679bfb29",
+            "index": 0,
+            "producerCellId": "01a1cf75-67f5-76bb-81bb-1983d5f54aea"
+          },
+          {
+            "address": "@d2",
+            "artifactId": "01a1cf75-658b-732d-9f24-8c2ff0f471a3",
+            "cellId": "01a1cf75-683a-7518-80e8-477b488dadaf",
+            "index": 1,
+            "producerCellId": "01a1cf75-683a-7518-80e8-3df2db4a39ef"
+          }
+        ],
+        "previousChainIds": [],
+        "revision": 3,
+        "shotIndexes": [
+          0,
+          1
+        ]
+      }
+    },
+    "status": "completed",
+    "trackId": "01a1cf75-5d0d-7419-b8c9-7e05c46594ad",
+    "updatedAt": "2026-11-12T11:12:20.835Z"
+  },
+  "cells": [
+    {
+      "id": "01a1cf75-6100-726e-988c-45e37de599d8",
+      "type": "image",
+      "label": "Character 1",
+      "slot": {
+        "row": 0,
+        "column": 0
+      },
+      "inputs": {},
+      "outputArtifactId": "01a1cf75-6099-7375-9ec5-aedccd16ce1a",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-618b-745c-ac64-45ca47db3a36",
+      "type": "image",
+      "label": "Character 2",
+      "slot": {
+        "row": 0,
+        "column": 1
+      },
+      "inputs": {},
+      "outputArtifactId": "01a1cf75-612d-719d-bb09-e8af658e3db9",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-61c7-77d7-aba6-98c75aec83b5",
+      "type": "goal",
+      "label": "The skateboard champion",
+      "slot": {
+        "row": 1,
+        "column": 0
+      },
+      "prompt": "@a1@a2 make a funny video of a dog on a skateboard, two 10s clips",
+      "inputs": {
+        "characters": [
+          {
+            "address": "@a1",
+            "artifactId": "01a1cf75-6099-7375-9ec5-aedccd16ce1a",
+            "cellId": "01a1cf75-6100-726e-988c-45e37de599d8",
+            "label": "Character 1"
+          },
+          {
+            "address": "@a2",
+            "artifactId": "01a1cf75-612d-719d-bb09-e8af658e3db9",
+            "cellId": "01a1cf75-618b-745c-ac64-45ca47db3a36",
+            "label": "Character 2"
+          }
+        ],
+        "estimate": {
+          "frame": {
+            "usd": 0.05,
+            "warnings": []
+          },
+          "storyboards": {
+            "usd": 0.1,
+            "warnings": []
+          },
+          "total": {
+            "usd": 6.45,
+            "warnings": []
+          },
+          "videos": {
+            "usd": 6.3,
+            "warnings": []
+          }
+        },
+        "goalId": "01a1cf75-61c1-7622-844a-3f1518f3118b",
+        "plan": {
+          "aspectRatio": "9:16",
+          "continuity": "Character 1: terrier, red helmet. Character 2: tabby, blue scarf. Sunny park. Blue skateboard. Warm comic cinema.",
+          "frame": {
+            "prompt": "Both characters stand beside the skateboard in the sunny park, full bodies visible."
+          },
+          "frameContinuity": false,
+          "imageModel": "sunburst",
+          "imageResolution": "2K",
+          "shots": [
+            {
+              "durationSeconds": 10,
+              "endingPrompt": null,
+              "storyboardPrompt": "1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.",
+              "title": "Park adventure 1",
+              "videoPrompt": "Roll, stop. Birds, squeaky wheels. Action 1."
+            },
+            {
+              "durationSeconds": 10,
+              "endingPrompt": null,
+              "storyboardPrompt": "1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.",
+              "title": "Park adventure 2",
+              "videoPrompt": "Roll, stop. Birds, squeaky wheels. Action 2."
+            }
+          ],
+          "style": {
+            "id": "cinematic",
+            "options": {}
+          },
+          "title": "The skateboard champion",
+          "version": 2,
+          "videoResolution": "720p"
+        },
+        "revision": 3
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-62a6-72ea-8969-55c2f20d5a07",
+      "type": "generate_image",
+      "label": "GPT Image 2.5 Sunburst Edit — Character 1: terrier, red helmet. Character 2: tabby, blue…",
+      "slot": {
+        "row": 1,
+        "column": 1
+      },
+      "prompt": "Character 1: terrier, red helmet. Character 2: tabby, blue scarf. Sunny park. Blue skateboard. Warm comic cinema.\n\nBoth characters stand beside the skateboard in the sunny park, full bodies visible.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 Character 1; @image2 Character 2.",
+      "provider": "kie",
+      "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+      "operation": "edit_image",
+      "tool": "generate_image",
+      "inputs": {
+        "chainRunId": "01a1cf75-6253-75c8-9c35-d49609e4ef7e:frame",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "background": "opaque",
+          "resolution": "2K"
+        }
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-63e5-702f-bd47-0f8440b1c1f0",
+      "type": "generate_image",
+      "label": "GPT Image 2.5 Sunburst Edit — 2x2 storyboard. Each 9:16. Left-right, top-bottom: setup;…",
+      "slot": {
+        "row": 1,
+        "column": 2
+      },
+      "prompt": "2x2 storyboard. Each 9:16. Left-right, top-bottom: setup; action; reaction; ending. Below pictures: timing + action/camera notes. Times: 0–2.5s; 2.5–5s; 5–7.5s; 7.5–10s. Pictures text-free.\n\nShot 1: Park adventure 1 (10s). 1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.\nAction: Roll, stop. Birds, squeaky wheels. Action 1.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 full frame: keep clothes, props; @image2 Character 1; @image3 Character 2.",
+      "provider": "kie",
+      "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+      "operation": "edit_image",
+      "tool": "generate_image",
+      "inputs": {
+        "chainRunId": "01a1cf75-6374-762c-adcb-5ff3ad6825e3:storyboard1",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "background": "opaque",
+          "resolution": "2K"
+        }
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-6483-742b-901d-342206519bcd",
+      "type": "generate_image",
+      "label": "GPT Image 2.5 Sunburst Edit — 2x2 storyboard. Each 9:16. Left-right, top-bottom: setup;…",
+      "slot": {
+        "row": 1,
+        "column": 3
+      },
+      "prompt": "2x2 storyboard. Each 9:16. Left-right, top-bottom: setup; action; reaction; ending. Below pictures: timing + action/camera notes. Times: 0–2.5s; 2.5–5s; 5–7.5s; 7.5–10s. Pictures text-free.\n\nShot 2: Park adventure 2 (10s). 1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.\nAction: Roll, stop. Birds, squeaky wheels. Action 2.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 full frame: keep clothes, props; @image2 Character 1; @image3 Character 2.",
+      "provider": "kie",
+      "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+      "operation": "edit_image",
+      "tool": "generate_image",
+      "inputs": {
+        "chainRunId": "01a1cf75-6374-762c-adcb-5ff3ad6825e3:storyboard2",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "background": "opaque",
+          "resolution": "2K"
+        }
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-67f5-76bb-81bb-1983d5f54aea",
+      "type": "generate_video",
+      "label": "Seedance 2.5 — Roll, stop. Birds, squeaky wheels. Action 1. @image1…",
+      "slot": {
+        "row": 1,
+        "column": 4
+      },
+      "prompt": "Roll, stop. Birds, squeaky wheels. Action 1.\n\n@image1 storyboard. Four beats in order, 2.5s each. Same people, place. Full-screen. Live-action, natural motion, restrained expressions. No grid, borders, notes, text. No music.",
+      "provider": "kie",
+      "model": "kie:bytedance/seedance-2-5",
+      "operation": "text_to_video",
+      "tool": "generate_video",
+      "inputs": {
+        "chainRunId": "01a1cf75-67f5-76bb-81bb-144b3d924074:shot1",
+        "generationMode": "r2v",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "duration": 10,
+          "generate_audio": true,
+          "resolution": "720p"
+        }
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-683a-7518-80e8-3df2db4a39ef",
+      "type": "generate_video",
+      "label": "Seedance 2.5 — Roll, stop. Birds, squeaky wheels. Action 2. @image1…",
+      "slot": {
+        "row": 1,
+        "column": 5
+      },
+      "prompt": "Roll, stop. Birds, squeaky wheels. Action 2.\n\n@image1 storyboard. Four beats in order, 2.5s each. Same people, place. Full-screen. Live-action, natural motion, restrained expressions. No grid, borders, notes, text. No music.",
+      "provider": "kie",
+      "model": "kie:bytedance/seedance-2-5",
+      "operation": "text_to_video",
+      "tool": "generate_video",
+      "inputs": {
+        "chainRunId": "01a1cf75-67f5-76bb-81bb-144b3d924074:shot2",
+        "generationMode": "r2v",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "duration": 10,
+          "generate_audio": true,
+          "resolution": "720p"
+        }
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-62a6-72ea-8969-63a4a1b94e82",
+      "type": "image",
+      "label": "GPT Image 2.5 Sunburst Edit — Character 1: terrier, red helmet. Character 2: tabby, blue… image",
+      "slot": {
+        "row": 2,
+        "column": 0
+      },
+      "prompt": "Character 1: terrier, red helmet. Character 2: tabby, blue scarf. Sunny park. Blue skateboard. Warm comic cinema.\n\nBoth characters stand beside the skateboard in the sunny park, full bodies visible.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 Character 1; @image2 Character 2.",
+      "provider": "kie",
+      "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+      "tool": "generate_image",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:19.109Z",
+        "generationRunId": "01a1cf75-6253-75c8-9c35-d49609e4ef7e:frame",
+        "mediaRole": "generate-image-output",
+        "producerCellId": "01a1cf75-62a6-72ea-8969-55c2f20d5a07",
+        "state": "awaiting-output"
+      },
+      "outputArtifactId": "01a1cf75-6253-75c8-9c35-da125f601cbc",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-63e5-702f-bd47-1ede29c45dcd",
+      "type": "image",
+      "label": "GPT Image 2.5 Sunburst Edit — 2x2 storyboard. Each 9:16. Left-right, top-bottom: setup;… image",
+      "slot": {
+        "row": 2,
+        "column": 1
+      },
+      "prompt": "2x2 storyboard. Each 9:16. Left-right, top-bottom: setup; action; reaction; ending. Below pictures: timing + action/camera notes. Times: 0–2.5s; 2.5–5s; 5–7.5s; 7.5–10s. Pictures text-free.\n\nShot 1: Park adventure 1 (10s). 1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.\nAction: Roll, stop. Birds, squeaky wheels. Action 1.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 full frame: keep clothes, props; @image2 Character 1; @image3 Character 2.",
+      "provider": "kie",
+      "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+      "tool": "generate_image",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:19.428Z",
+        "generationRunId": "01a1cf75-6374-762c-adcb-5ff3ad6825e3:storyboard1",
+        "mediaRole": "generate-image-output",
+        "producerCellId": "01a1cf75-63e5-702f-bd47-0f8440b1c1f0",
+        "state": "awaiting-output"
+      },
+      "outputArtifactId": "01a1cf75-6374-762c-adcb-632f41359eae",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-6483-742b-901d-457aa70a8377",
+      "type": "image",
+      "label": "GPT Image 2.5 Sunburst Edit — 2x2 storyboard. Each 9:16. Left-right, top-bottom: setup;… image",
+      "slot": {
+        "row": 2,
+        "column": 2
+      },
+      "prompt": "2x2 storyboard. Each 9:16. Left-right, top-bottom: setup; action; reaction; ending. Below pictures: timing + action/camera notes. Times: 0–2.5s; 2.5–5s; 5–7.5s; 7.5–10s. Pictures text-free.\n\nShot 2: Park adventure 2 (10s). 1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.\nAction: Roll, stop. Birds, squeaky wheels. Action 2.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 full frame: keep clothes, props; @image2 Character 1; @image3 Character 2.",
+      "provider": "kie",
+      "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+      "tool": "generate_image",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:19.586Z",
+        "generationRunId": "01a1cf75-6374-762c-adcb-5ff3ad6825e3:storyboard2",
+        "mediaRole": "generate-image-output",
+        "producerCellId": "01a1cf75-6483-742b-901d-342206519bcd",
+        "state": "awaiting-output"
+      },
+      "outputArtifactId": "01a1cf75-6427-7259-8473-0d949446a7e5",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-67f6-7409-a072-a4a2679bfb29",
+      "type": "video",
+      "label": "Seedance 2.5 — Roll, stop. Birds, squeaky wheels. Action 1. @image1… video",
+      "slot": {
+        "row": 3,
+        "column": 0
+      },
+      "prompt": "Roll, stop. Birds, squeaky wheels. Action 1.\n\n@image1 storyboard. Four beats in order, 2.5s each. Same people, place. Full-screen. Live-action, natural motion, restrained expressions. No grid, borders, notes, text. No music.",
+      "provider": "kie",
+      "model": "kie:bytedance/seedance-2-5",
+      "tool": "generate_video",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:20.469Z",
+        "generationRunId": "01a1cf75-67f5-76bb-81bb-144b3d924074:shot1",
+        "mediaRole": "generate-video-output",
+        "producerCellId": "01a1cf75-67f5-76bb-81bb-1983d5f54aea",
+        "state": "awaiting-output"
+      },
+      "outputArtifactId": "01a1cf75-65fa-72cb-87f7-641315977b80",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-683a-7518-80e8-477b488dadaf",
+      "type": "video",
+      "label": "Seedance 2.5 — Roll, stop. Birds, squeaky wheels. Action 2. @image1… video",
+      "slot": {
+        "row": 3,
+        "column": 1
+      },
+      "prompt": "Roll, stop. Birds, squeaky wheels. Action 2.\n\n@image1 storyboard. Four beats in order, 2.5s each. Same people, place. Full-screen. Live-action, natural motion, restrained expressions. No grid, borders, notes, text. No music.",
+      "provider": "kie",
+      "model": "kie:bytedance/seedance-2-5",
+      "tool": "generate_video",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:20.536Z",
+        "generationRunId": "01a1cf75-67f5-76bb-81bb-144b3d924074:shot2",
+        "mediaRole": "generate-video-output",
+        "producerCellId": "01a1cf75-683a-7518-80e8-3df2db4a39ef",
+        "state": "awaiting-output"
+      },
+      "outputArtifactId": "01a1cf75-658b-732d-9f24-8c2ff0f471a3",
+      "references": [],
+      "pinnedResults": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "01a1cf75-61c7-77d7-aba6-9ca73eb0e7d5",
+      "source": "01a1cf75-6100-726e-988c-45e37de599d8",
+      "target": "01a1cf75-61c7-77d7-aba6-98c75aec83b5",
+      "targetInput": "character"
+    },
+    {
+      "id": "01a1cf75-61c7-77d7-aba6-a06dafae7749",
+      "source": "01a1cf75-618b-745c-ac64-45ca47db3a36",
+      "target": "01a1cf75-61c7-77d7-aba6-98c75aec83b5",
+      "targetInput": "character_2"
+    },
+    {
+      "id": "01a1cf75-62a6-72ea-8969-583ca40732fe",
+      "source": "01a1cf75-6100-726e-988c-45e37de599d8",
+      "target": "01a1cf75-62a6-72ea-8969-55c2f20d5a07",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-62a6-72ea-8969-5d5766a9a24a",
+      "source": "01a1cf75-618b-745c-ac64-45ca47db3a36",
+      "target": "01a1cf75-62a6-72ea-8969-55c2f20d5a07",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "01a1cf75-62a6-72ea-8969-663b94f0dd14",
+      "source": "01a1cf75-62a6-72ea-8969-55c2f20d5a07",
+      "target": "01a1cf75-62a6-72ea-8969-63a4a1b94e82",
+      "targetInput": "media"
+    },
+    {
+      "id": "01a1cf75-63e5-702f-bd47-122e45689ed1",
+      "source": "01a1cf75-62a6-72ea-8969-63a4a1b94e82",
+      "target": "01a1cf75-63e5-702f-bd47-0f8440b1c1f0",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-63e5-702f-bd47-154c94ddf4c7",
+      "source": "01a1cf75-6100-726e-988c-45e37de599d8",
+      "target": "01a1cf75-63e5-702f-bd47-0f8440b1c1f0",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "01a1cf75-63e5-702f-bd47-1b86cbe833c1",
+      "source": "01a1cf75-618b-745c-ac64-45ca47db3a36",
+      "target": "01a1cf75-63e5-702f-bd47-0f8440b1c1f0",
+      "targetInput": "image_3"
+    },
+    {
+      "id": "01a1cf75-63e5-702f-bd47-2015ac266e1f",
+      "source": "01a1cf75-63e5-702f-bd47-0f8440b1c1f0",
+      "target": "01a1cf75-63e5-702f-bd47-1ede29c45dcd",
+      "targetInput": "media"
+    },
+    {
+      "id": "01a1cf75-6483-742b-901d-3a8a0eb5af65",
+      "source": "01a1cf75-62a6-72ea-8969-63a4a1b94e82",
+      "target": "01a1cf75-6483-742b-901d-342206519bcd",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-6483-742b-901d-3d5137ff9b2e",
+      "source": "01a1cf75-6100-726e-988c-45e37de599d8",
+      "target": "01a1cf75-6483-742b-901d-342206519bcd",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "01a1cf75-6483-742b-901d-41fba84fdd94",
+      "source": "01a1cf75-618b-745c-ac64-45ca47db3a36",
+      "target": "01a1cf75-6483-742b-901d-342206519bcd",
+      "targetInput": "image_3"
+    },
+    {
+      "id": "01a1cf75-6483-742b-901d-4924f34f20b6",
+      "source": "01a1cf75-6483-742b-901d-342206519bcd",
+      "target": "01a1cf75-6483-742b-901d-457aa70a8377",
+      "targetInput": "media"
+    },
+    {
+      "id": "01a1cf75-67f5-76bb-81bb-1df175261227",
+      "source": "01a1cf75-63e5-702f-bd47-1ede29c45dcd",
+      "target": "01a1cf75-67f5-76bb-81bb-1983d5f54aea",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-67f6-7409-a072-aad0053012a6",
+      "source": "01a1cf75-67f5-76bb-81bb-1983d5f54aea",
+      "target": "01a1cf75-67f6-7409-a072-a4a2679bfb29",
+      "targetInput": "media"
+    },
+    {
+      "id": "01a1cf75-683a-7518-80e8-41dadfa89c18",
+      "source": "01a1cf75-6483-742b-901d-457aa70a8377",
+      "target": "01a1cf75-683a-7518-80e8-3df2db4a39ef",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-683a-7518-80e8-4992d5cddb22",
+      "source": "01a1cf75-683a-7518-80e8-3df2db4a39ef",
+      "target": "01a1cf75-683a-7518-80e8-477b488dadaf",
+      "targetInput": "media"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifactId": "01a1cf75-6099-7375-9ec5-aedccd16ce1a",
+      "kind": "image",
+      "label": "Character 1"
+    },
+    {
+      "artifactId": "01a1cf75-612d-719d-bb09-e8af658e3db9",
+      "kind": "image",
+      "label": "Character 2"
+    },
+    {
+      "artifactId": "01a1cf75-6253-75c8-9c35-da125f601cbc",
+      "kind": "image",
+      "label": "frame"
+    },
+    {
+      "artifactId": "01a1cf75-6374-762c-adcb-632f41359eae",
+      "kind": "image",
+      "label": "storyboard1"
+    },
+    {
+      "artifactId": "01a1cf75-6427-7259-8473-0d949446a7e5",
+      "kind": "image",
+      "label": "storyboard2"
+    },
+    {
+      "artifactId": "01a1cf75-658b-732d-9f24-8c2ff0f471a3",
+      "kind": "video",
+      "label": "blue"
+    },
+    {
+      "artifactId": "01a1cf75-65fa-72cb-87f7-641315977b80",
+      "kind": "video",
+      "label": "red"
+    }
+  ],
+  "chainRuns": {
+    "01a1cf75-6253-75c8-9c35-d49609e4ef7e": {
+      "autoApply": false,
+      "awaitingStepId": null,
+      "bookId": "01a1cf75-5b25-74d0-9b23-c1a67da1255f",
+      "chainId": "01a1cf75-6253-75c8-9c35-d49609e4ef7e",
+      "createdAt": "2026-11-12T11:12:19.027Z",
+      "effect": "generation",
+      "error": null,
+      "fingerprint": "fixture-01a1cf75-6253-75c8-9c35-d49609e4ef7e",
+      "kind": "chain-run",
+      "notebookId": "01a1cf75-606d-73d5-9888-3ad089918a39",
+      "requestId": null,
+      "status": "completed",
+      "steps": [
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:19.027Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [],
+          "effect": "generation",
+          "error": null,
+          "id": "frame",
+          "outputs": {
+            "address": "@b2",
+            "asset_id": "01a1cf75-6253-75c8-9c35-da125f601cbc",
+            "cell_id": "01a1cf75-62a6-72ea-8969-63a4a1b94e82",
+            "img_asset_id": "01a1cf75-6253-75c8-9c35-da125f601cbc",
+            "status": "completed"
+          },
+          "params": {
+            "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+            "options": {
+              "aspect_ratio": "9:16",
+              "background": "opaque",
+              "resolution": "2K"
+            },
+            "prompt": "Character 1: terrier, red helmet. Character 2: tabby, blue scarf. Sunny park. Blue skateboard. Warm comic cinema.\n\nBoth characters stand beside the skateboard in the sunny park, full bodies visible.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 Character 1; @image2 Character 2.",
+            "refs": {
+              "image": [
+                "@a1",
+                "@a2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-6099-7375-9ec5-aedccd16ce1a",
+              "cellId": "01a1cf75-6100-726e-988c-45e37de599d8",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-612d-719d-bb09-e8af658e3db9",
+              "cellId": "01a1cf75-618b-745c-ac64-45ca47db3a36",
+              "field": "refs.image",
+              "index": 1,
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "status": "completed",
+          "tool": "generate_image"
+        }
+      ],
+      "updatedAt": "2026-11-12T11:12:19.027Z"
+    },
+    "01a1cf75-6374-762c-adcb-5ff3ad6825e3": {
+      "autoApply": false,
+      "awaitingStepId": null,
+      "bookId": "01a1cf75-5b25-74d0-9b23-c1a67da1255f",
+      "chainId": "01a1cf75-6374-762c-adcb-5ff3ad6825e3",
+      "createdAt": "2026-11-12T11:12:19.316Z",
+      "effect": "generation",
+      "error": null,
+      "fingerprint": "fixture-01a1cf75-6374-762c-adcb-5ff3ad6825e3",
+      "kind": "chain-run",
+      "notebookId": "01a1cf75-606d-73d5-9888-3ad089918a39",
+      "requestId": null,
+      "status": "completed",
+      "steps": [
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:19.316Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [],
+          "effect": "generation",
+          "error": null,
+          "id": "storyboard1",
+          "outputs": {
+            "address": "@b3",
+            "asset_id": "01a1cf75-6374-762c-adcb-632f41359eae",
+            "cell_id": "01a1cf75-63e5-702f-bd47-1ede29c45dcd",
+            "img_asset_id": "01a1cf75-6374-762c-adcb-632f41359eae",
+            "status": "completed"
+          },
+          "params": {
+            "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+            "options": {
+              "aspect_ratio": "9:16",
+              "background": "opaque",
+              "resolution": "2K"
+            },
+            "prompt": "2x2 storyboard. Each 9:16. Left-right, top-bottom: setup; action; reaction; ending. Below pictures: timing + action/camera notes. Times: 0–2.5s; 2.5–5s; 5–7.5s; 7.5–10s. Pictures text-free.\n\nShot 1: Park adventure 1 (10s). 1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.\nAction: Roll, stop. Birds, squeaky wheels. Action 1.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 full frame: keep clothes, props; @image2 Character 1; @image3 Character 2.",
+            "refs": {
+              "image": [
+                "@c1",
+                "@a1",
+                "@a2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@c1",
+              "artifactId": "01a1cf75-6253-75c8-9c35-da125f601cbc",
+              "cellId": "01a1cf75-62a6-72ea-8969-63a4a1b94e82",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-6099-7375-9ec5-aedccd16ce1a",
+              "cellId": "01a1cf75-6100-726e-988c-45e37de599d8",
+              "field": "refs.image",
+              "index": 1,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-612d-719d-bb09-e8af658e3db9",
+              "cellId": "01a1cf75-618b-745c-ac64-45ca47db3a36",
+              "field": "refs.image",
+              "index": 2,
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "status": "completed",
+          "tool": "generate_image"
+        },
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:19.316Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [],
+          "effect": "generation",
+          "error": null,
+          "id": "storyboard2",
+          "outputs": {
+            "address": "@b4",
+            "asset_id": "01a1cf75-6427-7259-8473-0d949446a7e5",
+            "cell_id": "01a1cf75-6483-742b-901d-457aa70a8377",
+            "img_asset_id": "01a1cf75-6427-7259-8473-0d949446a7e5",
+            "status": "completed"
+          },
+          "params": {
+            "model": "kie:gpt-image-2-5-sunburst-image-to-image",
+            "options": {
+              "aspect_ratio": "9:16",
+              "background": "opaque",
+              "resolution": "2K"
+            },
+            "prompt": "2x2 storyboard. Each 9:16. Left-right, top-bottom: setup; action; reaction; ending. Below pictures: timing + action/camera notes. Times: 0–2.5s; 2.5–5s; 5–7.5s; 7.5–10s. Pictures text-free.\n\nShot 2: Park adventure 2 (10s). 1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.\nAction: Roll, stop. Birds, squeaky wheels. Action 2.\n\nPhotographic live-action, natural proportions, real textures.\n\n@image1 full frame: keep clothes, props; @image2 Character 1; @image3 Character 2.",
+            "refs": {
+              "image": [
+                "@c1",
+                "@a1",
+                "@a2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@c1",
+              "artifactId": "01a1cf75-6253-75c8-9c35-da125f601cbc",
+              "cellId": "01a1cf75-62a6-72ea-8969-63a4a1b94e82",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-6099-7375-9ec5-aedccd16ce1a",
+              "cellId": "01a1cf75-6100-726e-988c-45e37de599d8",
+              "field": "refs.image",
+              "index": 1,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-612d-719d-bb09-e8af658e3db9",
+              "cellId": "01a1cf75-618b-745c-ac64-45ca47db3a36",
+              "field": "refs.image",
+              "index": 2,
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "status": "completed",
+          "tool": "generate_image"
+        }
+      ],
+      "updatedAt": "2026-11-12T11:12:19.316Z"
+    },
+    "01a1cf75-67f5-76bb-81bb-144b3d924074": {
+      "autoApply": false,
+      "awaitingStepId": null,
+      "bookId": "01a1cf75-5b25-74d0-9b23-c1a67da1255f",
+      "chainId": "01a1cf75-67f5-76bb-81bb-144b3d924074",
+      "createdAt": "2026-11-12T11:12:20.469Z",
+      "effect": "generation",
+      "error": "Fixture stage interrupted",
+      "fingerprint": "fixture-01a1cf75-67f5-76bb-81bb-144b3d924074",
+      "kind": "chain-run",
+      "notebookId": "01a1cf75-606d-73d5-9888-3ad089918a39",
+      "requestId": null,
+      "status": "failed",
+      "steps": [
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:20.469Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [],
+          "effect": "generation",
+          "error": null,
+          "id": "shot1",
+          "outputs": {
+            "address": "@b5",
+            "asset_id": "01a1cf75-65fa-72cb-87f7-641315977b80",
+            "cell_id": "01a1cf75-67f6-7409-a072-a4a2679bfb29",
+            "status": "completed",
+            "vid_asset_id": "01a1cf75-65fa-72cb-87f7-641315977b80"
+          },
+          "params": {
+            "mode": "r2v",
+            "model": "kie:bytedance/seedance-2-5",
+            "options": {
+              "aspect_ratio": "9:16",
+              "duration": 10,
+              "generate_audio": true,
+              "resolution": "720p"
+            },
+            "prompt": "Roll, stop. Birds, squeaky wheels. Action 1.\n\n@image1 storyboard. Four beats in order, 2.5s each. Same people, place. Full-screen. Live-action, natural motion, restrained expressions. No grid, borders, notes, text. No music.",
+            "refs": {
+              "image": [
+                "@c2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@c2",
+              "artifactId": "01a1cf75-6374-762c-adcb-632f41359eae",
+              "cellId": "01a1cf75-63e5-702f-bd47-1ede29c45dcd",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "42cebdb180055b4f5524eaa5638bf7e639a53c5aa7c1c082259e1e931669c49a"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "status": "completed",
+          "tool": "generate_video"
+        },
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:20.469Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [],
+          "effect": "generation",
+          "error": null,
+          "id": "shot2",
+          "outputs": {
+            "address": "@b6",
+            "asset_id": "01a1cf75-658b-732d-9f24-8c2ff0f471a3",
+            "cell_id": "01a1cf75-683a-7518-80e8-477b488dadaf",
+            "status": "completed",
+            "vid_asset_id": "01a1cf75-658b-732d-9f24-8c2ff0f471a3"
+          },
+          "params": {
+            "mode": "r2v",
+            "model": "kie:bytedance/seedance-2-5",
+            "options": {
+              "aspect_ratio": "9:16",
+              "duration": 10,
+              "generate_audio": true,
+              "resolution": "720p"
+            },
+            "prompt": "Roll, stop. Birds, squeaky wheels. Action 2.\n\n@image1 storyboard. Four beats in order, 2.5s each. Same people, place. Full-screen. Live-action, natural motion, restrained expressions. No grid, borders, notes, text. No music.",
+            "refs": {
+              "image": [
+                "@c3"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@c3",
+              "artifactId": "01a1cf75-6427-7259-8473-0d949446a7e5",
+              "cellId": "01a1cf75-6483-742b-901d-457aa70a8377",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "42cebdb180055b4f5524eaa5638bf7e639a53c5aa7c1c082259e1e931669c49a"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "status": "completed",
+          "tool": "generate_video"
+        },
+        {
+          "approval": null,
+          "autoApply": false,
+          "childJobIds": [],
+          "effect": "mutation",
+          "error": "Fixture stage interrupted",
+          "id": "assemble",
+          "outputs": null,
+          "params": {
+            "artifact_ids": [
+              {
+                "$ref": {
+                  "output": "asset_id",
+                  "step_id": "shot1"
+                }
+              },
+              {
+                "$ref": {
+                  "output": "asset_id",
+                  "step_id": "shot2"
+                }
+              }
+            ],
+            "goal_id": "01a1cf75-61c1-7622-844a-3f1518f3118b"
+          },
+          "pins": [],
+          "requiresApproval": false,
+          "review": null,
+          "status": "failed",
+          "tool": "assemble_goal"
+        }
+      ],
+      "updatedAt": "2026-11-12T11:12:20.469Z"
+    }
+  }
+}

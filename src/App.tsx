@@ -3558,23 +3558,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!goalScope) throw new Error('Open the goal notebook first.')
     const scope = goalScope
     const goal = await actOnGoal(scope, args)
-    if (args.action === 'combine') {
-      await refreshBookData(scope.bookId, scope.notebookId)
-      return goal
-    }
     if (args.action !== 'approve' && args.action !== 'regenerate' && args.action !== 'revise' && args.action !== 'retry') return goal
     if (watchScopeRef.current.bookId === scope.bookId && watchScopeRef.current.notebookId === scope.notebookId) collapseComposerAfterCellCreation()
     await refreshBookData(scope.bookId, scope.notebookId)
     return goal
-  }
-
-  const previewGoalSequence = async (frame: number) => {
-    if (!goalScope) return
-    const scope = goalScope
-    const refreshed = await refreshBookData(scope.bookId, scope.notebookId, () => watchScopeRef.current.bookId === scope.bookId && watchScopeRef.current.notebookId === scope.notebookId)
-    const cell = refreshed?.cells.find((candidate) => candidate.type === 'timeline')
-    if (!cell) throw new Error('Add a timeline cell to preview the assembled sequence.')
-    openTimelinePreview(cell.id, frame)
   }
 
   const updateFullscreenSubjectMap = useCallback((
@@ -10373,7 +10360,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         connected={mcp.state === 'ready'}
         onAction={runGoalAction}
         onCharacter={runGoalCharacter}
-        onPreview={previewGoalSequence}
         onSelectCell={openCellInspector}
         resolveAsset={(artifactId) => assetById.get(artifactId) ?? null}
         onPreviewCell={(cellId) => {

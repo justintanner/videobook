@@ -1,0 +1,752 @@
+{
+  "name": "v2-six-panel",
+  "store": "application.goals.v2",
+  "bookId": "01a1cf75-69a3-7015-97da-595cebe150c6",
+  "notebookId": "01a1cf75-6ee0-72a8-b851-202eb797a67e",
+  "goalId": "01a1cf75-7059-77cb-84fc-733f82a8c976",
+  "record": {
+    "assembly": null,
+    "bookId": "01a1cf75-69a3-7015-97da-595cebe150c6",
+    "cellId": "01a1cf75-705d-7188-b081-f9c71907d5bc",
+    "chainId": "01a1cf75-7529-714b-9528-fa89cd462bd5",
+    "clipIds": [
+      "01a1cf75-758c-764e-9227-5e2ac784528e"
+    ],
+    "createdAt": "2026-11-12T11:12:22.617Z",
+    "dismissedAt": null,
+    "error": null,
+    "goalId": "01a1cf75-7059-77cb-84fc-733f82a8c976",
+    "notebookId": "01a1cf75-6ee0-72a8-b851-202eb797a67e",
+    "planningJobId": null,
+    "planVersion": 2,
+    "requestId": "01a1cf75-7058-711d-9e26-bf95096fe523",
+    "resumeOutputs": null,
+    "resumeStage": null,
+    "resumeStatus": null,
+    "stage": "videos",
+    "stages": {
+      "frame": {
+        "approvedAt": "2026-11-12T11:12:22.816Z",
+        "attempts": [
+          {
+            "artifactId": "01a1cf75-7120-74e6-942e-e61dd19afa6f",
+            "basePrompt": "Reference 2 interviews the woman in Reference 1; giant microphone.",
+            "cellId": "01a1cf75-718d-725c-b1ed-f23612cd36b1",
+            "chainId": "01a1cf75-7120-74e6-942e-e346ebfe2ece",
+            "createdAt": "2026-11-12T11:12:22.816Z",
+            "feedback": null,
+            "fingerprint": "{\"prompt\":\"Reference 2 interviews the woman in Reference 1; giant microphone.\",\"aspectRatio\":\"9:16\",\"style\":{\"id\":\"source\",\"options\":[]},\"referenceRoles\":[\"scene\",\"character\"],\"references\":[{\"artifactId\":\"01a1cf75-6f0a-738b-aee1-3f180314aea9\",\"objectHash\":\"e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec\"},{\"artifactId\":\"01a1cf75-6fae-74b9-87d4-3b16c51a3b6f\",\"objectHash\":\"ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4\"}],\"model\":\"nano-banana-2-1\",\"resolution\":\"2K\",\"continuity\":\"Keep the source street, lighting and camera. Reference 2 replaces the interviewer.\"}",
+            "frameArtifactId": null,
+            "index": 0,
+            "parentArtifactId": null,
+            "stage": "frame",
+            "stepId": "frame"
+          }
+        ],
+        "chainId": "01a1cf75-7120-74e6-942e-e346ebfe2ece",
+        "outputs": [
+          {
+            "address": "@c1",
+            "artifactId": "01a1cf75-7120-74e6-942e-e61dd19afa6f",
+            "cellId": "01a1cf75-718d-725c-b1ed-f23612cd36b1",
+            "index": 0,
+            "producerCellId": "01a1cf75-718d-725c-b1ed-e6367efed5b4"
+          }
+        ],
+        "previousChainIds": [],
+        "revision": 1,
+        "shotIndexes": [
+          0
+        ]
+      },
+      "storyboards": {
+        "approvedAt": "2026-11-12T11:12:23.114Z",
+        "attempts": [
+          {
+            "artifactId": "01a1cf75-724a-757a-b8c9-98c833cabdd3",
+            "basePrompt": "Shot 1: Park adventure 1 (20s). Wide hook; interviewer raises microphone; woman responds; microphone grows; both react; beach payoff.",
+            "cellId": "01a1cf75-72af-7635-9a29-176e9d2c829b",
+            "chainId": "01a1cf75-724a-757a-b8c9-9527fc265001",
+            "createdAt": "2026-11-12T11:12:23.114Z",
+            "feedback": null,
+            "fingerprint": "{\"prompt\":\"Shot 1: Park adventure 1 (20s). Wide hook; interviewer raises microphone; woman responds; microphone grows; both react; beach payoff.\",\"aspectRatio\":\"9:16\",\"style\":{\"id\":\"source\",\"options\":[]},\"referenceRoles\":[\"scene\",\"character\"],\"references\":[{\"artifactId\":\"01a1cf75-6f0a-738b-aee1-3f180314aea9\",\"objectHash\":\"e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec\"},{\"artifactId\":\"01a1cf75-6fae-74b9-87d4-3b16c51a3b6f\",\"objectHash\":\"ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4\"},{\"artifactId\":\"01a1cf75-7120-74e6-942e-e61dd19afa6f\",\"objectHash\":\"e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec\"}],\"model\":\"nano-banana-2-1\",\"resolution\":\"2K\",\"layout\":\"six-panel\"}",
+            "frameArtifactId": "01a1cf75-7120-74e6-942e-e61dd19afa6f",
+            "index": 0,
+            "parentArtifactId": null,
+            "stage": "storyboards",
+            "stepId": "storyboard1",
+            "storyboardLayout": "six-panel"
+          }
+        ],
+        "chainId": "01a1cf75-724a-757a-b8c9-9527fc265001",
+        "outputs": [
+          {
+            "address": "@c2",
+            "artifactId": "01a1cf75-724a-757a-b8c9-98c833cabdd3",
+            "cellId": "01a1cf75-72af-7635-9a29-176e9d2c829b",
+            "index": 0,
+            "producerCellId": "01a1cf75-72ae-77fe-8264-8c5c811fb4d1"
+          }
+        ],
+        "previousChainIds": [],
+        "revision": 2,
+        "shotIndexes": [
+          0
+        ]
+      },
+      "videos": {
+        "approvedAt": "2026-11-12T11:12:23.849Z",
+        "attempts": [
+          {
+            "artifactId": "01a1cf75-73cc-73ca-a61e-dd71584bc472",
+            "basePrompt": "Natural gestures, lively timing. Street ambience, brief dialogue. No music.",
+            "cellId": "01a1cf75-752b-7579-8591-cc1391a5e8c2",
+            "chainId": "01a1cf75-7529-714b-9528-fa89cd462bd5",
+            "createdAt": "2026-11-12T11:12:23.849Z",
+            "feedback": null,
+            "fingerprint": "{\"prompt\":\"Natural gestures, lively timing. Street ambience, brief dialogue. No music.\",\"aspectRatio\":\"9:16\",\"style\":{\"id\":\"source\",\"options\":[]},\"referenceRoles\":[\"scene\",\"character\"],\"references\":[{\"artifactId\":\"01a1cf75-6f0a-738b-aee1-3f180314aea9\",\"objectHash\":\"e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec\"},{\"artifactId\":\"01a1cf75-6fae-74b9-87d4-3b16c51a3b6f\",\"objectHash\":\"ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4\"},{\"artifactId\":\"01a1cf75-7120-74e6-942e-e61dd19afa6f\",\"objectHash\":\"e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec\"},{\"artifactId\":\"01a1cf75-724a-757a-b8c9-98c833cabdd3\",\"objectHash\":\"6069078e035882713a5dfec4816cab75169643b0dd62275c2341fe9d54031543\"}],\"duration\":20,\"resolution\":\"720p\",\"audio\":true}",
+            "frameArtifactId": null,
+            "index": 0,
+            "parentArtifactId": null,
+            "stage": "videos",
+            "stepId": "shot1"
+          }
+        ],
+        "chainId": "01a1cf75-7529-714b-9528-fa89cd462bd5",
+        "outputs": [
+          {
+            "address": "@d1",
+            "artifactId": "01a1cf75-73cc-73ca-a61e-dd71584bc472",
+            "cellId": "01a1cf75-752b-7579-8591-cc1391a5e8c2",
+            "index": 0,
+            "producerCellId": "01a1cf75-752b-7579-8591-b8940b667dc3"
+          }
+        ],
+        "previousChainIds": [],
+        "revision": 3,
+        "shotIndexes": [
+          0
+        ]
+      }
+    },
+    "status": "completed",
+    "trackId": "01a1cf75-6ba6-75a0-89c6-088032218481",
+    "updatedAt": "2026-11-12T11:12:23.969Z"
+  },
+  "cells": [
+    {
+      "id": "01a1cf75-6f75-7509-94ef-376576a53071",
+      "type": "image",
+      "label": "Character 1",
+      "slot": {
+        "row": 0,
+        "column": 0
+      },
+      "inputs": {},
+      "outputArtifactId": "01a1cf75-6f0a-738b-aee1-3f180314aea9",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-7015-739e-b519-37b14dbf526a",
+      "type": "image",
+      "label": "Character 2",
+      "slot": {
+        "row": 0,
+        "column": 1
+      },
+      "inputs": {},
+      "outputArtifactId": "01a1cf75-6fae-74b9-87d4-3b16c51a3b6f",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-705d-7188-b081-f9c71907d5bc",
+      "type": "goal",
+      "label": "The skateboard champion",
+      "slot": {
+        "row": 1,
+        "column": 0
+      },
+      "prompt": "@a1 @a2 interview with a giant microphone",
+      "inputs": {
+        "characters": [
+          {
+            "address": "@a1",
+            "artifactId": "01a1cf75-6f0a-738b-aee1-3f180314aea9",
+            "cellId": "01a1cf75-6f75-7509-94ef-376576a53071",
+            "label": "Character 1"
+          },
+          {
+            "address": "@a2",
+            "artifactId": "01a1cf75-6fae-74b9-87d4-3b16c51a3b6f",
+            "cellId": "01a1cf75-7015-739e-b519-37b14dbf526a",
+            "label": "Character 2"
+          }
+        ],
+        "estimate": {
+          "frame": {
+            "usd": 0.03,
+            "warnings": []
+          },
+          "storyboards": {
+            "usd": 0.03,
+            "warnings": []
+          },
+          "total": {
+            "usd": 6.359999999999999,
+            "warnings": []
+          },
+          "videos": {
+            "usd": 6.3,
+            "warnings": []
+          }
+        },
+        "goalId": "01a1cf75-7059-77cb-84fc-733f82a8c976",
+        "plan": {
+          "aspectRatio": "9:16",
+          "continuity": "Keep the source street, lighting and camera. Reference 2 replaces the interviewer.",
+          "frame": {
+            "prompt": "Reference 2 interviews the woman in Reference 1; giant microphone."
+          },
+          "frameContinuity": false,
+          "imageModel": "nano-banana-2-1",
+          "imageResolution": "2K",
+          "referenceRoles": [
+            "scene",
+            "character"
+          ],
+          "shots": [
+            {
+              "durationSeconds": 20,
+              "endingPrompt": null,
+              "storyboardPrompt": "Wide hook; interviewer raises microphone; woman responds; microphone grows; both react; beach payoff.",
+              "title": "Park adventure 1",
+              "videoPrompt": "Natural gestures, lively timing. Street ambience, brief dialogue. No music."
+            }
+          ],
+          "storyboardLayout": "six-panel",
+          "style": {
+            "id": "source",
+            "options": {}
+          },
+          "title": "The skateboard champion",
+          "version": 2,
+          "videoResolution": "720p"
+        },
+        "revision": 3
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-718d-725c-b1ed-e6367efed5b4",
+      "type": "generate_image",
+      "label": "Nano Banana 2.1 — Keep the source street, lighting and camera. Reference 2…",
+      "slot": {
+        "row": 1,
+        "column": 1
+      },
+      "prompt": "Keep the source street, lighting and camera. Reference 2 replaces the interviewer.\n\nReference 2 interviews the woman in Reference 1; giant microphone.\n\nMatch the source scene's framing, lighting and visual style; remove interface overlays.\n\n@image1 Reference 1 (scene); @image2 Reference 2 (character).",
+      "provider": "kie",
+      "model": "kie:nano-banana-2-1",
+      "operation": "text_to_image",
+      "tool": "generate_image",
+      "inputs": {
+        "chainRunId": "01a1cf75-7120-74e6-942e-e346ebfe2ece:frame",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "output_format": "png",
+          "resolution": "2K"
+        }
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-72ae-77fe-8264-8c5c811fb4d1",
+      "type": "generate_image",
+      "label": "Nano Banana 2.1 — 2 columns by 3 rows, six-panel storyboard. Each 9:16.…",
+      "slot": {
+        "row": 1,
+        "column": 2
+      },
+      "prompt": "2 columns by 3 rows, six-panel storyboard. Each 9:16. Left-right, top-bottom: hook; setup; action; escalation; reaction; payoff. Below pictures: timing + action/camera notes. Times: 0–3.3s; 3.3–6.7s; 6.7–10s; 10–13.3s; 13.3–16.7s; 16.7–20s. Pictures text-free.\n\nShot 1: Park adventure 1 (20s). Wide hook; interviewer raises microphone; woman responds; microphone grows; both react; beach payoff.\n\nKeep the approved scene's visual style, people and props.\n\n@image1 approved scene: keep clothes, props, place; @image2 Reference 1 (scene); @image3 Reference 2 (character).",
+      "provider": "kie",
+      "model": "kie:nano-banana-2-1",
+      "operation": "text_to_image",
+      "tool": "generate_image",
+      "inputs": {
+        "chainRunId": "01a1cf75-724a-757a-b8c9-9527fc265001:storyboard1",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "output_format": "png",
+          "resolution": "2K"
+        }
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-752b-7579-8591-b8940b667dc3",
+      "type": "generate_video",
+      "label": "Seedance 2.5 — Natural gestures, lively timing. Street ambience, brief…",
+      "slot": {
+        "row": 1,
+        "column": 3
+      },
+      "prompt": "Natural gestures, lively timing. Street ambience, brief dialogue. No music.\n\n@image1 storyboard. Six beats in reading order, follow its timestamps. Same people, place. Full-screen. Match the approved scene's camera and lighting; natural ambient sound. @image2 approved scene; @image3 Reference 1 (scene); @image4 Reference 2 (character). No grid, borders, notes, text. No music.",
+      "provider": "kie",
+      "model": "kie:bytedance/seedance-2-5",
+      "operation": "text_to_video",
+      "tool": "generate_video",
+      "inputs": {
+        "chainRunId": "01a1cf75-7529-714b-9528-fa89cd462bd5:shot1",
+        "generationMode": "r2v",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "duration": 20,
+          "generate_audio": true,
+          "resolution": "720p"
+        }
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-718d-725c-b1ed-f23612cd36b1",
+      "type": "image",
+      "label": "Nano Banana 2.1 — Keep the source street, lighting and camera. Reference 2… image",
+      "slot": {
+        "row": 2,
+        "column": 0
+      },
+      "prompt": "Keep the source street, lighting and camera. Reference 2 replaces the interviewer.\n\nReference 2 interviews the woman in Reference 1; giant microphone.\n\nMatch the source scene's framing, lighting and visual style; remove interface overlays.\n\n@image1 Reference 1 (scene); @image2 Reference 2 (character).",
+      "provider": "kie",
+      "model": "kie:nano-banana-2-1",
+      "tool": "generate_image",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:22.924Z",
+        "generationRunId": "01a1cf75-7120-74e6-942e-e346ebfe2ece:frame",
+        "mediaRole": "generate-image-output",
+        "producerCellId": "01a1cf75-718d-725c-b1ed-e6367efed5b4",
+        "state": "awaiting-output"
+      },
+      "outputArtifactId": "01a1cf75-7120-74e6-942e-e61dd19afa6f",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-72af-7635-9a29-176e9d2c829b",
+      "type": "image",
+      "label": "Nano Banana 2.1 — 2 columns by 3 rows, six-panel storyboard. Each 9:16.… image",
+      "slot": {
+        "row": 2,
+        "column": 1
+      },
+      "prompt": "2 columns by 3 rows, six-panel storyboard. Each 9:16. Left-right, top-bottom: hook; setup; action; escalation; reaction; payoff. Below pictures: timing + action/camera notes. Times: 0–3.3s; 3.3–6.7s; 6.7–10s; 10–13.3s; 13.3–16.7s; 16.7–20s. Pictures text-free.\n\nShot 1: Park adventure 1 (20s). Wide hook; interviewer raises microphone; woman responds; microphone grows; both react; beach payoff.\n\nKeep the approved scene's visual style, people and props.\n\n@image1 approved scene: keep clothes, props, place; @image2 Reference 1 (scene); @image3 Reference 2 (character).",
+      "provider": "kie",
+      "model": "kie:nano-banana-2-1",
+      "tool": "generate_image",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:23.213Z",
+        "generationRunId": "01a1cf75-724a-757a-b8c9-9527fc265001:storyboard1",
+        "mediaRole": "generate-image-output",
+        "producerCellId": "01a1cf75-72ae-77fe-8264-8c5c811fb4d1",
+        "state": "awaiting-output"
+      },
+      "outputArtifactId": "01a1cf75-724a-757a-b8c9-98c833cabdd3",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-752b-7579-8591-cc1391a5e8c2",
+      "type": "video",
+      "label": "Seedance 2.5 — Natural gestures, lively timing. Street ambience, brief… video",
+      "slot": {
+        "row": 3,
+        "column": 0
+      },
+      "prompt": "Natural gestures, lively timing. Street ambience, brief dialogue. No music.\n\n@image1 storyboard. Six beats in reading order, follow its timestamps. Same people, place. Full-screen. Match the approved scene's camera and lighting; natural ambient sound. @image2 approved scene; @image3 Reference 1 (scene); @image4 Reference 2 (character). No grid, borders, notes, text. No music.",
+      "provider": "kie",
+      "model": "kie:bytedance/seedance-2-5",
+      "tool": "generate_video",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:23.849Z",
+        "generationRunId": "01a1cf75-7529-714b-9528-fa89cd462bd5:shot1",
+        "mediaRole": "generate-video-output",
+        "producerCellId": "01a1cf75-752b-7579-8591-b8940b667dc3",
+        "state": "awaiting-output"
+      },
+      "outputArtifactId": "01a1cf75-73cc-73ca-a61e-dd71584bc472",
+      "references": [],
+      "pinnedResults": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "01a1cf75-705d-7188-b081-fdc0d7cd7c7a",
+      "source": "01a1cf75-6f75-7509-94ef-376576a53071",
+      "target": "01a1cf75-705d-7188-b081-f9c71907d5bc",
+      "targetInput": "character"
+    },
+    {
+      "id": "01a1cf75-705d-7188-b082-013a5d96f1aa",
+      "source": "01a1cf75-7015-739e-b519-37b14dbf526a",
+      "target": "01a1cf75-705d-7188-b081-f9c71907d5bc",
+      "targetInput": "character_2"
+    },
+    {
+      "id": "01a1cf75-718d-725c-b1ed-eb99ad9442ee",
+      "source": "01a1cf75-6f75-7509-94ef-376576a53071",
+      "target": "01a1cf75-718d-725c-b1ed-e6367efed5b4",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-718d-725c-b1ed-ee02edf6206d",
+      "source": "01a1cf75-7015-739e-b519-37b14dbf526a",
+      "target": "01a1cf75-718d-725c-b1ed-e6367efed5b4",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "01a1cf75-718d-725c-b1ed-f725b204defe",
+      "source": "01a1cf75-718d-725c-b1ed-e6367efed5b4",
+      "target": "01a1cf75-718d-725c-b1ed-f23612cd36b1",
+      "targetInput": "media"
+    },
+    {
+      "id": "01a1cf75-72ae-77fe-8264-9014c28fa797",
+      "source": "01a1cf75-718d-725c-b1ed-f23612cd36b1",
+      "target": "01a1cf75-72ae-77fe-8264-8c5c811fb4d1",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-72ae-77fe-8264-97d135459f0a",
+      "source": "01a1cf75-6f75-7509-94ef-376576a53071",
+      "target": "01a1cf75-72ae-77fe-8264-8c5c811fb4d1",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "01a1cf75-72ae-77fe-8264-9932e1a62ec5",
+      "source": "01a1cf75-7015-739e-b519-37b14dbf526a",
+      "target": "01a1cf75-72ae-77fe-8264-8c5c811fb4d1",
+      "targetInput": "image_3"
+    },
+    {
+      "id": "01a1cf75-72af-7635-9a29-1bb971eddbc4",
+      "source": "01a1cf75-72ae-77fe-8264-8c5c811fb4d1",
+      "target": "01a1cf75-72af-7635-9a29-176e9d2c829b",
+      "targetInput": "media"
+    },
+    {
+      "id": "01a1cf75-752b-7579-8591-bcccc71977c6",
+      "source": "01a1cf75-72af-7635-9a29-176e9d2c829b",
+      "target": "01a1cf75-752b-7579-8591-b8940b667dc3",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-752b-7579-8591-c1c90ed0a715",
+      "source": "01a1cf75-718d-725c-b1ed-f23612cd36b1",
+      "target": "01a1cf75-752b-7579-8591-b8940b667dc3",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "01a1cf75-752b-7579-8591-c65e790feacf",
+      "source": "01a1cf75-6f75-7509-94ef-376576a53071",
+      "target": "01a1cf75-752b-7579-8591-b8940b667dc3",
+      "targetInput": "image_3"
+    },
+    {
+      "id": "01a1cf75-752b-7579-8591-cac745b540de",
+      "source": "01a1cf75-7015-739e-b519-37b14dbf526a",
+      "target": "01a1cf75-752b-7579-8591-b8940b667dc3",
+      "targetInput": "image_4"
+    },
+    {
+      "id": "01a1cf75-752b-7579-8591-d1f0644f0d50",
+      "source": "01a1cf75-752b-7579-8591-b8940b667dc3",
+      "target": "01a1cf75-752b-7579-8591-cc1391a5e8c2",
+      "targetInput": "media"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifactId": "01a1cf75-6f0a-738b-aee1-3f180314aea9",
+      "kind": "image",
+      "label": "Character 1"
+    },
+    {
+      "artifactId": "01a1cf75-6fae-74b9-87d4-3b16c51a3b6f",
+      "kind": "image",
+      "label": "Character 2"
+    },
+    {
+      "artifactId": "01a1cf75-7120-74e6-942e-e61dd19afa6f",
+      "kind": "image",
+      "label": "frame"
+    },
+    {
+      "artifactId": "01a1cf75-724a-757a-b8c9-98c833cabdd3",
+      "kind": "image",
+      "label": "storyboard1"
+    },
+    {
+      "artifactId": "01a1cf75-73cc-73ca-a61e-dd71584bc472",
+      "kind": "video",
+      "label": "green"
+    }
+  ],
+  "chainRuns": {
+    "01a1cf75-7120-74e6-942e-e346ebfe2ece": {
+      "autoApply": false,
+      "awaitingStepId": null,
+      "bookId": "01a1cf75-69a3-7015-97da-595cebe150c6",
+      "chainId": "01a1cf75-7120-74e6-942e-e346ebfe2ece",
+      "createdAt": "2026-11-12T11:12:22.816Z",
+      "effect": "generation",
+      "error": null,
+      "fingerprint": "fixture-01a1cf75-7120-74e6-942e-e346ebfe2ece",
+      "kind": "chain-run",
+      "notebookId": "01a1cf75-6ee0-72a8-b851-202eb797a67e",
+      "requestId": null,
+      "status": "completed",
+      "steps": [
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:22.816Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [],
+          "effect": "generation",
+          "error": null,
+          "id": "frame",
+          "outputs": {
+            "address": "@b2",
+            "asset_id": "01a1cf75-7120-74e6-942e-e61dd19afa6f",
+            "cell_id": "01a1cf75-718d-725c-b1ed-f23612cd36b1",
+            "img_asset_id": "01a1cf75-7120-74e6-942e-e61dd19afa6f",
+            "status": "completed"
+          },
+          "params": {
+            "model": "kie:nano-banana-2-1",
+            "options": {
+              "aspect_ratio": "9:16",
+              "output_format": "png",
+              "resolution": "2K"
+            },
+            "prompt": "Keep the source street, lighting and camera. Reference 2 replaces the interviewer.\n\nReference 2 interviews the woman in Reference 1; giant microphone.\n\nMatch the source scene's framing, lighting and visual style; remove interface overlays.\n\n@image1 Reference 1 (scene); @image2 Reference 2 (character).",
+            "refs": {
+              "image": [
+                "@a1",
+                "@a2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-6f0a-738b-aee1-3f180314aea9",
+              "cellId": "01a1cf75-6f75-7509-94ef-376576a53071",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-6fae-74b9-87d4-3b16c51a3b6f",
+              "cellId": "01a1cf75-7015-739e-b519-37b14dbf526a",
+              "field": "refs.image",
+              "index": 1,
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "status": "completed",
+          "tool": "generate_image"
+        }
+      ],
+      "updatedAt": "2026-11-12T11:12:22.816Z"
+    },
+    "01a1cf75-724a-757a-b8c9-9527fc265001": {
+      "autoApply": false,
+      "awaitingStepId": null,
+      "bookId": "01a1cf75-69a3-7015-97da-595cebe150c6",
+      "chainId": "01a1cf75-724a-757a-b8c9-9527fc265001",
+      "createdAt": "2026-11-12T11:12:23.114Z",
+      "effect": "generation",
+      "error": null,
+      "fingerprint": "fixture-01a1cf75-724a-757a-b8c9-9527fc265001",
+      "kind": "chain-run",
+      "notebookId": "01a1cf75-6ee0-72a8-b851-202eb797a67e",
+      "requestId": null,
+      "status": "completed",
+      "steps": [
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:23.114Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [],
+          "effect": "generation",
+          "error": null,
+          "id": "storyboard1",
+          "outputs": {
+            "address": "@b3",
+            "asset_id": "01a1cf75-724a-757a-b8c9-98c833cabdd3",
+            "cell_id": "01a1cf75-72af-7635-9a29-176e9d2c829b",
+            "img_asset_id": "01a1cf75-724a-757a-b8c9-98c833cabdd3",
+            "status": "completed"
+          },
+          "params": {
+            "model": "kie:nano-banana-2-1",
+            "options": {
+              "aspect_ratio": "9:16",
+              "output_format": "png",
+              "resolution": "2K"
+            },
+            "prompt": "2 columns by 3 rows, six-panel storyboard. Each 9:16. Left-right, top-bottom: hook; setup; action; escalation; reaction; payoff. Below pictures: timing + action/camera notes. Times: 0–3.3s; 3.3–6.7s; 6.7–10s; 10–13.3s; 13.3–16.7s; 16.7–20s. Pictures text-free.\n\nShot 1: Park adventure 1 (20s). Wide hook; interviewer raises microphone; woman responds; microphone grows; both react; beach payoff.\n\nKeep the approved scene's visual style, people and props.\n\n@image1 approved scene: keep clothes, props, place; @image2 Reference 1 (scene); @image3 Reference 2 (character).",
+            "refs": {
+              "image": [
+                "@c1",
+                "@a1",
+                "@a2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@c1",
+              "artifactId": "01a1cf75-7120-74e6-942e-e61dd19afa6f",
+              "cellId": "01a1cf75-718d-725c-b1ed-f23612cd36b1",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-6f0a-738b-aee1-3f180314aea9",
+              "cellId": "01a1cf75-6f75-7509-94ef-376576a53071",
+              "field": "refs.image",
+              "index": 1,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-6fae-74b9-87d4-3b16c51a3b6f",
+              "cellId": "01a1cf75-7015-739e-b519-37b14dbf526a",
+              "field": "refs.image",
+              "index": 2,
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "status": "completed",
+          "tool": "generate_image"
+        }
+      ],
+      "updatedAt": "2026-11-12T11:12:23.114Z"
+    },
+    "01a1cf75-7529-714b-9528-fa89cd462bd5": {
+      "autoApply": false,
+      "awaitingStepId": null,
+      "bookId": "01a1cf75-69a3-7015-97da-595cebe150c6",
+      "chainId": "01a1cf75-7529-714b-9528-fa89cd462bd5",
+      "createdAt": "2026-11-12T11:12:23.849Z",
+      "effect": "generation",
+      "error": null,
+      "fingerprint": "fixture-01a1cf75-7529-714b-9528-fa89cd462bd5",
+      "kind": "chain-run",
+      "notebookId": "01a1cf75-6ee0-72a8-b851-202eb797a67e",
+      "requestId": null,
+      "status": "completed",
+      "steps": [
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:23.849Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [],
+          "effect": "generation",
+          "error": null,
+          "id": "shot1",
+          "outputs": {
+            "address": "@b4",
+            "asset_id": "01a1cf75-73cc-73ca-a61e-dd71584bc472",
+            "cell_id": "01a1cf75-752b-7579-8591-cc1391a5e8c2",
+            "status": "completed",
+            "vid_asset_id": "01a1cf75-73cc-73ca-a61e-dd71584bc472"
+          },
+          "params": {
+            "mode": "r2v",
+            "model": "kie:bytedance/seedance-2-5",
+            "options": {
+              "aspect_ratio": "9:16",
+              "duration": 20,
+              "generate_audio": true,
+              "resolution": "720p"
+            },
+            "prompt": "Natural gestures, lively timing. Street ambience, brief dialogue. No music.\n\n@image1 storyboard. Six beats in reading order, follow its timestamps. Same people, place. Full-screen. Match the approved scene's camera and lighting; natural ambient sound. @image2 approved scene; @image3 Reference 1 (scene); @image4 Reference 2 (character). No grid, borders, notes, text. No music.",
+            "refs": {
+              "image": [
+                "@c2",
+                "@c1",
+                "@a1",
+                "@a2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@c2",
+              "artifactId": "01a1cf75-724a-757a-b8c9-98c833cabdd3",
+              "cellId": "01a1cf75-72af-7635-9a29-176e9d2c829b",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "6069078e035882713a5dfec4816cab75169643b0dd62275c2341fe9d54031543"
+            },
+            {
+              "address": "@c1",
+              "artifactId": "01a1cf75-7120-74e6-942e-e61dd19afa6f",
+              "cellId": "01a1cf75-718d-725c-b1ed-f23612cd36b1",
+              "field": "refs.image",
+              "index": 1,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-6f0a-738b-aee1-3f180314aea9",
+              "cellId": "01a1cf75-6f75-7509-94ef-376576a53071",
+              "field": "refs.image",
+              "index": 2,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-6fae-74b9-87d4-3b16c51a3b6f",
+              "cellId": "01a1cf75-7015-739e-b519-37b14dbf526a",
+              "field": "refs.image",
+              "index": 3,
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "status": "completed",
+          "tool": "generate_video"
+        }
+      ],
+      "updatedAt": "2026-11-12T11:12:23.849Z"
+    }
+  }
+}

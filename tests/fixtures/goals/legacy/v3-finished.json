@@ -1,0 +1,701 @@
+{
+  "name": "v3-finished",
+  "store": "application.goals.v2",
+  "bookId": "01a1cf75-75d5-7589-9111-a4049ee817a7",
+  "notebookId": "01a1cf75-7b2b-704b-9d85-a2e27f046c15",
+  "goalId": "01a1cf75-7c4b-753d-a780-3b7da6f809d9",
+  "record": {
+    "assembly": null,
+    "bookId": "01a1cf75-75d5-7589-9111-a4049ee817a7",
+    "cellId": "01a1cf75-7c4e-74de-a067-13202e56c79a",
+    "chainId": "01a1cf75-7f02-70cc-ac1f-5887b02701af",
+    "clipIds": [],
+    "createdAt": "2026-11-12T11:12:25.675Z",
+    "dismissedAt": null,
+    "error": null,
+    "finish": {
+      "coldOpenArtifactId": "01a1cf75-839b-74eb-8f26-20759b008ebb",
+      "coldOpenRequestId": "01a1cf75-828e-747a-a5b7-2a9d4e17db62",
+      "endSeconds": 2.3,
+      "error": null,
+      "finalArtifactId": "01a1cf75-8889-700b-885f-06ea1dedf87e",
+      "identity": "{\"sourceObjectHash\":\"dc53405ff7670e3c5b804c89fdd872dd339137e5787b78e63dc30c1ad866ab8f\",\"startSeconds\":0,\"endSeconds\":2.3,\"profile\":{\"platform\":\"tiktok\",\"handle\":\"jtbkk\",\"profileUrl\":\"https://www.tiktok.com/@jtbkk\",\"includePlatformIcon\":true,\"includeHandleBorder\":true,\"handlePaddingX\":15,\"handlePaddingY\":28,\"handleRounding\":56,\"scale\":1,\"mode\":\"burn\",\"handlePlacement\":\"center\",\"handleVerticalPercent\":10,\"handleStartSeconds\":0,\"handleEndSeconds\":3,\"handleOpacity\":0.28,\"qrPosition\":\"bottom-right\",\"qrLeadSeconds\":2.3,\"qrOpacity\":0.37,\"fadeSeconds\":0.3}}",
+      "jobId": 5,
+      "sourceArtifactId": "01a1cf75-7f37-7178-9d31-8074f2b043b8",
+      "sourceObjectHash": "dc53405ff7670e3c5b804c89fdd872dd339137e5787b78e63dc30c1ad866ab8f",
+      "startSeconds": 0,
+      "status": "completed"
+    },
+    "goalId": "01a1cf75-7c4b-753d-a780-3b7da6f809d9",
+    "notebookId": "01a1cf75-7b2b-704b-9d85-a2e27f046c15",
+    "planningJobId": null,
+    "planVersion": 3,
+    "requestId": "01a1cf75-7c4a-769e-b12f-01f9963234cf",
+    "resumeFinish": null,
+    "resumeOutputs": null,
+    "resumeStage": null,
+    "resumeStatus": null,
+    "stage": "videos",
+    "stages": {
+      "frame": {
+        "approvedAt": "2026-11-12T11:12:25.822Z",
+        "attempts": [
+          {
+            "artifactId": "01a1cf75-7cff-725b-9d90-a511c0c22114",
+            "basePrompt": "skate through the morning market @image1 @image2",
+            "cellId": "01a1cf75-7d52-720b-9056-a128a46661d6",
+            "chainId": "01a1cf75-7cc5-733e-aec9-df09b3fa7d29",
+            "createdAt": "2026-11-12T11:12:25.822Z",
+            "feedback": null,
+            "fingerprint": "{\"prompt\":\"skate through the morning market @image1 @image2\",\"settings\":{\"model\":\"kie:nano-banana-2-1\",\"aspectRatio\":\"9:16\",\"resolution\":\"2K\",\"outputFormat\":\"jpg\"},\"references\":[{\"artifactId\":\"01a1cf75-7b53-73a1-a52a-0186a5e1e895\",\"objectHash\":\"e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec\"},{\"artifactId\":\"01a1cf75-7bce-77f9-a3dc-440ef40aee30\",\"objectHash\":\"ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4\"}]}",
+            "frameArtifactId": null,
+            "index": 0,
+            "parentArtifactId": null,
+            "stage": "frame",
+            "stepId": "scene"
+          }
+        ],
+        "chainId": "01a1cf75-7cc5-733e-aec9-df09b3fa7d29",
+        "outputs": [
+          {
+            "address": "@c1",
+            "artifactId": "01a1cf75-7cff-725b-9d90-a511c0c22114",
+            "cellId": "01a1cf75-7d52-720b-9056-a128a46661d6",
+            "index": 0,
+            "producerCellId": "01a1cf75-7d52-720b-9056-9557cd67bfdd"
+          }
+        ],
+        "previousChainIds": [],
+        "revision": 1,
+        "shotIndexes": [
+          0
+        ]
+      },
+      "videos": {
+        "approvedAt": "2026-11-12T11:12:26.393Z",
+        "attempts": [
+          {
+            "artifactId": "01a1cf75-7f37-7178-9d31-8074f2b043b8",
+            "basePrompt": "skate through the morning market @image1 @image2",
+            "cellId": "01a1cf75-7f76-7513-ba94-ed00f234a7a4",
+            "chainId": "01a1cf75-7f02-70cc-ac1f-5887b02701af",
+            "createdAt": "2026-11-12T11:12:26.393Z",
+            "feedback": null,
+            "fingerprint": "{\"prompt\":\"skate through the morning market @image1 @image2\",\"settings\":{\"aspectRatio\":\"9:16\",\"resolution\":\"1080p\",\"duration\":12,\"audio\":true,\"outputFormat\":\"mp4\"},\"references\":[{\"artifactId\":\"01a1cf75-7b53-73a1-a52a-0186a5e1e895\",\"objectHash\":\"e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec\"},{\"artifactId\":\"01a1cf75-7bce-77f9-a3dc-440ef40aee30\",\"objectHash\":\"ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4\"}],\"sceneArtifactId\":\"01a1cf75-7cff-725b-9d90-a511c0c22114\"}",
+            "frameArtifactId": "01a1cf75-7cff-725b-9d90-a511c0c22114",
+            "index": 0,
+            "parentArtifactId": null,
+            "stage": "videos",
+            "stepId": "video"
+          }
+        ],
+        "chainId": "01a1cf75-7f02-70cc-ac1f-5887b02701af",
+        "outputs": [
+          {
+            "address": "@d1",
+            "artifactId": "01a1cf75-7f37-7178-9d31-8074f2b043b8",
+            "cellId": "01a1cf75-7f76-7513-ba94-ed00f234a7a4",
+            "index": 0,
+            "producerCellId": "01a1cf75-7f76-7513-ba94-dd45a14f8675"
+          }
+        ],
+        "previousChainIds": [],
+        "revision": 2,
+        "shotIndexes": [
+          0
+        ]
+      }
+    },
+    "status": "completed",
+    "trackId": null,
+    "updatedAt": "2026-11-12T11:12:42.665Z"
+  },
+  "cells": [
+    {
+      "id": "01a1cf75-7ba9-72ea-be72-4e505e15c6fd",
+      "type": "image",
+      "label": "Character 1",
+      "slot": {
+        "row": 0,
+        "column": 0
+      },
+      "inputs": {},
+      "outputArtifactId": "01a1cf75-7b53-73a1-a52a-0186a5e1e895",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-7c1a-70c8-a4ca-56ab8b9a71ff",
+      "type": "image",
+      "label": "Character 2",
+      "slot": {
+        "row": 0,
+        "column": 1
+      },
+      "inputs": {},
+      "outputArtifactId": "01a1cf75-7bce-77f9-a3dc-440ef40aee30",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-be3a-708d-81c4-c16f28c93007",
+      "type": "video",
+      "label": "Finished",
+      "slot": {
+        "row": 0,
+        "column": 2
+      },
+      "inputs": {
+        "sourceArtifactId": "01a1cf75-7f37-7178-9d31-8074f2b043b8",
+        "sourceOperation": "goal_finish",
+        "state": "completed"
+      },
+      "outputArtifactId": "01a1cf75-8889-700b-885f-06ea1dedf87e",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-7c4e-74de-a067-13202e56c79a",
+      "type": "goal",
+      "label": "skate through the morning market",
+      "slot": {
+        "row": 1,
+        "column": 0
+      },
+      "prompt": "@a1 @a2 skate through the morning market",
+      "inputs": {
+        "characters": [
+          {
+            "address": "@a1",
+            "artifactId": "01a1cf75-7b53-73a1-a52a-0186a5e1e895",
+            "cellId": "01a1cf75-7ba9-72ea-be72-4e505e15c6fd",
+            "label": "Character 1"
+          },
+          {
+            "address": "@a2",
+            "artifactId": "01a1cf75-7bce-77f9-a3dc-440ef40aee30",
+            "cellId": "01a1cf75-7c1a-70c8-a4ca-56ab8b9a71ff",
+            "label": "Character 2"
+          }
+        ],
+        "estimate": {
+          "frame": {
+            "usd": 0.03,
+            "warnings": []
+          },
+          "storyboards": {
+            "usd": 0,
+            "warnings": []
+          },
+          "total": {
+            "usd": 9.51,
+            "warnings": []
+          },
+          "videos": {
+            "usd": 9.48,
+            "warnings": []
+          }
+        },
+        "goalId": "01a1cf75-7c4b-753d-a780-3b7da6f809d9",
+        "media": [
+          {
+            "address": "@a1",
+            "artifactId": "01a1cf75-7b53-73a1-a52a-0186a5e1e895",
+            "cellId": "01a1cf75-7ba9-72ea-be72-4e505e15c6fd",
+            "kind": "image",
+            "label": "Character 1",
+            "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec",
+            "slot": "@image1"
+          },
+          {
+            "address": "@a2",
+            "artifactId": "01a1cf75-7bce-77f9-a3dc-440ef40aee30",
+            "cellId": "01a1cf75-7c1a-70c8-a4ca-56ab8b9a71ff",
+            "kind": "image",
+            "label": "Character 2",
+            "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4",
+            "slot": "@image2"
+          }
+        ],
+        "plan": {
+          "aspectRatio": "9:16",
+          "finish": {
+            "suggestedColdOpenSeconds": 2.3,
+            "watermark": {
+              "fadeSeconds": 0.3,
+              "handle": "jtbkk",
+              "handleEndSeconds": 3,
+              "handleOpacity": 0.28,
+              "mode": "burn",
+              "platform": "tiktok",
+              "profileUrl": "https://www.tiktok.com/@jtbkk",
+              "qrLeadSeconds": 2.3,
+              "qrOpacity": 0.37
+            }
+          },
+          "references": [
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-7b53-73a1-a52a-0186a5e1e895",
+              "cellId": "01a1cf75-7ba9-72ea-be72-4e505e15c6fd",
+              "kind": "image",
+              "label": "Character 1",
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec",
+              "slot": "@image1"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-7bce-77f9-a3dc-440ef40aee30",
+              "cellId": "01a1cf75-7c1a-70c8-a4ca-56ab8b9a71ff",
+              "kind": "image",
+              "label": "Character 2",
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4",
+              "slot": "@image2"
+            }
+          ],
+          "sampledFrames": [],
+          "scene": {
+            "aspectRatio": "9:16",
+            "imageRefs": [
+              {
+                "address": "@a1",
+                "artifactId": "01a1cf75-7b53-73a1-a52a-0186a5e1e895",
+                "cellId": "01a1cf75-7ba9-72ea-be72-4e505e15c6fd",
+                "kind": "image",
+                "label": "Character 1",
+                "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec",
+                "slot": "@image1"
+              },
+              {
+                "address": "@a2",
+                "artifactId": "01a1cf75-7bce-77f9-a3dc-440ef40aee30",
+                "cellId": "01a1cf75-7c1a-70c8-a4ca-56ab8b9a71ff",
+                "kind": "image",
+                "label": "Character 2",
+                "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4",
+                "slot": "@image2"
+              }
+            ],
+            "model": "kie:nano-banana-2-1",
+            "outputFormat": "jpg",
+            "prompt": "skate through the morning market @image1 @image2",
+            "resolution": "2K",
+            "tool": "generate_image"
+          },
+          "title": "skate through the morning market",
+          "version": 3,
+          "video": {
+            "aspectRatio": "9:16",
+            "durationSeconds": 12,
+            "generateAudio": true,
+            "imageRefs": [
+              {
+                "address": "@a1",
+                "artifactId": "01a1cf75-7b53-73a1-a52a-0186a5e1e895",
+                "cellId": "01a1cf75-7ba9-72ea-be72-4e505e15c6fd",
+                "kind": "image",
+                "label": "Character 1",
+                "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec",
+                "slot": "@image1"
+              },
+              {
+                "address": "@a2",
+                "artifactId": "01a1cf75-7bce-77f9-a3dc-440ef40aee30",
+                "cellId": "01a1cf75-7c1a-70c8-a4ca-56ab8b9a71ff",
+                "kind": "image",
+                "label": "Character 2",
+                "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4",
+                "slot": "@image2"
+              }
+            ],
+            "model": "kie:bytedance/seedance-2-5",
+            "outputFormat": "mp4",
+            "prompt": "skate through the morning market @image1 @image2",
+            "resolution": "1080p",
+            "tool": "generate_video",
+            "videoRefs": []
+          }
+        },
+        "revision": 2
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-7d52-720b-9056-9557cd67bfdd",
+      "type": "generate_image",
+      "label": "Nano Banana 2.1 — skate through the morning market @image1 @image2",
+      "slot": {
+        "row": 1,
+        "column": 1
+      },
+      "prompt": "skate through the morning market @image1 @image2",
+      "provider": "kie",
+      "model": "kie:nano-banana-2-1",
+      "operation": "text_to_image",
+      "tool": "generate_image",
+      "inputs": {
+        "chainRunId": "01a1cf75-7cc5-733e-aec9-df09b3fa7d29:scene",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "output_format": "jpg",
+          "resolution": "2K"
+        },
+        "resolvedPrompt": "skate through the morning market @image1 @image2"
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-7f76-7513-ba94-dd45a14f8675",
+      "type": "generate_video",
+      "label": "Seedance 2.5 — skate through the morning market @image1 @image2",
+      "slot": {
+        "row": 1,
+        "column": 2
+      },
+      "prompt": "skate through the morning market @image1 @image2",
+      "provider": "kie",
+      "model": "kie:bytedance/seedance-2-5",
+      "operation": "text_to_video",
+      "tool": "generate_video",
+      "inputs": {
+        "chainRunId": "01a1cf75-7f02-70cc-ac1f-5887b02701af:video",
+        "generationMode": "r2v",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "duration": 12,
+          "generate_audio": true,
+          "output_format": "mp4",
+          "resolution": "1080p"
+        },
+        "resolvedPrompt": "skate through the morning market @image1 @image2"
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-7d52-720b-9056-a128a46661d6",
+      "type": "image",
+      "label": "Nano Banana 2.1 — skate through the morning market @image1 @image2 image",
+      "slot": {
+        "row": 2,
+        "column": 0
+      },
+      "prompt": "skate through the morning market @image1 @image2",
+      "provider": "kie",
+      "model": "kie:nano-banana-2-1",
+      "tool": "generate_image",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:25.937Z",
+        "generationRunId": "01a1cf75-7cc5-733e-aec9-df09b3fa7d29:scene",
+        "mediaRole": "generate-image-output",
+        "producerCellId": "01a1cf75-7d52-720b-9056-9557cd67bfdd",
+        "resolvedPrompt": "skate through the morning market @image1 @image2",
+        "state": "completed"
+      },
+      "outputArtifactId": "01a1cf75-7cff-725b-9d90-a511c0c22114",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-7f76-7513-ba94-ed00f234a7a4",
+      "type": "video",
+      "label": "Seedance 2.5 — skate through the morning market @image1 @image2 video",
+      "slot": {
+        "row": 3,
+        "column": 0
+      },
+      "prompt": "skate through the morning market @image1 @image2",
+      "provider": "kie",
+      "model": "kie:bytedance/seedance-2-5",
+      "tool": "generate_video",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:26.485Z",
+        "generationRunId": "01a1cf75-7f02-70cc-ac1f-5887b02701af:video",
+        "mediaRole": "generate-video-output",
+        "producerCellId": "01a1cf75-7f76-7513-ba94-dd45a14f8675",
+        "resolvedPrompt": "skate through the morning market @image1 @image2",
+        "state": "completed"
+      },
+      "outputArtifactId": "01a1cf75-7f37-7178-9d31-8074f2b043b8",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-881c-758d-8dbb-a9b5c343cde8",
+      "type": "video",
+      "label": "Seedance 2.5 — skate through the morning market @image1 @image2 — Cold open",
+      "slot": {
+        "row": 4,
+        "column": 0
+      },
+      "inputs": {
+        "sourceArtifactId": "01a1cf75-7f37-7178-9d31-8074f2b043b8",
+        "sourceOperation": "edit_cold_open",
+        "state": "completed"
+      },
+      "outputArtifactId": "01a1cf75-839b-74eb-8f26-20759b008ebb",
+      "references": [],
+      "pinnedResults": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "01a1cf75-7c4e-74de-a067-144c2041c491",
+      "source": "01a1cf75-7ba9-72ea-be72-4e505e15c6fd",
+      "target": "01a1cf75-7c4e-74de-a067-13202e56c79a",
+      "targetInput": "character"
+    },
+    {
+      "id": "01a1cf75-7c4e-74de-a067-1ad718846bbc",
+      "source": "01a1cf75-7c1a-70c8-a4ca-56ab8b9a71ff",
+      "target": "01a1cf75-7c4e-74de-a067-13202e56c79a",
+      "targetInput": "character_2"
+    },
+    {
+      "id": "01a1cf75-7d52-720b-9056-9b596145217b",
+      "source": "01a1cf75-7ba9-72ea-be72-4e505e15c6fd",
+      "target": "01a1cf75-7d52-720b-9056-9557cd67bfdd",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-7d52-720b-9056-9d15e0e76bed",
+      "source": "01a1cf75-7c1a-70c8-a4ca-56ab8b9a71ff",
+      "target": "01a1cf75-7d52-720b-9056-9557cd67bfdd",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "01a1cf75-7d52-720b-9056-a6cd1d432880",
+      "source": "01a1cf75-7d52-720b-9056-9557cd67bfdd",
+      "target": "01a1cf75-7d52-720b-9056-a128a46661d6",
+      "targetInput": "media"
+    },
+    {
+      "id": "01a1cf75-7f76-7513-ba94-e0cc9470d132",
+      "source": "01a1cf75-7d52-720b-9056-a128a46661d6",
+      "target": "01a1cf75-7f76-7513-ba94-dd45a14f8675",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-7f76-7513-ba94-e7b31b9f44b0",
+      "source": "01a1cf75-7ba9-72ea-be72-4e505e15c6fd",
+      "target": "01a1cf75-7f76-7513-ba94-dd45a14f8675",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "01a1cf75-7f76-7513-ba94-e9b4a3b3436b",
+      "source": "01a1cf75-7c1a-70c8-a4ca-56ab8b9a71ff",
+      "target": "01a1cf75-7f76-7513-ba94-dd45a14f8675",
+      "targetInput": "image_3"
+    },
+    {
+      "id": "01a1cf75-7f76-7513-ba94-f0a24b05b994",
+      "source": "01a1cf75-7f76-7513-ba94-dd45a14f8675",
+      "target": "01a1cf75-7f76-7513-ba94-ed00f234a7a4",
+      "targetInput": "media"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifactId": "01a1cf75-7b53-73a1-a52a-0186a5e1e895",
+      "kind": "image",
+      "label": "Character 1"
+    },
+    {
+      "artifactId": "01a1cf75-7bce-77f9-a3dc-440ef40aee30",
+      "kind": "image",
+      "label": "Character 2"
+    },
+    {
+      "artifactId": "01a1cf75-7cff-725b-9d90-a511c0c22114",
+      "kind": "image",
+      "label": "Nano Banana 2.1 — skate through the morning market @image1 @image2"
+    },
+    {
+      "artifactId": "01a1cf75-7f37-7178-9d31-8074f2b043b8",
+      "kind": "video",
+      "label": "Seedance 2.5 — skate through the morning market @image1 @image2"
+    },
+    {
+      "artifactId": "01a1cf75-839b-74eb-8f26-20759b008ebb",
+      "kind": "video",
+      "label": "Seedance 2.5 — skate through the morning market @image1 @image2 — Cold open"
+    },
+    {
+      "artifactId": "01a1cf75-8889-700b-885f-06ea1dedf87e",
+      "kind": "video",
+      "label": "Finished"
+    }
+  ],
+  "chainRuns": {
+    "01a1cf75-7cc5-733e-aec9-df09b3fa7d29": {
+      "autoApply": true,
+      "awaitingStepId": null,
+      "bookId": "01a1cf75-75d5-7589-9111-a4049ee817a7",
+      "chainId": "01a1cf75-7cc5-733e-aec9-df09b3fa7d29",
+      "createdAt": "2026-11-12T11:12:25.798Z",
+      "effect": "generation",
+      "error": null,
+      "fingerprint": "4e03936a1e28634fe8d1d4447eca7f9205aefce7ec4bc376a5683b222a686fba",
+      "kind": "chain-run",
+      "notebookId": "01a1cf75-7b2b-704b-9d85-a2e27f046c15",
+      "requestId": "goal:01a1cf75-7c4b-753d-a780-3b7da6f809d9:frame:1",
+      "status": "completed",
+      "steps": [
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:25.798Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [
+            "generate-image-01a1cf75-7cff-725b-9d90-a511c0c22114-1794481945898"
+          ],
+          "effect": "generation",
+          "error": null,
+          "id": "scene",
+          "outputs": {
+            "address": "@b2",
+            "asset_id": "01a1cf75-7cff-725b-9d90-a511c0c22114",
+            "cell_id": "01a1cf75-7d52-720b-9056-a128a46661d6",
+            "job_id": "generate-image-01a1cf75-7cff-725b-9d90-a511c0c22114-1794481945898",
+            "model": "kie:nano-banana-2-1",
+            "status": "completed"
+          },
+          "params": {
+            "model": "kie:nano-banana-2-1",
+            "options": {
+              "aspect_ratio": "9:16",
+              "output_format": "jpg",
+              "resolution": "2K"
+            },
+            "prompt": "skate through the morning market @image1 @image2",
+            "refs": {
+              "image": [
+                "@a1",
+                "@a2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-7b53-73a1-a52a-0186a5e1e895",
+              "cellId": "01a1cf75-7ba9-72ea-be72-4e505e15c6fd",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-7bce-77f9-a3dc-440ef40aee30",
+              "cellId": "01a1cf75-7c1a-70c8-a4ca-56ab8b9a71ff",
+              "field": "refs.image",
+              "index": 1,
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "startedAt": "2026-11-12T11:12:25.842Z",
+          "status": "completed",
+          "tool": "generate_image"
+        }
+      ],
+      "updatedAt": "2026-11-12T11:12:26.246Z"
+    },
+    "01a1cf75-7f02-70cc-ac1f-5887b02701af": {
+      "autoApply": true,
+      "awaitingStepId": null,
+      "bookId": "01a1cf75-75d5-7589-9111-a4049ee817a7",
+      "chainId": "01a1cf75-7f02-70cc-ac1f-5887b02701af",
+      "createdAt": "2026-11-12T11:12:26.370Z",
+      "effect": "generation",
+      "error": null,
+      "fingerprint": "2de5d72cb53d918c553adaeac64efbdeec60d5047e02f229b031cc6b87636119",
+      "kind": "chain-run",
+      "notebookId": "01a1cf75-7b2b-704b-9d85-a2e27f046c15",
+      "requestId": "goal:01a1cf75-7c4b-753d-a780-3b7da6f809d9:videos:2",
+      "status": "completed",
+      "steps": [
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:26.370Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [
+            "generate-video-01a1cf75-7f37-7178-9d31-8074f2b043b8-1794481946462"
+          ],
+          "effect": "generation",
+          "error": null,
+          "id": "video",
+          "outputs": {
+            "address": "@b3",
+            "asset_id": "01a1cf75-7f37-7178-9d31-8074f2b043b8",
+            "cell_id": "01a1cf75-7f76-7513-ba94-ed00f234a7a4",
+            "job_id": "generate-video-01a1cf75-7f37-7178-9d31-8074f2b043b8-1794481946462",
+            "model": "kie:bytedance/seedance-2-5",
+            "status": "completed"
+          },
+          "params": {
+            "mode": "r2v",
+            "model": "kie:bytedance/seedance-2-5",
+            "options": {
+              "aspect_ratio": "9:16",
+              "duration": 12,
+              "generate_audio": true,
+              "output_format": "mp4",
+              "resolution": "1080p"
+            },
+            "prompt": "skate through the morning market @image1 @image2",
+            "refs": {
+              "image": [
+                "@c1",
+                "@a1",
+                "@a2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@c1",
+              "artifactId": "01a1cf75-7cff-725b-9d90-a511c0c22114",
+              "cellId": "01a1cf75-7d52-720b-9056-a128a46661d6",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "f1d3eee5643bca976a6558ce9df729675e68a174c5abdbab5dfc7ac01407828c"
+            },
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-7b53-73a1-a52a-0186a5e1e895",
+              "cellId": "01a1cf75-7ba9-72ea-be72-4e505e15c6fd",
+              "field": "refs.image",
+              "index": 1,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-7bce-77f9-a3dc-440ef40aee30",
+              "cellId": "01a1cf75-7c1a-70c8-a4ca-56ab8b9a71ff",
+              "field": "refs.image",
+              "index": 2,
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "startedAt": "2026-11-12T11:12:26.410Z",
+          "status": "completed",
+          "tool": "generate_video"
+        }
+      ],
+      "updatedAt": "2026-11-12T11:12:27.233Z"
+    }
+  }
+}

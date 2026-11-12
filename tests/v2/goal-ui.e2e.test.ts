@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import { join } from 'node:path'
@@ -10,54 +10,33 @@ import sharp from 'sharp'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import type { Engine } from 'videobook-engine'
-import { findPrimaryMediaFile } from 'videobook-engine'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
 import { createHttpHandler } from '../../server/src/server.js'
-import { configureProviderPollDriverForTests, pauseBookQueueForTests, queue, resetProviderPollDriverForTests, setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
+import { configureProviderPollDriverForTests, queue, resetProviderPollDriverForTests, setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
 import { registerAllJobHandlers } from '../../server/src/jobs/index.js'
-import { goalTestPlan, goalTestSimplePlan, goalTestVideo, seedGoalStage } from '../../server/src/test-goals.js'
-import { compileFrameSteps, compileReviseStillStep, compileStoryboardSteps, compileVideoSteps, goalPlanSchema, goalPromptBudgetIssues } from '../../server/src/goal-plan.js'
-import { goalPromptWords } from '../../server/src/goal-prompt-budget.js'
-import { goalBriefStyle, goalStyle } from '../../server/src/goal-styles.js'
-import { probeVideo } from '../../server/src/ffmpeg.js'
-import { readGoal, saveGoal } from '../../server/src/goal-store.js'
-import { constrainGoalPlannerPlan } from '../../server/src/goal-planner-prompt.js'
-import { cancelChainRun, getChainRun, waitForChainRun } from '../../server/src/chain-executor.js'
-import { tryResolveModel } from '../../server/src/media/descriptor.js'
+import { loadLegacyGoalFixture } from '../../server/src/test-legacy-goals.js'
 import { installFalDynamicEstimator } from '../../server/src/media/cost.js'
 import { configureProviderEndpoints } from '../../server/src/media/endpoints.js'
-import { buildGoalPlanV3 } from '../../server/src/goal-plan-v3.js'
-import { captureGoalSceneFrame, resolveGoalMediaReferences } from '../../server/src/goal-v3-runtime.js'
 import { copyVideoFixture } from '../../server/src/test-media-fixtures.js'
 import { redirectFalStorage, startShortStub } from '../../server/src/test-short-stub.js'
 import { testBudget } from '../../server/src/test-budget.js'
 import { readTaggingSettings, writeTaggingSettings } from '../../server/src/tag-settings.js'
-import type { GoalSnapshot } from '../../server/src/tools/goal.js'
+import type { GoalSnapshot, ShortGoalSnapshot } from '../../server/src/tools/goal.js'
 import { availablePort, resultValue, startProcess, stopProcess, waitForHttp } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
 
 const live = process.env.VIDEOBOOK_RUN_MODEL_E2E === '1'
 const scenario = live ? it.skip : it
 
-function generationJobs(engine: Engine, media: 'image' | 'video') {
-  return engine.jobs.queue.list({ type: 'generate_media' })
-    .filter(job => tryResolveModel(String(job.payload.model))?.media === media)
+function shortGoal(goal: GoalSnapshot | undefined): ShortGoalSnapshot {
+  if (!goal || goal.legacy) throw new Error('expected a short')
+  return goal
 }
 
-function openNotebookSlot(cells: ReadonlyArray<{ slot: { row: number; column: number } }>): { row: number; column: number } {
-  const used = new Set(cells.map(cell => `${cell.slot.row}:${cell.slot.column}`))
-  for (let row = 0; row < 64; row += 1) {
-    for (let column = 0; column < 8; column += 1) {
-      if (!used.has(`${row}:${column}`)) return { row, column }
-    }
-  }
-  throw new Error('no empty notebook slot')
-}
-
-describe('staged goal mode in the browser', () => {
+describe('goal mode in the browser', () => {
   let root = ''
   let server: Server | undefined
   let books: BookManager
@@ -70,21 +49,13 @@ describe('staged goal mode in the browser', () => {
   let notebookId = ''
   let appUrl = ''
   const errors: string[] = []
-  const previousKeys = { OPENAI_API_KEY: process.env.OPENAI_API_KEY, KIE_API_KEY: process.env.KIE_API_KEY }
+  const previousKeys = { OPENAI_API_KEY: process.env.OPENAI_API_KEY }
   const call = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client.callTool({ name, arguments: { book_id: bookId, notebook_id: notebookId, ...args } })) as T
   const goals = () => call<{ goals: GoalSnapshot[] }>('video_goal', { action: 'list' })
   const current = (goal: GoalSnapshot) => call<GoalSnapshot>('video_goal', { action: 'status', goal_id: goal.goalId })
   const status = () => page.locator('.goal-status-button')
   const panel = () => page.locator('.goal-panel')
   const tile = (goal: GoalSnapshot) => page.locator(`.react-flow__node[data-id="${goal.cellId}"]`)
-  const create = () => call<GoalSnapshot>('video_goal', { action: 'create', brief: '@a1@a2 on a skateboard, two 10s clips', plan: goalTestPlan(2) })
-  const open = async (goal: GoalSnapshot) => {
-    await page.reload()
-    await tile(goal).waitFor({ state: 'visible', timeout: 30_000 })
-    await tile(goal).click()
-    await panel().waitFor({ state: 'visible', timeout: 15_000 })
-    if (goal.status === 'review') await panel().locator(`.goal-editor[data-review="${goal.plan && 'storyboardLayout' in goal.plan && goal.plan.storyboardLayout === 'six-panel' ? goal.stage === 'videos' ? 'storyboards' : 'frame' : goal.stage}"]`).waitFor({ state: 'visible', timeout: 15_000 })
-  }
   const screenshot = async (name: string) => {
     if (process.env.VIDEOBOOK_GOAL_SCREENSHOTS) await page.screenshot({ path: join(process.env.VIDEOBOOK_GOAL_SCREENSHOTS, `${name}.png`) })
   }
@@ -97,10 +68,9 @@ describe('staged goal mode in the browser', () => {
 
   beforeAll(async () => {
     if (live) {
-      if (!process.env.OPENAI_API_KEY || !process.env.KIE_API_KEY) throw new Error('Live goal verification requires OPENAI_API_KEY and KIE_API_KEY')
+      if (!process.env.OPENAI_API_KEY) throw new Error('Live goal verification requires OPENAI_API_KEY')
     } else {
       process.env.OPENAI_API_KEY = 'test-goal-browser'
-      process.env.KIE_API_KEY = 'test-goal-browser'
     }
     root = await mkdtemp(join(tmpdir(), 'videobook-goal-ui-'))
     const port = await availablePort()
@@ -191,340 +161,6 @@ describe('staged goal mode in the browser', () => {
     await queue.startBook(bookId)
   })
 
-  scenario('places goal generators, images, videos and timeline on separate rows and preserves them through Arrange', async () => {
-    const saved = await create()
-    await call('create_notebook_cell', { cell: { type: 'timeline', slot: { row: 9, column: 0 } } })
-    await seedGoalStage(engine, saved.goalId, 'frame')
-    await current(saved)
-    await seedGoalStage(engine, saved.goalId, 'storyboards')
-    await current(saved)
-    const videoIds = await Promise.all(['red', 'blue'].map(color => goalTestVideo(engine, root, color)))
-    await seedGoalStage(engine, saved.goalId, 'videos', { videoIds })
-    const complete = await call<GoalSnapshot>('video_goal', { action: 'assemble', goal_id: saved.goalId })
-    const read = engine.notebooks.read(notebookId)
-    if (!read.ok) throw new Error(read.error.message)
-    const cells = read.value.cells
-    const references = cells.filter(cell => saved.characters.some(character => character.cellId === cell.id))
-    const first = cells.filter(cell => cell.type === 'goal' || cell.type.startsWith('generate_'))
-    expect(first).toHaveLength(6)
-    expect(references.every(cell => cell.slot.row === 0)).toBe(true)
-    expect(first.every(cell => cell.slot.row === 1)).toBe(true)
-    expect(cells.filter(cell => cell.type === 'image' && !references.includes(cell)).every(cell => cell.slot.row === 2)).toBe(true)
-    expect(cells.filter(cell => cell.type === 'video').every(cell => cell.slot.row === 3)).toBe(true)
-    const timeline = cells.find(cell => cell.type === 'timeline')!
-    expect(timeline.slot).toEqual({ row: 4, column: 0 })
-    const sequence = engine.sequences.getPrimary()
-    const displaced = { ...read.value, cells: cells.map(cell => cell.id === timeline.id ? { ...cell, slot: { row: 10, column: 0 } } : cell) }
-    const moved = await engine.notebooks.write(displaced)
-    if (!moved.ok) throw new Error(moved.error.message)
-    await open(complete)
-    await panel().locator('[data-composer-dock-hide]').click()
-    await expect.poll(() => page.locator(`.react-flow__node[data-id="${timeline.id}"]`).textContent(), { timeout: 15_000 }).toContain('@k1')
-    const renamed = await engine.notebooks.write({ ...displaced, name: 'Goal layout review' })
-    if (!renamed.ok) throw new Error(renamed.error.message)
-    const moveResponse = page.waitForResponse(response => response.request().postData()?.includes('"move_notebook_cells"') ?? false)
-    await page.getByRole('button', { name: 'Clean up notebook', exact: true }).click()
-    const movePayload = await (await moveResponse).text()
-    expect(movePayload).not.toContain('isError":true')
-    await expect.poll(() => {
-      const result = engine.notebooks.read(notebookId)
-      return result.ok ? result.value.cells.find(cell => cell.id === timeline.id)?.slot : null
-    }, { timeout: 15_000 }).toEqual({ row: 4, column: 0 })
-    expect(engine.sequences.getPrimary().clips).toEqual(sequence.clips)
-    const arranged = engine.notebooks.read(notebookId)
-    if (!arranged.ok) throw new Error(arranged.error.message)
-    expect(arranged.value.edges).toEqual(read.value.edges)
-    for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
-      await page.setViewportSize(viewport)
-      for (const cell of cells) {
-        const node = page.locator(`.react-flow__node[data-id="${cell.id}"]`)
-        await expect.poll(() => node.textContent()).toContain(notebookGridTag(cell.slot))
-      }
-      const rows = [references[0]!, first[0]!, cells.find(cell => cell.type === 'image' && cell.slot.row === 2)!, cells.find(cell => cell.type === 'video')!, timeline]
-      await expect.poll(async () => {
-        const bounds = await Promise.all(rows.map(cell => page.locator(`.react-flow__node[data-id="${cell.id}"]`).boundingBox()))
-        return bounds.every((box, index) => box && (index === 0 || box.y >= bounds[index - 1]!.y + bounds[index - 1]!.height))
-      }).toBe(true)
-      await screenshot(`goal-rows-${viewport.width}`)
-    }
-    expect(errors).toEqual([])
-  }, 60_000)
-
-  scenario('reviews and saves before approving only the frame, shows stable queued progress, and stops', async () => {
-    const saved = await create()
-    await open(saved)
-    expect(await panel().getByLabel('Video title', { exact: true }).inputValue()).toBe(saved.plan!.title)
-    expect(await panel().locator('.goal-editor-shot').count()).toBe(2)
-    expect(await panel().getByLabel('Character images').locator('img').count()).toBe(2)
-    expect(await page.getByRole('button', { name: 'Open goals', exact: true }).count()).toBe(0)
-    expect(await status().textContent()).toContain('Review plan')
-    expect(await tile(saved).locator('[title="Aspect ratio"]').textContent()).toBe('9:16')
-    expect(await panel().getByRole('radio', { name: 'Portrait · 9:16', exact: true }).getAttribute('aria-checked')).toBe('true')
-    expect(await panel().getByLabel('Shot 1 storyboard prompt', { exact: true }).getAttribute('rows')).toBe('2')
-    expect(await panel().locator('.goal-prompt-input').first().textContent()).toContain('/ 32 words')
-    await panel().getByText('Advanced', { exact: true }).click()
-    await panel().getByLabel('Full frame prompt', { exact: true }).fill('Both characters salute beside the skateboard, wide park view.')
-    await panel().getByLabel('Shot 1 seconds', { exact: true }).fill('12')
-    await screenshot('goal-plan')
-    await page.setViewportSize({ width: 390, height: 844 })
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
-    expect((await status().boundingBox())!.height).toBe(32)
-    expect(await status().locator('.goal-status-short').isVisible()).toBe(true)
-    await screenshot('goal-phone')
-    await page.setViewportSize({ width: 1440, height: 1000 })
-    const previousMarkers = await page.locator('.cell-goal-mark').count()
-    await pauseBookQueueForTests(bookId)
-    await panel().getByRole('button', { name: /^Generate frame ·/ }).click()
-    await expect.poll(async () => (await current(saved)).status).toBe('running')
-    await expect.poll(() => status().textContent(), { timeout: 15_000 }).toContain('Full frame · Generating')
-    await page.getByLabel('Videobook command input', { exact: true }).click()
-    await expect.poll(() => page.locator('.composer-history-entry[data-role="status"]').allTextContents(), { timeout: 15_000 }).toContainEqual(expect.stringContaining('Plan approved'))
-    const running = await current(saved)
-    expect(running.revision).toBe(2)
-    const runningPlan = running.plan
-    expect(runningPlan && 'shots' in runningPlan ? runningPlan.shots[0]?.durationSeconds : undefined).toBe(12)
-    const jobs = generationJobs(engine, 'image')
-    expect(jobs).toHaveLength(1)
-    expect(jobs[0]!.payload).toMatchObject({ options: { aspect_ratio: '9:16', resolution: '2K' } })
-    expect(generationJobs(engine, 'video')).toHaveLength(0)
-    await expect.poll(() => page.locator('.cell-goal-mark').count(), { timeout: 15_000 }).toBe(previousMarkers + 2)
-    expect(getChainRun(engine, running.chainId!)!.steps.map(step => step.id)).toEqual(['frame'])
-    await status().click()
-    await panel().getByRole('button', { name: 'Stop goal', exact: true }).click()
-    await expect.poll(async () => (await current(saved)).status).toBe('cancelled')
-    expect(errors).toEqual([])
-  }, 60_000)
-
-  scenario('lays out a supplied portrait scene plan compactly at desktop and phone widths', async () => {
-    const created = await call<GoalSnapshot>('video_goal', { action: 'create', brief: '@a1 @a2 as Mr Bean in Thailand, portrait', plan: { ...goalTestSimplePlan(), aspectRatio: '9:16' } })
-    await open(created)
-    expect(await tile(created).locator('[title="Aspect ratio"]').textContent()).toBe('9:16')
-    expect(await panel().getByLabel('Format', { exact: true }).inputValue()).toBe('9:16')
-    expect(await panel().locator('.goal-stage-tabs button').allTextContents()).toEqual(['Scene', 'Storyboard', 'Video'])
-    expect(await panel().getByLabel('Shot 1 seconds', { exact: true }).inputValue()).toBe('20')
-    expect(await panel().getByLabel('Image model', { exact: true }).inputValue()).toBe('nano-banana-2-1')
-    await page.setViewportSize({ width: 1440, height: 900 })
-    const layout = await page.locator('.goal-panel-body').evaluate(element => ({ height: element.clientHeight, scroll: element.scrollHeight, sections: [...element.querySelectorAll('.goal-editor > *')].map(child => ({ name: child.className, height: child.getBoundingClientRect().height, display: getComputedStyle(child).display })) }))
-    expect(layout.scroll, JSON.stringify(layout)).toBeLessThanOrEqual(layout.height + 1)
-    await screenshot('goal-plan-compact')
-    await page.setViewportSize({ width: 390, height: 844 })
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
-    expect(await page.locator('.goal-panel-body').evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
-    await screenshot('goal-plan-compact-phone')
-  }, 30_000)
-
-  scenario('picks a frame version, revises it with feedback, and returns to the review when the revision is stopped', async () => {
-    const created = await create()
-    await seedGoalStage(engine, created.goalId, 'frame')
-    const first = await current(created)
-    await seedGoalStage(engine, created.goalId, 'frame')
-    const second = await current(created)
-    await open(second)
-    const card = panel().getByRole('region', { name: 'Full frame', exact: true })
-    await card.getByRole('button', { name: 'Full frame v1', exact: true }).click()
-    const firstId = first.stages.frame!.outputs[0]!.artifactId
-    await expect.poll(async () => (await current(created)).stages.frame!.outputs[0]!.artifactId).toBe(firstId)
-    expect(await card.getByRole('button', { name: 'Full frame v1', exact: true }).getAttribute('aria-pressed')).toBe('true')
-    await card.getByLabel('What should change in Full frame?', { exact: true }).fill('Give Character 1 a red cap')
-    await screenshot('goal-frame-versions')
-    await pauseBookQueueForTests(bookId)
-    const before = generationJobs(engine, 'image').length
-    await card.getByRole('button', { name: /^Revise ·/ }).click()
-    await expect.poll(() => generationJobs(engine, 'image').length, { timeout: 15_000 }).toBe(before + 1)
-    const running = await current(created)
-    const job = generationJobs(engine, 'image').find(job => String(job.payload.prompt).includes('Give Character 1 a red cap'))!
-    expect(job.payload).toMatchObject({ refs: { image: [firstId, ...created.characters.map(character => character.artifactId)] }, prompt: expect.stringContaining('Change @image1: Give Character 1 a red cap') })
-    expect(running.stages.frame!.attempts!.at(-1)).toMatchObject({ parentArtifactId: firstId, feedback: 'Give Character 1 a red cap' })
-    await expect.poll(() => status().textContent(), { timeout: 15_000 }).toContain('Revising frame')
-    await status().click()
-    await panel().getByRole('button', { name: 'Stop revision', exact: true }).click()
-    await expect.poll(async () => (await current(created)).status).toBe('review')
-    const stopped = await current(created)
-    expect(stopped.stage).toBe('storyboards')
-    expect(stopped.stages.frame!.outputs[0]!.artifactId).toBe(firstId)
-    expect(stopped.stages.frame!.outputs[0]!.versions).toHaveLength(3)
-    await expect.poll(() => card.getByRole('button', { name: 'Full frame v1', exact: true }).getAttribute('aria-pressed'), { timeout: 15_000 }).toBe('true')
-    expect(await panel().getByRole('button', { name: /Use this frame/ }).isVisible()).toBe(true)
-    expect(errors).toEqual([])
-  }, 60_000)
-
-  scenario.each([{ width: 1440, height: 1000 }, { width: 390, height: 844 }])('detects, edits and saves IG Influencer style under Advanced at $width pixels', async viewport => {
-    await page.setViewportSize(viewport)
-    await pauseBookQueueForTests(bookId)
-    const brief = `@a1 as an IG influencer, GRWM morning routine, two 4s clips; review ${viewport.width}`
-    const created = await call<GoalSnapshot>('video_goal', { action: 'create', brief, plan: constrainGoalPlannerPlan(goalTestPlan(2), brief, goalBriefStyle(brief)) })
-    await open(created)
-    await panel().getByText('Advanced', { exact: true }).click()
-    expect(await panel().getByLabel('Style', { exact: true }).inputValue()).toBe('ig-influencer')
-    expect(await panel().getByLabel('Content format', { exact: true }).inputValue()).toBe('grwm')
-    await panel().getByLabel('Style', { exact: true }).selectOption('cinematic')
-    expect(await panel().getByLabel('Content format', { exact: true }).count()).toBe(0)
-    await panel().getByLabel('Style', { exact: true }).selectOption('ig-influencer')
-    expect(await panel().getByLabel('Content format', { exact: true }).inputValue()).toBe('day-in-the-life')
-    await panel().getByLabel('Content format', { exact: true }).selectOption('grwm')
-    await panel().getByLabel('Delivery', { exact: true }).selectOption('mirror')
-    expect(await panel().getByLabel('Camera', { exact: true }).inputValue()).toBe('iphone-main')
-    await panel().getByRole('button', { name: 'Save plan', exact: true }).click()
-    await expect.poll(async () => goalPlanSchema.parse((await current(created)).plan).style.options.delivery).toBe('mirror')
-    await open(await current(created))
-    await panel().getByText('Advanced', { exact: true }).click()
-    expect(await panel().getByLabel('Delivery', { exact: true }).inputValue()).toBe('mirror')
-    expect(await tile(created).locator('[title="Goal style"]').textContent()).toBe('IG Influencer')
-    expect(await status().locator('.goal-status-style').textContent()).toBe('IG Influencer')
-    expect(goalStyle('ig-influencer').summary).toContain('natural skin')
-    await panel().locator('.goal-panel-body').evaluate(element => { element.scrollTop = 0 })
-    await screenshot(`goal-style-plan-${viewport.width}`)
-    const primary = panel().getByRole('button', { name: /^Generate scene ·/ })
-    const footer = await panel().locator('.goal-panel-bar').boundingBox()
-    const button = await primary.boundingBox()
-    expect(button!.y).toBeGreaterThanOrEqual(footer!.y)
-    expect(button!.y + button!.height).toBeLessThanOrEqual(viewport.height)
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
-    await primary.click()
-    await expect.poll(async () => (await current(created)).status).toBe('running')
-    const running = await current(created)
-    await expect.poll(() => getChainRun(engine, running.chainId!)!.steps[0]!.childJobIds.length).toBe(1)
-    expect(getChainRun(engine, running.chainId!)!.steps[0]!.params.prompt).toContain('hyper-realistic')
-    cancelChainRun(engine, running.chainId!)
-    await waitForChainRun(engine, running.chainId!)
-    await seedGoalStage(engine, created.goalId, 'frame')
-    await open(await current(created))
-    await panel().getByText('Advanced', { exact: true }).click()
-    expect(await panel().getByLabel('Style', { exact: true }).isEnabled()).toBe(true)
-    for (const name of ['Content format', 'Delivery', 'Camera', 'Light']) expect(await panel().getByLabel(name, { exact: true }).isEnabled()).toBe(true)
-    expect(await tile(created).locator('[title="Goal style"]').textContent()).toBe('IG Influencer')
-    await screenshot(`goal-style-locked-${viewport.width}`)
-    expect(errors).toEqual([])
-  }, 60_000)
-
-  scenario('shows placeholder failure and retries only the frame with new tiles and provenance', async () => {
-    const saved = await create()
-    await open(saved)
-    const before = generationJobs(engine, 'image').length
-    await panel().getByRole('button', { name: /^Generate frame ·/ }).click()
-    await expect.poll(async () => (await current(saved)).status, { timeout: 30_000 }).toBe('failed')
-    await expect.poll(() => status().textContent(), { timeout: 15_000 }).toContain('Full frame failed')
-    const failed = await current(saved)
-    expect(failed.error).toContain('placeholder')
-    await status().click()
-    await panel().getByRole('button', { name: /^Retry frame · \$/ }).click()
-    await expect.poll(() => generationJobs(engine, 'image').length, { timeout: 15_000 }).toBe(before + 2)
-    await expect.poll(async () => (await current(saved)).status, { timeout: 30_000 }).toBe('failed')
-    await status().click()
-    await expect.poll(() => panel().getByRole('button', { name: /^Retry frame · \$/ }).isVisible(), { timeout: 15_000 }).toBe(true)
-    await screenshot('goal-failed')
-    expect(generationJobs(engine, 'video')).toHaveLength(0)
-    expect(errors).toEqual([])
-  }, 60_000)
-
-  scenario('reviews readable storyboard sheets, fences changed actions and regenerates a legacy single frame', async () => {
-    const saved = await create()
-    await seedGoalStage(engine, saved.goalId, 'frame')
-    const frame = await current(saved)
-    expect(frame.stage).toBe('storyboards')
-    await open(frame)
-    expect(await panel().getByRole('button', { name: 'Open Full frame', exact: true }).isVisible()).toBe(true)
-    expect(await panel().getByRole('button', { name: /Use this frame/ }).isVisible()).toBe(true)
-    await screenshot('goal-frame')
-    await seedGoalStage(engine, saved.goalId, 'storyboards')
-    const boards = await current(saved)
-    expect(boards.stage).toBe('videos')
-    await open(boards)
-    expect(await panel().getByRole('button', { name: /^Regenerate(?: ·|$)/ }).count()).toBe(2)
-    const approve = panel().getByRole('button', { name: /Use these storyboards/ })
-    expect(await approve.isEnabled()).toBe(true)
-    expect(await panel().getByText('Read left to right, then top to bottom.', { exact: true }).count()).toBe(2)
-    const sheet = panel().getByRole('button', { name: 'Open Storyboard 1', exact: true }).locator('img')
-    await expect.poll(() => sheet.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(360)
-    expect(await sheet.getAttribute('src')).toContain('original.png')
-    for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
-      await page.setViewportSize(viewport)
-      await sheet.scrollIntoViewIfNeeded()
-      const bounds = await sheet.boundingBox()
-      expect(bounds!.height).toBeGreaterThanOrEqual(viewport.width > 600 ? 260 : 200)
-      expect(bounds!.x).toBeGreaterThanOrEqual(0)
-      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width)
-      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual((await panel().locator('.goal-panel-bar').boundingBox())!.y + 1)
-      await screenshot(`goal-storyboards-${viewport.width}`)
-    }
-    await page.setViewportSize({ width: 1440, height: 1000 })
-    const action = panel().getByLabel('Shot 1 video prompt', { exact: true })
-    const originalAction = await action.inputValue()
-    await action.fill('Character 1 jumps off the skateboard and bows. Applause.')
-    expect(await approve.isDisabled()).toBe(true)
-    await action.fill(originalAction)
-    expect(await approve.isEnabled()).toBe(true)
-    await screenshot('goal-storyboards')
-    const stored = readGoal(engine, saved.goalId)
-    saveGoal(engine, { ...stored, stages: { ...stored.stages, storyboards: {
-      ...stored.stages.storyboards!, attempts: stored.stages.storyboards!.attempts!.map(attempt => attempt.index === 1 ? { ...attempt, storyboardLayout: undefined } : attempt),
-    } } })
-    await open(await current(saved))
-    expect(await approve.isDisabled()).toBe(true)
-    expect(await panel().getByText(/Storyboard 2 is a legacy single-frame preview/).isVisible()).toBe(true)
-    await pauseBookQueueForTests(bookId)
-    await panel().getByRole('region', { name: 'Storyboard 2', exact: true }).getByRole('button', { name: /^Regenerate(?: ·|$)/ }).click()
-    await expect.poll(async () => (await current(saved)).status).toBe('running')
-    const regenerating = await current(saved)
-    expect(getChainRun(engine, regenerating.chainId!)!.steps.map(step => step.id)).toEqual(['storyboard2'])
-    expect(getChainRun(engine, regenerating.chainId!)!.steps[0]!.params.prompt).toContain('2x2 storyboard')
-    expect(regenerating.stages.storyboards!.outputs[0]).toEqual(boards.stages.storyboards!.outputs[0])
-    expect(regenerating.stages.storyboards!.outputs[1]!.artifactId).toBe(boards.stages.storyboards!.outputs[1]!.artifactId)
-    expect(regenerating.stages.storyboards!.outputs[1]!.versions).toHaveLength(2)
-  }, 60_000)
-
-  scenario('combines a finished goal into one local video and opens its preview', async () => {
-    const saved = await create()
-    await seedGoalStage(engine, saved.goalId, 'frame')
-    await current(saved)
-    await seedGoalStage(engine, saved.goalId, 'storyboards')
-    await current(saved)
-    const videoIds = await Promise.all(['red', 'blue'].map(color => goalTestVideo(engine, root, color)))
-    await seedGoalStage(engine, saved.goalId, 'videos', { videoIds })
-    const complete = await call<GoalSnapshot>('video_goal', { action: 'assemble', goal_id: saved.goalId })
-    await open(complete)
-    await panel().getByRole('button', { name: 'Combine into one video', exact: true }).click()
-    await expect.poll(async () => (await current(saved)).combined?.status, { timeout: 30_000 }).toBe('completed')
-    await expect.poll(() => panel().getByRole('button', { name: 'Open combined video', exact: true }).isVisible(), { timeout: 15_000 }).toBe(true)
-    const combined = (await current(saved)).combined!
-    await expect.poll(() => page.locator(`.react-flow__node[data-id="${combined.cellId}"] .cell-goal-mark`).textContent(), { timeout: 15_000 }).toContain('Combined')
-    await panel().getByRole('button', { name: 'Open combined video', exact: true }).click()
-    await page.getByRole('dialog', { name: /Fullscreen preview for/ }).waitFor({ state: 'visible' })
-    await page.keyboard.press('Escape')
-    expect(errors).toEqual([])
-  }, 60_000)
-
-  scenario('opts into ending frames, reviews both images and regenerates an ending independently', async () => {
-    const saved = await create()
-    await open(saved)
-    await panel().getByText('Advanced', { exact: true }).click()
-    expect(await panel().getByLabel('Ending frames', { exact: true }).inputValue()).toBe('off')
-    await panel().getByLabel('Ending frames', { exact: true }).selectOption('on')
-    await panel().getByLabel('Shot 2 ending frame prompt', { exact: true }).fill('Both characters wave beside the stationary skateboard.')
-    await panel().getByRole('button', { name: 'Save plan', exact: true }).click()
-    await expect.poll(async () => (await current(saved)).revision).toBe(2)
-    const enabled = await current(saved)
-    expect(enabled.plan).toMatchObject({ frameContinuity: true })
-    expect(enabled.estimate.storyboards.usd).toBeCloseTo(saved.estimate.storyboards.usd! * 2)
-    await seedGoalStage(engine, saved.goalId, 'frame')
-    await current(saved)
-    await seedGoalStage(engine, saved.goalId, 'storyboards')
-    const ready = await current(saved)
-    expect(ready.stages.storyboards!.outputs).toHaveLength(4)
-    await open(ready)
-    expect(await panel().getByRole('button', { name: /Open Ending frame/ }).count()).toBe(2)
-    await panel().getByText('Advanced', { exact: true }).click()
-    expect(await panel().getByLabel('Ending frames', { exact: true }).isDisabled()).toBe(true)
-    await panel().getByRole('button', { name: /Open Ending frame 1/ }).scrollIntoViewIfNeeded()
-    await screenshot('goal-ending-storyboards')
-    await pauseBookQueueForTests(bookId)
-    await panel().getByRole('region', { name: 'Ending frame 2', exact: true }).getByRole('button', { name: /^Regenerate(?: ·|$)/ }).click()
-    await expect.poll(async () => (await current(saved)).status).toBe('running')
-    const regenerating = await current(saved)
-    expect(getChainRun(engine, regenerating.chainId!)!.steps.map(step => step.id)).toEqual(['storyboard4'])
-    expect(errors).toEqual([])
-  }, 60_000)
-
   scenario('makes a short from /goal without a mention: character, frame, clip, one continuation and finish', async () => {
     for (const goal of (await goals()).goals) {
       if (goal.status !== 'cancelled' && !goal.dismissedAt) await call('video_goal', { action: 'dismiss', goal_id: goal.goalId })
@@ -550,7 +186,7 @@ describe('staged goal mode in the browser', () => {
       const brief = 'he waits for a bus in the rain'
       await command(`/goal ${brief}`)
       await expect.poll(async () => (await goals()).goals.find(goal => goal.brief === brief)?.status, { timeout: testBudget(30_000) }).toBe('review')
-      const short = (await goals()).goals.find(goal => goal.brief === brief)!
+      const short = shortGoal((await goals()).goals.find(goal => goal.brief === brief))
       expect(short).toMatchObject({ planVersion: 4, plan: null, shortPlan: { version: 4, title: 'Bus in the rain', segments: [{ seconds: 12 }] } })
       expect(JSON.stringify(short)).not.toMatch(/nano-banana|seedance|kie:/iu)
       expect(stub.plannerRequests).toHaveLength(1)
@@ -595,7 +231,7 @@ describe('staged goal mode in the browser', () => {
       await panel().getByLabel('New beat', { exact: true }).fill('He steps back from a splash and boards the bus.')
       await panel().getByLabel('New beat seconds', { exact: true }).fill('5')
       await panel().getByRole('button', { name: 'Add beat', exact: true }).click()
-      await expect.poll(async () => (await current(short)).shortPlan?.segments.map(segment => segment.seconds), { timeout: testBudget(15_000) }).toEqual([12, 5])
+      await expect.poll(async () => shortGoal(await current(short)).shortPlan?.segments.map(segment => segment.seconds), { timeout: testBudget(15_000) }).toEqual([12, 5])
       await openTab('Video')
       await primary(/^Generate clip · at least \$/).click()
       await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review clip 2 of 2 · at least $')
@@ -630,330 +266,39 @@ describe('staged goal mode in the browser', () => {
     }
   }, testBudget(600_000))
 
-  scenario('reviews a simple scene, six-panel storyboard and single video, then revises and selects completed versions', async () => {
-    const saved = await call<GoalSnapshot>('video_goal', { action: 'create', brief: '@a1 @a2 interview with a giant microphone', plan: goalTestSimplePlan() })
-    await open(saved)
-    expect(await panel().locator('.goal-stage-tabs button').allTextContents()).toEqual(['Scene', 'Storyboard', 'Video'])
-    expect(await panel().getByLabel('Reference 1 role').inputValue()).toBe('scene')
-    await panel().getByLabel('Reference 2 role').selectOption('prop')
-    await panel().getByRole('button', { name: 'Save plan', exact: true }).click()
-    await expect.poll(async () => goalPlanSchema.parse((await current(saved)).plan).referenceRoles).toEqual(['scene', 'prop'])
-    expect(await panel().getByRole('button', { name: /^Generate scene · \$/ }).isEnabled()).toBe(true)
-    await seedGoalStage(engine, saved.goalId, 'frame')
-    await open(await current(saved))
-    expect(await panel().getByRole('region', { name: 'Scene', exact: true }).isVisible()).toBe(true)
-    expect(await panel().getByRole('button', { name: /^Use scene · Generate storyboard ·/ }).isEnabled()).toBe(true)
-    await seedGoalStage(engine, saved.goalId, 'storyboards')
-    const boards = await current(saved)
-    await open(boards)
-    expect(await panel().textContent()).toContain('Six beats · 2 columns × 3 rows')
-    const sheet = panel().getByRole('region', { name: 'Storyboard 1', exact: true }).locator('.goal-media img')
-    await expect.poll(() => sheet.evaluate(image => (image as HTMLImageElement).naturalHeight)).toBeGreaterThan(0)
-    await screenshot('simple-goal-storyboard')
-    await pauseBookQueueForTests(bookId)
-    await panel().getByRole('button', { name: /^Use storyboard · Generate video ·/ }).click()
-    await expect.poll(async () => (await current(saved)).status).toBe('running')
-    const running = await current(saved)
-    expect(getChainRun(engine, running.chainId!)!.steps).toHaveLength(1)
-    cancelChainRun(engine, running.chainId!)
-    await waitForChainRun(engine, running.chainId!)
-    const original = await goalTestVideo(engine, root, 'red')
-    await seedGoalStage(engine, saved.goalId, 'videos', { videoIds: [original] })
-    await open(await current(saved))
-    const video = panel().getByRole('region', { name: 'Video 1', exact: true })
-    await expect.poll(() => video.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThan(0)
-    await video.getByText('Prompt', { exact: true }).click()
-    await video.getByLabel('Shot 1 video prompt', { exact: true }).fill('Faster gestures. Waves and laughter.')
-    await video.getByLabel('What should change in Video 1?').fill('Hold the final reaction')
-    await video.getByRole('button', { name: /^Revise · \$/ }).click()
-    await expect.poll(async () => (await current(saved)).status).toBe('running')
-    const revision = await current(saved)
-    expect(revision.stages.storyboards!.outputs[0]!.stale).toBeNull()
-    expect(revision.stages.videos!.outputs[0]!.artifactId).toBe(original)
-    await status().click()
-    await panel().getByRole('button', { name: 'Stop revision', exact: true }).click()
-    await waitForChainRun(engine, revision.chainId!)
-    await expect.poll(async () => (await current(saved)).status).toBe('completed')
-    expect((await current(saved)).stages.videos!.outputs[0]!.artifactId).toBe(original)
-    const replacement = await goalTestVideo(engine, root, 'blue')
-    await seedGoalStage(engine, saved.goalId, 'videos', { videoIds: [replacement], revise: { index: 0, feedback: 'Hold the final reaction' } })
-    const final = await current(saved)
-    await open(final)
-    const originalVersion = final.stages.videos!.attempts!.findIndex(attempt => attempt.artifactId === original) + 1
-    await video.getByRole('button', { name: `Video 1 v${originalVersion}`, exact: true }).click()
-    await expect.poll(async () => (await current(saved)).stages.videos!.outputs[0]!.artifactId).toBe(original)
-    for (const width of [1440, 390]) {
-      await page.setViewportSize({ width, height: 1000 })
-      await panel().getByRole('button', { name: /^Scene ✓$/ }).click()
-      expect(await panel().getByRole('region', { name: 'Scene', exact: true }).isVisible()).toBe(true)
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
-      await screenshot(`simple-goal-revisions-${width}`)
-    }
-    expect(errors).toEqual([])
-  }, 60_000)
 
-  it.runIf(live).each(['Match source', 'IG Influencer'])('plans and generates a complete two-shot %s goal with real providers', async styleLabel => {
-    const influencer = styleLabel === 'IG Influencer'
-    const brief = influencer
-      ? '@a3 as an IG influencer, GRWM morning routine. Selfie to camera. Same adult face and hair, casual white shirt, bedroom mirror. Two portrait 4s clips. 1K images and 480p video. Barebones prompts. Ambient room sound.'
-      : '@a1 @a2 make two 4s funny clips of the orange bird in a red scarf teaching the blue robot in a yellow scarf to skateboard in a sunny park. Simple friendly cartoon. 1K images and 480p video.'
-    const frameFeedback = influencer ? 'White headband' : 'Give Character 1 a red cap'
-    const storyboardFeedback = influencer ? 'Raise the chin' : 'Move Character 2 closer'
-    const requests: Array<{ artifactId: string; stage: string; prompt: string; words: number; aspectRatio: string; path: string; width: number; height: number; duration?: number; hasAudio?: boolean }> = []
-    const reportPath = process.env.VIDEOBOOK_GOAL_REPORT ?? join(root, `live-${influencer ? 'ig-influencer' : 'source'}-report.json`)
-    const checkpoint = async (goal: GoalSnapshot) => writeFile(reportPath, JSON.stringify({ bookId, notebookId, root, goal, requests, usage: await call('get_book_usage') }, null, 2))
-    const inspectPrompt = (stage: 'frame' | 'storyboards' | 'videos', prompt: string) => {
-      const words = goalPromptWords(prompt)
-      expect(words, prompt).toBeLessThan(stage === 'frame' ? 145 : stage === 'storyboards' ? 210 : 110)
-      if (influencer) {
-        expect(prompt).toContain('hyper-realistic')
-        expect(prompt).toContain('skin pores')
-        for (const word of goalStyle('ig-influencer').banned) expect(prompt).not.toMatch(new RegExp(`\\b${word}\\b`, 'iu'))
-      }
-      return words
+  scenario('shows goals from an earlier /goal as read-only summaries whose outputs open their cells', async () => {
+    const image = await sharp({ create: { width: 90, height: 160, channels: 3, background: '#7a6a4f' } }).png().toBuffer()
+    const fixtures = await mkdtemp(join(tmpdir(), 'videobook-goal-legacy-media-'))
+    try {
+      await copyVideoFixture({ width: 90, height: 160, durationSec: 2, fps: 12, source: 'color', color: 'blue', audio: { frequency: 330 } }, join(fixtures, 'clip.mp4'))
+      const video = await readFile(join(fixtures, 'clip.mp4'))
+      const boards = await loadLegacyGoalFixture(engine, notebookId, 'v2-four-panel', { image, video })
+      const finished = await loadLegacyGoalFixture(engine, notebookId, 'v3-finished', { image, video })
+      await page.reload()
+      const listed = (await goals()).goals
+      const earlier = listed.find(goal => goal.goalId === boards.goalId)
+      const scene = listed.find(goal => goal.goalId === finished.goalId)
+      if (!earlier?.legacy || !scene?.legacy) throw new Error('expected two earlier goals')
+      expect(earlier.outputs.map(output => output.stage)).toEqual(['frame', 'storyboards', 'storyboards', 'videos', 'videos'])
+      await tile(earlier).waitFor({ state: 'visible', timeout: testBudget(30_000) })
+      expect(await tile(earlier).textContent()).toContain('Made by an earlier /goal')
+      await tile(earlier).click()
+      await panel().waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      expect(await panel().getByText('Made by an earlier /goal.', { exact: false }).isVisible()).toBe(true)
+      expect(await panel().getByRole('navigation', { name: 'Short stages' }).count()).toBe(0)
+      const outputs = panel().getByRole('list', { name: 'Outputs' }).getByRole('button')
+      expect(await outputs.allTextContents()).toEqual(earlier.outputs.map(output => output.address))
+      const target = earlier.outputs[1]!
+      await outputs.nth(1).click()
+      await expect.poll(() => page.locator(`.react-flow__node[data-id="${target.cellId}"] [data-selection="primary"]`).count(), { timeout: testBudget(15_000) }).toBe(1)
+      await tile(scene).click()
+      await panel().getByLabel('Finished video', { exact: true }).waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      await panel().getByRole('button', { name: 'Dismiss', exact: true }).click()
+      await expect.poll(async () => (await current(scene)).dismissedAt, { timeout: testBudget(15_000) }).toEqual(expect.any(String))
+      expect(errors).toEqual([])
+    } finally {
+      await rm(fixtures, { recursive: true, force: true })
     }
-    const mediaPath = async (artifactId: string, kind: 'image' | 'video') => {
-      const manifest = await engine.files.manifest(artifactId)
-      if (!manifest.ok) throw new Error(manifest.error.message)
-      const file = findPrimaryMediaFile(manifest.value.files, kind)
-      if (!file) throw new Error(`No ${kind} file for ${artifactId}`)
-      return join(manifest.value.path, file.name)
-    }
-    const inspect = async (goal: GoalSnapshot, stage: 'frame' | 'storyboards' | 'videos') => {
-      const ids = stage === 'videos' ? goal.stages[stage]!.outputs.map(output => output.artifactId)
-        : goal.stages[stage]!.attempts!.map(attempt => attempt.artifactId!)
-      for (const artifactId of ids.filter(id => !requests.some(request => request.artifactId === id))) {
-        const result = await call<{ payload: { input: { prompt: string; aspect_ratio: string } } }>('inspect_generation_request', { asset_id: artifactId })
-        const { prompt, aspect_ratio: aspectRatio } = result.payload.input
-        const words = inspectPrompt(stage, prompt)
-        expect(aspectRatio).toBe('9:16')
-        const path = await mediaPath(artifactId, stage === 'videos' ? 'video' : 'image')
-        const media = stage === 'videos' ? await probeVideo(path) : await sharp(path).metadata()
-        expect(media.height).toBeGreaterThan(media.width!)
-        requests.push({ artifactId, stage, prompt, words, aspectRatio, path, width: media.width!, height: media.height!,
-          ...('hasAudio' in media ? { duration: media.duration, hasAudio: media.hasAudio } : {}) })
-      }
-      await checkpoint(goal)
-    }
-    await call('video_goal', { action: 'create', brief, plan: constrainGoalPlannerPlan(goalTestPlan(2), brief, goalBriefStyle(brief)) })
-    const waitForGoal = async (stage: string, wanted: string, timeout = 1_800_000, previousChainId?: string | null): Promise<GoalSnapshot> => {
-      const deadline = Date.now() + timeout
-      let lastProgress = ''
-      let lastLoggedAt = 0
-      while (Date.now() < deadline) {
-        const latest = (await goals()).goals.find(goal => goal.brief === brief)
-        const progress = latest ? `${latest.stage}:${latest.status}:${latest.chainId}` : 'creating'
-        if (progress !== lastProgress || Date.now() - lastLoggedAt >= 60_000) {
-          console.info(JSON.stringify({ goalId: latest?.goalId, progress, steps: latest?.steps.map(step => ({ id: step.id, status: step.status })) }))
-          lastProgress = progress
-          lastLoggedAt = Date.now()
-          if (latest) await checkpoint(latest)
-        }
-        if (latest?.status === 'failed' || latest?.status === 'interrupted') throw new Error(latest.error ?? 'Goal failed')
-        if (latest?.status === wanted && (stage === '*' || latest.stage === stage) && latest.chainId !== previousChainId) return latest
-        await new Promise(resolve => setTimeout(resolve, 2_000))
-      }
-      throw new Error(`Goal did not reach ${stage}:${wanted}`)
-    }
-    const planned = await waitForGoal('frame', 'review', 120_000)
-    const plan = goalPlanSchema.parse(planned.plan)
-    expect(plan.aspectRatio).toBe('9:16')
-    expect(plan.style.id).toBe(influencer ? 'ig-influencer' : 'source')
-    if (influencer) expect(plan.style.options).toMatchObject({ format: 'grwm', delivery: 'selfie-to-camera', camera: 'iphone-front' })
-    expect(plan.imageResolution).toBe('1K')
-    expect(plan.videoResolution).toBe('480p')
-    expect(plan.shots.map(shot => shot.durationSeconds)).toEqual([4, 4])
-    expect(goalPromptBudgetIssues(plan)).toEqual([])
-    const predictedFrames = [...compileFrameSteps(plan, planned.characters), compileReviseStillStep(plan, planned.characters, 'frame', 0, '@a1', frameFeedback)]
-    for (const step of predictedFrames) inspectPrompt('frame', String(step.params.prompt))
-    const predictedBoards = [...compileStoryboardSteps(plan, planned.characters, '@a1'), compileReviseStillStep(plan, planned.characters, 'storyboards', 1, '@a1', storyboardFeedback, '@a2')]
-    for (const step of predictedBoards) inspectPrompt('storyboards', String(step.params.prompt))
-    for (const step of compileVideoSteps(planned.goalId, plan, ['@a1', '@a2'])) if (typeof step.params.prompt === 'string') inspectPrompt('videos', step.params.prompt)
-    const reviewed = await call<GoalSnapshot>('video_goal', { action: 'update', goal_id: planned.goalId, revision: planned.revision, plan })
-    const reviewedPlan = reviewed.plan
-    expect(reviewedPlan && 'shots' in reviewedPlan ? reviewedPlan.shots : []).toHaveLength(2)
-    expect(reviewed.estimate.total.usd).not.toBeNull()
-    const mediaEstimate = reviewed.estimate.total.usd! + 2 * reviewed.estimate.still.usd!
-    expect(mediaEstimate).toBeLessThan(3)
-    console.info(JSON.stringify({ goalId: reviewed.goalId, bookId, root, reportPath, mediaEstimate }))
-    await open(reviewed)
-    await panel().getByRole('button', { name: /^Generate scene ·/ }).click()
-    const frame = await waitForGoal('storyboards', 'review')
-    expect(frame.stages.frame!.outputs).toHaveLength(1)
-    await inspect(frame, 'frame')
-    await status().click()
-    await panel().getByRole('button', { name: /Use scene · Generate storyboards/ }).waitFor({ state: 'visible', timeout: 30_000 })
-    await screenshot('live-full-frame')
-    const frameCard = panel().getByRole('region', { name: 'Scene', exact: true })
-    await frameCard.getByLabel('What should change in Scene?', { exact: true }).fill(frameFeedback)
-    await frameCard.getByRole('button', { name: /^Revise ·/ }).click()
-    const revisedFrame = await waitForGoal('storyboards', 'review', 1_800_000, frame.chainId)
-    expect(revisedFrame.stages.frame!.attempts).toHaveLength(2)
-    expect(revisedFrame.stages.frame!.attempts!.at(-1)).toMatchObject({ feedback: frameFeedback, parentArtifactId: frame.stages.frame!.outputs[0]!.artifactId })
-    await inspect(revisedFrame, 'frame')
-    await status().click()
-    await frameCard.getByRole('button', { name: 'Scene v1', exact: true }).click()
-    await expect.poll(async () => (await current(reviewed)).stages.frame!.outputs[0]!.artifactId).toBe(frame.stages.frame!.outputs[0]!.artifactId)
-    await frameCard.getByRole('button', { name: 'Scene v2', exact: true }).click()
-    await expect.poll(async () => (await current(reviewed)).stages.frame!.outputs[0]!.artifactId).toBe(revisedFrame.stages.frame!.outputs[0]!.artifactId)
-    await screenshot('live-revised-frame')
-    await panel().getByRole('button', { name: /Use scene · Generate storyboards/ }).click()
-    const boards = await waitForGoal('videos', 'review')
-    expect(boards.stages.storyboards!.outputs).toHaveLength(2)
-    await inspect(boards, 'storyboards')
-    await status().click()
-    await panel().getByRole('button', { name: /Use storyboards · Generate videos/ }).waitFor({ state: 'visible', timeout: 30_000 })
-    await screenshot('live-storyboards')
-    const boardCard = panel().getByRole('region', { name: 'Storyboard 2', exact: true })
-    await boardCard.getByLabel('What should change in Storyboard 2?', { exact: true }).fill(storyboardFeedback)
-    await boardCard.getByRole('button', { name: /^Revise ·/ }).click()
-    const revisedBoards = await waitForGoal('videos', 'review', 1_800_000, boards.chainId)
-    expect(revisedBoards.stages.storyboards!.outputs[0]).toEqual(boards.stages.storyboards!.outputs[0])
-    expect(revisedBoards.stages.storyboards!.attempts).toHaveLength(3)
-    expect(revisedBoards.stages.storyboards!.attempts!.at(-1)).toMatchObject({ feedback: storyboardFeedback, parentArtifactId: boards.stages.storyboards!.outputs[1]!.artifactId, frameArtifactId: revisedFrame.stages.frame!.outputs[0]!.artifactId })
-    await inspect(revisedBoards, 'storyboards')
-    await status().click()
-    await panel().getByRole('button', { name: /Use storyboards · Generate videos/ }).waitFor({ state: 'visible', timeout: 30_000 })
-    await screenshot('live-revised-storyboards')
-    await panel().getByRole('button', { name: /Use storyboards · Generate videos/ }).click()
-    const completed = await waitForGoal('*', 'completed', 2_700_000)
-    expect(completed.stages.videos!.outputs).toHaveLength(2)
-    await inspect(completed, 'videos')
-    expect(requests.filter(request => request.stage === 'videos').every(request => request.hasAudio && Math.abs(request.duration! - 4) <= 0.3)).toBe(true)
-    expect(completed.assembly!.durationFrames).toBeGreaterThan(0)
-    const sequence = engine.sequences.getPrimary()
-    expect(sequence.clips.filter(clip => completed.clipIds.includes(clip.clipId))).toHaveLength(2)
-    const document = engine.notebooks.read(notebookId)
-    if (!document.ok) throw new Error(document.error.message)
-    for (const [stage, count] of [['frame', 1], ['storyboards', 2], ['videos', 2]] as const) {
-      const outputs = completed.stages[stage]!.outputs
-      expect(outputs).toHaveLength(count)
-      for (const output of outputs) {
-        expect(document.value.cells.some(cell => cell.id === output.cellId && cell.outputArtifactId === output.artifactId)).toBe(true)
-        const revised = completed.stages[stage]!.attempts?.some(attempt => attempt.artifactId === output.artifactId && attempt.feedback)
-        expect(document.value.edges.filter(edge => edge.target === output.producerCellId)).toHaveLength((stage === 'frame' ? planned.characters.length : stage === 'storyboards' ? planned.characters.length + 1 : planned.characters.length + 2) + (revised ? 1 : 0))
-      }
-    }
-    await status().click()
-    await panel().getByRole('button', { name: 'Combine into one video', exact: true }).click()
-    await expect.poll(async () => (await current(reviewed)).combined?.status, { timeout: 120_000 }).toBe('completed')
-    const combined = await current(reviewed)
-    const combinedPath = await mediaPath(combined.combined!.artifactId, 'video')
-    const probe = await probeVideo(combinedPath)
-    expect(probe.height).toBeGreaterThan(probe.width)
-    expect(probe.hasAudio).toBe(true)
-    expect(Math.abs(probe.duration - 8)).toBeLessThanOrEqual(0.3)
-    expect((await call<GoalSnapshot>('video_goal', { action: 'combine', goal_id: reviewed.goalId })).combined?.artifactId).toBe(combined.combined!.artifactId)
-    await checkpoint(combined)
-    console.info(JSON.stringify({ goalId: reviewed.goalId, bookId, root, usage: await call('get_book_usage'), combinedPath, combined: probe }))
-    await screenshot('live-complete')
-    expect(errors).toEqual([])
-  }, 5_400_000)
-
-  scenario('reviews a scene and video goal through finish without a storyboard', async () => {
-    const videoId = await goalTestVideo(engine, root, 'blue')
-    const placed = engine.notebooks.read(notebookId)
-    if (!placed.ok) throw new Error(placed.error.message)
-    const slot = openNotebookSlot(placed.value.cells)
-    await call('create_notebook_cell', { cell: { type: 'video', slot, output_artifact_id: videoId } })
-    const notebook = engine.notebooks.read(notebookId)
-    if (!notebook.ok) throw new Error(notebook.error.message)
-    const videoCell = notebook.value.cells.find(cell => cell.outputArtifactId === videoId)
-    if (!videoCell) throw new Error('missing video cell')
-    const v3Brief = `@a1 @a2 ${notebookGridTag(videoCell.slot)} skate through the morning market`
-    const references = await resolveGoalMediaReferences(engine, notebook.value, v3Brief)
-    const v3Plan = buildGoalPlanV3({ brief: v3Brief, references, frame: await captureGoalSceneFrame(engine, notebookId, references) })
-    const saved = await call<GoalSnapshot>('video_goal', { action: 'create', brief: v3Brief, plan: v3Plan })
-    expect(saved.planVersion).toBe(3)
-    if (!saved.plan || !('version' in saved.plan) || saved.plan.version !== 3) throw new Error('expected a v3 plan')
-    await page.reload()
-    await tile(saved).click()
-    const editor = panel().locator('.goal-editor')
-    await editor.waitFor({ state: 'visible', timeout: 15_000 })
-    expect(await editor.getAttribute('data-review')).toBe('scene')
-    const tabs = panel().locator('.goal-stage-tabs')
-    expect(await tabs.getByRole('button', { name: 'Scene', exact: true }).isVisible()).toBe(true)
-    expect(await tabs.getByRole('button', { name: 'Video', exact: true }).isVisible()).toBe(true)
-    expect(await tabs.getByRole('button', { name: 'Finish', exact: true }).isVisible()).toBe(true)
-    expect(await panel().getByRole('button', { name: /storyboard/i }).count()).toBe(0)
-    expect(await panel().getByText('Use these storyboards').count()).toBe(0)
-    expect(await panel().getByRole('button', { name: /Open @image1/ }).isVisible()).toBe(true)
-    expect(await panel().getByRole('button', { name: /Open @video1/ }).count()).toBe(0)
-    await tabs.getByRole('button', { name: 'Video', exact: true }).click()
-    expect(await panel().getByRole('button', { name: /Open @video1/ }).isVisible()).toBe(true)
-    await tabs.getByRole('button', { name: 'Scene', exact: true }).click()
-    const scenePrompt = panel().getByLabel('Scene prompt', { exact: true })
-    await scenePrompt.fill('Morning market skate past the fruit stalls')
-    expect(await panel().getByRole('button', { name: /^Generate scene · \$/ }).isEnabled()).toBe(true)
-    await tabs.getByRole('button', { name: 'Finish', exact: true }).click()
-    expect(await panel().getByText('Finishing analysis · $0.00').isVisible()).toBe(true)
-    expect(await panel().getByText('Approve the video before finishing it.').isVisible()).toBe(true)
-    const imageCell = notebook.value.cells.find(cell => cell.type === 'image' && cell.outputArtifactId)
-    if (!imageCell?.outputArtifactId) throw new Error('missing scene image')
-    const now = new Date().toISOString()
-    const output = (artifactId: string, cellId: string) => ({ index: 0, artifactId, cellId, producerCellId: null, address: null })
-    const stored = readGoal(engine, saved.goalId)
-    saveGoal(engine, {
-      ...stored, stage: 'videos', status: 'review',
-      stages: {
-        frame: {
-          chainId: 'scene-fixture', revision: saved.revision, approvedAt: now, shotIndexes: [0], previousChainIds: [],
-          outputs: [output(imageCell.outputArtifactId, imageCell.id)],
-          attempts: [{ stage: 'frame', index: 0, chainId: 'scene-fixture', stepId: 'scene', artifactId: imageCell.outputArtifactId, cellId: imageCell.id, basePrompt: saved.plan.scene.prompt, feedback: null, parentArtifactId: null, frameArtifactId: null, createdAt: now }],
-        },
-        videos: {
-          chainId: 'video-fixture', revision: saved.revision, approvedAt: now, shotIndexes: [0], previousChainIds: [],
-          outputs: [output(videoId, videoCell.id)],
-          attempts: [{ stage: 'videos', index: 0, chainId: 'video-fixture', stepId: 'video', artifactId: videoId, cellId: videoCell.id, basePrompt: saved.plan.video.prompt, feedback: null, parentArtifactId: null, frameArtifactId: imageCell.outputArtifactId, createdAt: now }],
-        },
-      },
-      finish: { status: 'review', sourceArtifactId: videoId, finalArtifactId: null, error: null },
-    })
-    const finishing = await current(saved)
-    expect(finishing.coldOpen).toMatchObject({ startSeconds: 0, endSeconds: 2.3, analysisUsd: 0 })
-    await page.reload()
-    await tile(saved).click()
-    await editor.waitFor({ state: 'visible' })
-    await tabs.getByRole('button', { name: 'Video', exact: true }).click()
-    expect(await panel().getByRole('button', { name: 'Open Approved scene', exact: true }).isVisible()).toBe(true)
-    await tabs.getByRole('button', { name: 'Scene', exact: true }).click()
-    await panel().getByLabel('Scene prompt', { exact: true }).fill('A different stall and a slower board')
-    await tabs.getByRole('button', { name: 'Video', exact: true }).click()
-    expect(await panel().getByText('Refresh the scene before continuing.').isVisible()).toBe(true)
-    expect(await panel().getByRole('button', { name: /^Regenerate video/ }).isDisabled()).toBe(true)
-    await page.reload()
-    await tile(saved).click()
-    await editor.waitFor({ state: 'visible' })
-    expect(await editor.getAttribute('data-review')).toBe('finish')
-    await expect.poll(async () => panel().getByLabel('Highlight end').inputValue().catch(() => ''), { timeout: 20_000 }).toBe('2.3')
-    expect(await panel().getByLabel('Highlight start').inputValue()).toBe('0')
-    expect(await panel().getByText('Finishing analysis · $0.00').isVisible()).toBe(true)
-    expect(await panel().getByRole('button', { name: 'Finish', exact: true }).last().isEnabled()).toBe(true)
-    for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
-      await page.setViewportSize(viewport)
-      await tabs.scrollIntoViewIfNeeded()
-      const bounds = await tabs.boundingBox()
-      expect(bounds).not.toBeNull()
-      expect(bounds!.width).toBeGreaterThan(40)
-      expect(bounds!.x).toBeGreaterThanOrEqual(0)
-      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width + 1)
-      expect(await tabs.getByRole('button', { name: 'Scene', exact: true }).isVisible()).toBe(true)
-      expect(await tabs.getByRole('button', { name: 'Video', exact: true }).isVisible()).toBe(true)
-      expect(await tabs.getByRole('button', { name: 'Finish', exact: true }).isVisible()).toBe(true)
-    }
-    await page.setViewportSize({ width: 1440, height: 1000 })
-    await pauseBookQueueForTests(bookId)
-    await panel().locator('.goal-panel-primary', { hasText: 'Finish' }).click()
-    await expect.poll(async () => (await current(saved)).finish?.status, { timeout: 20_000 }).toBe('running')
-    await page.reload()
-    await expect.poll(async () => (await current(saved)).finish?.status, { timeout: 20_000 }).toBe('running')
-    await tile(saved).waitFor({ state: 'visible', timeout: 30_000 })
-    await tile(saved).click()
-    await editor.waitFor({ state: 'visible', timeout: 15_000 })
-    await expect.poll(() => panel().getByText('Rendering the cold open, then burning the saved watermark.').isVisible(), { timeout: 20_000 }).toBe(true)
-    await expect.poll(() => panel().getByRole('button', { name: 'Stop finishing', exact: true }).isVisible(), { timeout: 20_000 }).toBe(true)
-    expect(await panel().getByRole('button', { name: /storyboard/i }).count()).toBe(0)
-    expect(errors).toEqual([])
-  })
-
+  }, testBudget(120_000))
 })

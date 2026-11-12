@@ -1,16 +1,15 @@
-import { z } from "zod";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
-import { goalMediaRefSchema, goalPlanSchema, goalStyleSchema, legacyGoalPlanSchema, savedGoalPlanV3Schema, type GoalCharacter, type GoalDisplayPlan, type GoalMediaRef, type GoalStage, type GoalGenerationStage } from "./goal-plan.js";
-import type { GoalStyleSelection } from "./goal-styles.js";
 import { goalShortDraftSchema, goalShortPlanSchema, type GoalShortDraft, type GoalShortPlan } from "./goal-short-plan.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 
 export type GoalStatus = "planning" | "review" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
+export type GoalGenerationStage = "frame" | "videos";
+type StoredGoalStage = GoalGenerationStage | "storyboards";
 
 export type GoalEstimate = { usd: number | null; warnings: string[] };
-export type GoalEstimates = Record<GoalGenerationStage | "total", GoalEstimate> & { segments?: GoalEstimate[] };
+export type GoalEstimates = Record<StoredGoalStage | "total", GoalEstimate> & { segments?: GoalEstimate[] };
 export type GoalStageOutput = { index: number; artifactId: string; cellId: string | null; producerCellId: string | null; address: string | null };
 export type GoalStillAttempt = {
   stage: GoalGenerationStage;
@@ -20,7 +19,6 @@ export type GoalStillAttempt = {
   artifactId: string | null;
   cellId: string | null;
   basePrompt: string;
-  storyboardLayout?: "four-panel" | "six-panel";
   fingerprint?: string;
   feedback: string | null;
   parentArtifactId: string | null;
@@ -55,8 +53,8 @@ export type GoalFinish = {
 
 export type GoalRecord = {
   planVersion: 1 | 2 | 3 | 4;
-  stage: GoalStage;
-  stages: Partial<Record<GoalGenerationStage, GoalStageRun>>;
+  stage: StoredGoalStage | "assembly";
+  stages: Partial<Record<StoredGoalStage, GoalStageRun>>;
   goalId: string;
   bookId: string;
   notebookId: string;
@@ -70,7 +68,7 @@ export type GoalRecord = {
   assembly: GoalAssembly | null;
   combined?: GoalCombinedVideo;
   finish?: GoalFinish | null;
-  resumeStage?: GoalStage | null;
+  resumeStage?: GoalGenerationStage | null;
   resumeStatus?: "review" | "completed" | null;
   resumeOutputs?: GoalStageOutput[] | null;
   resumeFinish?: GoalFinish | null;
@@ -78,16 +76,6 @@ export type GoalRecord = {
   dismissedAt: string | null;
   createdAt: string;
   updatedAt: string;
-};
-
-export type GoalContent = {
-  brief: string;
-  characters: GoalCharacter[];
-  media?: GoalMediaRef[];
-  revision: number;
-  plan: GoalDisplayPlan | null;
-  requestedStyle?: GoalStyleSelection;
-  estimate: GoalEstimates;
 };
 
 export type GoalShortContent = {
@@ -155,46 +143,10 @@ function estimatesFrom(value: unknown): GoalEstimates {
   };
 }
 
-function charactersFrom(value: unknown): GoalCharacter[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((entry): entry is GoalCharacter => entry && typeof entry === "object"
-    && ["artifactId", "cellId", "address", "label"].every(key => typeof (entry as Record<string, unknown>)[key] === "string"));
-}
-
-function mediaFrom(value: unknown): GoalMediaRef[] {
-  const parsed = z.array(z.unknown()).safeParse(value);
-  if (!parsed.success) return [];
-  return parsed.data.flatMap(entry => {
-    const media = goalMediaRefSchema.safeParse(entry);
-    return media.success ? [media.data] : [];
-  });
-}
-
-export function goalContent(cell: NotebookCell): GoalContent {
-  const inputs = cell.inputs ?? {};
-  const plan = z.union([savedGoalPlanV3Schema, goalPlanSchema, legacyGoalPlanSchema]).safeParse(inputs.plan);
-  const requestedStyle = goalStyleSchema.safeParse(inputs.requestedStyle);
-  const media = mediaFrom(inputs.media);
-  return {
-    brief: cell.prompt ?? "",
-    characters: charactersFrom(inputs.characters),
-    ...(media.length > 0 ? { media } : {}),
-    revision: typeof inputs.revision === "number" && Number.isInteger(inputs.revision) ? inputs.revision : 0,
-    plan: plan.success ? plan.data : null,
-    ...(!plan.success && requestedStyle.success ? { requestedStyle: requestedStyle.data } : {}),
-    estimate: estimatesFrom(inputs.estimate),
-  };
-}
-
-function goalCellInputs(goalId: string, content: GoalContent): Record<string, unknown> {
-  return { goalId, revision: content.revision, plan: content.plan, characters: content.characters, estimate: content.estimate,
-    ...(content.media ? { media: content.media } : {}),
-    ...(!content.plan && content.requestedStyle ? { requestedStyle: content.requestedStyle } : {}),
-  };
-}
-
-function goalCellText(content: GoalContent): { label: string; prompt: string } {
-  return { label: content.plan?.title ?? GOAL_TILE_LABEL, prompt: content.brief };
+export function legacyGoalText(cell: NotebookCell): { title: string | null; brief: string } {
+  const plan = cell.inputs?.plan;
+  const title = plan && typeof plan === "object" && typeof (plan as Record<string, unknown>).title === "string" ? (plan as { title: string }).title : null;
+  return { title, brief: cell.prompt ?? "" };
 }
 
 export function findGoalCell(document: NotebookDocument, goal: GoalRecord): NotebookCell | null {
@@ -205,12 +157,6 @@ export function readGoalCell(engine: Engine, goal: GoalRecord): NotebookCell | n
   const notebook = engine.notebooks.read(goal.notebookId);
   if (!notebook.ok) throw new Error(notebook.error.message);
   return findGoalCell(notebook.value, goal);
-}
-
-export function requireGoalContent(engine: Engine, goal: GoalRecord): GoalContent {
-  const cell = readGoalCell(engine, goal);
-  if (!cell) throw new Error(REMOVED_TILE_ERROR);
-  return goalContent(cell);
 }
 
 export function goalShortContent(cell: NotebookCell): GoalShortContent {
@@ -254,12 +200,6 @@ async function placeGoalTile(engine: Engine, notebookId: string, goalId: string,
   return created.cell;
 }
 
-export async function createGoalCell(engine: Engine, notebookId: string, goalId: string, content: GoalContent): Promise<NotebookCell> {
-  return placeGoalTile(engine, notebookId, goalId, goalCellText(content), goalCellInputs(goalId, content), content.characters.map((character, index) => ({
-    cellId: character.cellId, targetInput: index === 0 ? "character" : `character_${index + 1}`,
-  })));
-}
-
 function shortTileText(content: GoalShortContent): { label: string; prompt: string } {
   return { label: content.plan?.title ?? GOAL_TILE_LABEL, prompt: content.brief };
 }
@@ -286,10 +226,6 @@ async function writeGoalTile(engine: Engine, goal: GoalRecord, text: { label: st
     };
   }, { goalId: goal.goalId });
   if (!result.ok) throw new Error(result.error.message);
-}
-
-export async function writeGoalContent(engine: Engine, goal: GoalRecord, content: GoalContent): Promise<void> {
-  await writeGoalTile(engine, goal, goalCellText(content), goalCellInputs(goal.goalId, content));
 }
 
 export async function writeGoalShortContent(engine: Engine, goal: GoalRecord, content: GoalShortContent): Promise<void> {

@@ -4,19 +4,19 @@ import { describe, expect, it } from 'vitest'
 import { GoalShortReview } from '../../src/components/videobook/GoalShortReview'
 import { GoalPanel } from '../../src/components/videobook/GoalPanel'
 import type { AssetRecord } from '../../src/videobook/workspace-responses'
-import type { GoalSnapshot, MainCharacterView } from '../../src/videobook/goals'
+import type { MainCharacterView, ShortGoalSnapshot } from '../../src/videobook/goals'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
-import { shortGoalFixture, shortPlanFixture, shortStage } from './goal-short-fixtures'
+import { legacyGoalFixture, shortGoalFixture, shortPlanFixture, shortStage } from './goal-short-fixtures'
 
 const noop = async () => shortGoalFixture()
 const noCharacter = async (): Promise<MainCharacterView> => ({ character: { name: 'Main character', description: 'a man in a green shirt', silent: true }, references: [], sheet: { estimate: { usd: null, warnings: [] }, pending: null, lastError: null } })
 
 function asset(artifactId: string): AssetRecord | null {
-  if (!artifactId.startsWith('clip') && !artifactId.startsWith('final')) return null
+  if (!artifactId.startsWith('clip') && !artifactId.startsWith('final') && !artifactId.startsWith('video')) return null
   return { mediaUrl: `/media/${artifactId}.mp4`, thumbnailUrl: null, duration: 20, fps: 24, objectHash: `${artifactId}-hash` } as unknown as AssetRecord
 }
 
-function render(goal: GoalSnapshot): string {
+function render(goal: ShortGoalSnapshot): string {
   return renderToStaticMarkup(createElement(GoalShortReview, {
     goal, plan: goal.shortPlan!, disabled: false, resolveAsset: asset, onPreviewCell: () => undefined, onRun: () => undefined, onAction: noop, onCharacter: noCharacter,
   }))
@@ -102,7 +102,7 @@ describe('GoalShortReview', () => {
 
 describe('GoalPanel with a short', () => {
   it('opens the short review for a version-4 goal and the older reviews for others', () => {
-    const props = { connected: true, onAction: noop, onCharacter: noCharacter, onPreview: async () => undefined, onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
+    const props = { connected: true, onAction: noop, onCharacter: noCharacter, onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
     expect(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture() }))).toContain('aria-label="Short stages"')
     expect(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture({ status: 'planning', shortPlan: undefined }) }))).toContain('Planning the frame and the beats of your short')
     const failed = renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture({ status: 'failed', shortPlan: undefined, error: 'OpenAI API error 500' }) }))
@@ -110,5 +110,31 @@ describe('GoalPanel with a short', () => {
     expect(failed).toContain('OpenAI API error 500')
     expect(button(failed, 'Retry planning')).toMatch(/>Retry planning<\/button>$/u)
     expect(failed).not.toContain('ready ·')
+  })
+})
+
+describe('GoalPanel with an earlier goal', () => {
+  const props = { connected: true, onAction: noop, onCharacter: noCharacter, onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
+
+  it('summarises a version-2 goal read-only with its outputs as cell addresses', () => {
+    const html = renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: legacyGoalFixture() }))
+    expect(html).toContain('>The skateboard champion<')
+    expect(html).toContain('make a funny video of a dog on a skateboard')
+    expect(html).toContain('Made by an earlier /goal.')
+    expect(html).toMatch(/<span>Frame<\/span><button type="button" class="goal-progress-address">@c1<\/button>/u)
+    expect(html).toMatch(/<span>Storyboard<\/span><button type="button" class="goal-progress-address">@c2<\/button>/u)
+    expect(html).toMatch(/<span>Video<\/span><span class="goal-panel-muted">Removed from the notebook<\/span>/u)
+    expect(button(html, 'Dismiss')).not.toContain('disabled')
+    for (const label of ['Generate', 'Retry', 'Finish', 'Approve', 'Discard goal']) expect(html).not.toContain(`>${label}`)
+    expect(html).not.toContain('aria-label="Short stages"')
+  })
+
+  it('plays the finished video of a version-3 goal and keeps an already dismissed goal from dismissing again', () => {
+    const goal = legacyGoalFixture({ planVersion: 3, title: 'Morning market', outputs: [{ stage: 'frame', artifactId: 'scene-old', cellId: 'scene-cell', address: '@c1' }, { stage: 'videos', artifactId: 'video-old', cellId: 'video-cell', address: '@d1' }], finalArtifactId: 'final-old' })
+    const html = renderToStaticMarkup(createElement(GoalPanel, { ...props, goal }))
+    expect(html).toContain('aria-label="Finished video"')
+    expect(html).toContain('src="/media/final-old.mp4"')
+    expect(html).toMatch(/<span>Video<\/span><button type="button" class="goal-progress-address">@d1<\/button>/u)
+    expect(button(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: { ...goal, dismissedAt: '2026-11-12T00:00:00Z' } })), 'Dismiss')).toContain('disabled=""')
   })
 })

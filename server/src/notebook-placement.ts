@@ -1,10 +1,5 @@
 import type { NotebookCell, NotebookDocument, NotebookGridSlot } from "videobook-engine";
-import {
-  nextHorizontalSlotFrom,
-  nextVerticalSlotFrom,
-  NOTEBOOK_GRID_COLUMN_COUNT,
-  NOTEBOOK_GRID_ROW_COUNT,
-} from "videobook-engine";
+import { NOTEBOOK_GRID_COLUMN_COUNT, NOTEBOOK_GRID_ROW_COUNT } from "videobook-engine";
 import { notebookGridTag, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 
 export function slotBelowArtifactOrFirstFree(notebook: NotebookDocument, sourceArtifactId: string, fullMessage: string): NotebookGridSlot {
@@ -19,16 +14,6 @@ export function slotBelowArtifactOrFirstFree(notebook: NotebookDocument, sourceA
     }
   }
   throw new Error(fullMessage);
-}
-
-function slotBelow(slot: NotebookGridSlot): NotebookGridSlot {
-  if (slot.row + 1 < NOTEBOOK_GRID_ROW_COUNT) {
-    return { row: slot.row + 1, column: slot.column };
-  }
-  return {
-    row: slot.row,
-    column: Math.min(slot.column + 1, NOTEBOOK_GRID_COLUMN_COUNT - 1),
-  };
 }
 
 export function slotRight(slot: NotebookGridSlot): NotebookGridSlot {
@@ -57,15 +42,4 @@ export function isVerticalGenerationType(type: string): boolean {
     || type === "split_video"
     || type === "video"
     || type === "concat";
-}
-
-export function nextGenerationOutputSlot(
-  producerType: string,
-  producerSlot: NotebookGridSlot,
-  occupied: readonly NotebookGridSlot[],
-): NotebookGridSlot {
-  if (producerType === "generate_video") {
-    return nextVerticalSlotFrom(slotBelow(producerSlot), occupied);
-  }
-  return nextHorizontalSlotFrom(slotRight(producerSlot), occupied);
 }

@@ -1,0 +1,546 @@
+{
+  "name": "v3-running",
+  "store": "application.goals.v2",
+  "bookId": "01a1cf75-c0c8-732f-8485-535201127995",
+  "notebookId": "01a1cf75-c604-72a4-b491-daf738d6eb66",
+  "goalId": "01a1cf75-c79c-76ca-812a-8acd860e01a2",
+  "record": {
+    "assembly": null,
+    "bookId": "01a1cf75-c0c8-732f-8485-535201127995",
+    "cellId": "01a1cf75-c79e-72c8-ae70-b89daea744cf",
+    "chainId": "01a1cf75-ca3d-711e-97eb-0752fb5e9a6f",
+    "clipIds": [],
+    "createdAt": "2026-11-12T11:12:44.956Z",
+    "dismissedAt": null,
+    "error": null,
+    "finish": null,
+    "goalId": "01a1cf75-c79c-76ca-812a-8acd860e01a2",
+    "notebookId": "01a1cf75-c604-72a4-b491-daf738d6eb66",
+    "planningJobId": null,
+    "planVersion": 3,
+    "requestId": "01a1cf75-c79b-765c-932a-e88e4c02ddd0",
+    "resumeFinish": null,
+    "resumeOutputs": null,
+    "resumeStage": null,
+    "resumeStatus": null,
+    "stage": "videos",
+    "stages": {
+      "frame": {
+        "approvedAt": "2026-11-12T11:12:45.110Z",
+        "attempts": [
+          {
+            "artifactId": "01a1cf75-c84e-74cf-bdfb-9535f0e21544",
+            "basePrompt": "glide over the harbour at dusk @image1 @image2",
+            "cellId": "01a1cf75-c889-72bf-90c8-d61aa486716d",
+            "chainId": "01a1cf75-c81f-72cf-92c0-8b702dd66752",
+            "createdAt": "2026-11-12T11:12:45.110Z",
+            "feedback": null,
+            "fingerprint": "{\"prompt\":\"glide over the harbour at dusk @image1 @image2\",\"settings\":{\"model\":\"kie:nano-banana-2-1\",\"aspectRatio\":\"9:16\",\"resolution\":\"2K\",\"outputFormat\":\"jpg\"},\"references\":[{\"artifactId\":\"01a1cf75-c629-743f-b153-84bf0d7b89f1\",\"objectHash\":\"e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec\"},{\"artifactId\":\"01a1cf75-c6ec-7521-934c-d9f3e10cfd88\",\"objectHash\":\"ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4\"}]}",
+            "frameArtifactId": null,
+            "index": 0,
+            "parentArtifactId": null,
+            "stage": "frame",
+            "stepId": "scene"
+          }
+        ],
+        "chainId": "01a1cf75-c81f-72cf-92c0-8b702dd66752",
+        "outputs": [
+          {
+            "address": "@c1",
+            "artifactId": "01a1cf75-c84e-74cf-bdfb-9535f0e21544",
+            "cellId": "01a1cf75-c889-72bf-90c8-d61aa486716d",
+            "index": 0,
+            "producerCellId": "01a1cf75-c889-72bf-90c8-c98458e0bb2d"
+          }
+        ],
+        "previousChainIds": [],
+        "revision": 1,
+        "shotIndexes": [
+          0
+        ]
+      },
+      "videos": {
+        "approvedAt": "2026-11-12T11:12:45.653Z",
+        "attempts": [
+          {
+            "artifactId": null,
+            "basePrompt": "glide over the harbour at dusk @image1 @image2",
+            "cellId": null,
+            "chainId": "01a1cf75-ca3d-711e-97eb-0752fb5e9a6f",
+            "createdAt": "2026-11-12T11:12:45.653Z",
+            "feedback": null,
+            "fingerprint": "{\"prompt\":\"glide over the harbour at dusk @image1 @image2\",\"settings\":{\"aspectRatio\":\"9:16\",\"resolution\":\"1080p\",\"duration\":12,\"audio\":true,\"outputFormat\":\"mp4\"},\"references\":[{\"artifactId\":\"01a1cf75-c629-743f-b153-84bf0d7b89f1\",\"objectHash\":\"e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec\"},{\"artifactId\":\"01a1cf75-c6ec-7521-934c-d9f3e10cfd88\",\"objectHash\":\"ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4\"}],\"sceneArtifactId\":\"01a1cf75-c84e-74cf-bdfb-9535f0e21544\"}",
+            "frameArtifactId": "01a1cf75-c84e-74cf-bdfb-9535f0e21544",
+            "index": 0,
+            "parentArtifactId": null,
+            "stage": "videos",
+            "stepId": "video"
+          }
+        ],
+        "chainId": "01a1cf75-ca3d-711e-97eb-0752fb5e9a6f",
+        "outputs": [],
+        "previousChainIds": [],
+        "revision": 2,
+        "shotIndexes": [
+          0
+        ]
+      }
+    },
+    "status": "running",
+    "trackId": null,
+    "updatedAt": "2026-11-12T11:12:45.653Z"
+  },
+  "cells": [
+    {
+      "id": "01a1cf75-c6c2-776e-97fc-752f3b5a93a4",
+      "type": "image",
+      "label": "Character 1",
+      "slot": {
+        "row": 0,
+        "column": 0
+      },
+      "inputs": {},
+      "outputArtifactId": "01a1cf75-c629-743f-b153-84bf0d7b89f1",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-c768-777f-830d-b9bb18cb5c47",
+      "type": "image",
+      "label": "Character 2",
+      "slot": {
+        "row": 0,
+        "column": 1
+      },
+      "inputs": {},
+      "outputArtifactId": "01a1cf75-c6ec-7521-934c-d9f3e10cfd88",
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-c79e-72c8-ae70-b89daea744cf",
+      "type": "goal",
+      "label": "glide over the harbour at dusk",
+      "slot": {
+        "row": 1,
+        "column": 0
+      },
+      "prompt": "@a1 @a2 glide over the harbour at dusk",
+      "inputs": {
+        "characters": [
+          {
+            "address": "@a1",
+            "artifactId": "01a1cf75-c629-743f-b153-84bf0d7b89f1",
+            "cellId": "01a1cf75-c6c2-776e-97fc-752f3b5a93a4",
+            "label": "Character 1"
+          },
+          {
+            "address": "@a2",
+            "artifactId": "01a1cf75-c6ec-7521-934c-d9f3e10cfd88",
+            "cellId": "01a1cf75-c768-777f-830d-b9bb18cb5c47",
+            "label": "Character 2"
+          }
+        ],
+        "estimate": {
+          "frame": {
+            "usd": 0.03,
+            "warnings": []
+          },
+          "storyboards": {
+            "usd": 0,
+            "warnings": []
+          },
+          "total": {
+            "usd": 9.51,
+            "warnings": []
+          },
+          "videos": {
+            "usd": 9.48,
+            "warnings": []
+          }
+        },
+        "goalId": "01a1cf75-c79c-76ca-812a-8acd860e01a2",
+        "media": [
+          {
+            "address": "@a1",
+            "artifactId": "01a1cf75-c629-743f-b153-84bf0d7b89f1",
+            "cellId": "01a1cf75-c6c2-776e-97fc-752f3b5a93a4",
+            "kind": "image",
+            "label": "Character 1",
+            "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec",
+            "slot": "@image1"
+          },
+          {
+            "address": "@a2",
+            "artifactId": "01a1cf75-c6ec-7521-934c-d9f3e10cfd88",
+            "cellId": "01a1cf75-c768-777f-830d-b9bb18cb5c47",
+            "kind": "image",
+            "label": "Character 2",
+            "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4",
+            "slot": "@image2"
+          }
+        ],
+        "plan": {
+          "aspectRatio": "9:16",
+          "finish": {
+            "suggestedColdOpenSeconds": 2.3,
+            "watermark": {
+              "fadeSeconds": 0.3,
+              "handle": "jtbkk",
+              "handleEndSeconds": 3,
+              "handleOpacity": 0.28,
+              "mode": "burn",
+              "platform": "tiktok",
+              "profileUrl": "https://www.tiktok.com/@jtbkk",
+              "qrLeadSeconds": 2.3,
+              "qrOpacity": 0.37
+            }
+          },
+          "references": [
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-c629-743f-b153-84bf0d7b89f1",
+              "cellId": "01a1cf75-c6c2-776e-97fc-752f3b5a93a4",
+              "kind": "image",
+              "label": "Character 1",
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec",
+              "slot": "@image1"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-c6ec-7521-934c-d9f3e10cfd88",
+              "cellId": "01a1cf75-c768-777f-830d-b9bb18cb5c47",
+              "kind": "image",
+              "label": "Character 2",
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4",
+              "slot": "@image2"
+            }
+          ],
+          "sampledFrames": [],
+          "scene": {
+            "aspectRatio": "9:16",
+            "imageRefs": [
+              {
+                "address": "@a1",
+                "artifactId": "01a1cf75-c629-743f-b153-84bf0d7b89f1",
+                "cellId": "01a1cf75-c6c2-776e-97fc-752f3b5a93a4",
+                "kind": "image",
+                "label": "Character 1",
+                "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec",
+                "slot": "@image1"
+              },
+              {
+                "address": "@a2",
+                "artifactId": "01a1cf75-c6ec-7521-934c-d9f3e10cfd88",
+                "cellId": "01a1cf75-c768-777f-830d-b9bb18cb5c47",
+                "kind": "image",
+                "label": "Character 2",
+                "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4",
+                "slot": "@image2"
+              }
+            ],
+            "model": "kie:nano-banana-2-1",
+            "outputFormat": "jpg",
+            "prompt": "glide over the harbour at dusk @image1 @image2",
+            "resolution": "2K",
+            "tool": "generate_image"
+          },
+          "title": "glide over the harbour at dusk",
+          "version": 3,
+          "video": {
+            "aspectRatio": "9:16",
+            "durationSeconds": 12,
+            "generateAudio": true,
+            "imageRefs": [
+              {
+                "address": "@a1",
+                "artifactId": "01a1cf75-c629-743f-b153-84bf0d7b89f1",
+                "cellId": "01a1cf75-c6c2-776e-97fc-752f3b5a93a4",
+                "kind": "image",
+                "label": "Character 1",
+                "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec",
+                "slot": "@image1"
+              },
+              {
+                "address": "@a2",
+                "artifactId": "01a1cf75-c6ec-7521-934c-d9f3e10cfd88",
+                "cellId": "01a1cf75-c768-777f-830d-b9bb18cb5c47",
+                "kind": "image",
+                "label": "Character 2",
+                "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4",
+                "slot": "@image2"
+              }
+            ],
+            "model": "kie:bytedance/seedance-2-5",
+            "outputFormat": "mp4",
+            "prompt": "glide over the harbour at dusk @image1 @image2",
+            "resolution": "1080p",
+            "tool": "generate_video",
+            "videoRefs": []
+          }
+        },
+        "revision": 2
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-c889-72bf-90c8-c98458e0bb2d",
+      "type": "generate_image",
+      "label": "Nano Banana 2.1 — glide over the harbour at dusk @image1 @image2",
+      "slot": {
+        "row": 1,
+        "column": 1
+      },
+      "prompt": "glide over the harbour at dusk @image1 @image2",
+      "provider": "kie",
+      "model": "kie:nano-banana-2-1",
+      "operation": "text_to_image",
+      "tool": "generate_image",
+      "inputs": {
+        "chainRunId": "01a1cf75-c81f-72cf-92c0-8b702dd66752:scene",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "output_format": "jpg",
+          "resolution": "2K"
+        },
+        "resolvedPrompt": "glide over the harbour at dusk @image1 @image2"
+      },
+      "references": [],
+      "pinnedResults": []
+    },
+    {
+      "id": "01a1cf75-c889-72bf-90c8-d61aa486716d",
+      "type": "image",
+      "label": "Nano Banana 2.1 — glide over the harbour at dusk @image1 @image2 image",
+      "slot": {
+        "row": 2,
+        "column": 0
+      },
+      "prompt": "glide over the harbour at dusk @image1 @image2",
+      "provider": "kie",
+      "model": "kie:nano-banana-2-1",
+      "tool": "generate_image",
+      "inputs": {
+        "acceptedAt": "2026-11-12T11:12:45.192Z",
+        "generationRunId": "01a1cf75-c81f-72cf-92c0-8b702dd66752:scene",
+        "mediaRole": "generate-image-output",
+        "producerCellId": "01a1cf75-c889-72bf-90c8-c98458e0bb2d",
+        "resolvedPrompt": "glide over the harbour at dusk @image1 @image2",
+        "state": "completed"
+      },
+      "outputArtifactId": "01a1cf75-c84e-74cf-bdfb-9535f0e21544",
+      "references": [],
+      "pinnedResults": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "01a1cf75-c79e-72c8-ae70-bf299d696ce7",
+      "source": "01a1cf75-c6c2-776e-97fc-752f3b5a93a4",
+      "target": "01a1cf75-c79e-72c8-ae70-b89daea744cf",
+      "targetInput": "character"
+    },
+    {
+      "id": "01a1cf75-c79e-72c8-ae70-c2265bb367c2",
+      "source": "01a1cf75-c768-777f-830d-b9bb18cb5c47",
+      "target": "01a1cf75-c79e-72c8-ae70-b89daea744cf",
+      "targetInput": "character_2"
+    },
+    {
+      "id": "01a1cf75-c889-72bf-90c8-cc6da53fa122",
+      "source": "01a1cf75-c6c2-776e-97fc-752f3b5a93a4",
+      "target": "01a1cf75-c889-72bf-90c8-c98458e0bb2d",
+      "targetInput": "image"
+    },
+    {
+      "id": "01a1cf75-c889-72bf-90c8-d262c9fd4aff",
+      "source": "01a1cf75-c768-777f-830d-b9bb18cb5c47",
+      "target": "01a1cf75-c889-72bf-90c8-c98458e0bb2d",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "01a1cf75-c889-72bf-90c8-d9d584a1e498",
+      "source": "01a1cf75-c889-72bf-90c8-c98458e0bb2d",
+      "target": "01a1cf75-c889-72bf-90c8-d61aa486716d",
+      "targetInput": "media"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifactId": "01a1cf75-c629-743f-b153-84bf0d7b89f1",
+      "kind": "image",
+      "label": "Character 1"
+    },
+    {
+      "artifactId": "01a1cf75-c6ec-7521-934c-d9f3e10cfd88",
+      "kind": "image",
+      "label": "Character 2"
+    },
+    {
+      "artifactId": "01a1cf75-c84e-74cf-bdfb-9535f0e21544",
+      "kind": "image",
+      "label": "Nano Banana 2.1 — glide over the harbour at dusk @image1 @image2"
+    }
+  ],
+  "chainRuns": {
+    "01a1cf75-c81f-72cf-92c0-8b702dd66752": {
+      "autoApply": true,
+      "awaitingStepId": null,
+      "bookId": "01a1cf75-c0c8-732f-8485-535201127995",
+      "chainId": "01a1cf75-c81f-72cf-92c0-8b702dd66752",
+      "createdAt": "2026-11-12T11:12:45.087Z",
+      "effect": "generation",
+      "error": null,
+      "fingerprint": "5f01debad8908d962dd20992cfa92ecc2c11708961d30a1a92b38c6efd016f00",
+      "kind": "chain-run",
+      "notebookId": "01a1cf75-c604-72a4-b491-daf738d6eb66",
+      "requestId": "goal:01a1cf75-c79c-76ca-812a-8acd860e01a2:frame:1",
+      "status": "completed",
+      "steps": [
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:45.087Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [
+            "generate-image-01a1cf75-c84e-74cf-bdfb-9535f0e21544-1794481965166"
+          ],
+          "effect": "generation",
+          "error": null,
+          "id": "scene",
+          "outputs": {
+            "address": "@b2",
+            "asset_id": "01a1cf75-c84e-74cf-bdfb-9535f0e21544",
+            "cell_id": "01a1cf75-c889-72bf-90c8-d61aa486716d",
+            "job_id": "generate-image-01a1cf75-c84e-74cf-bdfb-9535f0e21544-1794481965166",
+            "model": "kie:nano-banana-2-1",
+            "status": "completed"
+          },
+          "params": {
+            "model": "kie:nano-banana-2-1",
+            "options": {
+              "aspect_ratio": "9:16",
+              "output_format": "jpg",
+              "resolution": "2K"
+            },
+            "prompt": "glide over the harbour at dusk @image1 @image2",
+            "refs": {
+              "image": [
+                "@a1",
+                "@a2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-c629-743f-b153-84bf0d7b89f1",
+              "cellId": "01a1cf75-c6c2-776e-97fc-752f3b5a93a4",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-c6ec-7521-934c-d9f3e10cfd88",
+              "cellId": "01a1cf75-c768-777f-830d-b9bb18cb5c47",
+              "field": "refs.image",
+              "index": 1,
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "startedAt": "2026-11-12T11:12:45.125Z",
+          "status": "completed",
+          "tool": "generate_image"
+        }
+      ],
+      "updatedAt": "2026-11-12T11:12:45.488Z"
+    },
+    "01a1cf75-ca3d-711e-97eb-0752fb5e9a6f": {
+      "autoApply": true,
+      "awaitingStepId": null,
+      "bookId": "01a1cf75-c0c8-732f-8485-535201127995",
+      "chainId": "01a1cf75-ca3d-711e-97eb-0752fb5e9a6f",
+      "createdAt": "2026-11-12T11:12:45.629Z",
+      "effect": "generation",
+      "error": null,
+      "fingerprint": "714d164f81f6e4de5b028f12b72e6a713ac3a1349476999b913f546c119fef5d",
+      "kind": "chain-run",
+      "notebookId": "01a1cf75-c604-72a4-b491-daf738d6eb66",
+      "requestId": "goal:01a1cf75-c79c-76ca-812a-8acd860e01a2:videos:2",
+      "status": "running",
+      "steps": [
+        {
+          "approval": {
+            "actor": "chat",
+            "approvedAt": "2026-11-12T11:12:45.629Z",
+            "estimateUnavailable": true,
+            "estimateUsd": null
+          },
+          "autoApply": false,
+          "childJobIds": [],
+          "effect": "generation",
+          "error": null,
+          "id": "video",
+          "outputs": null,
+          "params": {
+            "mode": "r2v",
+            "model": "kie:bytedance/seedance-2-5",
+            "options": {
+              "aspect_ratio": "9:16",
+              "duration": 12,
+              "generate_audio": true,
+              "output_format": "mp4",
+              "resolution": "1080p"
+            },
+            "prompt": "glide over the harbour at dusk @image1 @image2",
+            "refs": {
+              "image": [
+                "@c1",
+                "@a1",
+                "@a2"
+              ]
+            }
+          },
+          "pins": [
+            {
+              "address": "@c1",
+              "artifactId": "01a1cf75-c84e-74cf-bdfb-9535f0e21544",
+              "cellId": "01a1cf75-c889-72bf-90c8-d61aa486716d",
+              "field": "refs.image",
+              "index": 0,
+              "objectHash": "f1d3eee5643bca976a6558ce9df729675e68a174c5abdbab5dfc7ac01407828c"
+            },
+            {
+              "address": "@a1",
+              "artifactId": "01a1cf75-c629-743f-b153-84bf0d7b89f1",
+              "cellId": "01a1cf75-c6c2-776e-97fc-752f3b5a93a4",
+              "field": "refs.image",
+              "index": 1,
+              "objectHash": "e777e1aeb963f3f6679049754c1f1cd468ee92cb5198a8a35f5f22343690a0ec"
+            },
+            {
+              "address": "@a2",
+              "artifactId": "01a1cf75-c6ec-7521-934c-d9f3e10cfd88",
+              "cellId": "01a1cf75-c768-777f-830d-b9bb18cb5c47",
+              "field": "refs.image",
+              "index": 2,
+              "objectHash": "ece236b06e2ab55b076b44b2dd209ffc64d22e05d57c633a4c1b1154ae1054c4"
+            }
+          ],
+          "requiresApproval": true,
+          "review": null,
+          "status": "pending",
+          "tool": "generate_video"
+        }
+      ],
+      "updatedAt": "2026-11-12T11:12:45.639Z"
+    }
+  }
+}

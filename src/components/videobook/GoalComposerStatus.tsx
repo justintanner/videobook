@@ -3,24 +3,24 @@ import { Flag } from 'lucide-react'
 import {
   goalProgress,
   goalStatusLine,
-  goalTileView,
   goalWake,
   goalWakeKey,
-  type GoalSnapshot,
+  shortPlanOf,
   type GoalWake,
+  type ShortGoalSnapshot,
 } from '@/videobook/goals'
 import { useElapsedSeconds } from '@/videobook/use-elapsed-seconds'
 import './GoalComposerStatus.css'
 
 type GoalComposerStatusProps = {
-  goal: GoalSnapshot
+  goal: ShortGoalSnapshot
   disabled?: boolean
   onOpen: () => void
 }
 
 type SeenGoal = {
   key: string
-  goal: GoalSnapshot
+  goal: ShortGoalSnapshot
 }
 
 function GoalStatusText({ text, short }: { text: string; short: string }) {
@@ -39,7 +39,6 @@ export function GoalComposerStatus({ goal, disabled = false, onOpen }: GoalCompo
     : null
   const elapsed = useElapsedSeconds(generatingSince)
   const line = goalStatusLine(goal, elapsed)
-  const { styleLabel } = goalTileView(goal, goal.plan, undefined)
   const key = goalWakeKey(goal)
   const [seen, setSeen] = useState<SeenGoal>({ key, goal })
   const [wake, setWake] = useState<GoalWake | null>(null)
@@ -63,13 +62,12 @@ export function GoalComposerStatus({ goal, disabled = false, onOpen }: GoalCompo
           type="button"
           className="goal-status-button"
           disabled={disabled}
-          aria-label={`Goal ${goal.address ?? ''}${styleLabel ? ` · ${styleLabel}` : ''}: ${line.text}. Open the goal panel`}
-          title={goal.plan?.title ?? goal.brief}
+          aria-label={`Goal ${goal.address ?? ''}: ${line.text}. Open the goal panel`}
+          title={shortPlanOf(goal)?.title ?? goal.brief}
           onClick={onOpen}
         >
           <Flag size={13} aria-hidden="true" className="goal-status-flag" />
           <span className="goal-status-kind" aria-hidden="true">Goal</span>
-          {styleLabel && <span className="goal-status-style" aria-hidden="true">{styleLabel}</span>}
           <span className="goal-status-text" aria-hidden="true">
             {wake ? (
               <>

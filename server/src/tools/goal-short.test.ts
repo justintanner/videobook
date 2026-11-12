@@ -20,7 +20,7 @@ import { createTestClient } from "../test-client.js";
 import { goalTestCharacters } from "../test-goals.js";
 import { copyVideoFixture } from "../test-media-fixtures.js";
 import { redirectFalStorage, SHORT_STUB_REFUSAL as REFUSAL, startShortStub, type ShortStub } from "../test-short-stub.js";
-import type { GoalSnapshot } from "./goal.js";
+import type { ShortGoalSnapshot } from "./goal.js";
 
 const AUTHORED = 'he waits for a bus in the rain, frame: "He stands under a bus shelter at dusk." beat 1: "He checks the road for the bus."';
 const NO_CHARACTER_REFERENCE = "Give the main character a reference image first: generate a character sheet or choose image cells.";
@@ -89,10 +89,10 @@ describe("video_goal shorts", () => {
   const raw = (args: Record<string, unknown>) => client.callTool({ name: "video_goal", arguments: { book_id: bookId, notebook_id: notebookId, ...args } });
   const textOf = (result: Awaited<ReturnType<typeof raw>>) => (result.content as Array<{ text: string }>)[0]!.text;
 
-  async function invoke(args: Record<string, unknown>): Promise<GoalSnapshot> {
+  async function invoke(args: Record<string, unknown>): Promise<ShortGoalSnapshot> {
     const result = await raw(args);
     expect(result.isError, textOf(result)).toBeFalsy();
-    return JSON.parse(textOf(result)) as GoalSnapshot;
+    return JSON.parse(textOf(result)) as ShortGoalSnapshot;
   }
 
   async function refusal(args: Record<string, unknown>): Promise<string> {
@@ -104,16 +104,16 @@ describe("video_goal shorts", () => {
   const status = (goalId: string) => invoke({ action: "status", goal_id: goalId });
   const chainRuns = () => Object.keys(engine.settings.get<{ runs: Record<string, unknown> }>("application.chain-runs.v1")?.runs ?? {}).length;
 
-  async function short(brief = AUTHORED): Promise<GoalSnapshot> {
+  async function short(brief = AUTHORED): Promise<ShortGoalSnapshot> {
     return status((await createShortGoal(engine, bookId, notebookId, { brief, requestId: uuidv7() })).goalId);
   }
 
-  async function settled(goal: GoalSnapshot): Promise<GoalSnapshot> {
+  async function settled(goal: ShortGoalSnapshot): Promise<ShortGoalSnapshot> {
     await waitForChainRun(engine, goal.chainId!, testBudget(90_000));
     return status(goal.goalId);
   }
 
-  async function approved(goal: GoalSnapshot): Promise<GoalSnapshot> {
+  async function approved(goal: ShortGoalSnapshot): Promise<ShortGoalSnapshot> {
     return settled(await invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision }));
   }
 
@@ -123,7 +123,8 @@ describe("video_goal shorts", () => {
 
   it("creates a short for the saved character, in review when authored and through the planner otherwise", async () => {
     const goal = await short();
-    expect(goal).toMatchObject({ planVersion: 4, status: "review", stage: "frame", plan: null, mainCharacterReferences: 1 });
+    expect(goal).toMatchObject({ planVersion: 4, status: "review", stage: "frame", legacy: false, mainCharacterReferences: 1 });
+    expect(goal).not.toHaveProperty("plan");
     expect(goal.shortPlan).toMatchObject({
       version: 4, aspectRatio: "9:16",
       character: { name: "Main character", description: "a man in a green shirt", silent: true, references: [{ artifactId: imageIds[0], slot: "@image1" }] },
@@ -142,7 +143,7 @@ describe("video_goal shorts", () => {
     expect((await invoke({ action: "create", brief: "a bus stop short", plan: goal.shortPlan, request_id: "structured-short" })).goalId).toBe(structured.goalId);
     stub.plannerAnswers = [{ title: "Bus stop", frame: "He waits at the bus shelter in the rain.", beats: ["He checks the road, then boards the bus."] }];
     const mentioned = await invoke({ action: "create", brief: "@a2 he waits for a bus" });
-    expect(mentioned).toMatchObject({ planVersion: 4, status: "planning", plan: null });
+    expect(mentioned).toMatchObject({ planVersion: 4, status: "planning", legacy: false });
     await expect.poll(() => readGoal(engine, mentioned.goalId).status, { timeout: testBudget(30_000) }).toBe("review");
     const planned = await status(mentioned.goalId);
     expect(planned.shortPlan!.frame.references).toEqual([expect.objectContaining({ artifactId: imageIds[1], slot: "@image2" })]);
@@ -229,7 +230,6 @@ describe("video_goal shorts", () => {
     expect(clip).toMatchObject({ stage: "videos", status: "review", finish: { status: "review", sourceArtifactId: clipId } });
     expect((await invoke({ action: "finish", goal_id: goal.goalId })).finish).toMatchObject({ status: "review", sourceArtifactId: clipId });
     expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: clip.revision })).toBe("Every segment of this short is generated. Finish it, regenerate a segment or add a beat.");
-    expect(await refusal({ action: "combine", goal_id: goal.goalId })).toBe("A short is one clip extended in place, so it has no assembly or combine.");
     expect(stub.unexpected).toEqual([]);
   });
 
