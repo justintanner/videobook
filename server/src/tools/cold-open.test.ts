@@ -13,7 +13,8 @@ import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { registerAllJobHandlers } from "../jobs/index.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import { INTELLIGENCE_MODEL } from "../openai-intelligence.js";
-import { queue, setEngineRoot } from "../queue.js";
+import { pauseBookQueueForTests, queue, setEngineRoot } from "../queue.js";
+import { reconcileProjectWork } from "./reconcile-project-work.js";
 import { coldOpenDefs } from "./cold-open.js";
 import type { ToolResult } from "./tool-def.js";
 import { testBudget } from "../test-budget.js";
@@ -76,6 +77,28 @@ describe("reviewed cold-open copies", () => {
     await rm(root, { recursive: true, force: true });
   });
   afterAll(async () => { await rm(fixtureRoot, { recursive: true, force: true }); });
+
+  it.each([false, undefined])("keeps a rendered cold open out of the upload sweep (transcribe: %s)", async (transcribe) => {
+    await engine.metadata.artifacts.write(assetId, "original", { hasAudio: true, ...(transcribe === false ? { transcribe } : {}) });
+    const output = await done(value(await edit()).job_id);
+    await pauseBookQueueForTests(bookId);
+    const savedKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "offline-cold-open-key";
+    try {
+      const result = await reconcileProjectWork(engine, bookId);
+      expect(result.external_uploads).toEqual([]);
+      expect(result.auto_plain_transcript).toEqual([]);
+      expect(result.auto_transcribe).toEqual([]);
+      expect(engine.jobs.queue.list({ type: "transcribe_video_audio", artifactId: output.output_asset_id })).toEqual([]);
+      expect(engine.jobs.queue.list({ type: "transcribe", artifactId: output.output_asset_id })).toEqual([]);
+      expect(engine.jobs.queue.list({ type: "process_video", artifactId: output.output_asset_id })).toEqual([]);
+      const meta = await engine.metadata.artifacts.read(output.output_asset_id, "original");
+      expect(meta.ok && meta.value).toMatchObject({ width: 160, height: 96, hasAudio: true, duration: 8 });
+    } finally {
+      if (savedKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = savedKey;
+    }
+  });
 
   it("reuses a source-versioned suggestion without creating media or spending again", async () => {
     const source = await coldOpenSource(engine, assetId);
