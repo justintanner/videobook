@@ -63,7 +63,7 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
   const running = goal.status === 'running'
   const finishing = goal.finish?.status === 'running'
   const finishFailed = goal.finish?.status === 'failed'
-  const hasReference = plan.character.references.length > 0 || (character?.references.length ?? 0) > 0
+  const hasReference = plan.character.references.length > 0 || (character?.references.length ?? goal.mainCharacterReferences ?? 0) > 0
   const canGenerate = goal.status === 'review' && promptsReady && !disabled && !running && !finishing
   const sourceId = next === null ? goal.finish?.sourceArtifactId ?? currentClip?.artifactId ?? null : null
   const sourceAsset = sourceId ? resolveAsset(sourceId) : null

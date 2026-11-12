@@ -6,14 +6,14 @@ import { firstEmptyNotebookGridRow, notebookGridTag, notebookOccupiedSlots, NOTE
 import { queue } from "../queue.js";
 import { cancelChainRun, getChainRun, preflightAndAccept, retryChainRun } from "../chain-executor.js";
 import { compileFrameSteps, compileGoalV3Approval, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalPlanV3Schema, goalStillPrompt, isGoalPlanV3, refreshGoalPlanV3, type GoalGenerationStage, type GoalPlan } from "../goal-plan.js";
-import { buildGoalPlanV3, type GoalPlanV3 } from "../goal-plan-v3.js";
+import type { GoalPlanV3 } from "../goal-plan-v3.js";
 import { goalShortPlanSchema } from "../goal-short-plan.js";
-import { createShortGoal, retryShortGoal, selectShortVersion, startShortStage, updateShortGoal } from "../goal-short-runtime.js";
+import { createShortGoal, priceShortFrame, retryShortGoal, selectShortVersion, startShortStage, updateShortGoal } from "../goal-short-runtime.js";
 import {
   clearMainCharacterError, describeMainCharacter, reconcileMainCharacter, requireCharacterSheetKey, resolveCharacterReferences,
   saveMainCharacter, startCharacterSheet, type MainCharacterView,
 } from "../goal-short-character.js";
-import { estimateGoalV3, goalMediaCharacters, resolveGoalMediaReferences, captureGoalSceneFrame } from "../goal-v3-runtime.js";
+import { estimateGoalV3, goalMediaCharacters } from "../goal-v3-runtime.js";
 import { currentGoalCharacters, resolveGoalCharacters } from "../goal-characters.js";
 import { goalStylesEqual } from "../goal-styles.js";
 import { activeGoalStage, completedGoalVideos, LEGACY_GOAL_MESSAGE, publicGoal, reconcileFinish, reconcileGoal } from "../goal-state.js";
@@ -339,14 +339,13 @@ async function createGoal(engine: Engine, bookId: string, notebookId: string, ar
     }
     const document = readNotebook(engine, notebookId);
     const supplied = args.plan === undefined ? undefined : z.union([goalShortPlanSchema, goalPlanV3Schema, goalPlanSchema]).parse(args.plan);
-    if (supplied?.version === 4) return goalSnapshot(engine, await createShortGoal(engine, bookId, notebookId, { brief, requestId, plan: supplied }));
+    if (supplied === undefined || supplied.version === 4) {
+      return goalSnapshot(engine, await createShortGoal(engine, bookId, notebookId, { brief, requestId, ...(supplied ? { plan: supplied } : {}) }));
+    }
     const goalId = uuidv7();
     const timestamp = new Date().toISOString();
-    if (supplied === undefined || isGoalPlanV3(supplied)) {
-      const sourced = supplied === undefined
-        ? await resolveGoalMediaReferences(engine, document, brief)
-        : supplied.references;
-      const plan = supplied ?? buildGoalPlanV3({ brief, references: sourced, frame: await captureGoalSceneFrame(engine, notebookId, sourced) });
+    if (isGoalPlanV3(supplied)) {
+      const plan = supplied;
       const media = plan.references;
       const characters = goalMediaCharacters(media);
       const estimate = await estimateGoalV3(engine, plan);
@@ -544,6 +543,9 @@ async function mainCharacterAction(engine: Engine, bookId: string, notebookId: s
       });
     }
     if (args.generate === true) character = await startCharacterSheet(engine, bookId, notebookId);
+    for (const goal of character.referenceArtifactIds.length > 0 ? listGoals(engine, notebookId) : []) {
+      await withNotebookMutation(`goal:${goal.goalId}`, () => priceShortFrame(engine, readGoal(engine, goal.goalId), character.referenceArtifactIds));
+    }
     const view = await describeMainCharacter(engine, readNotebook(engine, notebookId), character);
     clearMainCharacterError(engine, view.sheet.lastError);
     return view;
@@ -564,7 +566,7 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id. The character action reads the book's main character for shorts, saves its name, description or reference_ids (image cells), and with generate makes a paid GPT Image 2.6 character sheet.",
+    description: "Run Goal mode on a notebook. create makes a short from a brief: a real-looking phone video, 5 to 60 seconds, starring the book's main character, who never speaks; image cells mentioned in the brief become place or prop references for the opening frame. Then list, status, update, approve, regenerate, select, revise, cancel, retry, combine, finish (cold open plus the saved watermark) or dismiss it by goal_id. Each paid step needs its own approval with its estimate: the GPT Image 2.6 opening frame, the H3 Max base clip, and each H3 Max Extend continuation for the next beat. The character action reads the main character, saves its name, description or reference_ids (image cells), and with generate makes a paid GPT Image 2.6 character sheet.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
       action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "assemble", "retry", "dismiss", "combine", "finish", "character"]),

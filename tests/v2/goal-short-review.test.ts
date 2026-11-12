@@ -45,6 +45,9 @@ describe('GoalShortReview', () => {
     const html = render(shortGoalFixture({}, shortPlanFixture([12], [])))
     expect(button(html, 'Generate frame')).toContain('disabled=""')
     expect(html).toContain('Give the main character a reference image first')
+    const ready = render(shortGoalFixture({ mainCharacterReferences: 1 }, shortPlanFixture([12], [])))
+    expect(button(ready, 'Generate frame')).not.toContain('disabled')
+    expect(ready).not.toContain('Give the main character a reference image first')
   })
 
   it('shows each clip with its state and estimate, continues the next one and offers another beat', () => {
@@ -102,5 +105,10 @@ describe('GoalPanel with a short', () => {
     const props = { connected: true, onAction: noop, onCharacter: noCharacter, onPreview: async () => undefined, onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
     expect(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture() }))).toContain('aria-label="Short stages"')
     expect(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture({ status: 'planning', shortPlan: undefined }) }))).toContain('Planning the frame and the beats of your short')
+    const failed = renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture({ status: 'failed', shortPlan: undefined, error: 'OpenAI API error 500' }) }))
+    expect(failed).toContain('>Short<')
+    expect(failed).toContain('OpenAI API error 500')
+    expect(button(failed, 'Retry planning')).toMatch(/>Retry planning<\/button>$/u)
+    expect(failed).not.toContain('ready ·')
   })
 })

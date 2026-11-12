@@ -8,6 +8,7 @@ import { suggestedColdOpen } from "./lightning-defaults.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { goalStageAttempts, goalStillStaleReason } from "./goal-stills.js";
 import { refreshGoalShortPlan } from "./goal-short-plan.js";
+import { readMainCharacter } from "./goal-short-character.js";
 import { currentShortClip, nextShortSegment, shortSegmentStale } from "./goal-short-runtime.js";
 
 export const LEGACY_GOAL_MESSAGE = "Goal mode now starts from character images. Start a new /goal.";
@@ -244,7 +245,7 @@ export async function publicGoal(engine: Engine, goal: GoalRecord, document: Not
       : content.estimate.frame;
   return {
     kind: "video-goal" as const, ...goal, ...content, plan: displayedPlan,
-    ...(short?.plan ? { shortPlan: refreshGoalShortPlan(short.plan, document) } : {}),
+    ...(short?.plan ? { shortPlan: refreshGoalShortPlan(short.plan, document), mainCharacterReferences: readMainCharacter(engine).referenceArtifactIds.length } : {}),
     finish: goal.finish ?? null,
     finalArtifactId: goal.finish?.finalArtifactId ?? null,
     coldOpen: await coldOpenReview(engine, goal),

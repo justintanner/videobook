@@ -253,6 +253,14 @@ async function adoptCharacterReferences(engine: Engine, goal: GoalRecord, conten
   return next;
 }
 
+export async function priceShortFrame(engine: Engine, goal: GoalRecord, characterIds: readonly string[]): Promise<void> {
+  if (goal.planVersion !== 4 || goal.status !== "review" || characterIds.length === 0 || (goal.stages.frame?.outputs.length ?? 0) > 0) return;
+  const content = requireGoalShortContent(engine, goal);
+  if (!content.plan || content.plan.character.references.length > 0 || content.estimate.frame.usd !== null) return;
+  const plan = withShortCharacterReferences(content.plan, await characterReferences(engine, goal.notebookId, characterIds));
+  await writeGoalShortContent(engine, goal, { ...content, estimate: await estimateShort(engine, plan) });
+}
+
 async function clipSeconds(engine: Engine, artifactId: string): Promise<number> {
   const manifest = await engine.files.manifest(artifactId);
   const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, "video") : null;

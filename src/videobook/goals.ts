@@ -378,11 +378,10 @@ export function goalWake(previous: GoalSnapshot, current: GoalSnapshot): GoalWak
   const revised = revisionLabel(current)
   const stopped = stoppedStillLabel(previous, before, after, current)
   if (after.phase === 'failed' || after.phase === 'interrupted') from = goalStatusLine(current).text
-  else if (after.phase === 'complete') from = current.assembly ? 'Sequence assembled' : 'Clip ready'
+  else if (after.phase === 'complete') from = current.assembly ? 'Sequence assembled' : current.planVersion === 4 ? 'Short ready' : 'Clip ready'
   else if (before.phase === 'planning' && after.phase === 'review') from = 'Plan ready'
   else if (stopped) from = stopped
   else if (after.phase === 'review' && revised) from = `${revised[0]!.toUpperCase()}${revised.slice(1)} revised`
-  else if (after.phase === 'review' && current.planVersion === 4 && current.finish) from = 'Short ready'
   else if (after.phase === 'review' && current.planVersion === 4 && after.stage === 'videos' && before.stage === 'frame') from = 'Frame ready'
   else if (after.phase === 'review' && current.planVersion === 4 && after.stage === 'videos') from = `Clip ${Math.max(1, after.done)} ready`
   else if (after.phase === 'review' && current.planVersion === 3 && current.finish) from = 'Video ready'
@@ -520,7 +519,7 @@ export function goalTileView(goal: GoalSnapshot | null, fallbackPlan: GoalDispla
     ...(goal.stages.storyboards?.outputs ?? []).map(output => ({ ...output, label: output.index >= planRows.length ? `Ending ${output.index + 1 - planRows.length}` : `Storyboard ${output.index + 1}` })),
   ] : []
   return {
-    title: plan?.title ?? (phase === 'planning' ? 'Building your shot plan' : label ?? 'Video goal'), planning: phase === 'planning',
+    title: plan?.title ?? (goal?.planVersion === 4 ? phase === 'planning' ? 'Planning your short' : 'Short' : phase === 'planning' ? 'Building your shot plan' : label ?? 'Video goal'), planning: phase === 'planning',
     rows: visible.map(shot => ({
       key: `${shot.index}`, number: shot.number, title: shot.title, state: shot.state,
       detail: shot.state === 'generating' ? '' : shot.state === 'submitting' ? 'Queued'

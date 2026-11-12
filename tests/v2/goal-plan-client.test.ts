@@ -264,7 +264,8 @@ describe('short goal model', () => {
     const appended = shortGoalFixture({ stage: 'videos', stages: bothClips, finalArtifactId: 'final', finish: { status: 'completed', sourceArtifactId: 'clip-b', finalArtifactId: 'final', error: null } }, shortPlanFixture([10, 10, 5]))
     expect(goalStatusLine(appended).text).toBe('Review clip 3 of 3 · at least $0.60')
     expect(goalTileView(appended, null, undefined).note).toBe('Review clip 3 of 3 · at least $0.60')
-    expect(goalTileView(shortGoalFixture({ status: 'planning', shortPlan: undefined }), null, 'Video goal').planning).toBe(true)
+    expect(goalTileView(shortGoalFixture({ status: 'planning', shortPlan: undefined }), null, 'Video goal')).toMatchObject({ planning: true, title: 'Planning your short' })
+    expect(goalTileView(shortGoalFixture({ status: 'failed', shortPlan: undefined, error: 'OpenAI API error 500' }), null, undefined)).toMatchObject({ title: 'Short', note: 'Planning failed · open to retry' })
   })
 
   it('wakes the composer as the frame, each clip and the short become ready', () => {
@@ -277,7 +278,10 @@ describe('short goal model', () => {
       stage: 'videos', chainId: step.chainId, stages: { frame, videos: shortStage('videos', [{ index: 0, artifactId: 'clip-a' }, { index: 1, artifactId: 'clip-b' }]) },
       finish: { status: 'review', sourceArtifactId: 'clip-b', finalArtifactId: null, error: null },
     })
-    expect(goalWake(generating, ready)?.from).toBe('Short ready')
+    expect(goalWake(generating, ready)?.from).toBe('Clip 2 ready')
+    const finishing = { ...ready, finish: { status: 'running' as const, sourceArtifactId: 'clip-b', finalArtifactId: null, error: null } }
+    const finished = { ...ready, status: 'completed' as const, finalArtifactId: 'final', finish: { status: 'completed' as const, sourceArtifactId: 'clip-b', finalArtifactId: 'final', error: null } }
+    expect(goalWake(finishing, finished)?.from).toBe('Short ready')
   })
 
   it('prices each clip on its own and reads H3 Max estimates as lower bounds', () => {

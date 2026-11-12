@@ -35,7 +35,7 @@ export const WORKFLOW_TOOLS: Readonly<Record<string, { actionId: string; reason:
   edit_cold_open: { actionId: "command.edit-cold-open", reason: "Creates the reviewed cold-open copy." },
   video_goal: {
     actionId: "command.goal",
-    reason: "Goal mode defaults to portrait and Cinematic style. IG Influencer adds a hyper-realistic phone-shot style with content format, delivery, camera and light options, fixed after the frame. Review the plan and separately approve the frame, storyboards and videos; still versions remain selectable and revisable.",
+    reason: "Goal mode makes a real-looking short starring the book's main character, who never speaks. Review the character, then approve the opening frame, the base clip and each continuation separately, each with its own estimate; frame and clip versions stay selectable and revisable, and Finish adds the cold open and the saved watermark.",
   },
   assemble_goal: {
     actionId: "command.goal",

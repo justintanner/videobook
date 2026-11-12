@@ -21,6 +21,8 @@ import { LEGACY_GOAL_MESSAGE } from "../goal-state.js";
 import { appendGoalClips } from "../jobs/assemble-goal.js";
 import { goalProviderJob, goalTestCharacters, goalTestPlan, goalTestSimplePlan, goalTestVideo, seedGoalStage, settleGoalChain } from "../test-goals.js";
 import { goalPlannerImages } from "../goal-reference-images.js";
+import { buildGoalPlanV3 } from "../goal-plan-v3.js";
+import { captureGoalSceneFrame, resolveGoalMediaReferences } from "../goal-v3-runtime.js";
 import { probeVideo } from "../ffmpeg.js";
 import type { GoalSnapshot } from "./goal.js";
 import { testBudget } from "../test-budget.js";
@@ -268,6 +270,11 @@ describe("staged video goals through MCP", () => {
     return JSON.parse(text) as T;
   }
   const create = (extra: Record<string, unknown> = {}) => invoke({ action: "create", brief, plan, ...extra });
+  async function createV3(text: string) {
+    const references = await resolveGoalMediaReferences(engine, notebook(), text);
+    const v3 = buildGoalPlanV3({ brief: text, references, frame: await captureGoalSceneFrame(engine, notebookId, references) });
+    return invoke({ action: "create", brief: text, plan: v3 });
+  }
   const status = (goalId: string) => invoke({ action: "status", goal_id: goalId });
   const approve = (goal: GoalSnapshot) => invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
   const notebook = () => {
@@ -356,11 +363,16 @@ describe("staged video goals through MCP", () => {
     expect((await status(created.goalId)).stages.frame!.outputs[0]!.stale).toBeNull();
   });
 
-  it("keeps a new goal on the lightning plan and lets an explicit plan override brief keywords", async () => {
+  it("makes a short from a brief alone and lets an explicit plan override brief keywords", async () => {
     const styledBrief = "@a1 as an IG influencer, GRWM morning routine";
-    const created = await invoke({ action: "create", brief: styledBrief });
-    expect(created).toMatchObject({ status: "review", planVersion: 3 });
-    expect(created.plan).toMatchObject({ version: 3, aspectRatio: "9:16", video: { durationSeconds: 12 } });
+    const created = await invoke({ action: "create", brief: `${styledBrief}, frame: "She stands at a mirror in morning light." beat 1: "She picks up a brush and turns to the window."` });
+    expect(created).toMatchObject({ status: "review", planVersion: 4, plan: null, steps: [], mainCharacterReferences: 0 });
+    expect(created.shortPlan).toMatchObject({
+      version: 4, aspectRatio: "9:16", character: { silent: true, references: [] },
+      frame: { model: "fal:openai/gpt-image-2.6/sunburst/edit", references: [expect.objectContaining({ artifactId: imageIds[0], slot: "@image1" })] },
+      segments: [{ prompt: "She picks up a brush and turns to the window.", seconds: 12 }],
+    });
+    expect(JSON.stringify(created)).not.toMatch(/nano-banana|seedance|kie:/iu);
     expect(created).not.toHaveProperty("requestedStyle");
     expect(notebook().cells.find(cell => cell.id === created.cellId)!.inputs).not.toHaveProperty("requestedStyle");
     const explicit = await create({ brief: styledBrief });
@@ -962,7 +974,7 @@ describe("staged video goals through MCP", () => {
     const videoCell = engine.notebooks.createCell({ type: "video", label: "Market clip", slot: { row: 0, column: 2 }, outputArtifactId: videoId });
     const inserted = await engine.notebooks.insertCell(notebookId, videoCell);
     expect(inserted.ok, inserted.ok ? "" : inserted.error.message).toBe(true);
-    const goal = await invoke({ action: "create", brief: "@a1 @a3 skate through the morning market" });
+    const goal = await createV3("@a1 @a3 skate through the morning market");
     expect(engine.jobs.queue.list({ type: "plan_goal" })).toHaveLength(0);
     expect(goal).toMatchObject({
       planVersion: 3, status: "review", stage: "frame",
@@ -1012,28 +1024,28 @@ describe("staged video goals through MCP", () => {
       return `${notebookGridTag(image.slot)} ${notebookGridTag(video.slot)}`;
     };
     const quote = "keep every word of this authored scene even when it runs past the twenty five word ceiling for fresh scene prompts today and again tomorrow morning";
-    const authored = await invoke({ action: "create", brief: `${mention()} scene: "${quote}"` });
+    const authored = await createV3(`${mention()} scene: "${quote}"`);
     if (!authored.plan || !("version" in authored.plan) || authored.plan.version !== 3) throw new Error("expected a quoted v3 plan");
     expect(goalPromptWords(quote)).toBeGreaterThan(25);
     expect(authored.plan.scene.prompt).toContain(quote);
     expect(authored.plan.scene.prompt).toContain("@image1");
 
     const many = Array.from({ length: 40 }, (_, index) => `word${index}`).join(" ");
-    const truncated = await invoke({ action: "create", brief: `${mention()} ${many}` });
+    const truncated = await createV3(`${mention()} ${many}`);
     if (!truncated.plan || !("version" in truncated.plan) || truncated.plan.version !== 3) throw new Error("expected a truncated v3 plan");
     expect(goalPromptWords(truncated.plan.scene.prompt)).toBeLessThanOrEqual(25);
     expect(goalPromptWords(truncated.plan.video.prompt)).toBeLessThanOrEqual(60);
     expect(truncated.plan.scene.prompt).not.toContain("word39");
 
-    const portrait = await invoke({ action: "create", brief: `${mention()} a portrait clip of the market` });
+    const portrait = await createV3(`${mention()} a portrait clip of the market`);
     expect(portrait.plan).toMatchObject({ aspectRatio: "9:16", scene: { aspectRatio: "9:16" }, video: { aspectRatio: "9:16", durationSeconds: 12 } });
     const tallId = await goalTestVideo(engine, root, "blue", { width: 90, height: 160 });
     const tallCell = engine.notebooks.createCell({ type: "video", label: "Tall clip", slot: { row: 7, column: 0 }, outputArtifactId: tallId });
     const tallInserted = await engine.notebooks.insertCell(notebookId, tallCell);
     expect(tallInserted.ok, tallInserted.ok ? "" : tallInserted.error.message).toBe(true);
-    const tall = await invoke({ action: "create", brief: `${mention().split(" ")[0]} ${notebookGridTag(tallCell.slot)} a clip of the workshop` });
+    const tall = await createV3(`${mention().split(" ")[0]} ${notebookGridTag(tallCell.slot)} a clip of the workshop`);
     expect(tall.plan).toMatchObject({ aspectRatio: "9:16", scene: { aspectRatio: "9:16" }, video: { aspectRatio: "9:16" } });
-    const timed = await invoke({ action: "create", brief: `${mention()} 10 seconds through the market` });
+    const timed = await createV3(`${mention()} 10 seconds through the market`);
     expect(timed.plan).toMatchObject({ video: { durationSeconds: 10 } });
     expect(timed.estimate.videos.usd).toBeLessThan(goal.estimate.videos.usd!);
 
@@ -1091,7 +1103,7 @@ describe("staged video goals through MCP", () => {
   }, testBudget(60_000));
 
   it("approves a v3 scene then a video and stops at finishing review", async () => {
-    const goal = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
+    const goal = await createV3("@a1 @a2 skate through the morning market");
     expect(goal).toMatchObject({ planVersion: 3, status: "review", stage: "frame", finalArtifactId: null, finish: null });
     expect(goal.estimate.still.usd).toBe(goal.estimate.frame.usd);
     expect(goal.estimate.still.usd).toBeGreaterThan(0);
@@ -1168,7 +1180,7 @@ describe("staged video goals through MCP", () => {
   }, testBudget(60_000));
 
   it("saves a v3 title and prompt without rewriting settings or a title-only finish", async () => {
-    const goal = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
+    const goal = await createV3("@a1 @a2 skate through the morning market");
     if (!goal.plan || !("version" in goal.plan) || goal.plan.version !== 3) throw new Error("expected a v3 plan");
     const videoId = await goalTestVideo(engine, root, "green");
     const seeded = { status: "review" as const, sourceArtifactId: videoId, finalArtifactId: null, error: null };
@@ -1223,7 +1235,7 @@ describe("staged video goals through MCP", () => {
   }, testBudget(60_000));
 
   it("retries an interrupted v3 scene unless the reference changed, including a video-only goal", async () => {
-    const goal = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
+    const goal = await createV3("@a1 @a2 skate through the morning market");
     await pauseBookQueueForTests(bookId);
     const started = await approve(goal);
     await expect.poll(() => getChainRun(engine, started.chainId!)?.steps[0]?.childJobIds.length, { timeout: testBudget(15_000) }).toBe(1);
@@ -1260,7 +1272,7 @@ describe("staged video goals through MCP", () => {
     const inserted = await engine.notebooks.insertCell(notebookId, videoCell);
     expect(inserted.ok, inserted.ok ? "" : inserted.error.message).toBe(true);
     const videoAddress = notebookGridTag(notebook().cells.find(cell => cell.id === videoCell.id)!.slot);
-    const videoOnly = await invoke({ action: "create", brief: `${videoAddress} glide over the market` });
+    const videoOnly = await createV3(`${videoAddress} glide over the market`);
     expect(videoOnly.characters).toHaveLength(0);
     expect(notebook().edges.filter(edge => edge.target === videoOnly.cellId)).toHaveLength(0);
     const scene = await approve(videoOnly);
@@ -1280,7 +1292,7 @@ describe("staged video goals through MCP", () => {
   }, testBudget(60_000));
 
   it("loads, edits, approves and retries a v3 goal saved with the earlier 2K scene default", async () => {
-    const created = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
+    const created = await createV3("@a1 @a2 skate through the morning market");
     if (!created.plan || !("version" in created.plan) || created.plan.version !== 3) throw new Error("expected a v3 plan");
     expect(created.plan.scene.resolution).toBe("2K");
     const savedBefore4K: GoalPlanV3 = {

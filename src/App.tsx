@@ -114,7 +114,6 @@ import {
   NOTEBOOK_GRID_ADDRESS_SOURCE,
   normalizeNotebookReference,
   stripNotebookMentions,
-  scanNotebookMentions,
 } from 'videobook-engine/notebook-mentions'
 import {
   notebookCellOccupiedSlots,
@@ -3530,12 +3529,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook) return { ok: false, message: 'Open a notebook first.' }
     if (!brief) {
       if (!activeComposerGoal) {
-        return { ok: false, message: 'Mention the reference images or videos, for example /goal @a1 @a2 as a short clip.' }
+        return { ok: false, message: 'Describe the short, for example /goal he waits for a bus in the rain' }
       }
       openGoalTile(activeComposerGoal.cellId)
       return { ok: true, message: `Opened goal ${activeComposerGoal.address ?? ''}`.trim() }
     }
-    if (scanNotebookMentions(brief).length === 0) return { ok: false, message: 'Mention the reference images or videos, for example /goal @a1 @a2 as a short clip' }
     const scope = { bookId, notebookId: notebook.id }
     const goal = await actOnGoal(scope, { action: 'create', brief, request_id: uuidv7() }, chat)
     if (watchScopeRef.current.bookId !== scope.bookId || watchScopeRef.current.notebookId !== scope.notebookId || chat?.isCurrent() === false) {
@@ -3545,7 +3543,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     revealNotebookCanvasCell(goal.cellId)
     collapseComposerAfterCellCreation(chat)
     openGoalTile(goal.cellId)
-    return { ok: true, message: `Planning your video goal in ${goal.address ?? 'a new tile'}` }
+    const where = goal.address ?? 'a new tile'
+    return { ok: true, message: goal.status === 'planning' ? `Planning your short in ${where}` : `Your short in ${where} is ready to review` }
   }
 
   const runGoalCharacter = async (args: Record<string, unknown>) => {

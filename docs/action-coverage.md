@@ -292,7 +292,7 @@ Review is what the action sheet asks before Run action. A tool billed per operat
 | `upload_file` | `command.upload` | Import opens a native file picker and uploads media through the file workflow; users do not enter base64 data. |
 | `prepare_cold_open` | `command.edit-cold-open` | Selects a highlight in the cold-open review. |
 | `edit_cold_open` | `command.edit-cold-open` | Creates the reviewed cold-open copy. |
-| `video_goal` | `command.goal` | Goal mode defaults to portrait and Cinematic style. IG Influencer adds a hyper-realistic phone-shot style with content format, delivery, camera and light options, fixed after the frame. Review the plan and separately approve the frame, storyboards and videos; still versions remain selectable and revisable. |
+| `video_goal` | `command.goal` | Goal mode makes a real-looking short starring the book's main character, who never speaks. Review the character, then approve the opening frame, the base clip and each continuation separately, each with its own estimate; frame and clip versions stay selectable and revisable, and Finish adds the cold open and the saved watermark. |
 | `assemble_goal` | `command.goal` | Goal mode appends its completed shots to the sequence in order. |
 | `record_prompt` | `tool.chat` | Records text entered through the composer and generation editors; browsing history is a separate action. |
 | `slash_commands` | `command.actions` | Loads slash suggestions and dynamic project shortcuts in the Actions launcher. |

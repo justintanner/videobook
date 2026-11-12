@@ -16,7 +16,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
 import { createHttpHandler } from '../../server/src/server.js'
-import { pauseBookQueueForTests, queue, setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
+import { configureProviderPollDriverForTests, pauseBookQueueForTests, queue, resetProviderPollDriverForTests, setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
 import { registerAllJobHandlers } from '../../server/src/jobs/index.js'
 import { goalTestPlan, goalTestSimplePlan, goalTestVideo, seedGoalStage } from '../../server/src/test-goals.js'
 import { compileFrameSteps, compileReviseStillStep, compileStoryboardSteps, compileVideoSteps, goalPlanSchema, goalPromptBudgetIssues } from '../../server/src/goal-plan.js'
@@ -27,6 +27,14 @@ import { readGoal, saveGoal } from '../../server/src/goal-store.js'
 import { constrainGoalPlannerPlan } from '../../server/src/goal-planner-prompt.js'
 import { cancelChainRun, getChainRun, waitForChainRun } from '../../server/src/chain-executor.js'
 import { tryResolveModel } from '../../server/src/media/descriptor.js'
+import { installFalDynamicEstimator } from '../../server/src/media/cost.js'
+import { configureProviderEndpoints } from '../../server/src/media/endpoints.js'
+import { buildGoalPlanV3 } from '../../server/src/goal-plan-v3.js'
+import { captureGoalSceneFrame, resolveGoalMediaReferences } from '../../server/src/goal-v3-runtime.js'
+import { copyVideoFixture } from '../../server/src/test-media-fixtures.js'
+import { redirectFalStorage, startShortStub } from '../../server/src/test-short-stub.js'
+import { testBudget } from '../../server/src/test-budget.js'
+import { readTaggingSettings, writeTaggingSettings } from '../../server/src/tag-settings.js'
 import type { GoalSnapshot } from '../../server/src/tools/goal.js'
 import { availablePort, resultValue, startProcess, stopProcess, waitForHttp } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
@@ -287,10 +295,7 @@ describe('staged goal mode in the browser', () => {
     expect(errors).toEqual([])
   }, 60_000)
 
-  scenario('shows portrait defaults for a goal created without a supplied plan or format words', async () => {
-    const fresh = await call<GoalSnapshot>('video_goal', { action: 'create', brief: '@a1 @a2 as Mr Bean in Thailand' })
-    expect(fresh).toMatchObject({ planVersion: 3, status: 'review', plan: { version: 3, aspectRatio: '9:16', video: { durationSeconds: 12 } } })
-    expect(fresh.plan && 'shots' in fresh.plan).toBe(false)
+  scenario('lays out a supplied portrait scene plan compactly at desktop and phone widths', async () => {
     const created = await call<GoalSnapshot>('video_goal', { action: 'create', brief: '@a1 @a2 as Mr Bean in Thailand, portrait', plan: { ...goalTestSimplePlan(), aspectRatio: '9:16' } })
     await open(created)
     expect(await tile(created).locator('[title="Aspect ratio"]').textContent()).toBe('9:16')
@@ -520,18 +525,110 @@ describe('staged goal mode in the browser', () => {
     expect(errors).toEqual([])
   }, 60_000)
 
-  scenario('requires character mentions and reveals a goal created from the chat input', async () => {
-    const before = (await goals()).goals.length
-    await command('/goal a funny skateboard video')
-    await expect.poll(() => page.locator('.chat-bubble-assistant').last().textContent(), { timeout: 15_000 }).toContain('Mention the reference images')
-    expect((await goals()).goals).toHaveLength(before)
-    const brief = '@a1@a2 make two 4s funny skateboard clips'
-    await command(`/goal ${brief}`)
-    await expect.poll(async () => (await goals()).goals.find(goal => goal.brief === brief)?.status, { timeout: 15_000 }).toBe('review')
-    await expect.poll(() => status().textContent(), { timeout: 15_000 }).toContain('Review scene')
-    expect(await page.getByRole('dialog', { name: 'Goal mode', exact: true }).count()).toBe(0)
-    expect(errors).toEqual([])
-  }, 30_000)
+  scenario('makes a short from /goal without a mention: character, frame, clip, one continuation and finish', async () => {
+    for (const goal of (await goals()).goals) {
+      if (goal.status !== 'cancelled' && !goal.dismissedAt) await call('video_goal', { action: 'dismiss', goal_id: goal.goalId })
+    }
+    const fixtures = await mkdtemp(join(tmpdir(), 'videobook-goal-short-media-'))
+    await copyVideoFixture({ width: 360, height: 640, durationSec: 3, fps: 12, source: 'color', color: 'green', audio: { frequency: 330 } }, join(fixtures, 'clip.mp4'))
+    const clip = await readFile(join(fixtures, 'clip.mp4'))
+    const stub = await startShortStub({ frame: await sharp({ create: { width: 360, height: 640, channels: 3, background: '#5b7a4c' } }).png().toBuffer(), clip, extended: clip })
+    const savedKeys = { FAL_API_KEY: process.env.FAL_API_KEY, OPENAI_API_KEY: process.env.OPENAI_API_KEY }
+    const savedTagging = readTaggingSettings(engine)
+    writeTaggingSettings(engine, { analysisOnNewAssets: false })
+    process.env.FAL_API_KEY = 'local-fal-key'
+    process.env.OPENAI_API_KEY = 'offline-openai-key'
+    const restoreFetch = redirectFalStorage(stub.baseURL)
+    const restoreEndpoints = configureProviderEndpoints({ falQueueBaseURL: stub.baseURL, openaiBaseURL: stub.baseURL })
+    const restoreEstimator = installFalDynamicEstimator(async () => ({ total_cost: 0.21, currency: 'USD' }))
+    configureProviderPollDriverForTests({ intervalMs: 200 })
+    try {
+      await page.reload()
+      await command('/goal')
+      await expect.poll(() => page.locator('.chat-bubble-assistant').last().textContent(), { timeout: testBudget(15_000) }).toContain('Describe the short, for example /goal he waits for a bus in the rain')
+      stub.plannerAnswers = [{ title: 'Bus in the rain', frame: 'He stands under a bus shelter at dusk, rain on the road.', beats: ['He checks the road for the bus, then wipes rain from his sleeve.'] }]
+      const brief = 'he waits for a bus in the rain'
+      await command(`/goal ${brief}`)
+      await expect.poll(async () => (await goals()).goals.find(goal => goal.brief === brief)?.status, { timeout: testBudget(30_000) }).toBe('review')
+      const short = (await goals()).goals.find(goal => goal.brief === brief)!
+      expect(short).toMatchObject({ planVersion: 4, plan: null, shortPlan: { version: 4, title: 'Bus in the rain', segments: [{ seconds: 12 }] } })
+      expect(JSON.stringify(short)).not.toMatch(/nano-banana|seedance|kie:/iu)
+      expect(stub.plannerRequests).toHaveLength(1)
+      if (savedKeys.OPENAI_API_KEY === undefined) delete process.env.OPENAI_API_KEY
+      else process.env.OPENAI_API_KEY = savedKeys.OPENAI_API_KEY
+      const tabs = panel().getByRole('navigation', { name: 'Short stages' })
+      const openTab = async (name: string) => {
+        if (!(await panel().isVisible())) {
+          await tile(short).click()
+          await panel().waitFor({ state: 'visible', timeout: testBudget(15_000) })
+        }
+        await tabs.getByRole('button', { name, exact: true }).click()
+      }
+      const primary = (label: RegExp) => panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: label })
+      await tile(short).waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      await openTab('Frame')
+      expect(await tabs.getByRole('button').allTextContents()).toEqual(['Character', 'Frame', 'Video', 'Finish'])
+      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review frame · estimate unavailable')
+      expect(short.mainCharacterReferences).toBe(0)
+      expect(await primary(/^Generate frame/).isDisabled()).toBe(true)
+      expect(await panel().getByText('Give the main character a reference image first').isVisible()).toBe(true)
+
+      await openTab('Character')
+      await panel().getByLabel('Character description', { exact: true }).fill('a man in his thirties in a green shirt')
+      await panel().getByRole('button', { name: 'Save character', exact: true }).click()
+      await expect.poll(async () => (await call<{ character: { description: string } }>('video_goal', { action: 'character' })).character.description, { timeout: testBudget(15_000) }).toBe('a man in his thirties in a green shirt')
+      const read = engine.notebooks.read(notebookId)
+      if (!read.ok) throw new Error(read.error.message)
+      const imageCell = read.value.cells.find(cell => cell.type === 'image' && cell.outputArtifactId)
+      if (!imageCell) throw new Error('missing image cell')
+      await openTab('Character')
+      await panel().getByLabel('Character image cells', { exact: true }).fill(notebookGridTag(imageCell.slot))
+      await panel().getByRole('button', { name: 'Use these images', exact: true }).click()
+      await expect.poll(async () => (await call<{ references: unknown[] }>('video_goal', { action: 'character' })).references.length, { timeout: testBudget(15_000) }).toBe(1)
+
+      await openTab('Frame')
+      await expect.poll(() => primary(/^Generate frame · \$0\.21$/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
+      await primary(/^Generate frame/).click()
+      await expect.poll(() => status().textContent(), { timeout: testBudget(90_000) }).toContain('Review clip 1 of 1 · at least $')
+
+      await openTab('Video')
+      await panel().getByLabel('New beat', { exact: true }).fill('He steps back from a splash and boards the bus.')
+      await panel().getByLabel('New beat seconds', { exact: true }).fill('5')
+      await panel().getByRole('button', { name: 'Add beat', exact: true }).click()
+      await expect.poll(async () => (await current(short)).shortPlan?.segments.map(segment => segment.seconds), { timeout: testBudget(15_000) }).toEqual([12, 5])
+      await openTab('Video')
+      await primary(/^Generate clip · at least \$/).click()
+      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review clip 2 of 2 · at least $')
+      await openTab('Video')
+      expect(await panel().getByLabel('Current clip', { exact: true }).isVisible()).toBe(true)
+      await primary(/^Continue · clip 2 · at least \$/).click()
+      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review finish · 0:17')
+
+      await openTab('Finish')
+      await expect.poll(() => primary(/^Finish$/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
+      await primary(/^Finish$/).click()
+      await expect.poll(() => status().textContent(), { timeout: testBudget(240_000) }).toContain('Short ready · 0:17')
+      await openTab('Finish')
+      const finished = panel().getByLabel('Finished short', { exact: true })
+      await finished.waitFor({ state: 'visible', timeout: testBudget(30_000) })
+      await expect.poll(() => finished.evaluate(node => (node as HTMLVideoElement).readyState), { timeout: testBudget(30_000) }).toBeGreaterThan(0)
+      expect(stub.submissions.map(submission => submission.path)).toEqual(['/openai/gpt-image-2.6/sunburst/edit', '/minimax/h3-max/reference-to-video', '/minimax/h3-max/extend-video'])
+      expect(stub.unexpected).toEqual([])
+      expect(errors).toEqual([])
+    } finally {
+      resetProviderPollDriverForTests()
+      restoreEstimator()
+      restoreEndpoints()
+      restoreFetch()
+      await stub.close()
+      for (const [key, value] of Object.entries(savedKeys)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+      writeTaggingSettings(engine, savedTagging)
+      await rm(fixtures, { recursive: true, force: true })
+    }
+  }, testBudget(600_000))
 
   scenario('reviews a simple scene, six-panel storyboard and single video, then revises and selects completed versions', async () => {
     const saved = await call<GoalSnapshot>('video_goal', { action: 'create', brief: '@a1 @a2 interview with a giant microphone', plan: goalTestSimplePlan() })
@@ -763,7 +860,10 @@ describe('staged goal mode in the browser', () => {
     if (!notebook.ok) throw new Error(notebook.error.message)
     const videoCell = notebook.value.cells.find(cell => cell.outputArtifactId === videoId)
     if (!videoCell) throw new Error('missing video cell')
-    const saved = await call<GoalSnapshot>('video_goal', { action: 'create', brief: `@a1 @a2 ${notebookGridTag(videoCell.slot)} skate through the morning market` })
+    const v3Brief = `@a1 @a2 ${notebookGridTag(videoCell.slot)} skate through the morning market`
+    const references = await resolveGoalMediaReferences(engine, notebook.value, v3Brief)
+    const v3Plan = buildGoalPlanV3({ brief: v3Brief, references, frame: await captureGoalSceneFrame(engine, notebookId, references) })
+    const saved = await call<GoalSnapshot>('video_goal', { action: 'create', brief: v3Brief, plan: v3Plan })
     expect(saved.planVersion).toBe(3)
     if (!saved.plan || !('version' in saved.plan) || saved.plan.version !== 3) throw new Error('expected a v3 plan')
     await page.reload()

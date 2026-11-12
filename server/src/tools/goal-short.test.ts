@@ -123,7 +123,7 @@ describe("video_goal shorts", () => {
 
   it("creates a short for the saved character, in review when authored and through the planner otherwise", async () => {
     const goal = await short();
-    expect(goal).toMatchObject({ planVersion: 4, status: "review", stage: "frame", plan: null });
+    expect(goal).toMatchObject({ planVersion: 4, status: "review", stage: "frame", plan: null, mainCharacterReferences: 1 });
     expect(goal.shortPlan).toMatchObject({
       version: 4, aspectRatio: "9:16",
       character: { name: "Main character", description: "a man in a green shirt", silent: true, references: [{ artifactId: imageIds[0], slot: "@image1" }] },
@@ -140,7 +140,24 @@ describe("video_goal shorts", () => {
     const structured = await invoke({ action: "create", brief: "a bus stop short", plan: goal.shortPlan, request_id: "structured-short" });
     expect(structured).toMatchObject({ planVersion: 4, status: "review", shortPlan: { title: goal.shortPlan!.title } });
     expect((await invoke({ action: "create", brief: "a bus stop short", plan: goal.shortPlan, request_id: "structured-short" })).goalId).toBe(structured.goalId);
-    expect((await invoke({ action: "create", brief: "@a2 waits for a bus" })).planVersion).toBe(3);
+    stub.plannerAnswers = [{ title: "Bus stop", frame: "He waits at the bus shelter in the rain.", beats: ["He checks the road, then boards the bus."] }];
+    const mentioned = await invoke({ action: "create", brief: "@a2 he waits for a bus" });
+    expect(mentioned).toMatchObject({ planVersion: 4, status: "planning", plan: null });
+    await expect.poll(() => readGoal(engine, mentioned.goalId).status, { timeout: testBudget(30_000) }).toBe("review");
+    const planned = await status(mentioned.goalId);
+    expect(planned.shortPlan!.frame.references).toEqual([expect.objectContaining({ artifactId: imageIds[1], slot: "@image2" })]);
+    expect(JSON.stringify(planned)).not.toMatch(/nano-banana|seedance|kie:/iu);
+  });
+
+  it("prices the frame of a waiting short once the main character has an image, leaving its plan alone", async () => {
+    saveMainCharacter(engine, { referenceArtifactIds: [] });
+    const goal = await short();
+    expect(goal).toMatchObject({ mainCharacterReferences: 0, estimate: { frame: { usd: null } }, shortPlan: { character: { references: [] } } });
+    await invoke({ action: "character", reference_ids: ["@a1"] });
+    const priced = await status(goal.goalId);
+    expect(priced).toMatchObject({ revision: goal.revision, mainCharacterReferences: 1, estimate: { frame: { usd: 0.21 } }, shortPlan: { character: { references: [] } } });
+    const approved = await settled(await invoke({ action: "approve", goal_id: goal.goalId, revision: priced.revision }));
+    expect(approved.shortPlan!.character.references).toEqual([expect.objectContaining({ artifactId: imageIds[0], slot: "@image1" })]);
   });
 
   it("refuses a mentioned video by name and takes mentioned images as extra frame references", async () => {
