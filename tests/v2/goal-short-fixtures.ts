@@ -31,13 +31,14 @@ export function shortStep(id: string, status: Step['status'], index = 0): Step {
   }
 }
 
-export function shortStage(stage: 'frame' | 'videos', outputs: readonly { index: number, artifactId: string, stale?: string | null, versions?: number }[], steps: Step[] = []): Stage {
+export function shortStage(stage: 'frame' | 'videos', outputs: readonly { index: number, artifactId: string, stale?: string | null, versions?: number, realism?: Output['realism'] }[], steps: Step[] = []): Stage {
   return {
     chainId: `${stage}-chain`, revision: 1, approvedAt: '2026-11-12T00:00:00Z', previousChainIds: [], shotIndexes: outputs.map(output => output.index),
     steps, allSteps: steps,
     outputs: outputs.map((output): Output => ({
       index: output.index, artifactId: output.artifactId, cellId: `${output.artifactId}-cell`, producerCellId: null, address: `@c${output.index + 1}`,
       stale: output.stale ?? null,
+      realism: output.realism ?? null,
       versions: Array.from({ length: output.versions ?? 1 }, (_, version) => ({
         stage, index: output.index, chainId: `${stage}-chain-${version}`, stepId: stage === 'frame' ? 'frame' : `clip${output.index + 1}`,
         artifactId: version === 0 ? output.artifactId : `${output.artifactId}-v${version}`, cellId: `${output.artifactId}-cell`, basePrompt: 'Beat.',

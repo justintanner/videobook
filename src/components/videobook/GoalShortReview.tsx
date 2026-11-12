@@ -27,6 +27,22 @@ const NO_REFERENCE = 'Give the main character a reference image first: generate 
 const SHEET_POLL_MS = 2_000
 const SHEET_POLL_LIMIT = 150
 
+type RealismView = NonNullable<NonNullable<ShortGoalSnapshot['stages']['frame']>['outputs'][number]['realism']>
+const REALISM_NOTE = 'The check for AI tells is billed like planning and never blocks a step.'
+
+function RealismCheck({ name, check, disabled, onCheck }: { name: string, check: RealismView | null, disabled: boolean, onCheck: () => void }) {
+  const running = check?.status === 'running'
+  const findings = [...(check?.findings ?? [])].sort((left, right) => left.severity === right.severity ? 0 : left.severity === 'warn' ? -1 : 1)
+  return <div className="goal-realism">
+    <button type="button" className="goal-panel-button" disabled={disabled || running} onClick={onCheck}>{running ? 'Checking for AI tells…' : check?.status === 'completed' ? 'Check again for AI tells' : 'Check for AI tells'}</button>
+    {running && <p role="status" className="goal-panel-muted">Looking at the {name} for AI tells…</p>}
+    {check?.status === 'failed' && <p role="alert" className="goal-panel-warning">{check.error ?? 'The check for AI tells failed. Run it again.'}</p>}
+    {check?.status === 'completed' && (findings.length === 0
+      ? <p className="goal-panel-muted">No AI tells found in the {name}.</p>
+      : <ul className="goal-realism-findings" aria-label={`AI tells in the ${name}`}>{findings.map((finding, index) => <li key={`${finding.severity}:${index}`} data-severity={finding.severity}><strong>{finding.severity === 'warn' ? 'Warn' : 'Note'}</strong> <span>{finding.text}</span></li>)}</ul>)}
+  </div>
+}
+
 function AlwaysAdded({ lines }: { lines: readonly string[] }) {
   return <div className="goal-short-rules" aria-label="Always added">
     <span>Always added</span>
@@ -150,6 +166,8 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
       <div className="goal-reference-grid" aria-label="Frame references">{[...plan.character.references, ...plan.frame.references].map(ref => <GoalMedia key={ref.slot} artifactId={ref.artifactId} cellId={ref.cellId} label={`${ref.slot} · ${ref.address}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />)}</div>
       {frameOutput && <GoalMedia artifactId={frameOutput.artifactId} cellId={frameOutput.cellId} label="Frame" resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
       {frameOutput && <div className="goal-versions" aria-label="Frame versions">{versions('frame', 0, 'Frame')}</div>}
+      {frameOutput && <RealismCheck name="frame" check={frameOutput.realism} disabled={disabled} onCheck={() => onRun(() => onAction({ action: 'check', stage: 'frame', index: 0 }))} />}
+      {frameOutput && <p className="goal-panel-muted">{REALISM_NOTE}</p>}
       <label><span>Title</span><input aria-label="Short title" value={title} maxLength={120} disabled={disabled || finishing} onChange={event => setTitle(event.target.value)} /></label>
       <GoalPromptInput label="Frame prompt" value={framePrompt} wordLimit={SHORT_WORD_CEILINGS.frame} disabled={disabled || finishing} onChange={setFramePrompt} />
       <AlwaysAdded lines={[plan.rules.frame]} />
@@ -170,8 +188,10 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
           {stale && <p role="status" className="goal-panel-warning">{stale}</p>}
           {output && <div className="goal-versions" aria-label={`Clip ${index + 1} versions`}>{versions('videos', index, `Clip ${index + 1}`)}</div>}
           {output && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'videos', index)}>Regenerate clip {index + 1}</button>}
+          {output && <RealismCheck name={`clip ${index + 1}`} check={output.realism} disabled={disabled} onCheck={() => onRun(() => onAction({ action: 'check', stage: 'videos', index }))} />}
         </li>
       })}</ol>
+      {clips.length > 0 && <p className="goal-panel-muted">{REALISM_NOTE}</p>}
       <AlwaysAdded lines={[plan.rules.video, plan.rules.silence]} />
       {!frameOutput && <p className="goal-panel-muted">Generate the frame before the clip.</p>}
       {canAddBeat && <fieldset className="goal-short-add">

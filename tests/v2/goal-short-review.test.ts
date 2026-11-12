@@ -86,6 +86,23 @@ describe('GoalShortReview', () => {
     expect(html).not.toContain('aria-label="Finished short"')
   })
 
+  it('checks the frame and each clip for AI tells on request and lists warnings first', () => {
+    const findings = [{ severity: 'note' as const, text: 'Rain streaks repeat.' }, { severity: 'warn' as const, text: 'Six fingers on the right hand.' }]
+    const checked = { status: 'completed' as const, checkedAt: '2026-11-12T00:00:00Z', findings, error: null }
+    const frameHtml = render(shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', realism: checked }]) } }))
+    expect(frameHtml).toMatch(/aria-label="AI tells in the frame"><li data-severity="warn"><strong>Warn<\/strong> <span>Six fingers on the right hand\.<\/span><\/li><li data-severity="note">/u)
+    expect(button(frameHtml, 'Check again for AI tells')).not.toContain('disabled')
+    expect(frameHtml).toContain('billed like planning and never blocks a step')
+    expect(button(frameHtml, 'Regenerate frame')).not.toContain('disabled')
+    const unchecked = render(shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]) } }))
+    expect(button(unchecked, 'Check for AI tells')).toContain('>Check for AI tells<')
+    expect(render(shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', realism: { ...checked, findings: [] } }]) } }))).toContain('No AI tells found in the frame.')
+    const running = render(shortGoalFixture({ stage: 'videos', stages: { ...withFrame, videos: shortStage('videos', [{ index: 0, artifactId: 'clip-a', realism: { status: 'running', checkedAt: null, findings: [], error: null } }]) } }))
+    expect(button(running, 'Checking for AI tells')).toContain('disabled=""')
+    expect(running).toContain('Looking at the clip 1 for AI tells')
+    expect(running.match(/for AI tells…?<\/button>/gu) ?? []).toHaveLength(1)
+  })
+
   it('reviews the cold open and plays the finished short', () => {
     const goal = shortGoalFixture({
       status: 'completed', stage: 'videos', finalArtifactId: 'final-a',

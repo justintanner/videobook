@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Engine, NotebookDocument } from "videobook-engine";
 import { cancelChainRun } from "../chain-executor.js";
 import { goalShortPlanSchema } from "../goal-short-plan.js";
-import { createShortGoal, priceShortFrame, retryShortGoal, selectShortVersion, startShortStage, updateShortGoal } from "../goal-short-runtime.js";
+import { createShortGoal, priceShortFrame, queueShortRealismCheck, retryShortGoal, selectShortVersion, startShortStage, updateShortGoal } from "../goal-short-runtime.js";
 import {
   clearMainCharacterError, describeMainCharacter, reconcileMainCharacter, requireCharacterSheetKey, resolveCharacterReferences,
   saveMainCharacter, startCharacterSheet, type MainCharacterView,
@@ -95,6 +95,7 @@ async function applyGoalAction(engine: Engine, notebookId: string, goalId: strin
   if (args.action === "cancel") return cancelGoal(engine, goal);
   if (args.action === "finish") return queueGoalFinish(engine, goal, args);
   if (args.action === "retry") return retryShortGoal(engine, goal);
+  if (args.action === "check") return queueShortRealismCheck(engine, goal, args);
   if (args.action === "dismiss") {
     if (ACTIVE_STATUSES.has(goal.status)) throw new Error("Stop the goal before dismissing it");
     return saveGoal(engine, { ...goal, dismissedAt: new Date().toISOString() });
@@ -139,10 +140,10 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Run Goal mode on a notebook. create makes a short from a brief: a real-looking phone video, 5 to 60 seconds, starring the book's main character, who never speaks; image cells mentioned in the brief become place or prop references for the opening frame. Then list, status, update, approve, regenerate, select, revise, cancel, retry, finish (cold open plus the saved watermark) or dismiss it by goal_id. Each paid step needs its own approval with its estimate: the GPT Image 2.6 opening frame, the H3 Max base clip, and each H3 Max Extend continuation for the next beat. The character action reads the main character, saves its name, description or reference_ids (image cells), and with generate makes a paid GPT Image 2.6 character sheet. Goals made by an earlier /goal are read-only: list, status, cancel and dismiss.",
+    description: "Run Goal mode on a notebook. create makes a short from a brief: a real-looking phone video, 5 to 60 seconds, starring the book's main character, who never speaks; image cells mentioned in the brief become place or prop references for the opening frame. Then list, status, update, approve, regenerate, select, revise, cancel, retry, finish (cold open plus the saved watermark) or dismiss it by goal_id. Each paid step needs its own approval with its estimate: the GPT Image 2.6 opening frame, the H3 Max base clip, and each H3 Max Extend continuation for the next beat. The character action reads the main character, saves its name, description or reference_ids (image cells), and with generate makes a paid GPT Image 2.6 character sheet. check (stage and index) looks at the selected frame, or 4 frames of a clip's new footage, for AI tells and stores up to 5 findings (note or warn) with that output; it is billed like planning, runs only when asked and never blocks an approval. Goals made by an earlier /goal are read-only: list, status, cancel and dismiss.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
-      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "retry", "dismiss", "finish", "character"]),
+      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "retry", "dismiss", "finish", "character", "check"]),
       name: goalShortPlanSchema.shape.character.shape.name.optional().describe("character: the main character's name"),
       description: goalShortPlanSchema.shape.character.shape.description.optional().describe("character: what the main character looks like"),
       reference_ids: z.array(z.string().min(1).max(200)).min(1).max(4).optional().describe("character: 1 to 4 grid addresses or artifact ids of image cells that replace the references"),

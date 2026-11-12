@@ -5,6 +5,7 @@ import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { findPrimaryMediaFile, resolveNotebookCellArtifactId } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
 import { scanNotebookMentions } from "videobook-engine/notebook-mentions";
+import { getApiKey } from "./api-key.js";
 import { getChainRun, preflightAndAccept, retryChainRun } from "./chain-executor.js";
 import type { ChainStep } from "./chain-plan.js";
 import { probeVideo } from "./ffmpeg.js";
@@ -433,6 +434,22 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
     ...(reopened ? { status: "review" as const, error: null } : {}),
     ...(generatedPromptChanged ? { finish: null } : {}),
   });
+}
+
+export async function queueShortRealismCheck(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {
+  const stage = z.enum(["frame", "videos"]).parse(args.stage);
+  const index = z.number().int().min(0).parse(args.index ?? 0);
+  const output = goal.stages[stage]?.outputs.find((item) => item.index === index);
+  const manifest = output ? await engine.files.manifest(output.artifactId) : null;
+  if (!output || !manifest?.ok || !findPrimaryMediaFile(manifest.value.files, stage === "frame" ? "image" : "video")) {
+    throw new Error("Generate this frame or clip, and keep it selected, before checking it for AI tells.");
+  }
+  if (!getApiKey("OPENAI_API_KEY")) throw new Error("Set OPENAI_API_KEY in Settings before checking for AI tells.");
+  if (goal.realism?.[output.artifactId]?.status === "running") return goal;
+  const job = await queue.enqueue(`goal-realism-${output.artifactId}-${uuidv7()}`, {
+    type: "check_goal_realism", bookId: goal.bookId, goalId: goal.goalId, artifactId: output.artifactId, stage, index,
+  });
+  return saveGoal(engine, { ...goal, realism: { ...goal.realism, [output.artifactId]: { status: "running", checkedAt: null, findings: [], error: null, jobId: job.id } } });
 }
 
 export async function retryShortGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {

@@ -35,6 +35,15 @@ export type GoalStageRun = {
   attempts?: GoalStillAttempt[];
 };
 
+export type GoalRealismFinding = { severity: "note" | "warn"; text: string };
+export type GoalRealismCheck = {
+  status: "running" | "completed" | "failed";
+  checkedAt: string | null;
+  findings: GoalRealismFinding[];
+  error: string | null;
+  jobId?: number | null;
+};
+
 export type GoalAssembly = { sequenceId: string; startFrame: number; durationFrames: number; clipSnapshot?: string; artifactIds?: string[] };
 export type GoalCombinedVideo = { artifactId: string; cellId: string; jobId: number | null; status: "running" | "completed" | "failed"; error: string | null; sourceArtifactIds?: string[] };
 export type GoalFinish = {
@@ -68,6 +77,7 @@ export type GoalRecord = {
   assembly: GoalAssembly | null;
   combined?: GoalCombinedVideo;
   finish?: GoalFinish | null;
+  realism?: Record<string, GoalRealismCheck>;
   resumeStage?: GoalGenerationStage | null;
   resumeStatus?: "review" | "completed" | null;
   resumeOutputs?: GoalStageOutput[] | null;

@@ -11,7 +11,7 @@ import { createEngineForTest } from "../engine.js";
 import { saveMainCharacter } from "../goal-short-character.js";
 import { SHORT_RULES } from "../goal-short-rules.js";
 import { createShortGoal, shortFingerprint } from "../goal-short-runtime.js";
-import { readGoal } from "../goal-store.js";
+import { readGoal, saveGoal } from "../goal-store.js";
 import { installFalDynamicEstimator, lowerBoundWarnings } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
 import { configureProviderPollDriverForTests, resetProviderPollDriverForTests } from "../queue.js";
@@ -186,6 +186,28 @@ describe("video_goal shorts", () => {
     if (!written.ok) throw new Error(written.error.message);
     expect(await shortFingerprint(engine, plan, "frame", 0, null)).not.toBe(frame);
     expect(await shortFingerprint(engine, plan, "videos", 0, "frame-a")).not.toBe(clip);
+  });
+
+  it("refuses an AI-tell check without a key or a generated output, queues nothing, and never lets findings gate a step", async () => {
+    const goal = await short();
+    const notGenerated = "Generate this frame or clip, and keep it selected, before checking it for AI tells.";
+    expect(await refusal({ action: "check", goal_id: goal.goalId, stage: "frame", index: 0 })).toBe(notGenerated);
+    const frame = await approved(goal);
+    expect(await refusal({ action: "check", goal_id: goal.goalId, stage: "videos", index: 0 })).toBe(notGenerated);
+    delete process.env.OPENAI_API_KEY;
+    expect(await refusal({ action: "check", goal_id: goal.goalId, stage: "frame", index: 0 })).toBe("Set OPENAI_API_KEY in Settings before checking for AI tells.");
+    process.env.OPENAI_API_KEY = "offline-openai-key";
+    expect(engine.jobs.queue.list({ type: "check_goal_realism" })).toHaveLength(0);
+    const warned = (artifactId: string) => saveGoal(engine, { ...readGoal(engine, goal.goalId), realism: { [artifactId]: { status: "completed", checkedAt: new Date().toISOString(), findings: [{ severity: "warn", text: "Six fingers on the right hand." }], error: null } } });
+    warned(frame.stages.frame!.outputs[0]!.artifactId);
+    const regenerated = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: frame.revision, stage: "frame", index: 0 }));
+    expect(regenerated.stages.frame!.outputs[0]!.artifactId).not.toBe(frame.stages.frame!.outputs[0]!.artifactId);
+    expect(regenerated.stages.frame!.outputs[0]!.realism).toBeNull();
+    warned(regenerated.stages.frame!.outputs[0]!.artifactId);
+    const clip = await approved(await status(goal.goalId));
+    expect(clip.stages.videos!.outputs).toHaveLength(1);
+    warned(clip.stages.videos!.outputs[0]!.artifactId);
+    expect((await invoke({ action: "finish", goal_id: goal.goalId })).finish).toMatchObject({ status: "review" });
   });
 
   it("prices the frame and every segment, with H3 Max as a lower bound", async () => {

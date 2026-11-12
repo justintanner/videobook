@@ -14,6 +14,7 @@ import { currentShortClip, nextShortSegment, shortSegmentStale } from "./goal-sh
 
 export const LEGACY_GOAL_MESSAGE = "This goal was made by an earlier /goal. Its images and videos stay in the notebook. Start a new /goal.";
 const SHORT_STALE_MESSAGE = "The frame or an earlier clip changed after this clip was made.";
+const REALISM_INTERRUPTED = "The check for AI tells stopped before it answered. Run it again.";
 const LEGACY_STAGES = ["frame", "storyboards", "videos"] as const;
 const ACTIVE_LEGACY_STATUSES = new Set(["planning", "review", "running"]);
 
@@ -130,8 +131,18 @@ async function stopLegacyGoal(engine: Engine, goal: GoalRecord): Promise<GoalRec
   return saveGoal(engine, { ...goal, status: "failed", error: LEGACY_GOAL_MESSAGE });
 }
 
+function settleRealismChecks(engine: Engine, goal: GoalRecord): GoalRecord {
+  const stuck = Object.entries(goal.realism ?? {}).flatMap(([artifactId, check]) => {
+    if (check.status !== "running" || !check.jobId) return [];
+    const job = engine.jobs.queue.get(check.jobId);
+    return job && !["failed", "aborted"].includes(job.state) ? [] : [[artifactId, { ...check, status: "failed" as const, checkedAt: new Date().toISOString(), error: job?.error?.message ?? REALISM_INTERRUPTED }] as const];
+  });
+  return stuck.length === 0 ? goal : saveGoal(engine, { ...goal, realism: { ...goal.realism, ...Object.fromEntries(stuck) } });
+}
+
 export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: NotebookDocument): Promise<GoalRecord> {
   if (goal.planVersion !== 4) return stopLegacyGoal(engine, goal);
+  goal = settleRealismChecks(engine, goal);
   if (["completed", "cancelled", "review"].includes(goal.status)) return goal;
   if (goal.status === "planning") {
     const job = goal.planningJobId ? engine.jobs.queue.get(goal.planningJobId) : null;
@@ -209,7 +220,7 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
         };
       });
       const stale = stage === "videos" && shortSegmentStale(goal, output.index) ? SHORT_STALE_MESSAGE : null;
-      return { ...output, address: outputCell ? notebookGridTag(outputCell.slot) : null, versions, stale };
+      return { ...output, address: outputCell ? notebookGridTag(outputCell.slot) : null, versions, stale, realism: goal.realism?.[output.artifactId] ?? null };
     }),
     steps: goalChainSteps(engine, document, run.chainId),
     allSteps: [...run.previousChainIds, run.chainId].flatMap(chainId => allGoalChainSteps(engine, document, chainId)),
