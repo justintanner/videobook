@@ -380,11 +380,8 @@ describe("compiled short steps", () => {
     expect((compileShortContinuationStep(plan, 1, "@d1").params as StepParams).prompt).toMatch(/\n\nEarlier video rule\.\n\nEarlier silence rule\.$/u);
   });
 
-  it("makes the character sheet with GPT Image 2.6 text-to-image, or with the edit model from the references", () => {
-    const prompt = [
-      "Character reference sheet of a man in a green shirt: the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.",
-      SHORT_RULES.frame,
-    ].join("\n\n");
+  it("makes the character sheet on a plain background with GPT Image 2.6 text-to-image, or with the edit model from the references", () => {
+    const prompt = "Character reference sheet of a man in a green shirt: the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.";
     const options = { image_size: "landscape_16_9", quality: "high" };
     expect(shortSheetStep({ description: "a man in a green shirt", references: [] })).toEqual({
       id: "sheet",

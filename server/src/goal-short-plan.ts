@@ -374,10 +374,7 @@ export function shortSheetStep(character: ShortSheetCharacter): ChainStep {
     tool: "generate_image",
     params: {
       model: references.length > 0 ? SHEET_EDIT_MODEL : SHEET_TEXT_MODEL,
-      prompt: paragraphs(
-        `Character reference sheet of ${phrase(character.description)}: the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.`,
-        SHORT_RULES.frame,
-      ),
+      prompt: `Character reference sheet of ${phrase(character.description)}: the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.`,
       ...(references.length > 0 ? { refs: { image: references } } : {}),
       options: { image_size: "landscape_16_9", quality: "high" },
     },

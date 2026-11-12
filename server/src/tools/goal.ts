@@ -7,6 +7,11 @@ import { queue } from "../queue.js";
 import { cancelChainRun, getChainRun, preflightAndAccept, retryChainRun } from "../chain-executor.js";
 import { compileFrameSteps, compileGoalV3Approval, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalPlanV3Schema, goalStillPrompt, isGoalPlanV3, refreshGoalPlanV3, type GoalGenerationStage, type GoalPlan } from "../goal-plan.js";
 import { buildGoalPlanV3, type GoalPlanV3 } from "../goal-plan-v3.js";
+import { goalShortPlanSchema } from "../goal-short-plan.js";
+import {
+  clearMainCharacterError, describeMainCharacter, reconcileMainCharacter, requireCharacterSheetKey, resolveCharacterReferences,
+  saveMainCharacter, startCharacterSheet, type MainCharacterView,
+} from "../goal-short-character.js";
 import { estimateGoalV3, goalMediaCharacters, resolveGoalMediaReferences, captureGoalSceneFrame } from "../goal-v3-runtime.js";
 import { currentGoalCharacters, resolveGoalCharacters } from "../goal-characters.js";
 import { goalStylesEqual } from "../goal-styles.js";
@@ -517,6 +522,26 @@ async function applyGoalAction(engine: Engine, notebookId: string, goalId: strin
   return goal;
 }
 
+async function mainCharacterAction(engine: Engine, bookId: string, notebookId: string, args: GoalArgs): Promise<MainCharacterView> {
+  return withNotebookMutation(`goal-character:${bookId}`, async () => {
+    if (args.generate === true) requireCharacterSheetKey();
+    let character = await reconcileMainCharacter(engine);
+    if (args.name !== undefined || args.description !== undefined || args.reference_ids !== undefined) {
+      character = saveMainCharacter(engine, {
+        ...(typeof args.name === "string" ? { name: args.name } : {}),
+        ...(typeof args.description === "string" ? { description: args.description } : {}),
+        ...(Array.isArray(args.reference_ids)
+          ? { referenceArtifactIds: resolveCharacterReferences(engine, readNotebook(engine, notebookId), z.array(z.string()).parse(args.reference_ids)) }
+          : {}),
+      });
+    }
+    if (args.generate === true) character = await startCharacterSheet(engine, bookId, notebookId);
+    const view = await describeMainCharacter(engine, readNotebook(engine, notebookId), character);
+    clearMainCharacterError(engine, view.sheet.lastError);
+    return view;
+  });
+}
+
 async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Promise<GoalSnapshot[]> {
   const snapshots: GoalSnapshot[] = [];
   for (const goal of listGoals(engine, notebook.id)) {
@@ -531,10 +556,14 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.",
+    description: "Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id. The character action reads the book's main character for shorts, saves its name, description or reference_ids (image cells), and with generate makes a paid GPT Image 2.6 character sheet.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
-      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "assemble", "retry", "dismiss", "combine", "finish"]),
+      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "assemble", "retry", "dismiss", "combine", "finish", "character"]),
+      name: goalShortPlanSchema.shape.character.shape.name.optional().describe("character: the main character's name"),
+      description: goalShortPlanSchema.shape.character.shape.description.optional().describe("character: what the main character looks like"),
+      reference_ids: z.array(z.string().min(1).max(200)).min(1).max(4).optional().describe("character: 1 to 4 grid addresses or artifact ids of image cells that replace the references"),
+      generate: z.boolean().optional().describe("character: true makes a paid character sheet that becomes the only reference"),
       start_seconds: z.number().min(0).optional(), end_seconds: z.number().min(0).optional(),
       goal_id: z.string().uuid().optional(), request_id: z.string().min(1).max(200).optional(),
       brief: z.string().trim().min(1).max(6000).optional(), plan: advertisedAs(z.union([goalPlanV3Schema, goalPlanSchema]), {
@@ -552,6 +581,7 @@ export function goalDefs(engine: Engine): ToolDef[] {
         const notebook = readNotebook(engine, notebookId);
         if (args.action === "list") return json({ goals: await listGoalSnapshots(engine, notebook) });
         if (args.action === "create") return json(await createGoal(engine, bookId, notebookId, args));
+        if (args.action === "character") return json(await mainCharacterAction(engine, bookId, notebookId, args));
         const goalId = z.string().uuid().parse(args.goal_id);
         if (args.action === "assemble") {
           const goal = readGoal(engine, goalId);

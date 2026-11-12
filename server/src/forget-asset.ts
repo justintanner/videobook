@@ -8,6 +8,7 @@ import { mutateNotebook } from "./notebook-mutations.js";
 import { removeArtifactFromTimeline } from "./tools/delete-asset.js";
 import { forgetCaptionState } from "./captions/forget.js";
 import { forgetGraphicsState } from "./graphics/forget.js";
+import { forgetMainCharacterReference } from "./goal-short-character.js";
 
 /** One place at HEAD that still holds the artifact, as the engine reports it. */
 interface ForgetAssetReference {
@@ -238,6 +239,7 @@ export async function forgetAsset(
   }
   forgetCaptionState(engine, artifactId);
   forgetGraphicsState(engine, artifactId);
+  forgetMainCharacterReference(engine, artifactId);
   let forgottenObjects = 0;
   let sharedObjects = 0;
   let reclaimedBytes = 0;
