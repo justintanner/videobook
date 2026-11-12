@@ -8,9 +8,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 import { getChainRun, waitForChainRun } from "../chain-executor.js";
+import { revalidatePinnedTargets } from "../chain-plan.js";
 import { createEngineForTest } from "../engine.js";
 import { forgetAsset } from "../forget-asset.js";
 import { readMainCharacter, saveMainCharacter, type MainCharacterView } from "../goal-short-character.js";
+import { createShortGoal } from "../goal-short-runtime.js";
+import type { ShortGoalSnapshot } from "./goal.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
 import { configureProviderPollDriverForTests, resetProviderPollDriverForTests } from "../queue.js";
@@ -255,6 +258,24 @@ describe("video_goal character", () => {
     expect(done.references).toEqual([{ artifactId: sheetId, address: expect.stringMatching(/^@[a-z]+\d$/u), label: expect.any(String) }]);
     expect(done.sheet).toMatchObject({ pending: null, lastError: null });
     expect(readMainCharacter(engine)).toMatchObject({ referenceArtifactIds: [sheetId], pending: null, lastError: null });
+    const goal = await createShortGoal(engine, bookId, notebookId, {
+      brief: 'he waits, frame: "He stands at a bus stop." beat 1: "He watches the road."',
+      requestId: "generated-character-short",
+    });
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const sheetCell = notebook.value.cells.find((cell) => cell.outputArtifactId === sheetId)!;
+    const review = JSON.parse(textOf(await raw({ action: "status", goal_id: goal.goalId }))) as ShortGoalSnapshot;
+    const approved = await raw({ action: "approve", goal_id: goal.goalId, revision: review.revision });
+    expect(approved.isError, textOf(approved)).toBeFalsy();
+    const snapshot = JSON.parse(textOf(approved)) as ShortGoalSnapshot;
+    expect(snapshot.shortPlan!.character.references[0]).toMatchObject({ artifactId: sheetId, cellId: sheetCell.id });
+    const frameRun = await waitForChainRun(engine, snapshot.chainId!, testBudget(60_000));
+    expect(frameRun.status, frameRun.error ?? "").toBe("completed");
+    expect(await revalidatePinnedTargets(engine, notebookId, [{
+      ...snapshot.shortPlan!.character.references[0]!, field: "refs.image", index: 0, artifactId: imageIds[0]!,
+    }]))
+      .toContain("no longer points at the same artifact");
     expect(unexpected).toEqual([]);
   });
 

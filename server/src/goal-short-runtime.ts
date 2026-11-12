@@ -51,7 +51,7 @@ function readNotebook(engine: Engine, notebookId: string): NotebookDocument {
 }
 
 function cellHolding(document: NotebookDocument, artifactId: string): NotebookCell | undefined {
-  return document.cells.find((cell) => resolveNotebookCellArtifactId(document, cell) === artifactId);
+  return document.cells.find((cell) => cell.outputArtifactId === artifactId);
 }
 
 async function imageReference(engine: Engine, artifactId: string, cell: NotebookCell): Promise<ShortReference> {
