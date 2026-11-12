@@ -8,7 +8,7 @@ import { suggestedColdOpen } from "./lightning-defaults.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { goalStageAttempts, goalStillStaleReason } from "./goal-stills.js";
 import { refreshGoalShortPlan } from "./goal-short-plan.js";
-import { currentShortClip, shortSegmentStale } from "./goal-short-runtime.js";
+import { currentShortClip, nextShortSegment, shortSegmentStale } from "./goal-short-runtime.js";
 
 export const LEGACY_GOAL_MESSAGE = "Goal mode now starts from character images. Start a new /goal.";
 const SHORT_STALE_MESSAGE = "The frame or an earlier clip changed after this clip was made.";
@@ -114,11 +114,11 @@ async function settledShortStage(engine: Engine, goal: GoalRecord, next: GoalRec
   if (!approved.every(index => outputs.some(output => output.index === index))) {
     return { ...next, status: "failed", error: "The stage finished without its media output. Retry the stage.", ...cleared };
   }
+  const content = requireGoalShortContent(engine, goal);
   if (stage === "videos") {
-    const clip = currentShortClip(next);
+    const clip = content.plan && nextShortSegment(next, content.plan) === null ? currentShortClip(next) : null;
     return { ...next, status: "review", error: null, ...cleared, finish: clip ? { status: "review", sourceArtifactId: clip.artifactId, finalArtifactId: null, error: null } : null };
   }
-  const content = requireGoalShortContent(engine, goal);
   await writeGoalShortContent(engine, goal, { ...content, revision: content.revision + 1 });
   const frameChanged = (previous[0]?.artifactId ?? null) !== null && previous[0]?.artifactId !== outputs[0]?.artifactId;
   const finish = frameChanged ? null : goal.finish ?? goal.resumeFinish ?? null;

@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
@@ -6,6 +7,7 @@ import { firstEmptyNotebookGridSlot, notebookGridTag, notebookOccupiedSlots, NOT
 import { scanNotebookMentions } from "videobook-engine/notebook-mentions";
 import { getChainRun, preflightAndAccept, retryChainRun } from "./chain-executor.js";
 import type { ChainStep } from "./chain-plan.js";
+import { probeVideo } from "./ffmpeg.js";
 import { reconcileMainCharacter } from "./goal-short-character.js";
 import {
   buildGoalShortPlan, compileShortClipStep, compileShortContinuationStep, compileShortFrameStep, goalShortPlanSchema, refreshGoalShortPlan,
@@ -31,11 +33,11 @@ type ShortReference = Omit<GoalShortImageRef, "slot">;
 const EXTRA_REFERENCE_LIMIT = 12;
 const NO_CHARACTER_REFERENCE = "Give the main character a reference image first: generate a character sheet or choose image cells.";
 const NO_FAL_KEY = "Set FAL_API_KEY in Settings before generating this stage";
-const CONTINUE_LATER = "Continuing a short is not available yet.";
 const SETTINGS_LOCKED = "Models, resolution, aspect ratio and rules stay with this short once its frame exists. Start a new /goal to change them.";
 const REFERENCES_LOCKED = "The character and references stay with this short. Start a new /goal to change them.";
 const SEGMENT_LOCKED = "A generated segment keeps its place and seconds. Regenerate it, or start a new /goal to change them.";
 const STALE_RETRY = "The references or selected versions changed after this attempt. Regenerate using the current selection instead of retrying the older request.";
+const EXTEND_SOURCE_SECONDS = { minimum: 1.625, maximum: 60 };
 const PLACEHOLDER_FRAME = "https://videobook.invalid/short-frame.jpg";
 const PLACEHOLDER_CLIP = "https://videobook.invalid/short-clip.mp4";
 const stageSchema = z.enum(["frame", "videos"]);
@@ -165,7 +167,7 @@ export function currentShortClip(goal: GoalRecord): GoalStageOutput | null {
   return outputs.at(-1) ?? null;
 }
 
-function nextSegment(goal: GoalRecord, plan: GoalShortPlan): number | null {
+export function nextShortSegment(goal: GoalRecord, plan: GoalShortPlan): number | null {
   for (let index = 0; index < plan.segments.length; index += 1) {
     if (!selectedOutput(goal, "videos", index) || shortSegmentStale(goal, index)) return index;
   }
@@ -251,6 +253,31 @@ async function adoptCharacterReferences(engine: Engine, goal: GoalRecord, conten
   return next;
 }
 
+async function clipSeconds(engine: Engine, artifactId: string): Promise<number> {
+  const manifest = await engine.files.manifest(artifactId);
+  const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, "video") : null;
+  if (!manifest.ok || !file) throw new Error("The current clip has no readable video. Regenerate it before continuing.");
+  return (await probeVideo(join(manifest.value.path, file.name))).duration;
+}
+
+async function continuationSource(engine: Engine, goal: GoalRecord, index: number): Promise<GoalStageOutput> {
+  const previous = selectedOutput(goal, "videos", index - 1);
+  if (!previous) throw new Error(`Generate segment ${index} before continuing the short.`);
+  if (shortSegmentStale(goal, index - 1)) throw new Error(`Segment ${index} is out of date. Approve it again before continuing the short.`);
+  const seconds = await clipSeconds(engine, previous.artifactId);
+  if (seconds < EXTEND_SOURCE_SECONDS.minimum || seconds > EXTEND_SOURCE_SECONDS.maximum) {
+    throw new Error(`The current clip runs ${seconds.toFixed(2)} seconds, and H3 Extend takes a source of ${EXTEND_SOURCE_SECONDS.minimum} to ${EXTEND_SOURCE_SECONDS.maximum} seconds.`);
+  }
+  return previous;
+}
+
+export function shortFinishSource(engine: Engine, goal: GoalRecord): string {
+  const plan = requireGoalShortContent(engine, goal).plan;
+  const clip = currentShortClip(goal);
+  if (!plan || !clip || nextShortSegment(goal, plan) !== null) throw new Error("Generate every segment of the short before finishing it.");
+  return clip.artifactId;
+}
+
 async function ensureShortSpace(engine: Engine, goal: GoalRecord, stage: ShortStage): Promise<void> {
   const placed = await mutateNotebook(engine, goal.notebookId, "goal_stage_space", (document) => {
     if (NOTEBOOK_GRID_CAPACITY - notebookOccupiedSlots(document.cells).length < 2) throw new Error("The notebook needs two empty cells for each frame or clip");
@@ -262,16 +289,15 @@ async function ensureShortSpace(engine: Engine, goal: GoalRecord, stage: ShortSt
 function shortTarget(goal: GoalRecord, plan: GoalShortPlan, args: GoalArgs, regenerate: boolean): { stage: ShortStage; index: number } {
   if (!regenerate) {
     if (goal.stage !== "videos") return { stage: "frame", index: 0 };
-    const index = nextSegment(goal, plan);
-    if (index === null) throw new Error("Every segment of this short is generated. Finish it, or regenerate a segment.");
-    if (index > 0) throw new Error(CONTINUE_LATER);
+    const index = nextShortSegment(goal, plan);
+    if (index === null) throw new Error("Every segment of this short is generated. Finish it, regenerate a segment or add a beat.");
     return { stage: "videos", index };
   }
   const stage = args.stage !== undefined || args.action === "revise" ? stageSchema.parse(args.stage) : goal.stage === "videos" ? "frame" : null;
   if (!stage) throw new Error("There are no stage outputs to regenerate yet");
   const index = args.index === undefined ? 0 : z.number().int().nonnegative().parse(args.index);
   if (stage === "frame" && index !== 0) throw new Error("A short has one frame");
-  if (stage === "videos" && index > 0) throw new Error(CONTINUE_LATER);
+  if (stage === "videos" && index >= plan.segments.length) throw new Error(`This short has ${plan.segments.length} segments.`);
   if (!selectedOutput(goal, stage, index)) throw new Error("There is no current output to regenerate or revise");
   return { stage, index };
 }
@@ -288,18 +314,21 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   if (!process.env.FAL_API_KEY) throw new Error(NO_FAL_KEY);
   if (stage === "frame" && content.plan.character.references.length === 0) content = await adoptCharacterReferences(engine, goal, content);
   if (stage === "videos") outputAddress(readNotebook(engine, goal.notebookId), selectedOutput(goal, "frame", 0));
+  const sourceClip = stage === "videos" && index > 0 ? await continuationSource(engine, goal, index) : null;
   await ensureShortSpace(engine, goal, stage);
   const document = readNotebook(engine, goal.notebookId);
   const plan = refreshGoalShortPlan(content.plan, document);
   const source = stage === "videos" ? segmentSource(goal, index) : null;
-  if (stage === "videos") {
+  if (stage === "videos" && index === 0) {
     const frame = selectedOutput(goal, "frame", 0)!;
     const frameAttempt = goal.stages.frame?.attempts?.find((attempt) => attempt.artifactId === frame.artifactId && attempt.fingerprint);
     if (frameAttempt?.fingerprint && frameAttempt.fingerprint !== await shortFingerprint(engine, plan, "frame", 0, null)) {
       throw new Error("The frame prompt or references changed after this frame was made. Regenerate the frame before continuing.");
     }
   }
-  const compiled = stage === "frame" ? compileShortFrameStep(plan) : compileShortClipStep(plan, outputAddress(document, selectedOutput(goal, "frame", 0)));
+  const compiled = stage === "frame" ? compileShortFrameStep(plan)
+    : sourceClip ? compileShortContinuationStep(plan, index, outputAddress(document, sourceClip))
+      : compileShortClipStep(plan, outputAddress(document, selectedOutput(goal, "frame", 0)));
   const step = feedback ? { ...compiled, params: { ...compiled.params, prompt: `${String(compiled.params.prompt)}\n\n${feedback}` } } : compiled;
   const fingerprint = await shortFingerprint(engine, plan, stage, index, source);
   const previous = goal.stages[stage];
@@ -307,7 +336,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   const { defs, lookup } = await toolLookup(engine);
   const chain = await preflightAndAccept({
     action: "run", version: 1, book_id: goal.bookId, notebook_id: goal.notebookId,
-    request_id: `goal:${goal.goalId}:${stage}:${index}:${content.revision}${feedback ? `:revise:${attemptCount}` : regenerate ? `:regenerate:${attemptCount}` : ""}`,
+    request_id: `goal:${goal.goalId}:${stage}:${index}:${content.revision}:${feedback ? "revise" : regenerate ? "regenerate" : "approve"}:${attemptCount}`,
     steps: [step],
   }, {
     engine, bookId: goal.bookId, notebookId: goal.notebookId,
@@ -319,7 +348,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   return saveGoal(engine, {
     ...(regenerate ? stored : goal),
     stage, chainId: chain.chainId, status: "running", error: null,
-    ...(regenerate ? { finish: null, resumeFinish: goal.finish ?? null } : {}),
+    ...(regenerate ? { finish: null, resumeFinish: goal.finish ?? null } : stage === "videos" ? { finish: null } : {}),
     resumeStage: regenerate ? goal.resumeStage ?? goal.stage : null,
     resumeStatus: regenerate ? goal.status === "completed" || goal.resumeStatus === "completed" ? "completed" : "review" : null,
     resumeOutputs: regenerate ? previous?.outputs ?? [] : null,
@@ -357,10 +386,9 @@ export function selectShortVersion(engine: Engine, goal: GoalRecord, args: GoalA
   const outputs = [...run.outputs.filter((item) => item.index !== index), { ...output, address }].sort((a, b) => a.index - b.index);
   const next = { ...goal, stages: { ...goal.stages, [stage]: { ...run, attempts, outputs } } };
   if (!changed) return saveGoal(engine, next);
-  const clip = stage === "videos" ? currentShortClip(next) : null;
-  const finish = clip && !shortSegmentStale(next, clip.index)
-    ? { status: "review" as const, sourceArtifactId: clip.artifactId, finalArtifactId: null, error: null }
-    : null;
+  const plan = requireGoalShortContent(engine, goal).plan;
+  const clip = stage === "videos" && plan && nextShortSegment(next, plan) === null ? currentShortClip(next) : null;
+  const finish = clip ? { status: "review" as const, sourceArtifactId: clip.artifactId, finalArtifactId: null, error: null } : null;
   return saveGoal(engine, { ...next, status: "review", error: null, finish });
 }
 
@@ -391,7 +419,12 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
   const generatedPromptChanged = (frameMade && previous.frame.prompt !== plan.frame.prompt)
     || generated.some((index) => previous.segments[index]?.prompt !== plan.segments[index]?.prompt);
   await writeGoalShortContent(engine, goal, { ...content, plan, estimate: await estimateShort(engine, plan), revision: content.revision + 1 });
-  return saveGoal(engine, { ...goal, ...(generatedPromptChanged ? { status: "review" as const, error: null, finish: null } : {}) });
+  const reopened = generatedPromptChanged || plan.segments.length !== previous.segments.length;
+  return saveGoal(engine, {
+    ...goal,
+    ...(reopened ? { status: "review" as const, error: null } : {}),
+    ...(generatedPromptChanged ? { finish: null } : {}),
+  });
 }
 
 export async function retryShortGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {

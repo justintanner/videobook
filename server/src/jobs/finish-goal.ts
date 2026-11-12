@@ -9,7 +9,7 @@ import { probeVideo } from "../ffmpeg.js";
 import { readGoal, saveGoal, type GoalFinish, type GoalRecord } from "../goal-store.js";
 import { watermarkGraphicsTemplate } from "../graphics/templates.js";
 import { goalAssemblyStale } from "../goal-state.js";
-import { currentShortClip } from "../goal-short-runtime.js";
+import { shortFinishSource } from "../goal-short-runtime.js";
 import { finishingIdentityKey, watermarkProfileFor } from "../lightning-defaults.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
@@ -36,7 +36,8 @@ function currentFinish(engine: Engine, goalId: string, identity: string): GoalRe
 function finishSourceId(engine: Engine, goal: GoalRecord): string {
   if (goal.assembly && goalAssemblyStale(engine, goal)) throw new Error(ASSEMBLY_MESSAGE);
   if (goal.combined?.status === "completed" && goal.combined.artifactId && !goalAssemblyStale(engine, goal)) return goal.combined.artifactId;
-  const selected = (goal.planVersion === 4 ? currentShortClip(goal) : goal.stages.videos?.outputs[0])?.artifactId ?? goal.finish?.sourceArtifactId;
+  if (goal.planVersion === 4) return shortFinishSource(engine, goal);
+  const selected = goal.stages.videos?.outputs[0]?.artifactId ?? goal.finish?.sourceArtifactId;
   if (!selected) throw new Error("Approve a video before finishing it");
   return selected;
 }
