@@ -104,6 +104,7 @@ export default defineConfig({
       'scripts/benchmark-startup.test.ts',
       'scripts/changelog-section.test.ts',
       'scripts/ci-media-bins.test.ts',
+      'scripts/release.test.ts',
       'src/videobook/post-delivery-review.test.ts', 'src/videobook/post-copy-review.test.ts',
       'src/videobook/post-progress.test.ts',
       'src/videobook/x-post-thread.test.ts',

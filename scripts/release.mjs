@@ -211,13 +211,18 @@ async function tagRelease(version, commit) {
 }
 
 async function pushRelease(version, tarball) {
-  const notes = join(await mkdtemp(join(tmpdir(), 'videobook-release-notes-')), 'notes.md')
-  await writeFile(notes, `${await output(process.execPath, ['scripts/changelog-section.mjs', version])}\n`)
-  await run('git', ['push', 'origin', STABLE])
-  await run('git', ['push', 'origin', `v${version}`])
-  await run('git', ['push', 'origin', 'main'])
-  const assets = tarball && existsSync(tarball) ? [tarball] : []
-  await run('gh', ['release', 'create', `v${version}`, ...assets, '--title', `videobook ${version}`, '--notes-file', notes])
+  const directory = await mkdtemp(join(tmpdir(), 'videobook-release-notes-'))
+  try {
+    const notes = join(directory, 'notes.md')
+    await writeFile(notes, `${await output(process.execPath, ['scripts/changelog-section.mjs', version])}\n`)
+    await run('git', ['push', 'origin', STABLE])
+    await run('git', ['push', 'origin', `v${version}`])
+    await run('git', ['push', 'origin', 'main'])
+    const assets = tarball && existsSync(tarball) ? [tarball] : []
+    await run('gh', ['release', 'create', `v${version}`, ...assets, '--title', `videobook ${version}`, '--notes-file', notes])
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 }
 
 function printNextSteps(version, pushed) {

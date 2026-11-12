@@ -22,7 +22,8 @@
   "include": [
     "tests/v2/**/*.test.ts",
     "scripts/run-search-benchmark.ts",
-    "scripts/search-benchmark-corpus.test.ts"
+    "scripts/search-benchmark-corpus.test.ts",
+    "scripts/release.test.ts"
   ],
   "exclude": ["tests/v2/**/*.e2e.test.ts"]
 }
