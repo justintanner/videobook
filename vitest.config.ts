@@ -158,6 +158,8 @@ export default defineConfig({
       'server/src/goal-styles.test.ts',
       'server/src/goal-planner-prompt.test.ts',
       'server/src/goal-plan-v3.test.ts',
+      'server/src/goal-short-plan.test.ts',
+      'server/src/goal-short-rules.test.ts',
       'server/src/chain-executor.test.ts',
       'server/src/dialog-quality.test.ts',
       'server/src/downloads-dest.test.ts',
