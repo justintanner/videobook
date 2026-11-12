@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { asGoal, asGoals, goalStatusLine, goalWake, type GoalSnapshot } from './goals'
+import { asGoal, asGoals, asMainCharacter, goalStatusLine, goalWake, type GoalSnapshot } from './goals'
 import { jsonEqual } from './notebook-canvas'
 import type { ChatExecution } from './chat-turns'
 import { COMPOSER_HISTORY_CAP, type ComposerStatusRow } from './composer-history'
@@ -87,5 +87,12 @@ export function useVideoGoals(call: GoalToolCall, scope: GoalScope | null) {
     return goal
   }, [call, update])
 
-  return { goals, events, accept, refresh, act }
+  const character = useCallback(async (target: GoalScope, args: Record<string, unknown>) => asMainCharacter(await call('video_goal', {
+    ...args,
+    action: 'character',
+    book_id: target.bookId,
+    notebook_id: target.notebookId,
+  }, { background: true })), [call])
+
+  return { goals, events, accept, refresh, act, character }
 }

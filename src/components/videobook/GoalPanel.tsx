@@ -2,10 +2,11 @@ import { useRef, useState, type KeyboardEvent } from 'react'
 import { Flag } from 'lucide-react'
 import type { GoalPlan, GoalGenerationStage } from '../../../server/src/goal-plan'
 import type { AssetRecord } from '@/videobook/workspace-responses'
-import { formatGoalClock, goalCanRetry, goalOutputEstimate, goalPlansEqual, goalProgress, goalShotStateLabel, goalStageLabel, goalStatusLine, goalStopLabel, goalTileView, isStagedGoalPlan, planShots, type GoalShotView, type GoalSnapshot } from '@/videobook/goals'
+import { formatGoalClock, goalCanRetry, goalOutputEstimate, goalPlansEqual, goalProgress, goalShotStateLabel, goalStageLabel, goalStatusLine, goalStopLabel, goalTileView, isStagedGoalPlan, planShots, shortPlanOf, type GoalShotView, type GoalSnapshot, type MainCharacterView } from '@/videobook/goals'
 import { useElapsedSeconds } from '@/videobook/use-elapsed-seconds'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
 import { GoalReview } from './GoalReview'
+import { GoalShortReview } from './GoalShortReview'
 import { GoalV3Review } from './GoalV3Review'
 import { SimpleGoalReview } from './SimpleGoalReview'
 import './GoalPanel.css'
@@ -15,6 +16,7 @@ type GoalPanelProps = {
   goal: GoalSnapshot
   connected: boolean
   onAction: (args: GoalAction) => Promise<GoalSnapshot>
+  onCharacter: (args: GoalAction) => Promise<MainCharacterView>
   onPreview: (startFrame: number) => Promise<void>
   onSelectCell: (cellId: string) => void
   onPreviewCell: (cellId: string) => void
@@ -44,7 +46,7 @@ function GoalStepper({ goal }: { goal: GoalSnapshot }) {
   return <ol className="goal-stepper" aria-label="Goal stages">{labels.map((label, index) => <li key={label} data-state={goal.status === 'completed' || index < current ? 'done' : index === current ? 'current' : 'pending'} aria-current={index === current ? 'step' : undefined}>{label}</li>)}</ol>
 }
 
-export function GoalPanel({ goal, connected, onAction, onPreview, onSelectCell, onPreviewCell, resolveAsset }: GoalPanelProps) {
+export function GoalPanel({ goal, connected, onAction, onCharacter, onPreview, onSelectCell, onPreviewCell, resolveAsset }: GoalPanelProps) {
   const [pending, setPending] = useState(false)
   const pendingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
@@ -52,6 +54,7 @@ export function GoalPanel({ goal, connected, onAction, onPreview, onSelectCell, 
   const line = goalStatusLine(goal)
   const view = goalTileView(goal, goal.plan, undefined)
   const v3Plan = goal.plan && 'version' in goal.plan && goal.plan.version === 3 ? goal.plan : null
+  const shortPlan = shortPlanOf(goal)
   const disabled = pending || !connected
   const simpleReview = isStagedGoalPlan(goal.plan) && (goal.plan.storyboardLayout === 'six-panel' || goal.status === 'completed') && ['review', 'completed', 'failed', 'interrupted'].includes(goal.status)
   const perform = async (work: () => Promise<unknown>) => {
@@ -97,22 +100,23 @@ export function GoalPanel({ goal, connected, onAction, onPreview, onSelectCell, 
     <header>
       <span className="inspector-cell-title goal-panel-title"><Flag size={14} className="goal-panel-flag" /><strong>GOAL</strong>{goal.address && <code className="inspector-cell-address">{goal.address}</code>}<span className="goal-panel-name" title={view.title}>{view.title}</span><span className="goal-tile-chip" data-tone={view.chip.tone}>{view.chip.label}</span></span>
       <div className="inspector-header-actions"><div className="inspector-generation-header-actions">
-        {progress.phase === 'review' && <button type="button" disabled={disabled} onClick={() => act({ action: 'cancel' })}>{v3Plan && goal.finish?.status === 'running' ? 'Stop finishing' : 'Discard goal'}</button>}
+        {progress.phase === 'review' && <button type="button" disabled={disabled} onClick={() => act({ action: 'cancel' })}>{(v3Plan || shortPlan) && goal.finish?.status === 'running' ? 'Stop finishing' : 'Discard goal'}</button>}
         {active && <button type="button" disabled={disabled} onClick={() => act({ action: 'cancel' })}>{goalStopLabel(goal)}</button>}
         {finished && <button type="button" disabled={disabled || Boolean(goal.dismissedAt)} onClick={() => act({ action: 'dismiss' })}>Dismiss</button>}
       </div><ComposerDockClose /></div>
     </header>
     <div className="goal-panel-body">
       {goal.planVersion === 2 && !simpleReview && <GoalStepper goal={goal} />}
+      {shortPlan && goal.status !== 'planning' && <GoalShortReview key={`${goal.goalId}:${goal.revision}`} goal={goal} plan={shortPlan} disabled={disabled} resolveAsset={resolveAsset} onPreviewCell={onPreviewCell} onRun={work => { void perform(work) }} onAction={args => onAction({ ...args, goal_id: goal.goalId })} onCharacter={onCharacter} />}
       {v3Plan && goal.status !== 'planning' && <GoalV3Review key={`${goal.goalId}:${goal.revision}`} goal={goal} plan={v3Plan} disabled={disabled} resolveAsset={resolveAsset} onPreviewCell={onPreviewCell} onRun={work => { void perform(work) }} onAction={args => onAction({ ...args, goal_id: goal.goalId })} />}
       {!connected && <p role="status" className="goal-panel-muted">Reconnecting. Your goal is saved; generation continues on the server.</p>}
       {error && <p role="alert" className="goal-panel-error">{error}</p>}
       {goal.error && (progress.phase === 'failed' || progress.phase === 'interrupted') && <p role="alert" className="goal-panel-error">{goal.error}</p>}
       {goal.combined?.error && <p role="alert" className="goal-panel-error">{goal.combined.error}</p>}
-      {progress.phase === 'planning' && <div className="goal-panel-planning"><p className="goal-panel-brief">{goal.brief}</p><p className="goal-panel-muted">{view.styleLabel === 'Match source' ? 'Planning the scene, storyboard and video from your references…' : view.styleLabel ? `Planning ${view.styleLabel === 'IG Influencer' ? 'an' : 'a'} ${view.styleLabel} sequence…` : 'Planning the scene, storyboard and video from your reference images…'}</p><span className="goal-tile-placeholder" aria-hidden="true"><i /><i /><i /></span></div>}
+      {progress.phase === 'planning' && <div className="goal-panel-planning"><p className="goal-panel-brief">{goal.brief}</p><p className="goal-panel-muted">{goal.planVersion === 4 ? 'Planning the frame and the beats of your short…' : view.styleLabel === 'Match source' ? 'Planning the scene, storyboard and video from your references…' : view.styleLabel ? `Planning ${view.styleLabel === 'IG Influencer' ? 'an' : 'a'} ${view.styleLabel} sequence…` : 'Planning the scene, storyboard and video from your reference images…'}</p><span className="goal-tile-placeholder" aria-hidden="true"><i /><i /><i /></span></div>}
       {simpleReview && isStagedGoalPlan(goal.plan) && <SimpleGoalReview key={`${goal.goalId}:${goal.revision}:${goal.stage}`} goal={goal} plan={goal.plan} disabled={disabled} resolveAsset={resolveAsset} onPreviewCell={onPreviewCell} onSave={plan => reviewAction('update', plan)} onApprove={plan => reviewAction('approve', plan)} onRegenerate={(plan, stage, index) => reviewAction('regenerate', plan, stage, index)} onRevise={(plan, stage, index, feedback) => reviewAction('revise', plan, stage, index, feedback)} onSelect={(stage, index, artifactId) => act({ action: 'select', revision: goal.revision, stage, index, artifact_id: artifactId })} />}
       {!simpleReview && progress.phase === 'review' && isStagedGoalPlan(goal.plan) && <GoalReview key={`${goal.goalId}:${goal.revision}:${goal.stage}`} goal={goal} plan={goal.plan} disabled={disabled} resolveAsset={resolveAsset} onSelectCell={onSelectCell} onPreviewCell={onPreviewCell} onSave={plan => reviewAction('update', plan)} onApprove={plan => reviewAction('approve', plan)} onRegenerate={(plan, stage, index) => reviewAction('regenerate', plan, stage, index)} onRevise={(plan, stage, index, feedback) => reviewAction('revise', plan, stage, index, feedback)} onSelect={(stage, index, artifactId) => act({ action: 'select', stage, index, artifact_id: artifactId })} />}
-      {!v3Plan && progress.phase !== 'planning' && progress.phase !== 'review' && (!simpleReview || retry) && <div onKeyDown={event => runWithShortcut(event, primary)}>
+      {!v3Plan && !shortPlan && progress.phase !== 'planning' && progress.phase !== 'review' && (!simpleReview || retry) && <div onKeyDown={event => runWithShortcut(event, primary)}>
         <div className="goal-progress-summary"><progress max={Math.max(1, progress.total)} value={complete ? progress.total : progress.done} aria-label="Completed stage outputs" /><span>{progress.done} of {progress.total} ready · {goalStageLabel(progress.stage)}</span></div>
         <ol className="goal-progress-list">{progress.shots.map(shot => <GoalShotRow key={shot.index} shot={shot} onSelectCell={onSelectCell} />)}</ol>
         <div className="goal-panel-bar"><div className="goal-panel-bar-copy"><span>{complete ? goal.assembly ? 'Clips were appended in order to the timeline.' : 'Your clip is ready in the notebook.' : goal.status === 'cancelled' ? 'Remaining work is stopped. Requests already submitted may still finish.' : 'Outputs appear in the notebook as they finish. You can collapse this panel.'}</span></div>{primaryLabel && <button type="button" className="goal-panel-primary" disabled={disabled} onClick={primary}>{primaryLabel}</button>}</div>

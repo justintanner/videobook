@@ -1506,6 +1506,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     accept: acceptGoals,
     refresh: refreshGoals,
     act: actOnGoal,
+    character: characterOfGoal,
   } = useVideoGoals(call, goalScope)
   const goalCellIds = useMemo(
     () => new Set((notebook?.cells ?? []).filter((cell) => cell.type === 'goal').map((cell) => cell.id)),
@@ -3547,6 +3548,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return { ok: true, message: `Planning your video goal in ${goal.address ?? 'a new tile'}` }
   }
 
+  const runGoalCharacter = async (args: Record<string, unknown>) => {
+    if (!goalScope) throw new Error('Open the goal notebook first.')
+    const scope = goalScope
+    const view = await characterOfGoal(scope, args)
+    if (args.generate === true || args.reference_ids !== undefined) await refreshBookData(scope.bookId, scope.notebookId)
+    return view
+  }
   const runGoalAction = async (args: Record<string, unknown>) => {
     if (!goalScope) throw new Error('Open the goal notebook first.')
     const scope = goalScope
@@ -10365,6 +10373,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         goal={selectedGoal}
         connected={mcp.state === 'ready'}
         onAction={runGoalAction}
+        onCharacter={runGoalCharacter}
         onPreview={previewGoalSequence}
         onSelectCell={openCellInspector}
         resolveAsset={(artifactId) => assetById.get(artifactId) ?? null}

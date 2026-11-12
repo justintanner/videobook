@@ -1,8 +1,12 @@
 import type { GoalSnapshot } from '../../server/src/tools/goal'
 import type { GoalDisplayPlan, GoalGenerationStage, GoalPlan } from '../../server/src/goal-plan'
+import type { GoalShortPlan } from '../../server/src/goal-short-plan'
+import type { MainCharacterView } from '../../server/src/goal-short-character'
 import { goalStyle, goalStylesEqual } from '../../server/src/goal-styles'
+import { lowerBoundCost } from './command-plan'
+import { lowerBoundEstimate } from './provider-payload-preview'
 
-export type { GoalSnapshot }
+export type { GoalSnapshot, MainCharacterView }
 export type GoalShotState = 'planned' | 'waiting' | 'submitting' | 'generating' | 'done' | 'failed' | 'skipped' | 'stopped'
 export type GoalPhase = 'planning' | 'review' | 'frame' | 'storyboards' | 'videos' | 'assembling' | 'complete' | 'failed' | 'interrupted' | 'stopped'
 export type GoalShotView = {
@@ -44,6 +48,16 @@ export type GoalWake = {
 }
 type GoalStep = GoalSnapshot['steps'][number]
 
+export function shortPlanOf(goal: GoalSnapshot | null | undefined): GoalShortPlan | null {
+  return goal?.planVersion === 4 ? goal.shortPlan ?? null : null
+}
+
+export function asMainCharacter(value: unknown): MainCharacterView {
+  const record = value && typeof value === 'object' ? value as Record<string, unknown> : null
+  if (!record || !record.character || !Array.isArray(record.references) || !record.sheet) throw new Error('The server returned an invalid main character')
+  return value as MainCharacterView
+}
+
 export function isStagedGoalPlan(plan: GoalDisplayPlan | null): plan is GoalPlan {
   return Boolean(plan && 'version' in plan && plan.version === 2)
 }
@@ -77,6 +91,7 @@ export function goalStillStale(goal: GoalSnapshot, stage: GoalGenerationStage, i
 }
 
 export function goalOutputEstimate(goal: GoalSnapshot, stage: GoalGenerationStage, index: number): number | null {
+  if (goal.planVersion === 4) return stage === 'videos' ? goal.estimate.segments?.[index]?.usd ?? null : goal.estimate[stage].usd
   const total = goal.estimate[stage].usd
   if (total === null || stage === 'frame') return total
   const shots = planShots(goal.plan)
@@ -99,6 +114,7 @@ function revisionLabel(goal: GoalSnapshot): string | null {
     if (attempt.stage === 'frame') return 'scene'
     if (attempt.stage === 'videos') return 'video'
   }
+  if (goal.planVersion === 4 && attempt.stage === 'videos') return `clip ${attempt.index + 1}`
   if (attempt.stage === 'frame') return 'frame'
   if (attempt.stage === 'videos') return `video ${attempt.index + 1}`
   const count = Math.max(1, planShots(goal.plan).length)
@@ -106,7 +122,7 @@ function revisionLabel(goal: GoalSnapshot): string | null {
 }
 
 export function goalCanRetry(goal: GoalSnapshot): boolean {
-  return (goal.planVersion === 2 || goal.planVersion === 3) && (goal.status === 'failed' || goal.status === 'interrupted')
+  return (goal.planVersion === 2 || goal.planVersion === 3 || goal.planVersion === 4) && (goal.status === 'failed' || goal.status === 'interrupted')
 }
 
 export function goalStopLabel(goal: GoalSnapshot): string {
@@ -140,7 +156,8 @@ export function formatGoalClock(totalSeconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }
 
-export function goalPlanSeconds(plan: GoalDisplayPlan | null): number {
+export function goalPlanSeconds(plan: GoalDisplayPlan | GoalShortPlan | null): number {
+  if (plan && 'version' in plan && plan.version === 4) return plan.segments.reduce((sum, segment) => sum + segment.seconds, 0)
   if (plan && 'version' in plan && plan.version === 3) return plan.video.durationSeconds
   return planShots(plan).reduce((sum, shot) => sum + shot.durationSeconds, 0)
 }
@@ -163,10 +180,17 @@ function plannedShots(plan: GoalDisplayPlan | null): GoalShotView[] {
   }))
 }
 
+function shortRows(short: GoalShortPlan, stage: GoalGenerationStage) {
+  return stage === 'frame'
+    ? [{ index: 0, number: '01', title: 'Frame', prompt: short.frame.prompt, seconds: 0 }]
+    : short.segments.map((segment, index) => ({ index, number: String(index + 1).padStart(2, '0'), title: `Clip ${index + 1}`, prompt: segment.prompt, seconds: segment.seconds }))
+}
+
 function goalShots(goal: GoalSnapshot, stage: GoalGenerationStage): GoalShotView[] {
+  const short = shortPlanOf(goal)
   const plan = goal.plan
   const v3 = plan && 'version' in plan && plan.version === 3 ? plan : null
-  const firstRows = v3
+  const firstRows = short ? shortRows(short, stage) : v3
     ? [{ index: 0, number: '01', title: stage === 'videos' ? 'Video' : 'Scene', prompt: stage === 'videos' ? v3.video.prompt : v3.scene.prompt, seconds: stage === 'videos' ? v3.video.durationSeconds : 0 }]
     : stage === 'frame' && isStagedGoalPlan(plan)
     ? [{ index: 0, number: '01', title: 'Full frame', prompt: plan.frame.prompt, seconds: 0 }]
@@ -181,7 +205,7 @@ function goalShots(goal: GoalSnapshot, stage: GoalGenerationStage): GoalShotView
   const run = goal.stages[stage]
   const steps = new Map((run?.steps ?? (goal.planVersion === 1 ? goal.steps : [])).map(step => [step.id, step]))
   return rows.map(row => {
-    const id = v3 ? stage === 'videos' ? 'video' : 'scene' : stage === 'frame' ? 'frame' : `${stage === 'storyboards' ? 'storyboard' : 'shot'}${row.index + 1}`
+    const id = short ? stage === 'videos' ? `clip${row.index + 1}` : 'frame' : v3 ? stage === 'videos' ? 'video' : 'scene' : stage === 'frame' ? 'frame' : `${stage === 'storyboards' ? 'storyboard' : 'shot'}${row.index + 1}`
     const step = steps.get(id)
     const output = run?.outputs.find(item => item.index === row.index)
     return {
@@ -233,6 +257,41 @@ function statusLine(text: string, short: string, action: string | null, tone: Go
   return { text, short, announce: `Goal: ${text}`, action, tone, busy }
 }
 
+export function shortEstimateText(estimate: { usd: number | null, warnings: readonly string[] } | undefined): string {
+  if (!estimate || estimate.usd === null) return `estimate unavailable${estimate?.warnings[0] ? ` (${estimate.warnings[0]})` : ''}`
+  const amount = `$${estimate.usd.toFixed(2)}`
+  return lowerBoundEstimate(estimate.warnings) ? lowerBoundCost(amount) : amount
+}
+
+function shortStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null): GoalStatusLine | null {
+  const short = shortPlanOf(goal)
+  if (!short) return null
+  const progress = goalProgress(goal)
+  const finish = goal.finish
+  const total = short.segments.length
+  if (finish?.status === 'running') return statusLine('Finishing the cold open and watermark', 'Finishing', null, 'live', true)
+  if (finish?.status === 'failed') return statusLine('Finishing failed', 'Finishing failed', 'Finish', 'attention', false)
+  if (progress.phase === 'review') {
+    if (goal.stage !== 'videos') return statusLine(`Review frame · ${shortEstimateText(goal.estimate.frame)}`, 'Review', 'Review', 'review', false)
+    const next = progress.shots.find(shot => shot.state !== 'done' || goalStillStale(goal, 'videos', shot.index))?.index
+    if (next === undefined) return statusLine(`Review finish · ${formatGoalClock(goalPlanSeconds(short))}`, 'Review', 'Review', 'review', false)
+    return statusLine(`Review clip ${next + 1} of ${total} · ${shortEstimateText(goal.estimate.segments?.[next])}`, 'Review', 'Review', 'review', false)
+  }
+  if (progress.phase === 'frame' || progress.phase === 'videos') {
+    const activity = progress.active?.state === 'generating' ? `Generating${elapsedSeconds === null ? '' : ` ${formatGoalClock(elapsedSeconds)}`}` : 'Submitting'
+    const revised = revisionLabel(goal)
+    const name = progress.phase === 'frame' ? 'Frame' : `Clip ${(progress.active?.index ?? 0) + 1} of ${total}`
+    return statusLine(`${revised ? `Revising ${revised}` : name} · ${activity}`, progress.phase === 'frame' ? 'Frame' : `${(progress.active?.index ?? 0) + 1}/${total}`, null, 'live', true)
+  }
+  if (progress.phase === 'failed' || progress.phase === 'interrupted') {
+    const word = progress.phase === 'failed' ? 'failed' : 'interrupted'
+    const text = !goal.chainId ? `Planning ${word}` : progress.stage === 'videos' ? `Clip ${(progress.active?.index ?? 0) + 1} ${word}` : `Frame ${word}`
+    return statusLine(text, progress.phase === 'failed' ? 'Failed' : 'Interrupted', 'Retry', 'attention', false)
+  }
+  if (progress.phase === 'complete') return statusLine(`Short ready · ${formatGoalClock(goalPlanSeconds(short))}`, 'Done', 'Preview', 'done', false)
+  return null
+}
+
 function v3StatusLine(goal: GoalSnapshot, elapsedSeconds: number | null): GoalStatusLine | null {
   if (goal.planVersion !== 3) return null
   const progress = goalProgress(goal)
@@ -262,7 +321,7 @@ function v3StatusLine(goal: GoalSnapshot, elapsedSeconds: number | null): GoalSt
 }
 
 export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null = null): GoalStatusLine {
-  const modern = v3StatusLine(goal, elapsedSeconds)
+  const modern = shortStatusLine(goal, elapsedSeconds) ?? v3StatusLine(goal, elapsedSeconds)
   if (modern) return modern
   const progress = goalProgress(goal)
   const simple = isStagedGoalPlan(goal.plan) && goal.plan.storyboardLayout === 'six-panel'
@@ -323,6 +382,9 @@ export function goalWake(previous: GoalSnapshot, current: GoalSnapshot): GoalWak
   else if (before.phase === 'planning' && after.phase === 'review') from = 'Plan ready'
   else if (stopped) from = stopped
   else if (after.phase === 'review' && revised) from = `${revised[0]!.toUpperCase()}${revised.slice(1)} revised`
+  else if (after.phase === 'review' && current.planVersion === 4 && current.finish) from = 'Short ready'
+  else if (after.phase === 'review' && current.planVersion === 4 && after.stage === 'videos' && before.stage === 'frame') from = 'Frame ready'
+  else if (after.phase === 'review' && current.planVersion === 4 && after.stage === 'videos') from = `Clip ${Math.max(1, after.done)} ready`
   else if (after.phase === 'review' && current.planVersion === 3 && current.finish) from = 'Video ready'
   else if (after.phase === 'review' && current.planVersion === 3 && after.stage === 'videos') from = 'Scene ready'
   else if (after.phase === 'review' && after.stage === 'storyboards') from = 'Full frame ready'
@@ -348,6 +410,15 @@ export function goalGenerationMarks(goals: readonly GoalSnapshot[]): ReadonlyMap
     const total = planShots(goal.plan).length
     const steps = goal.planVersion === 1 ? goal.steps : Object.values(goal.stages).flatMap(run => run.allSteps)
     for (const step of steps) {
+      const clip = goal.planVersion === 4 ? /^clip(\d+)$/.exec(step.id) : null
+      if (clip) {
+        const segments = shortPlanOf(goal)?.segments.length ?? 1
+        const attempts = goal.stages.videos?.attempts?.filter(attempt => attempt.index === Number(clip[1]) - 1) ?? []
+        const version = attempts.findIndex(attempt => attempt.chainId === step.chainId && attempt.stepId === step.id)
+        const label = attempts.length > 1 && version >= 0 ? `Clip ${clip[1]} v${version + 1}` : `Clip ${clip[1]}/${segments}`
+        for (const id of [step.cellId, step.outputCellId]) if (id) marks.set(id, `${label}${goal.address ? ` · ${goal.address}` : ''}`)
+        continue
+      }
       const match = /^(frame|storyboard|shot)(\d+)?$/.exec(step.id)
       if (!match) continue
       const number = Number(match[2])
@@ -410,13 +481,18 @@ function tileNote(goal: GoalSnapshot | null, progress: GoalProgress | null): str
   if (!goal || !progress) return null
   if (progress.phase === 'failed' || progress.phase === 'interrupted') return `${goalStatusLine(goal).text}${goal.planVersion === 1 ? ' · start a new goal' : ' · open to retry'}`
   if (progress.phase === 'planning') return goal.brief || null
-  if (progress.phase === 'review') return `${goalStatusLine(goal).text}${progress.stage === 'frame' ? '' : estimateText(goal, progress.stage)}`
-  if (progress.phase === 'complete') return `${goal.assembly ? 'Added to the timeline' : 'Clip ready'} · ${formatGoalClock(goalPlanSeconds(goal.plan))}`
+  if (progress.phase === 'review') return `${goalStatusLine(goal).text}${progress.stage === 'frame' || shortPlanOf(goal) ? '' : estimateText(goal, progress.stage)}`
+  if (progress.phase === 'complete') return `${goal.assembly ? 'Added to the timeline' : shortPlanOf(goal) ? 'Short ready' : 'Clip ready'} · ${formatGoalClock(goalPlanSeconds(shortPlanOf(goal) ?? goal.plan))}`
   return null
 }
 
 function overallProgress(goal: GoalSnapshot, progress: GoalProgress): number {
   if (goal.status === 'completed') return 100
+  const short = shortPlanOf(goal)
+  if (short) {
+    const done = (goal.stages.frame?.outputs.length ? 1 : 0) + (goal.stages.videos?.outputs.length ?? 0)
+    return Math.round(done / (1 + short.segments.length) * 100)
+  }
   if (goal.planVersion === 3) {
     const done = (goal.stages.frame?.outputs.length ? 1 : 0) + (goal.stages.videos?.outputs.length ? 1 : 0)
     return Math.round(done / 2 * 100)
@@ -428,6 +504,8 @@ function overallProgress(goal: GoalSnapshot, progress: GoalProgress): number {
 }
 
 export function goalTileView(goal: GoalSnapshot | null, fallbackPlan: GoalDisplayPlan | null, label: string | undefined): GoalTileView {
+  const short = shortPlanOf(goal)
+  if (short && goal) return shortTileView(goal, short)
   const plan = goal?.plan ?? fallbackPlan
   const progress = goal ? goalProgress(goal) : null
   const phase = progress?.phase ?? null
@@ -456,5 +534,28 @@ export function goalTileView(goal: GoalSnapshot | null, fallbackPlan: GoalDispla
     aspectRatio: plan?.aspectRatio ?? null, thumbnails,
     styleLabel: isStagedGoalPlan(plan) ? goalStyle(plan.style?.id ?? 'cinematic').label
       : goal?.requestedStyle ? goalStyle(goal.requestedStyle.id).label : null,
+  }
+}
+
+function shortTileView(goal: GoalSnapshot, short: GoalShortPlan): GoalTileView {
+  const progress = goalProgress(goal)
+  const shots = progress.shots
+  const visible = shots.length > TILE_ROW_LIMIT ? shots.slice(0, TILE_ROW_LIMIT - 1) : shots
+  const seconds = goalPlanSeconds(short)
+  return {
+    title: short.title, planning: progress.phase === 'planning',
+    rows: visible.map(shot => ({
+      key: `${progress.stage}:${shot.index}`, number: shot.number, title: shot.title, state: shot.state,
+      detail: shot.state === 'generating' ? '' : shot.state === 'submitting' ? 'Queued'
+        : shot.seconds > 0 && (shot.state === 'done' || shot.state === 'planned') ? shot.state === 'done' ? formatGoalClock(shot.seconds) : `${shot.seconds}s` : goalShotStateLabel(shot.state),
+      startedAt: shot.state === 'generating' ? shot.startedAt : null,
+    })),
+    hiddenRows: shots.length - visible.length, note: tileNote(goal, progress), noteTone: tileChips[progress.phase].tone,
+    chip: goal.finish?.status === 'running' ? { label: 'Finishing', tone: 'live' } : tileChips[progress.phase],
+    progressPercent: overallProgress(goal, progress),
+    shotsLabel: short.segments.length === 1 ? `1 × ${seconds}s` : `${short.segments.length} clips · ${seconds}s`,
+    aspectRatio: short.aspectRatio,
+    styleLabel: null,
+    thumbnails: (goal.stages.frame?.outputs ?? []).map(output => ({ artifactId: output.artifactId, cellId: output.cellId, label: 'Frame' })),
   }
 }
