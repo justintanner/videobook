@@ -13,6 +13,7 @@ import { readGoal, requireGoalContent, requireGoalShortContent, saveGoal, writeG
 import type { GoalEstimate, GoalEstimates, GoalRecord } from "../goal-store.js";
 import { buildGoalShortPlan, type GoalShortDraft } from "../goal-short-plan.js";
 import { stripShortBannedWords } from "../goal-short-rules.js";
+import { estimateShort } from "../goal-short-runtime.js";
 import {
   shortAuthoredCopy, shortPlannerBrief, shortPlannerInstructions, shortPlannerIssues, shortPlannerNeeded, shortPlannerResponseSchema, shortTitle,
   type ShortAuthoredCopy, type ShortPlannerIssue, type ShortPlannerResponse,
@@ -127,11 +128,12 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
       framePrompt,
       beats: authored.beats.map((beat, index) => beat ?? written?.beats[index] ?? ""),
     });
+    const estimate = await estimateShort(engine, plan);
     await withNotebookMutation(`goal:${goalId}`, async () => {
       const current = readGoal(engine, goalId);
       if (current.status !== "planning") return;
       const latest = requireGoalShortContent(engine, current);
-      await writeGoalShortContent(engine, current, { ...latest, plan, revision: latest.revision + 1 });
+      await writeGoalShortContent(engine, current, { ...latest, plan, estimate, revision: latest.revision + 1 });
       saveGoal(engine, { ...current, stage: "frame", status: "review", error: null });
     });
     return { goalId };

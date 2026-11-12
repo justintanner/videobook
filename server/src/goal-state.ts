@@ -2,13 +2,16 @@ import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { cancelChainRun, getChainRun, type ChainRunRecord } from "./chain-executor.js";
 import { coldOpenSource } from "./cold-open.js";
-import { emptyGoalEstimates, findGoalCell, goalContent, requireGoalContent, saveGoal, writeGoalContent, type GoalRecord, type GoalStageOutput } from "./goal-store.js";
+import { emptyGoalEstimates, findGoalCell, goalContent, goalShortContent, requireGoalContent, requireGoalShortContent, saveGoal, writeGoalContent, writeGoalShortContent, type GoalRecord, type GoalStageOutput } from "./goal-store.js";
 import { GOAL_VIDEO_TOOL, refreshGoalPlanV3, type GoalGenerationStage } from "./goal-plan.js";
 import { suggestedColdOpen } from "./lightning-defaults.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { goalStageAttempts, goalStillStaleReason } from "./goal-stills.js";
+import { refreshGoalShortPlan } from "./goal-short-plan.js";
+import { currentShortClip, shortSegmentStale } from "./goal-short-runtime.js";
 
 export const LEGACY_GOAL_MESSAGE = "Goal mode now starts from character images. Start a new /goal.";
+const SHORT_STALE_MESSAGE = "The frame or an earlier clip changed after this clip was made.";
 
 export function activeGoalStage(goal: GoalRecord): GoalGenerationStage {
   return goal.stage === "assembly" ? "videos" : goal.stage;
@@ -77,7 +80,7 @@ export async function writeGoalCombinationState(engine: Engine, goal: GoalRecord
 
 export function reconcileFinish(engine: Engine, goal: GoalRecord): GoalRecord {
   const finish = goal.finish;
-  if (goal.planVersion !== 3 || !finish || finish.status !== "running") return goal;
+  if ((goal.planVersion !== 3 && goal.planVersion !== 4) || !finish || finish.status !== "running") return goal;
   const job = finish.jobId ? engine.jobs.queue.get(finish.jobId) : null;
   if (job && ["queued", "running", "completing"].includes(job.state)) return goal;
   if (job?.state === "done") {
@@ -92,7 +95,7 @@ export function reconcileFinish(engine: Engine, goal: GoalRecord): GoalRecord {
 }
 
 async function coldOpenReview(engine: Engine, goal: GoalRecord) {
-  if (goal.planVersion !== 3 || !goal.finish?.sourceArtifactId) return null;
+  if ((goal.planVersion !== 3 && goal.planVersion !== 4) || !goal.finish?.sourceArtifactId) return null;
   try {
     const source = await coldOpenSource(engine, goal.finish.sourceArtifactId, goal.finish.sourceObjectHash ?? undefined);
     const approved = goal.finish.status !== "review" && goal.finish.startSeconds != null && goal.finish.endSeconds != null;
@@ -103,6 +106,24 @@ async function coldOpenReview(engine: Engine, goal: GoalRecord) {
   } catch {
     return null;
   }
+}
+
+async function settledShortStage(engine: Engine, goal: GoalRecord, next: GoalRecord, stage: GoalGenerationStage, previous: readonly GoalStageOutput[], outputs: readonly GoalStageOutput[]): Promise<GoalRecord> {
+  const cleared = { resumeStage: null, resumeStatus: null, resumeOutputs: null, resumeFinish: null };
+  const approved = goal.stages[stage]?.shotIndexes ?? [0];
+  if (!approved.every(index => outputs.some(output => output.index === index))) {
+    return { ...next, status: "failed", error: "The stage finished without its media output. Retry the stage.", ...cleared };
+  }
+  if (stage === "videos") {
+    const clip = currentShortClip(next);
+    return { ...next, status: "review", error: null, ...cleared, finish: clip ? { status: "review", sourceArtifactId: clip.artifactId, finalArtifactId: null, error: null } : null };
+  }
+  const content = requireGoalShortContent(engine, goal);
+  await writeGoalShortContent(engine, goal, { ...content, revision: content.revision + 1 });
+  const frameChanged = (previous[0]?.artifactId ?? null) !== null && previous[0]?.artifactId !== outputs[0]?.artifactId;
+  const finish = frameChanged ? null : goal.finish ?? goal.resumeFinish ?? null;
+  const keepCompleted = finish?.status === "completed" && Boolean(finish.finalArtifactId);
+  return { ...next, stage: goal.resumeStage ?? "videos", status: keepCompleted ? "completed" : "review", error: null, ...cleared, finish };
 }
 
 export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: NotebookDocument): Promise<GoalRecord> {
@@ -136,7 +157,9 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
   });
   let next: GoalRecord = { ...goal, stages: { ...goal.stages, [stage]: { ...run, outputs, ...(attempts ? { attempts } : {}) } } };
   const assembled = stage === "videos" && goal.assembly?.artifactIds && JSON.stringify(goal.assembly.artifactIds) === JSON.stringify(outputs.map(output => output.artifactId));
-  if (chain.status === "completed" || assembled && !goal.resumeStage) {
+  if (chain.status === "completed" && goal.planVersion === 4) {
+    next = await settledShortStage(engine, goal, next, stage, run.outputs, outputs);
+  } else if (chain.status === "completed" || assembled && !goal.resumeStage) {
     const content = requireGoalContent(engine, goal);
     if (goal.planVersion === 3) {
       const cleared = { resumeStage: null, resumeStatus: null, resumeOutputs: null, resumeFinish: null };
@@ -184,7 +207,10 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
 
 export async function publicGoal(engine: Engine, goal: GoalRecord, document: NotebookDocument) {
   const cell = findGoalCell(document, goal);
-  const content = cell ? goalContent(cell) : { brief: "", characters: [], revision: 0, plan: null, estimate: emptyGoalEstimates() };
+  const short = goal.planVersion === 4 && cell ? goalShortContent(cell) : null;
+  const content = short
+    ? { brief: short.brief, characters: [], revision: short.revision, plan: null, estimate: short.estimate }
+    : cell ? goalContent(cell) : { brief: "", characters: [], revision: 0, plan: null, estimate: emptyGoalEstimates() };
   const stages = Object.fromEntries(await Promise.all(Object.entries(goal.stages).map(async ([stage, run]) => [stage, {
     ...run,
     ...(stage === "videos" ? { attempts: goalStageAttempts(engine, goal, "videos") } : {}),
@@ -200,7 +226,8 @@ export async function publicGoal(engine: Engine, goal: GoalRecord, document: Not
       });
       const stagedPlan = content.plan && "version" in content.plan && content.plan.version === 2 ? content.plan : null;
       const stale = stagedPlan && (stage === "frame" || stage === "storyboards" || stage === "videos")
-        ? await goalStillStaleReason(engine, goal, document, stagedPlan, content.characters, stage, output) : null;
+        ? await goalStillStaleReason(engine, goal, document, stagedPlan, content.characters, stage, output)
+        : short && stage === "videos" && shortSegmentStale(goal, output.index) ? SHORT_STALE_MESSAGE : null;
       return { ...output, address: outputCell ? notebookGridTag(outputCell.slot) : null, versions, stale };
     })),
     steps: goalChainSteps(engine, document, run.chainId),
@@ -217,6 +244,7 @@ export async function publicGoal(engine: Engine, goal: GoalRecord, document: Not
       : content.estimate.frame;
   return {
     kind: "video-goal" as const, ...goal, ...content, plan: displayedPlan,
+    ...(short?.plan ? { shortPlan: refreshGoalShortPlan(short.plan, document) } : {}),
     finish: goal.finish ?? null,
     finalArtifactId: goal.finish?.finalArtifactId ?? null,
     coldOpen: await coldOpenReview(engine, goal),

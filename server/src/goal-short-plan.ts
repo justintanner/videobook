@@ -262,6 +262,14 @@ export function buildGoalShortPlan(input: {
   });
 }
 
+export function withShortCharacterReferences(plan: GoalShortPlan, references: readonly ShortReferenceInput[]): GoalShortPlan {
+  return goalShortPlanSchema.parse({
+    ...plan,
+    character: { ...plan.character, references: slotted(references, 0) },
+    frame: { ...plan.frame, references: slotted(plan.frame.references, references.length) },
+  });
+}
+
 export function refreshGoalShortPlan(plan: GoalShortPlan, document: NotebookDocument): GoalShortPlan {
   const live = (reference: GoalShortImageRef): GoalShortImageRef => {
     const cell = document.cells.find((candidate) => candidate.id === reference.cellId);

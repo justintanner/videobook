@@ -17,6 +17,9 @@ import type { GraphicsDocument } from "../graphics/model.js";
 import { appendGraphicsLayers } from "../graphics/model.js";
 import { goalTestCharacters, goalTestVideo, settleGoalChain } from "../test-goals.js";
 import { saveWatermarkProfile } from "../watermark-config.js";
+import { v7 as uuidv7 } from "uuid";
+import { saveMainCharacter } from "../goal-short-character.js";
+import { createShortGoal } from "../goal-short-runtime.js";
 import type { GoalSnapshot } from "./goal.js";
 
 describe("goal finishing burns the saved watermark through the graphics renderer", () => {
@@ -360,5 +363,36 @@ describe("goal finishing burns the saved watermark through the graphics renderer
     expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
     expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
     expect(await mediaHash(finalBefore)).toBe(finalBeforeHash);
+  }, testBudget(300_000));
+
+  it("finishes a short from its current clip with a cold open and a burned watermark", async () => {
+    const oldFal = process.env.FAL_API_KEY;
+    process.env.FAL_API_KEY = "test-goal-key";
+    try {
+      const character = notebook().cells.find((cell) => cell.type === "image" && cell.outputArtifactId)!.outputArtifactId!;
+      saveMainCharacter(engine, { referenceArtifactIds: [character] });
+      await pauseBookQueueForTests(bookId);
+      const created = await createShortGoal(engine, bookId, notebookId, { brief: 'he waits, frame: "A bus stop at dusk." beat 1: "He checks the road."', requestId: uuidv7() });
+      const frame = await approve(await status(created.goalId));
+      await settleChain(frame.chainId!, "image");
+      const clip = await approve(await status(created.goalId));
+      const clipId = await settleChain(clip.chainId!, "video");
+      expect((await status(created.goalId)).finish).toMatchObject({ status: "review", sourceArtifactId: clipId });
+      const queued = await invoke({ action: "finish", goal_id: created.goalId, start_seconds: 0, end_seconds: 0.5 });
+      expect(queued.finish).toMatchObject({ status: "running", sourceArtifactId: clipId });
+      await resumeBookQueueForTests(bookId);
+      let finished: GoalSnapshot | null = null;
+      await expect.poll(async () => {
+        finished = await status(created.goalId);
+        return `${finished.status}:${finished.finish?.status ?? "none"}:${finished.finish?.error ?? ""}`;
+      }, { timeout: testBudget(120_000), interval: 500 }).toBe("completed:completed:");
+      const done = finished as GoalSnapshot | null;
+      expect(done?.finalArtifactId).toEqual(expect.any(String));
+      expect(done?.finalArtifactId).not.toBe(clipId);
+      expect(engine.jobs.queue.list({ type: "burn_watermark" }).length).toBeGreaterThan(0);
+    } finally {
+      await pauseBookQueueForTests(bookId);
+      if (oldFal === undefined) delete process.env.FAL_API_KEY; else process.env.FAL_API_KEY = oldFal;
+    }
   }, testBudget(300_000));
 });

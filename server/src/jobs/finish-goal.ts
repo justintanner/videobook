@@ -9,6 +9,7 @@ import { probeVideo } from "../ffmpeg.js";
 import { readGoal, saveGoal, type GoalFinish, type GoalRecord } from "../goal-store.js";
 import { watermarkGraphicsTemplate } from "../graphics/templates.js";
 import { goalAssemblyStale } from "../goal-state.js";
+import { currentShortClip } from "../goal-short-runtime.js";
 import { finishingIdentityKey, watermarkProfileFor } from "../lightning-defaults.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
@@ -35,7 +36,7 @@ function currentFinish(engine: Engine, goalId: string, identity: string): GoalRe
 function finishSourceId(engine: Engine, goal: GoalRecord): string {
   if (goal.assembly && goalAssemblyStale(engine, goal)) throw new Error(ASSEMBLY_MESSAGE);
   if (goal.combined?.status === "completed" && goal.combined.artifactId && !goalAssemblyStale(engine, goal)) return goal.combined.artifactId;
-  const selected = goal.stages.videos?.outputs[0]?.artifactId ?? goal.finish?.sourceArtifactId;
+  const selected = (goal.planVersion === 4 ? currentShortClip(goal) : goal.stages.videos?.outputs[0])?.artifactId ?? goal.finish?.sourceArtifactId;
   if (!selected) throw new Error("Approve a video before finishing it");
   return selected;
 }
@@ -176,7 +177,7 @@ export function registerFinishGoalJob(engine: Engine): void {
 }
 
 export async function queueGoalFinish(engine: Engine, goal: GoalRecord, args: Record<string, unknown>): Promise<GoalRecord> {
-  if (goal.planVersion !== 3) throw new Error(FINISH_MESSAGE);
+  if (goal.planVersion !== 3 && goal.planVersion !== 4) throw new Error(FINISH_MESSAGE);
   if (goal.status === "running") throw new Error("Wait until the video is ready before finishing it");
   if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Review the finished video before approving its cold open");
   const source = await coldOpenSource(engine, finishSourceId(engine, goal));

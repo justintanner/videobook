@@ -5,15 +5,34 @@ function readingOrder(left: NotebookCell, right: NotebookCell): number {
   return left.slot.row - right.slot.row || left.slot.column - right.slot.column || left.id.localeCompare(right.id);
 }
 
+function field(value: unknown, key: string): unknown {
+  return value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
+}
+
+function cellIdsOf(list: unknown): string[] {
+  return Array.isArray(list)
+    ? list.flatMap((entry: unknown) => typeof field(entry, "cellId") === "string" ? [field(entry, "cellId") as string] : [])
+    : [];
+}
+
+function goalReferenceCellIds(goal: NotebookCell): string[] {
+  const { characters, plan, draft } = goal.inputs ?? {};
+  return [
+    ...cellIdsOf(characters),
+    ...cellIdsOf(field(field(plan, "character"), "references")),
+    ...cellIdsOf(field(field(plan, "frame"), "references")),
+    ...cellIdsOf(field(field(draft, "character"), "references")),
+    ...cellIdsOf(field(draft, "extraReferences")),
+  ];
+}
+
 export function arrangeGoalNotebook(
   document: NotebookDocument,
   reserve: Partial<Record<"generators" | "images" | "videos" | "timelines", number>> = {},
 ): NotebookDocument {
   const goals = document.cells.filter(cell => cell.type === "goal").sort(readingOrder);
   if (goals.length === 0) return document;
-  const references = new Set(goals.flatMap(goal => Array.isArray(goal.inputs?.characters)
-    ? goal.inputs.characters.flatMap((character: unknown) => character && typeof character === "object" && "cellId" in character && typeof character.cellId === "string" ? [character.cellId] : [])
-    : []));
+  const references = new Set(goals.flatMap(goalReferenceCellIds));
   const outputs = new Set(document.edges.filter(edge => document.cells.some(cell => cell.id === edge.source && cell.type === "generate_image")).map(edge => edge.target));
   const ordered = [...document.cells].sort((left, right) => left.id.localeCompare(right.id));
   const referenceImages = document.cells.filter(cell => cell.type === "image" && (references.has(cell.id)

@@ -8,6 +8,7 @@ import { cancelChainRun, getChainRun, preflightAndAccept, retryChainRun } from "
 import { compileFrameSteps, compileGoalV3Approval, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalPlanV3Schema, goalStillPrompt, isGoalPlanV3, refreshGoalPlanV3, type GoalGenerationStage, type GoalPlan } from "../goal-plan.js";
 import { buildGoalPlanV3, type GoalPlanV3 } from "../goal-plan-v3.js";
 import { goalShortPlanSchema } from "../goal-short-plan.js";
+import { createShortGoal, retryShortGoal, selectShortVersion, startShortStage, updateShortGoal } from "../goal-short-runtime.js";
 import {
   clearMainCharacterError, describeMainCharacter, reconcileMainCharacter, requireCharacterSheetKey, resolveCharacterReferences,
   saveMainCharacter, startCharacterSheet, type MainCharacterView,
@@ -35,6 +36,7 @@ const failure = (error: unknown): ToolResult => ({ isError: true, content: [{ ty
 const ACTIVE_STATUSES = new Set(["planning", "review", "running"]);
 const V3_ASSEMBLY_MESSAGE = "Scene and video goals do not use storyboard editing or multi-clip assembly.";
 const V3_FINISH_REVIEW_MESSAGE = "The video is in finishing review. Revise the scene or video before generating again.";
+const SHORT_ASSEMBLY_MESSAGE = "A short is one clip extended in place, so it has no assembly or combine.";
 const V3_SETTINGS_MESSAGE = "Scene and video settings stay with this goal. Start a new goal to change them.";
 const STALE_RETRY_MESSAGE = "The references or selected versions changed after this attempt. Regenerate using the current selection instead of retrying the older request.";
 type GoalArgs = Record<string, unknown>;
@@ -55,6 +57,7 @@ async function goalSnapshot(engine: Engine, goal: GoalRecord): Promise<GoalSnaps
 }
 
 function requireModernGoal(goal: GoalRecord): void {
+  if (goal.planVersion === 4) throw new Error(SHORT_ASSEMBLY_MESSAGE);
   if (goal.planVersion === 3) throw new Error(V3_ASSEMBLY_MESSAGE);
   if (goal.planVersion !== 2) throw new Error(LEGACY_GOAL_MESSAGE);
 }
@@ -177,6 +180,7 @@ async function startV3Stage(engine: Engine, goal: GoalRecord, args: GoalArgs, re
 }
 
 async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, regenerate: boolean): Promise<GoalRecord> {
+  if (goal.planVersion === 4) return startShortStage(engine, goal, args, regenerate);
   if (goal.planVersion === 1) throw new Error(LEGACY_GOAL_MESSAGE);
   if (goal.planVersion === 3) return startV3Stage(engine, goal, args, regenerate);
   requireModernGoal(goal);
@@ -289,6 +293,7 @@ function selectV3Version(engine: Engine, goal: GoalRecord, args: GoalArgs): Goal
 }
 
 function selectStill(engine: Engine, goal: GoalRecord, args: GoalArgs): GoalRecord {
+  if (goal.planVersion === 4) return selectShortVersion(engine, goal, args);
   if (goal.planVersion === 1) throw new Error(LEGACY_GOAL_MESSAGE);
   if (goal.planVersion === 3) return selectV3Version(engine, goal, args);
   requireModernGoal(goal);
@@ -333,7 +338,8 @@ async function createGoal(engine: Engine, bookId: string, notebookId: string, ar
       return goalSnapshot(engine, existing);
     }
     const document = readNotebook(engine, notebookId);
-    const supplied = args.plan === undefined ? undefined : z.union([goalPlanV3Schema, goalPlanSchema]).parse(args.plan);
+    const supplied = args.plan === undefined ? undefined : z.union([goalShortPlanSchema, goalPlanV3Schema, goalPlanSchema]).parse(args.plan);
+    if (supplied?.version === 4) return goalSnapshot(engine, await createShortGoal(engine, bookId, notebookId, { brief, requestId, plan: supplied }));
     const goalId = uuidv7();
     const timestamp = new Date().toISOString();
     if (supplied === undefined || isGoalPlanV3(supplied)) {
@@ -415,6 +421,7 @@ async function updateV3Goal(engine: Engine, goal: GoalRecord, args: GoalArgs): P
 }
 
 async function updateGoal(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {
+  if (goal.planVersion === 4) return updateShortGoal(engine, goal, args);
   if (goal.planVersion === 3) return updateV3Goal(engine, goal, args);
   requireModernGoal(goal);
   if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Wait until generation stops before editing the goal");
@@ -445,7 +452,7 @@ function stopStillRun(engine: Engine, goal: GoalRecord): GoalRecord | null {
 }
 
 async function cancelGoal(engine: Engine, goal: GoalRecord, options: { discard?: boolean } = {}): Promise<GoalRecord> {
-  if (goal.planVersion === 3 && goal.finish?.status === "running") {
+  if ((goal.planVersion === 3 || goal.planVersion === 4) && goal.finish?.status === "running") {
     if (goal.finish.jobId) await engine.jobs.queue.abort(goal.finish.jobId, "Finishing cancelled");
     return saveGoal(engine, { ...goal, status: "review", error: null, finish: { ...goal.finish, status: "cancelled", error: null } });
   }
@@ -479,6 +486,7 @@ async function retryV3Goal(engine: Engine, goal: GoalRecord): Promise<GoalRecord
 }
 
 async function retryGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
+  if (goal.planVersion === 4) return retryShortGoal(engine, goal);
   if (goal.planVersion === 1) throw new Error(LEGACY_GOAL_MESSAGE);
   if (goal.planVersion === 3) return retryV3Goal(engine, goal);
   requireModernGoal(goal);
@@ -566,7 +574,7 @@ export function goalDefs(engine: Engine): ToolDef[] {
       generate: z.boolean().optional().describe("character: true makes a paid character sheet that becomes the only reference"),
       start_seconds: z.number().min(0).optional(), end_seconds: z.number().min(0).optional(),
       goal_id: z.string().uuid().optional(), request_id: z.string().min(1).max(200).optional(),
-      brief: z.string().trim().min(1).max(6000).optional(), plan: advertisedAs(z.union([goalPlanV3Schema, goalPlanSchema]), {
+      brief: z.string().trim().min(1).max(6000).optional(), plan: advertisedAs(z.union([goalShortPlanSchema, goalPlanV3Schema, goalPlanSchema]), {
         type: "object",
         description: "A goal plan, usually the plan from a video_goal status result with fields edited in place",
       }).optional(),

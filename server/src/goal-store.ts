@@ -10,7 +10,7 @@ import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 export type GoalStatus = "planning" | "review" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 
 export type GoalEstimate = { usd: number | null; warnings: string[] };
-export type GoalEstimates = Record<GoalGenerationStage | "total", GoalEstimate>;
+export type GoalEstimates = Record<GoalGenerationStage | "total", GoalEstimate> & { segments?: GoalEstimate[] };
 export type GoalStageOutput = { index: number; artifactId: string; cellId: string | null; producerCellId: string | null; address: string | null };
 export type GoalStillAttempt = {
   stage: GoalGenerationStage;
@@ -149,7 +149,10 @@ export function emptyGoalEstimates(): GoalEstimates {
 function estimatesFrom(value: unknown): GoalEstimates {
   const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
   if (!("total" in record)) return { ...emptyGoalEstimates(), videos: estimateFrom(value), total: estimateFrom(value) };
-  return { frame: estimateFrom(record.frame), storyboards: estimateFrom(record.storyboards), videos: estimateFrom(record.videos), total: estimateFrom(record.total) };
+  return {
+    frame: estimateFrom(record.frame), storyboards: estimateFrom(record.storyboards), videos: estimateFrom(record.videos), total: estimateFrom(record.total),
+    ...(Array.isArray(record.segments) ? { segments: record.segments.map(estimateFrom) } : {}),
+  };
 }
 
 function charactersFrom(value: unknown): GoalCharacter[] {
@@ -210,7 +213,7 @@ export function requireGoalContent(engine: Engine, goal: GoalRecord): GoalConten
   return goalContent(cell);
 }
 
-function goalShortContent(cell: NotebookCell): GoalShortContent {
+export function goalShortContent(cell: NotebookCell): GoalShortContent {
   const inputs = cell.inputs ?? {};
   const draft = goalShortDraftSchema.safeParse(inputs.draft);
   const plan = goalShortPlanSchema.safeParse(inputs.plan);
@@ -229,19 +232,19 @@ export function requireGoalShortContent(engine: Engine, goal: GoalRecord): GoalS
   return goalShortContent(cell);
 }
 
-export async function createGoalCell(engine: Engine, notebookId: string, goalId: string, content: GoalContent): Promise<NotebookCell> {
+type GoalTileSource = { cellId: string; targetInput: string };
+
+async function placeGoalTile(engine: Engine, notebookId: string, goalId: string, text: { label: string; prompt: string }, inputs: Record<string, unknown>, sources: readonly GoalTileSource[]): Promise<NotebookCell> {
   const created: { cell: NotebookCell | null } = { cell: null };
   const result = await mutateNotebook(engine, notebookId, "goal_create", (document) => {
     const cell = engine.notebooks.createCell({
       type: "goal",
-      ...goalCellText(content),
+      ...text,
       slot: firstEmptyNotebookGridSlot(notebookOccupiedSlots(document.cells)),
-      inputs: goalCellInputs(goalId, content),
+      inputs,
     });
     created.cell = cell;
-    const edges = content.characters.map((character, index) => engine.notebooks.createEdge({
-      source: character.cellId, target: cell.id, targetInput: index === 0 ? "character" : `character_${index + 1}`,
-    }));
+    const edges = sources.map((source) => engine.notebooks.createEdge({ source: source.cellId, target: cell.id, targetInput: source.targetInput }));
     const arranged = arrangeGoalNotebook({ ...document, cells: [...document.cells, cell], edges: [...document.edges, ...edges] });
     created.cell = arranged.cells.find(candidate => candidate.id === cell.id)!;
     return arranged;
@@ -249,6 +252,29 @@ export async function createGoalCell(engine: Engine, notebookId: string, goalId:
   if (!result.ok) throw new Error(result.error.message);
   if (!created.cell) throw new Error("The goal tile could not be placed");
   return created.cell;
+}
+
+export async function createGoalCell(engine: Engine, notebookId: string, goalId: string, content: GoalContent): Promise<NotebookCell> {
+  return placeGoalTile(engine, notebookId, goalId, goalCellText(content), goalCellInputs(goalId, content), content.characters.map((character, index) => ({
+    cellId: character.cellId, targetInput: index === 0 ? "character" : `character_${index + 1}`,
+  })));
+}
+
+function shortTileText(content: GoalShortContent): { label: string; prompt: string } {
+  return { label: content.plan?.title ?? GOAL_TILE_LABEL, prompt: content.brief };
+}
+
+function shortTileInputs(goalId: string, content: GoalShortContent): Record<string, unknown> {
+  return { goalId, revision: content.revision, plan: content.plan, draft: content.draft, estimate: content.estimate };
+}
+
+function shortTileSources(content: GoalShortContent): GoalTileSource[] {
+  const characters = content.plan?.character.references ?? content.draft?.character.references ?? [];
+  return characters.map((reference, index) => ({ cellId: reference.cellId, targetInput: index === 0 ? "character" : `character_${index + 1}` }));
+}
+
+export async function createGoalShortCell(engine: Engine, notebookId: string, goalId: string, content: GoalShortContent): Promise<NotebookCell> {
+  return placeGoalTile(engine, notebookId, goalId, shortTileText(content), shortTileInputs(goalId, content), shortTileSources(content));
 }
 
 async function writeGoalTile(engine: Engine, goal: GoalRecord, text: { label: string; prompt: string }, inputs: Record<string, unknown>): Promise<void> {
@@ -267,7 +293,5 @@ export async function writeGoalContent(engine: Engine, goal: GoalRecord, content
 }
 
 export async function writeGoalShortContent(engine: Engine, goal: GoalRecord, content: GoalShortContent): Promise<void> {
-  await writeGoalTile(engine, goal, { label: content.plan?.title ?? GOAL_TILE_LABEL, prompt: content.brief }, {
-    goalId: goal.goalId, revision: content.revision, plan: content.plan, draft: content.draft, estimate: content.estimate,
-  });
+  await writeGoalTile(engine, goal, shortTileText(content), shortTileInputs(goal.goalId, content));
 }
