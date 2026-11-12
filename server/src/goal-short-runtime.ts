@@ -34,6 +34,8 @@ type ShortReference = Omit<GoalShortImageRef, "slot">;
 const EXTRA_REFERENCE_LIMIT = 12;
 const NO_CHARACTER_REFERENCE = "Give the main character a reference image first: generate a character sheet or choose image cells.";
 const NO_FAL_KEY = "Set FAL_API_KEY in Settings before generating this stage";
+const NO_OPENAI_KEY = "Set OPENAI_API_KEY in Settings to revise with feedback, or edit the prompt and regenerate.";
+const REVISE_TIMEOUT_MS = 240_000;
 const SETTINGS_LOCKED = "Models, resolution, aspect ratio and rules stay with this short once its frame exists. Start a new /goal to change them.";
 const REFERENCES_LOCKED = "The character and references stay with this short. Start a new /goal to change them.";
 const SEGMENT_LOCKED = "A generated segment keeps its place and seconds. Regenerate it, or start a new /goal to change them.";
@@ -262,6 +264,29 @@ export async function priceShortFrame(engine: Engine, goal: GoalRecord, characte
   await writeGoalShortContent(engine, goal, { ...content, estimate: await estimateShort(engine, plan) });
 }
 
+async function rewrittenShortPrompt(goal: GoalRecord, stage: ShortStage, index: number, feedback: string, revision: number): Promise<string> {
+  try {
+    const result = await queue.enqueueAndWait<{ prompt: string }>(`goal-revise-${goal.goalId}-${uuidv7()}`, {
+      type: "revise_goal_prompt", bookId: goal.bookId, goalId: goal.goalId, stage, index, feedback, revision,
+    }, REVISE_TIMEOUT_MS);
+    return result.prompt;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/^Job \d+ timed out/u.test(message)) throw new Error("Writing the feedback into the prompt took too long. Revise again, or edit the prompt and regenerate.");
+    throw new Error(message.replace(/^Job \d+ (?:failed|aborted): /u, ""));
+  }
+}
+
+async function revisedShortContent(engine: Engine, goal: GoalRecord, content: GoalShortContent & { plan: GoalShortPlan }, stage: ShortStage, index: number, feedback: string) {
+  const prompt = await rewrittenShortPrompt(goal, stage, index, feedback, content.revision);
+  const plan = goalShortPlanSchema.parse(stage === "frame"
+    ? { ...content.plan, frame: { ...content.plan.frame, prompt } }
+    : { ...content.plan, segments: content.plan.segments.map((segment, position) => position === index ? { ...segment, prompt } : segment) });
+  const next = { ...content, plan, estimate: await estimateShort(engine, plan), revision: content.revision + 1 };
+  await writeGoalShortContent(engine, goal, next);
+  return next;
+}
+
 async function clipSeconds(engine: Engine, artifactId: string): Promise<number> {
   const manifest = await engine.files.manifest(artifactId);
   const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, "video") : null;
@@ -321,10 +346,12 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   const { stage, index } = shortTarget(goal, content.plan, args, regenerate);
   const feedback = args.action === "revise" ? feedbackSchema.parse(args.feedback) : null;
   if (!process.env.FAL_API_KEY) throw new Error(NO_FAL_KEY);
+  if (feedback && !getApiKey("OPENAI_API_KEY")) throw new Error(NO_OPENAI_KEY);
   if (stage === "frame" && content.plan.character.references.length === 0) content = await adoptCharacterReferences(engine, goal, content);
   if (stage === "videos") outputAddress(readNotebook(engine, goal.notebookId), selectedOutput(goal, "frame", 0));
   const sourceClip = stage === "videos" && index > 0 ? await continuationSource(engine, goal, index) : null;
   await ensureShortSpace(engine, goal, stage);
+  if (feedback) content = await revisedShortContent(engine, goal, content, stage, index, feedback);
   const document = readNotebook(engine, goal.notebookId);
   const plan = refreshGoalShortPlan(content.plan, document);
   const source = stage === "videos" ? segmentSource(goal, index) : null;
@@ -335,10 +362,9 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
       throw new Error("The frame prompt or references changed after this frame was made. Regenerate the frame before continuing.");
     }
   }
-  const compiled = stage === "frame" ? compileShortFrameStep(plan)
+  const step = stage === "frame" ? compileShortFrameStep(plan)
     : sourceClip ? compileShortContinuationStep(plan, index, outputAddress(document, sourceClip))
       : compileShortClipStep(plan, outputAddress(document, selectedOutput(goal, "frame", 0)));
-  const step = feedback ? { ...compiled, params: { ...compiled.params, prompt: `${String(compiled.params.prompt)}\n\n${feedback}` } } : compiled;
   const fingerprint = await shortFingerprint(engine, plan, stage, index, source);
   const previous = goal.stages[stage];
   const attemptCount = previous?.attempts?.length ?? 0;

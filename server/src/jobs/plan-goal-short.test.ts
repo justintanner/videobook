@@ -188,6 +188,23 @@ describe("plan_goal for a short", () => {
     expect(requireGoalShortContent(engine, goal).plan?.frame.prompt).toBe(PLAN.frame);
   });
 
+  it("re-asks once when a planner beat names a phone the brief never asked for, and drops a phone sentence the second answer keeps", async () => {
+    const phoned = { ...PLAN, beats: ["He checks the road for the bus. The phone stays at chest height, keeping him framed.", PLAN.beats[1]] };
+    answers = [phoned, phoned];
+    const goal = await plan(await plannedShort("he waits for a bus in the rain, 20 seconds"));
+    expect(requests).toHaveLength(2);
+    expect(requests[1]!.input.at(-1)!.content).toContain("Leave the phone out of the beat 1: call it the camera, which someone off screen holds.");
+    expect(goal).toMatchObject({ status: "review", error: null });
+    expect(requireGoalShortContent(engine, goal).plan!.segments.map((segment) => segment.prompt)).toEqual(["He checks the road for the bus.", PLAN.beats[1]]);
+  });
+
+  it("lets the planner give him a phone when the brief does", async () => {
+    answers = [{ ...PLAN, beats: ["He checks his phone for the bus time.", PLAN.beats[1]] }];
+    const goal = await plan(await plannedShort("he checks his phone at a bus stop, 20 seconds"));
+    expect(requests).toHaveLength(1);
+    expect(requireGoalShortContent(engine, goal).plan!.segments[0]!.prompt).toBe("He checks his phone for the bus time.");
+  });
+
   it("fails the goal when the second answer is still over a ceiling", async () => {
     answers = [{ ...PLAN, beats: [words(46), PLAN.beats[1]] }, { ...PLAN, beats: [words(50), PLAN.beats[1]] }];
     const goal = await plan(await plannedShort("he waits for a bus, 20 seconds"));

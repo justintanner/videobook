@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { NotebookDocument } from "videobook-engine";
+import { buildGoalShortPlan } from "./goal-short-plan.js";
 import {
-  shortAuthoredCopy, shortPlannerBrief, shortPlannerInstructions, shortPlannerIssues, shortPlannerNeeded, shortPlannerResponseSchema, shortTitle,
+  shortAuthoredCopy, shortPlannerBrief, shortPlannerInstructions, shortPlannerIssues, shortPlannerNeeded, shortPlannerResponseSchema, shortRevisionInstructions,
+  shortRevisionIssues, shortRevisionPart, shortRevisionResponseSchema, shortTitle,
 } from "./goal-short-planner.js";
 import { SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES } from "./goal-short-rules.js";
 import { loadGuide } from "./tools/rewrite-prompt.js";
@@ -104,6 +106,16 @@ describe("shortPlannerIssues", () => {
     ]);
   });
 
+  it("flags a planner-written frame or beat that names a phone unless phones are allowed, and leaves the title and authored parts alone", () => {
+    const phoned = { title: "Phone at the bus stop", frame: "He stands at the stop, phone at chest height.", beats: ["He checks the road. The phone stays at chest height, keeping him framed.", "He boards the bus."] };
+    expect(shortPlannerIssues(phoned, 2, undefined, false)).toEqual([
+      { kind: "phone", message: "Leave the phone out of the frame: call it the camera, which someone off screen holds." },
+      { kind: "phone", message: "Leave the phone out of the beat 1: call it the camera, which someone off screen holds." },
+    ]);
+    expect(shortPlannerIssues(phoned, 2)).toEqual([]);
+    expect(shortPlannerIssues(phoned, 2, { frame: phoned.frame, beats: [phoned.beats[0]!, null] }, false)).toEqual([]);
+  });
+
   it("leaves authored parts unchecked", () => {
     const authored = { frame: "A cinematic bus stop.", beats: [words(60), null] };
     expect(shortPlannerIssues({ ...clean, frame: authored.frame, beats: [authored.beats[0]!, "He boards the bus."] }, 2, authored)).toEqual([]);
@@ -125,8 +137,64 @@ describe("shortPlannerInstructions", () => {
     expect(instructions).toContain("3 beats for MiniMax H3 Max, one per segment: beat 1 lasts 11 seconds, beat 2 lasts 10 seconds, beat 3 lasts 10 seconds. The aspect ratio is 9:16.");
     expect(instructions).toContain("Word ceilings, not targets: title 6, frame 40, each beat 45.");
     expect(instructions).toContain("Each later beat continues from where the previous one ends, in the same place, and every beat ends with the main character in frame.");
+    expect(instructions).toContain("Plan a short that looks like real phone footage filmed by someone off screen, starring");
+    expect(instructions).toContain("Call it the camera, never the phone: someone off screen holds it.");
+    expect(instructions).toContain('Say what is there rather than what is not, such as "both hands hang empty at the sides" rather than "no phone in hand"');
+    expect(instructions).toContain("Give the main character a phone only when the brief does.");
     expect(instructions).toContain((await loadGuide("minimax_h3")).trim());
     expect(instructions).toContain((await loadGuide("gpt_image_26")).trim());
+  });
+});
+
+describe("short revisions", () => {
+  const plan = buildGoalShortPlan({
+    title: "Waiting", aspectRatio: "9:16", character: { name: "Main character", description: "a man in a green shirt", references: [] },
+    framePrompt: "He stands under a bus shelter at dusk.", beats: ["He checks the road. The phone stays at chest height, keeping him framed.", "He boards the bus."],
+    segmentSeconds: [10, 10], extraReferences: [],
+  });
+
+  it("names the part it rewrites with its ceiling and current prompt", () => {
+    expect(shortRevisionPart(plan, "frame", 0)).toEqual({ name: "frame", ceiling: 40, prompt: "He stands under a bus shelter at dusk." });
+    expect(shortRevisionPart(plan, "videos", 1)).toEqual({ name: "beat 2", ceiling: 45, prompt: "He boards the bus." });
+    expect(() => shortRevisionPart(plan, "videos", 2)).toThrow("This short has 2 segments.");
+    expect(z.toJSONSchema(shortRevisionResponseSchema(shortRevisionPart(plan, "videos", 0)))).toMatchObject({
+      type: "object", additionalProperties: false, required: ["prompt"],
+    });
+  });
+
+  it("tells the rewrite to drop what the feedback contradicts, with the plan's own rule lines and the one guide its model needs", async () => {
+    const saved = { ...plan, rules: { frame: "Earlier frame rule.", video: "Earlier video rule.", silence: "Earlier silence rule." } };
+    const beat = await shortRevisionInstructions(saved, "videos", 0);
+    expect(beat).toContain("Rewrite beat 1 of 2 for MiniMax H3 Max, which lasts 10 seconds, so it follows the operator's feedback.");
+    expect(beat).toContain("It starts from the opening frame and ends with the main character in frame.");
+    expect(beat).toContain("Remove or rewrite every sentence the feedback contradicts, so the prompt no longer says anything the feedback rules out.");
+    expect(beat).toContain("Call it the camera, never the phone: someone off screen holds it.");
+    expect(beat).toContain('"both hands hang empty at the sides" rather than "no phone in hand"');
+    expect(beat).toContain("Give the main character a phone only when the feedback or the brief does.");
+    expect(beat).toContain("Write at most 45 words, and answer with the whole revised beat 1.");
+    expect(beat).toContain("Video: Earlier video rule.\nSilence: Earlier silence rule.");
+    expect(beat).not.toContain("Earlier frame rule.");
+    for (const avoid of SHORT_AVOID) expect(beat).toContain(avoid);
+    expect(beat).toContain((await loadGuide("minimax_h3")).trim());
+    expect(beat).not.toContain((await loadGuide("gpt_image_26")).trim());
+    expect(await shortRevisionInstructions(saved, "videos", 1)).toContain("It continues from where the beat before it ends, in the same place, and ends with the main character in frame.");
+    const frame = await shortRevisionInstructions(saved, "frame", 0);
+    expect(frame).toContain("Rewrite the opening frame prompt for GPT Image 2.6 so it follows the operator's feedback.");
+    expect(frame).toContain("Frame: Earlier frame rule.");
+    expect(frame).not.toContain("Earlier video rule.");
+    expect(frame).toContain((await loadGuide("gpt_image_26")).trim());
+  });
+
+  it("checks a rewritten prompt for its ceiling, banned words and an unwanted phone", () => {
+    const part = shortRevisionPart(plan, "videos", 0);
+    expect(shortRevisionIssues("He checks the road with both hands empty.", part, false)).toEqual([]);
+    expect(shortRevisionIssues(`A cinematic ${words(45)}. The phone stays at chest height.`, part, false)).toEqual([
+      { kind: "ceiling", message: "Shorten the beat 1 to at most 45 words; it has 53." },
+      { kind: "banned", message: 'Remove "cinematic" from the beat 1.' },
+      { kind: "phone", message: "Leave the phone out of the beat 1: call it the camera, which someone off screen holds." },
+    ]);
+    expect(shortRevisionIssues("He checks his phone.", part, true)).toEqual([]);
+    expect(shortRevisionIssues(" ", part, true)).toEqual([{ kind: "empty", message: "Write the whole revised beat 1." }]);
   });
 });
 

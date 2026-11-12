@@ -91,6 +91,12 @@ approval with its estimate:
 4. **Finish:** review the cold open; **Finish** adds it and burns the saved
    watermark into the finished short.
 
+**Revising.** A revision is a short instruction for the frame or a clip.
+Before the paid step, the planner's model rewrites that frame prompt or beat to
+follow it, replacing any sentence the instruction contradicts instead of adding
+the instruction beside it, and the short keeps the rewritten prompt. Revising
+uses `OPENAI_API_KEY` and is billed like planning.
+
 **Continuations.** A short longer than 15 seconds is planned as up to four
 clips. Each clip after the first is an H3 Max Extend continuation of the clip
 before it, with its own beat, estimate and approval. **Add a beat** on the
@@ -100,9 +106,10 @@ date, and the next approval regenerates from the first stale one.
 
 **Always added.** Three rule lines are appended to every prompt and shown
 read-only under **Always added**: a candid phone photo look for the frame,
-real-time handheld phone footage for the clips, and silence. He never speaks:
-no dialogue, voiceover, narration, singing or music, while natural ambient
-sound stays.
+real-time phone footage filmed by someone off screen for the clips, and
+silence. He never speaks: no dialogue, voiceover, narration, singing or music,
+while natural ambient sound stays. Planned beats call the camera the camera,
+so he holds a phone only when the brief gives him one.
 
 **AI-tell check.** On request, **Check for AI tells** looks at the frame, or at
 four frames of a clip's new footage, beside the character reference and lists
@@ -111,9 +118,9 @@ skin, warped objects, drift from the reference, or mouth movement that reads as
 speech. It is billed like planning and never blocks a step.
 
 **Models and keys.** Frames, character sheets and clips use GPT Image 2.6 and
-MiniMax H3 Max through fal with `FAL_API_KEY`. Planning and the AI-tell check
-use `OPENAI_API_KEY`; a brief that quotes the frame and every beat needs no
-planning. A short's clips and finished video skip the speech-to-text pass that
+MiniMax H3 Max through fal with `FAL_API_KEY`. Planning, revising and the
+AI-tell check use `OPENAI_API_KEY`; a brief that quotes the frame and every
+beat needs no planning. A short's clips and finished video skip the speech-to-text pass that
 imported videos get, so no transcription provider is called. H3 Max is billed per requested second, so its estimates are lower
 bounds and read "at least". GPT Image 2.6 is priced from fal's historical
 average, which needs `FAL_ADMIN_API_KEY`; without it the frame and the sheet

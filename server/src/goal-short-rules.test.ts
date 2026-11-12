@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES, shortBannedWords, stripShortBannedWords } from "./goal-short-rules.js";
+import {
+  SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES, shortBannedWords, shortMentionsPhone, shortRulesOutPhone, shortWantsPhone, stripShortBannedWords,
+  withoutShortPhoneSentences,
+} from "./goal-short-rules.js";
 
 describe("short rule lines", () => {
   it("keeps the frame, video and silence lines of the plan word for word", () => {
     expect(SHORT_RULES).toEqual({
       frame: "Candid phone photo taken in available light in an ordinary real place. Natural colour, unretouched skin, slightly imperfect framing. No text, captions, logos, borders or watermarks.",
-      video: "Real phone footage in one continuous take at real-time speed, with slight handheld movement and natural weight and physics. No slow motion, cuts, zooms, effects or on-screen text.",
+      video: "Real phone footage filmed by someone off screen, in one continuous take at real-time speed, with slight handheld camera movement and natural weight and physics. No slow motion, cuts, zooms, effects or on-screen text.",
       silence: "The main character never speaks: no dialogue, voiceover, narration or singing, lips closed. No music. Natural ambient sound only.",
     });
+  });
+
+  it("puts the phone of the video line with whoever films off screen, never in the main character's hand", () => {
+    expect(SHORT_RULES.video.match(/[^.]*phone[^.]*/giu)).toEqual(["Real phone footage filmed by someone off screen, in one continuous take at real-time speed, with slight handheld camera movement and natural weight and physics"]);
+    expect(`${SHORT_RULES.video} ${SHORT_RULES.silence}`).not.toMatch(/\b(?:holds?|holding|carr(?:y|ies|ying)|hand)\b/iu);
   });
 
   it("names the main character and the same person rather than a pronoun, so a new description still reads", () => {
@@ -69,5 +77,36 @@ describe("stripShortBannedWords", () => {
     const stripped = stripShortBannedWords(everything);
     expect(shortBannedWords(stripped)).toEqual([]);
     expect(stripped).toBe(Array.from(SHORT_BANNED_WORDS, () => "light").join(", "));
+  });
+});
+
+describe("phones in short prompts", () => {
+  it("finds a phone by any of its names, and nothing inside other words", () => {
+    for (const text of ["The phone stays at chest height.", "He checks his smartphone", "an iPhone", "PHONES on the bench", "a payphone", "his cell phone", "a cellphone"]) {
+      expect(shortMentionsPhone(text), text).toBe(true);
+    }
+    for (const text of ["He wears headphones", "a phonetic sign", "a telephoto look", "He waits for the bus"]) expect(shortMentionsPhone(text), text).toBe(false);
+  });
+
+  it("reads feedback that rules a phone out, clause by clause", () => {
+    for (const text of ["He does not hold a phone.", "He doesn't hold a phone", "He doesn’t carry his phone", "No phone.", "He waits without his phone", "Never a phone in his hand"]) {
+      expect(shortRulesOutPhone(text), text).toBe(true);
+    }
+    for (const text of ["He checks his phone.", "No, he holds a phone.", "The bus shows no writing. He holds his phone.", "He does not look up"]) {
+      expect(shortRulesOutPhone(text), text).toBe(false);
+    }
+  });
+
+  it("wants a phone only when one is asked for and not ruled out", () => {
+    expect(shortWantsPhone("he checks his phone at the bus stop")).toBe(true);
+    expect(shortWantsPhone("A bus splashes him. He does not hold a phone.")).toBe(false);
+    expect(shortWantsPhone("he waits for a bus in the rain")).toBe(false);
+  });
+
+  it("drops each sentence that names a phone and keeps the rest word for word", () => {
+    expect(withoutShortPhoneSentences("He waits under the shelter. The phone stays at chest height, keeping him framed. Rain patters on the roof."))
+      .toBe("He waits under the shelter. Rain patters on the roof.");
+    expect(withoutShortPhoneSentences("He checks the road!  A bus passes? The iPhone shakes.")).toBe("He checks the road! A bus passes?");
+    expect(withoutShortPhoneSentences("The phone stays at chest height.")).toBe("");
   });
 });

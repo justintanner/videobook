@@ -3,18 +3,22 @@ import type { NotebookDocument } from "videobook-engine";
 import { resolveNotebookCellArtifactId } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { replaceNotebookMentions } from "videobook-engine/notebook-mentions";
-import { SHORT_WORD_CEILINGS, type ShortAspectRatio } from "./goal-short-plan.js";
-import { SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES, shortBannedWords } from "./goal-short-rules.js";
+import { SHORT_WORD_CEILINGS, type GoalShortPlan, type ShortAspectRatio } from "./goal-short-plan.js";
+import { SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES, shortBannedWords, shortMentionsPhone } from "./goal-short-rules.js";
 import { loadGuide } from "./tools/rewrite-prompt.js";
 
 const LABELLED = /(?<![\p{L}\p{N}])(frame|video|beat\s*(\d+))\s*:\s*["“]([^"”]*)["”]/giu;
+const CAMERA_LINE = "Call it the camera, never the phone: someone off screen holds it.";
+const POSITIVE_LINE = 'Say what is there rather than what is not, such as "both hands hang empty at the sides" rather than "no phone in hand": the models tend to show any object a prompt names, even after "no" or "not".';
 const QUOTED = /["“]([^"”]*)["”]/gu;
 
 export type ShortAuthoredCopy = { frame: string | null; beats: (string | null)[] };
 
 export type ShortPlannerResponse = { title: string; frame: string; beats: string[] };
 
-export type ShortPlannerIssue = { kind: "count" | "empty" | "ceiling" | "banned"; message: string };
+export type ShortPlannerIssue = { kind: "count" | "empty" | "ceiling" | "banned" | "phone"; message: string };
+
+export type ShortRevisionPart = { name: string; ceiling: number };
 
 function segments(count: number): string {
   return `${count} ${count === 1 ? "segment" : "segments"}`;
@@ -77,24 +81,46 @@ function wordCount(text: string): number {
   return text.trim().split(/\s+/u).filter(Boolean).length;
 }
 
-export function shortPlannerIssues(response: ShortPlannerResponse, segmentCount: number, authored?: ShortAuthoredCopy): ShortPlannerIssue[] {
+function partIssues(part: ShortRevisionPart, text: string, phones: boolean, empty = `Write the ${part.name}.`): ShortPlannerIssue[] {
+  const issues: ShortPlannerIssue[] = [];
+  const words = wordCount(text);
+  if (words === 0) issues.push({ kind: "empty", message: empty });
+  if (words > part.ceiling) issues.push({ kind: "ceiling", message: `Shorten the ${part.name} to at most ${part.ceiling} words; it has ${words}.` });
+  const banned = shortBannedWords(text);
+  if (banned.length > 0) issues.push({ kind: "banned", message: `Remove ${banned.map((word) => `"${word}"`).join(", ")} from the ${part.name}.` });
+  if (!phones && shortMentionsPhone(text)) issues.push({ kind: "phone", message: `Leave the phone out of the ${part.name}: call it the camera, which someone off screen holds.` });
+  return issues;
+}
+
+export function shortPlannerIssues(response: ShortPlannerResponse, segmentCount: number, authored?: ShortAuthoredCopy, phones = true): ShortPlannerIssue[] {
   const issues: ShortPlannerIssue[] = [];
   if (response.beats.length !== segmentCount) {
     issues.push({ kind: "count", message: `Write exactly ${segmentCount} beats, one per segment, not ${response.beats.length}.` });
   }
   const parts = [
-    { name: "title", text: response.title, ceiling: SHORT_WORD_CEILINGS.title, fixed: false },
-    { name: "frame", text: response.frame, ceiling: SHORT_WORD_CEILINGS.frame, fixed: authored?.frame != null },
-    ...response.beats.map((text, index) => ({ name: `beat ${index + 1}`, text, ceiling: SHORT_WORD_CEILINGS.beat, fixed: authored?.beats[index] != null })),
+    { name: "title", text: response.title, ceiling: SHORT_WORD_CEILINGS.title, fixed: false, prompt: false },
+    { name: "frame", text: response.frame, ceiling: SHORT_WORD_CEILINGS.frame, fixed: authored?.frame != null, prompt: true },
+    ...response.beats.map((text, index) => ({ name: `beat ${index + 1}`, text, ceiling: SHORT_WORD_CEILINGS.beat, fixed: authored?.beats[index] != null, prompt: true })),
   ];
-  for (const part of parts.filter((candidate) => !candidate.fixed)) {
-    const words = wordCount(part.text);
-    if (words === 0) issues.push({ kind: "empty", message: `Write the ${part.name}.` });
-    if (words > part.ceiling) issues.push({ kind: "ceiling", message: `Shorten the ${part.name} to at most ${part.ceiling} words; it has ${words}.` });
-    const banned = shortBannedWords(part.text);
-    if (banned.length > 0) issues.push({ kind: "banned", message: `Remove ${banned.map((word) => `"${word}"`).join(", ")} from the ${part.name}.` });
-  }
+  for (const part of parts.filter((candidate) => !candidate.fixed)) issues.push(...partIssues(part, part.text, phones || !part.prompt));
   return issues;
+}
+
+export function shortRevisionPart(plan: GoalShortPlan, stage: "frame" | "videos", index: number): ShortRevisionPart & { prompt: string } {
+  if (stage === "frame") return { name: "frame", ceiling: SHORT_WORD_CEILINGS.frame, prompt: plan.frame.prompt };
+  const segment = plan.segments[index];
+  if (!segment) throw new RangeError(`This short has ${plan.segments.length} segments.`);
+  return { name: `beat ${index + 1}`, ceiling: SHORT_WORD_CEILINGS.beat, prompt: segment.prompt };
+}
+
+export function shortRevisionIssues(prompt: string, part: ShortRevisionPart, phones: boolean): ShortPlannerIssue[] {
+  return partIssues(part, prompt, phones, `Write the whole revised ${part.name}.`);
+}
+
+export function shortRevisionResponseSchema(part: ShortRevisionPart) {
+  return z.object({
+    prompt: z.string().describe(`The whole revised ${part.name}, at most ${part.ceiling} words`),
+  }).strict();
 }
 
 export async function shortPlannerInstructions(input: {
@@ -105,10 +131,12 @@ export async function shortPlannerInstructions(input: {
   const [h3Guide, imageGuide] = await Promise.all([loadGuide("minimax_h3"), loadGuide("gpt_image_26")]);
   const count = input.segmentSeconds.length;
   return [
-    `Plan a short of real phone footage starring ${input.character.name}: ${input.character.description}. The main character never speaks.`,
+    `Plan a short that looks like real phone footage filmed by someone off screen, starring ${input.character.name}: ${input.character.description}. The main character never speaks.`,
     `Return JSON with a title, one opening frame prompt for GPT Image 2.6 and ${count === 1 ? "one beat" : `${count} beats`} for MiniMax H3 Max, one per segment: ${input.segmentSeconds.map((seconds, index) => `beat ${index + 1} lasts ${seconds} seconds`).join(", ")}. The aspect ratio is ${input.aspectRatio}.`,
     `Word ceilings, not targets: title ${SHORT_WORD_CEILINGS.title}, frame ${SHORT_WORD_CEILINGS.frame}, each beat ${SHORT_WORD_CEILINGS.beat}.`,
     "Beat 1 starts from the opening frame. Each later beat continues from where the previous one ends, in the same place, and every beat ends with the main character in frame. One action per beat, in the present tense, with what the camera does and what is heard.",
+    CAMERA_LINE,
+    `${POSITIVE_LINE} Give the main character a phone only when the brief does.`,
     "The images are references, labelled Reference 1, Reference 2 in order, and the brief names them the same way. Describe what they show in plain words instead of naming or numbering them, and write no @tokens.",
     "Write only the parts listed under write and keep the fixed parts exactly as given.",
     "These lines are added to the prompts after you write them. Do not repeat them and do not contradict them:",
@@ -119,5 +147,27 @@ export async function shortPlannerInstructions(input: {
     `Never use these words: ${SHORT_BANNED_WORDS.join(", ")}.`,
     `--- MiniMax H3 prompting guide ---\n${h3Guide.trim()}`,
     `--- GPT Image 2.6 prompting guide ---\n${imageGuide.trim()}`,
+  ].join("\n");
+}
+
+export async function shortRevisionInstructions(plan: GoalShortPlan, stage: "frame" | "videos", index: number): Promise<string> {
+  const frame = stage === "frame";
+  const part = shortRevisionPart(plan, stage, index);
+  const guide = await loadGuide(frame ? "gpt_image_26" : "minimax_h3");
+  return [
+    `Revise one prompt of a short that looks like real phone footage filmed by someone off screen, starring ${plan.character.name}: ${plan.character.description}. The main character never speaks.`,
+    frame
+      ? "Rewrite the opening frame prompt for GPT Image 2.6 so it follows the operator's feedback. It describes the one still picture the short opens on."
+      : `Rewrite beat ${index + 1} of ${plan.segments.length} for MiniMax H3 Max, which lasts ${plan.segments[index]!.seconds} seconds, so it follows the operator's feedback. One action in the present tense, with what the camera does and what is heard. ${index === 0 ? "It starts from the opening frame" : "It continues from where the beat before it ends, in the same place,"} and ends with the main character in frame.`,
+    "Change only what the feedback asks for and keep every other detail, in the same words where you can.",
+    "Remove or rewrite every sentence the feedback contradicts, so the prompt no longer says anything the feedback rules out. Never keep the old sentence and add the feedback beside it.",
+    CAMERA_LINE,
+    `${POSITIVE_LINE} Give the main character a phone only when the feedback or the brief does.`,
+    `Write at most ${part.ceiling} words, and answer with the whole revised ${part.name}.`,
+    "These lines are added to the prompt after you write it. Do not repeat them and do not contradict them:",
+    ...(frame ? [`Frame: ${plan.rules.frame}`] : [`Video: ${plan.rules.video}`, `Silence: ${plan.rules.silence}`]),
+    `Avoid: ${SHORT_AVOID.join("; ")}.`,
+    `Never use these words: ${SHORT_BANNED_WORDS.join(", ")}.`,
+    `--- ${frame ? "GPT Image 2.6" : "MiniMax H3"} prompting guide ---\n${guide.trim()}`,
   ].join("\n");
 }

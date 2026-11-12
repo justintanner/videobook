@@ -1,6 +1,6 @@
 export const SHORT_RULES = {
   frame: "Candid phone photo taken in available light in an ordinary real place. Natural colour, unretouched skin, slightly imperfect framing. No text, captions, logos, borders or watermarks.",
-  video: "Real phone footage in one continuous take at real-time speed, with slight handheld movement and natural weight and physics. No slow motion, cuts, zooms, effects or on-screen text.",
+  video: "Real phone footage filmed by someone off screen, in one continuous take at real-time speed, with slight handheld camera movement and natural weight and physics. No slow motion, cuts, zooms, effects or on-screen text.",
   silence: "The main character never speaks: no dialogue, voiceover, narration or singing, lips closed. No music. Natural ambient sound only.",
 } as const;
 
@@ -66,4 +66,25 @@ function tidied(text: string): string {
 export function stripShortBannedWords(text: string): string {
   if (shortBannedWords(text).length === 0) return text;
   return tidied(SHORT_BANNED_WORDS.reduce((current, word) => current.replace(wholeWord(word, "giu", "(?:[^\\S\\n]*,)?"), ""), text));
+}
+
+const PHONE = "(?<![\\p{L}\\p{N}])(?:i|smart|cell|tele|pay)?phones?(?![\\p{L}\\p{N}])";
+const PHONE_WORD = new RegExp(PHONE, "iu");
+const NO_PHONE = new RegExp(`(?:(?<![\\p{L}\\p{N}])(?:no|not|never|nor|without)|n['’]t)(?![\\p{L}\\p{N}])[^.!?;:,\\n]*?${PHONE}`, "iu");
+
+export function shortMentionsPhone(text: string): boolean {
+  return PHONE_WORD.test(text);
+}
+
+export function shortRulesOutPhone(text: string): boolean {
+  return NO_PHONE.test(text);
+}
+
+export function shortWantsPhone(text: string): boolean {
+  return shortMentionsPhone(text) && !shortRulesOutPhone(text);
+}
+
+export function withoutShortPhoneSentences(text: string): string {
+  if (!shortMentionsPhone(text)) return text;
+  return text.trim().split(/(?<=[.!?])\s+/u).filter((sentence) => !shortMentionsPhone(sentence)).join(" ");
 }

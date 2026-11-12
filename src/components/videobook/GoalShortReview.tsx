@@ -67,6 +67,7 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
   const [beats, setBeats] = useState(() => plan.segments.map(segment => segment.prompt))
   const [feedback, setFeedback] = useState('')
   const [clipFeedback, setClipFeedback] = useState<Record<number, string>>({})
+  const [revising, setRevising] = useState<string | null>(null)
   const [beat, setBeat] = useState({ prompt: '', seconds: 5 })
   const [character, setCharacter] = useState<MainCharacterView | null>(null)
   const [characterDraft, setCharacterDraft] = useState({ name: '', description: '', cells: '' })
@@ -102,7 +103,12 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
   const saved = async () => dirty ? shortSnapshot(await onAction({ action: 'update', revision: goal.revision, plan: draft })) : goal
   const generate = (action: 'approve' | 'regenerate' | 'revise', stage: 'frame' | 'videos', index = 0, note?: string) => onRun(async () => {
     const current = await saved()
-    await onAction({ action, revision: current.revision, stage, index, ...(note ? { feedback: note } : {}) })
+    if (note) setRevising(stage === 'frame' ? 'the frame prompt' : `beat ${index + 1}`)
+    try {
+      await onAction({ action, revision: current.revision, stage, index, ...(note ? { feedback: note } : {}) })
+    } finally {
+      setRevising(null)
+    }
     if (note && stage === 'frame') setFeedback('')
     if (note && stage === 'videos') setClipFeedback(current => ({ ...current, [index]: '' }))
   })
@@ -151,6 +157,7 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
     </nav>
     <p className="goal-panel-muted">{plan.segments.length === 1 ? '1 clip' : `${plan.segments.length} clips`} · {totalSeconds}s · {plan.aspectRatio} · GPT Image 2.6 frame · H3 Max video</p>
     {running && <p role="status">{goal.stage === 'videos' ? 'Generating a clip.' : 'Generating the frame.'}</p>}
+    {revising && <p role="status">Writing your feedback into {revising}, then generating…</p>}
     {view === 'character' && <>
       <p className="goal-panel-muted">The main character belongs to this book and applies to new goals.</p>
       {!character && <p role="status">Loading the main character…</p>}

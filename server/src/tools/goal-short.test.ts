@@ -20,11 +20,17 @@ import { createTestClient } from "../test-client.js";
 import { goalTestCharacters } from "../test-goals.js";
 import { copyVideoFixture } from "../test-media-fixtures.js";
 import { redirectFalStorage, SHORT_STUB_REFUSAL as REFUSAL, startShortStub, type ShortStub } from "../test-short-stub.js";
+import { writeTaggingSettings } from "../tag-settings.js";
 import type { ShortGoalSnapshot } from "./goal.js";
 
+const words = (count: number) => Array.from({ length: count }, (_, index) => `word${index}`).join(" ");
 const AUTHORED = 'he waits for a bus in the rain, frame: "He stands under a bus shelter at dusk." beat 1: "He checks the road for the bus."';
 const NO_CHARACTER_REFERENCE = "Give the main character a reference image first: generate a character sheet or choose image cells.";
 const NO_FAL_KEY = "Set FAL_API_KEY in Settings before generating this stage";
+const NO_OPENAI_KEY = "Set OPENAI_API_KEY in Settings to revise with feedback, or edit the prompt and regenerate.";
+const PHONE_SENTENCE = /[^.\n]*\bphones?\b[^.\n]*/giu;
+
+type RewriteRequest = { instructions: string; input: Array<{ role: string; content: string }> };
 
 describe("video_goal shorts", () => {
   let stub: ShortStub;
@@ -66,6 +72,7 @@ describe("video_goal shorts", () => {
     engine = createEngineForTest(join(root, "book"));
     client = await createTestClient(join(root, "book"));
     bookId = engine.book.get().bookId;
+    writeTaggingSettings(engine, { analysisOnNewAssets: false });
     const notebook = await engine.notebooks.create("Shorts");
     if (!notebook.ok) throw new Error(notebook.error.message);
     notebookId = notebook.value.id;
@@ -272,8 +279,11 @@ describe("video_goal shorts", () => {
     expect(earlier.finish).toBeNull();
     const later = await invoke({ action: "select", goal_id: goal.goalId, stage: "frame", index: 0, artifact_id: secondFrameId });
     expect(later.stages.videos!.outputs[0]!.stale).not.toBeNull();
+    stub.plannerAnswers = [{ prompt: "He checks the road for the bus as heavy rain hammers the shelter roof." }];
     const revised = await settled(await invoke({ action: "revise", goal_id: goal.goalId, revision: later.revision, stage: "videos", index: 0, feedback: "Make the rain heavier." }));
-    expect(String(stub.submissions.at(-1)!.body.prompt)).toMatch(/Make the rain heavier\.$/u);
+    expect(String(stub.submissions.at(-1)!.body.prompt)).toMatch(/^He checks the road for the bus as heavy rain hammers the shelter roof\.\n\n/u);
+    expect(String(stub.submissions.at(-1)!.body.prompt)).not.toContain("Make the rain heavier.");
+    expect(revised).toMatchObject({ revision: later.revision + 1, shortPlan: { segments: [{ prompt: "He checks the road for the bus as heavy rain hammers the shelter roof." }] } });
     expect(revised.stages.videos!.outputs[0]!.stale).toBeNull();
     expect(revised.stages.videos!.outputs[0]!.versions).toHaveLength(2);
     expect(revised.finish).toMatchObject({ status: "review", sourceArtifactId: revised.stages.videos!.outputs[0]!.artifactId });
@@ -289,6 +299,71 @@ describe("video_goal shorts", () => {
     const written = await engine.files.write(imageIds[0]!, "original.png", await sharp({ create: { width: 96, height: 128, channels: 3, background: "#123456" } }).png().toBuffer());
     if (!written.ok) throw new Error(written.error.message);
     expect(await refusal({ action: "retry", goal_id: goal.goalId })).toBe("The references or selected versions changed after this attempt. Regenerate using the current selection instead of retrying the older request.");
+  });
+
+  it("revises a clip by rewriting its beat with the feedback, so the one paid call keeps no sentence the feedback contradicts", async () => {
+    const beat = "He waits at the stop as a bus passes. The phone stays at chest height, keeping him framed.";
+    const feedback = "A bus drives past and splashes his green shirt. He does not hold a phone. The bus shows no writing.";
+    const goal = await short(`he waits for a bus in light rain, frame: "He stands under a bus shelter in light rain." beat 1: "${beat}"`);
+    const clip = await approved(await approved(goal));
+    const rewritten = "He waits at the stop, both hands empty at his sides, as a plain white bus drives past and splashes his green shirt. He looks down and sighs.";
+    stub.plannerAnswers = [{ prompt: "A plain white bus splashes his green shirt. The phone stays at chest height, keeping him framed." }, { prompt: rewritten }];
+    const before = stub.submissions.length;
+    const revised = await settled(await invoke({ action: "revise", goal_id: goal.goalId, revision: clip.revision, stage: "videos", index: 0, feedback }));
+    const [ask, again] = stub.plannerRequests as RewriteRequest[];
+    expect(stub.plannerRequests).toHaveLength(2);
+    expect(JSON.parse(ask!.input[0]!.content)).toMatchObject({ revise: "beat 1", prompt: beat, feedback, previous: "He stands under a bus shelter in light rain.", next: null });
+    expect(ask!.instructions).toContain("Remove or rewrite every sentence the feedback contradicts");
+    expect(again!.input.at(-1)!.content).toContain("Leave the phone out of the beat 1: call it the camera, which someone off screen holds.");
+    const paid = stub.submissions.slice(before);
+    expect(paid.map((submission) => submission.path)).toEqual(["/minimax/h3-max/reference-to-video"]);
+    expect(paid[0]!.body).toMatchObject({ prompt_expansion_mode: "disabled" });
+    const prompt = String(paid[0]!.body.prompt);
+    expect(prompt.startsWith(`${rewritten}\n\n`)).toBe(true);
+    expect(prompt).not.toContain("chest height");
+    expect(prompt).not.toContain("does not hold");
+    expect(prompt.match(PHONE_SENTENCE)).toEqual([SHORT_RULES.video.split(".")[0]]);
+    expect(revised).toMatchObject({ status: "review", revision: clip.revision + 1, shortPlan: { segments: [{ prompt: rewritten }] } });
+    expect(revised.stages.videos!.outputs[0]!.versions).toHaveLength(2);
+    expect(revised.stages.videos!.outputs[0]!.versions[0]).toMatchObject({ basePrompt: rewritten, feedback, current: true });
+    expect(stub.unexpected).toEqual([]);
+  });
+
+  it("drops a phone sentence the rewrite keeps twice once the feedback rules a phone out", async () => {
+    const beat = "He waits at the stop as a bus passes. The phone stays at chest height, keeping him framed.";
+    const goal = await short(`he waits for a bus, frame: "He stands under a bus shelter." beat 1: "${beat}"`);
+    const clip = await approved(await approved(goal));
+    stub.plannerAnswers = [{ prompt: beat }, { prompt: beat }];
+    const revised = await settled(await invoke({ action: "revise", goal_id: goal.goalId, revision: clip.revision, stage: "videos", index: 0, feedback: "No phone in his hand." }));
+    expect(revised.shortPlan!.segments[0]!.prompt).toBe("He waits at the stop as a bus passes.");
+    expect(String(stub.submissions.at(-1)!.body.prompt).match(PHONE_SENTENCE)).toEqual([SHORT_RULES.video.split(".")[0]]);
+  });
+
+  it("revises the frame by rewriting its prompt, then makes the clip from the new frame", async () => {
+    const frame = await approved(await short());
+    stub.plannerAnswers = [{ prompt: "He stands under a bus shelter at dusk beneath a dark, heavy sky." }];
+    const revised = await settled(await invoke({ action: "revise", goal_id: frame.goalId, revision: frame.revision, stage: "frame", feedback: "Darker sky." }));
+    expect(stub.submissions.at(-1)!.path).toBe("/openai/gpt-image-2.6/sunburst/edit");
+    expect(String(stub.submissions.at(-1)!.body.prompt)).toMatch(/^He stands under a bus shelter at dusk beneath a dark, heavy sky\.\n\n/u);
+    expect(String(stub.submissions.at(-1)!.body.prompt)).not.toContain("Darker sky.");
+    expect(revised).toMatchObject({ stage: "videos", status: "review", shortPlan: { frame: { prompt: "He stands under a bus shelter at dusk beneath a dark, heavy sky." } } });
+    expect(revised.stages.frame!.outputs[0]!.versions).toHaveLength(2);
+    expect((await approved(revised)).stages.videos!.outputs).toHaveLength(1);
+  });
+
+  it("refuses a revise without OPENAI_API_KEY, and spends nothing and changes nothing when the rewrite fails", async () => {
+    const frame = await approved(await short());
+    const runs = chainRuns();
+    delete process.env.OPENAI_API_KEY;
+    expect(await refusal({ action: "revise", goal_id: frame.goalId, revision: frame.revision, stage: "frame", feedback: "Darker sky." })).toBe(NO_OPENAI_KEY);
+    expect(stub.plannerRequests).toEqual([]);
+    process.env.OPENAI_API_KEY = "offline-openai-key";
+    stub.plannerAnswers = [{ prompt: "" }, { prompt: words(41) }];
+    expect(await refusal({ action: "revise", goal_id: frame.goalId, revision: frame.revision, stage: "frame", feedback: "Darker sky." }))
+      .toBe("The rewritten frame still breaks its limits. Shorten the frame to at most 40 words; it has 41. Revise the frame again, or edit it and regenerate.");
+    expect(stub.plannerRequests).toHaveLength(2);
+    expect(chainRuns()).toBe(runs);
+    expect(await status(frame.goalId)).toMatchObject({ status: "review", revision: frame.revision, shortPlan: { frame: { prompt: frame.shortPlan!.frame.prompt } } });
   });
 
   it("refuses every paid action without FAL_API_KEY before creating a chain", async () => {

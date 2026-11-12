@@ -374,6 +374,17 @@ describe("compiled short steps", () => {
     expect(valueAt(compileShortContinuationStep(shortPlan(), 1, "@d1").params, "options.enable_prompt_expansion")).toBe(false);
   });
 
+  it("compiles clips whose only phone is the off-screen camera of the video rule, with prompt expansion off", () => {
+    const plan = shortPlan();
+    for (const step of [compileShortClipStep(plan, "@c1"), compileShortContinuationStep(plan, 1, "@d1")]) {
+      expect(String((step.params as StepParams).prompt).match(/[^.\n]*\bphones?\b[^.\n]*/giu), step.id).toEqual([
+        "Real phone footage filmed by someone off screen, in one continuous take at real-time speed, with slight handheld camera movement and natural weight and physics",
+      ]);
+    }
+    expect(valueAt(compileShortClipStep(plan, "@c1").params, "options.prompt_expansion_mode")).toBe("disabled");
+    expect(valueAt(compileShortContinuationStep(plan, 1, "@d1").params, "options.enable_prompt_expansion")).toBe(false);
+  });
+
   it("compiles a saved short with the rule wording it was made with", () => {
     const rules = { frame: "Earlier frame rule.", video: "Earlier video rule.", silence: "Earlier silence rule." };
     const plan = goalShortPlanSchema.parse(saved({ ...shortPlan(), rules }));

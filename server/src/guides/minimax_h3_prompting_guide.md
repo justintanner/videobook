@@ -1,14 +1,14 @@
 ---
 source: "https://fal.ai/models/minimax/h3-max/reference-to-video/api and https://fal.ai/models/minimax/h3-max/extend-video/api"
 models: "MiniMax H3 Max reference-to-video and Extend on fal"
-note: "fal publishes no prompting guide for H3 Max. This guide is written from the parameter descriptions on those pages (read 2026-11-12), which match the apicity request schema descriptions."
+note: "fal publishes no prompting guide for H3 Max. This guide is written from the parameter descriptions on those pages (read 2026-11-12), which match the apicity request schema descriptions, and from the first live short, where a beat that named the phone put one in the main character's hand."
 ---
 
 # MiniMax H3 Max Prompting Guide
 
 Write one beat per clip: one continuous action in present tense and plain words. Say who moves, what they do and where they end up. Leave out lists of adjectives and style words.
 
-Say what the camera does, and keep to one camera behaviour per beat: a phone held at chest height, a slow walk behind the subject, or a camera that stays still.
+Say what the camera does, one behaviour per beat: held at chest height by someone off screen, following the subject, or still. Call it the camera, never the phone.
 
 Say what is heard, such as footsteps, rain on a roof or a passing bus. H3 always makes its own soundtrack, so name the sounds you want and say what stays quiet.
 

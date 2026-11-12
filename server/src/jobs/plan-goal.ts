@@ -6,7 +6,7 @@ import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } fr
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
 import { readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent, type GoalRecord } from "../goal-store.js";
 import { buildGoalShortPlan, type GoalShortDraft } from "../goal-short-plan.js";
-import { stripShortBannedWords } from "../goal-short-rules.js";
+import { shortWantsPhone, stripShortBannedWords, withoutShortPhoneSentences } from "../goal-short-rules.js";
 import { estimateShort } from "../goal-short-runtime.js";
 import {
   shortAuthoredCopy, shortPlannerBrief, shortPlannerInstructions, shortPlannerIssues, shortPlannerNeeded, shortPlannerResponseSchema, shortTitle,
@@ -26,11 +26,12 @@ function shortPlannerAnswer(text: string): ShortPlannerResponse | null {
   }
 }
 
-function withoutBannedWords(answer: ShortPlannerResponse, authored: ShortAuthoredCopy): ShortPlannerResponse {
+function cleanedAnswer(answer: ShortPlannerResponse, authored: ShortAuthoredCopy, phones: boolean): ShortPlannerResponse {
+  const cleaned = (text: string) => phones ? stripShortBannedWords(text) : withoutShortPhoneSentences(stripShortBannedWords(text));
   return {
     title: stripShortBannedWords(answer.title),
-    frame: authored.frame === null ? stripShortBannedWords(answer.frame) : answer.frame,
-    beats: answer.beats.map((beat, index) => authored.beats[index] == null ? stripShortBannedWords(beat) : beat),
+    frame: authored.frame === null ? cleaned(answer.frame) : answer.frame,
+    beats: answer.beats.map((beat, index) => authored.beats[index] == null ? cleaned(beat) : beat),
   };
 }
 
@@ -42,6 +43,7 @@ async function askShortPlanner(engine: Engine, goal: GoalRecord, brief: string, 
   const options = chatIntelligenceRequestOptions();
   const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"), options);
   const fixedBeats = authored.beats.flatMap((beat, index) => beat === null ? [] : [[`beat ${index + 1}`, beat] as const]);
+  const phones = shortWantsPhone(brief);
   const request = {
     instructions: await shortPlannerInstructions({ character: draft.character, aspectRatio: draft.aspectRatio, segmentSeconds: draft.segmentSeconds }),
     input: [{ role: "user" as const, content: [
@@ -60,7 +62,7 @@ async function askShortPlanner(engine: Engine, goal: GoalRecord, brief: string, 
   };
   const first = shortPlannerAnswer(firstResponseText(await responses(intelligenceRequest(request, options), signal)));
   const firstIssues: ShortPlannerIssue[] = first
-    ? shortPlannerIssues(first, count, authored)
+    ? shortPlannerIssues(first, count, authored, phones)
     : [{ kind: "count", message: "Answer with JSON holding a title, a frame and the beats." }];
   if (first && firstIssues.length === 0) return first;
   const revised = await responses(intelligenceRequest({
@@ -72,11 +74,11 @@ async function askShortPlanner(engine: Engine, goal: GoalRecord, brief: string, 
   }, options), signal);
   const second = shortPlannerAnswer(firstResponseText(revised));
   if (!second) throw new Error("The planner did not answer with a plan. Try planning again.");
-  const blocking = shortPlannerIssues(second, count, authored).filter((issue) => issue.kind !== "banned");
+  const blocking = shortPlannerIssues(second, count, authored, phones).filter((issue) => issue.kind !== "banned" && issue.kind !== "phone");
   if (blocking.length > 0) throw new Error(`The planner's plan still breaks its limits. ${blocking.map((issue) => issue.message).join(" ")} Try planning again.`);
-  const cleaned = withoutBannedWords(second, authored);
-  if (shortPlannerIssues({ ...cleaned, title: cleaned.title || "Short" }, count, authored).some((issue) => issue.kind === "empty")) {
-    throw new Error("The planner's plan was empty without its banned words. Try planning again.");
+  const cleaned = cleanedAnswer(second, authored, phones);
+  if (shortPlannerIssues({ ...cleaned, title: cleaned.title || "Short" }, count, authored, phones).some((issue) => issue.kind === "empty")) {
+    throw new Error("The planner's plan was empty without its banned words or phone sentences. Try planning again.");
   }
   return cleaned;
 }

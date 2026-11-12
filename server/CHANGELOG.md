@@ -14,7 +14,12 @@ and the package uses [Semantic Versioning](https://semver.org/).
   The goal panel reviews it in four steps, Character, Frame, Video and Finish,
   and every paid step has its own approval and estimate. The frame uses GPT
   Image 2.6 and the clips MiniMax H3 Max through fal (`FAL_API_KEY`); planning
-  uses `OPENAI_API_KEY`.
+  and revising use `OPENAI_API_KEY`.
+- Revising a short's frame or clip rewrites that frame prompt or beat with the
+  feedback before the paid step, replacing any sentence the feedback
+  contradicts, and saves it in the short. The clips' rule line films the phone
+  footage from someone off screen, and planned beats call the camera the camera,
+  so the main character holds a phone only when the brief gives him one.
 - A main character saved per book, by default "a man in a green shirt", with
   image cells or a GPT Image 2.6 character sheet as his references
   (`video_goal` action `character`).
