@@ -2,22 +2,19 @@ import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { cancelChainRun, getChainRun, type ChainRunRecord } from "./chain-executor.js";
 import {
-  emptyGoalEstimates, findGoalCell, goalShortContent, isCurrentShort, legacyGoalText, requireGoalShortContent, saveGoal, writeGoalShortContent,
-  type GoalGenerationStage, type GoalRecord, type GoalStageOutput,
+  activeGoalStage, emptyGoalEstimates, findGoalCell, goalShortContent, isCurrentShort, legacyGoalText, requireGoalShortContent, saveGoal, writeGoalShortContent,
+  type GoalEstimates, type GoalGenerationStage, type GoalRecord, type GoalStageOutput, type GoalStageRun,
 } from "./goal-store.js";
 import { goalStageAttempts } from "./goal-stills.js";
-import { refreshGoalShortPlan } from "./goal-short-plan.js";
-import { currentShortClip, nextShortSegment, shortSegmentStale } from "./goal-short-runtime.js";
+import { refreshGoalShortPlan, shortStoryboardOf, type GoalShortPlan } from "./goal-short-plan.js";
+import { currentShortClip, nextShortSegment, shortFrameStale, shortSegmentStale, storyboardReview } from "./goal-short-runtime.js";
 
 export const LEGACY_GOAL_MESSAGE = "This goal was made by an earlier /goal. Its images and videos stay in the notebook. Start a new /goal.";
 const SHORT_STALE_MESSAGE = "The frame or an earlier clip changed after this clip was made.";
+const FRAME_STALE_MESSAGE = "Storyboard frame 1 changed after this frame was made.";
 const REALISM_INTERRUPTED = "The check for AI tells stopped before it answered. Run it again.";
 const LEGACY_STAGES = ["frame", "storyboards", "videos"] as const;
 const ACTIVE_LEGACY_STATUSES = new Set(["planning", "review", "running"]);
-
-export function activeGoalStage(goal: GoalRecord): GoalGenerationStage {
-  return goal.stage === "frame" ? "frame" : "videos";
-}
 
 function outputString(outputs: Record<string, unknown> | null, key: string): string | null {
   const value = outputs?.[key];
@@ -99,6 +96,7 @@ async function settledShortStage(engine: Engine, goal: GoalRecord, next: GoalRec
     return { ...next, status: "review", error: null, ...cleared, finish: clip ? { status: "review", sourceArtifactId: clip.artifactId, finalArtifactId: null, error: null } : null };
   }
   await writeGoalShortContent(engine, goal, { ...content, revision: content.revision + 1 });
+  if (stage === "storyboards") return storyboardReview(goal, next, content.plan);
   const frameChanged = (previous[0]?.artifactId ?? null) !== null && previous[0]?.artifactId !== outputs[0]?.artifactId;
   const finish = frameChanged ? null : goal.finish ?? goal.resumeFinish ?? null;
   const keepCompleted = finish?.status === "completed" && Boolean(finish.finalArtifactId);
@@ -183,18 +181,34 @@ function legacyGoalSnapshot(engine: Engine, goal: GoalRecord, document: Notebook
   };
 }
 
-async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: NotebookDocument) {
-  const cell = findGoalCell(document, goal);
-  const short = cell ? goalShortContent(cell) : null;
-  const content = short
-    ? { brief: short.brief, revision: short.revision, estimate: short.estimate, notes: short.notes }
-    : { brief: "", revision: 0, estimate: emptyGoalEstimates(), notes: [] };
-  const stages = Object.fromEntries(Object.entries(goal.stages).map(([stage, run]) => [stage, {
+function outputStale(goal: GoalRecord, stage: GoalGenerationStage, index: number): string | null {
+  if (stage === "videos") return shortSegmentStale(goal, index) ? SHORT_STALE_MESSAGE : null;
+  return stage === "frame" && shortFrameStale(goal) ? FRAME_STALE_MESSAGE : null;
+}
+
+function storyboardView<Output extends { index: number }>(plan: GoalShortPlan | null, outputs: readonly Output[], estimate: GoalEstimates) {
+  const storyboard = shortStoryboardOf(plan);
+  if (!storyboard) return null;
+  return {
+    video: storyboard.video,
+    model: storyboard.model,
+    estimate: estimate.storyboards,
+    frames: storyboard.frames.map(({ index, atSeconds, aspectRatio, prompt, artifactId, cellId, address, label }) => ({
+      index, atSeconds, aspectRatio, prompt,
+      raw: { artifactId, cellId, address, label },
+      clean: outputs.find(output => output.index === index) ?? null,
+      estimate: estimate.storyboardFrames?.[index] ?? null,
+    })),
+  };
+}
+
+function stageView(engine: Engine, goal: GoalRecord, document: NotebookDocument, stage: GoalGenerationStage, run: GoalStageRun) {
+  return {
     ...run,
     ...(stage === "videos" ? { attempts: goalStageAttempts(goal, "videos") } : {}),
     outputs: run.outputs.map(output => {
       const outputCell = document.cells.find(candidate => candidate.id === output.cellId);
-      const versions = goalStageAttempts(goal, stage as GoalGenerationStage).filter(attempt => attempt.index === output.index).slice().reverse().map(attempt => {
+      const versions = goalStageAttempts(goal, stage).filter(attempt => attempt.index === output.index).slice().reverse().map(attempt => {
         const versionCell = document.cells.find(candidate => candidate.id === attempt.cellId);
         const step = getChainRun(engine, attempt.chainId)?.steps.find(candidate => candidate.id === attempt.stepId);
         return {
@@ -202,20 +216,34 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
           status: step?.status ?? "interrupted" as const, current: attempt.artifactId === output.artifactId,
         };
       });
-      const stale = stage === "videos" && shortSegmentStale(goal, output.index) ? SHORT_STALE_MESSAGE : null;
-      return { ...output, address: outputCell ? notebookGridTag(outputCell.slot) : null, versions, stale, realism: goal.realism?.[output.artifactId] ?? null };
+      return {
+        ...output, address: outputCell ? notebookGridTag(outputCell.slot) : null, versions,
+        stale: outputStale(goal, stage, output.index), realism: goal.realism?.[output.artifactId] ?? null,
+      };
     }),
     steps: goalChainSteps(engine, document, run.chainId),
     allSteps: [...run.previousChainIds, run.chainId].flatMap(chainId => allGoalChainSteps(engine, document, chainId)),
-  }] satisfies [string, unknown]));
+  };
+}
+
+async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: NotebookDocument) {
+  const cell = findGoalCell(document, goal);
+  const short = cell ? goalShortContent(cell) : null;
+  const content = short
+    ? { brief: short.brief, revision: short.revision, estimate: short.estimate, notes: short.notes }
+    : { brief: "", revision: 0, estimate: emptyGoalEstimates(), notes: [] };
+  const shortPlan = short?.plan ? refreshGoalShortPlan(short.plan, document) : null;
+  const runs = Object.entries(goal.stages) as [GoalGenerationStage, GoalStageRun][];
+  const stages: Partial<Record<GoalGenerationStage, ReturnType<typeof stageView>>> = Object.fromEntries(runs.map(([stage, run]) => [stage, stageView(engine, goal, document, stage, run)]));
   return {
     kind: "video-goal" as const, legacy: false as const, ...goal, ...content,
-    ...(short?.plan ? { shortPlan: refreshGoalShortPlan(short.plan, document) } : {}),
+    ...(shortPlan ? { shortPlan } : {}),
+    storyboard: storyboardView(shortPlan, stages.storyboards?.outputs ?? [], content.estimate),
     finish: goal.finish ?? null,
     finalArtifactId: goal.finish?.finalArtifactId ?? null,
     coldOpen: null,
     address: cell ? notebookGridTag(cell.slot) : null,
-    stages: stages as Partial<Record<GoalGenerationStage, NonNullable<typeof stages[string]>>>,
+    stages,
     steps: goalChainSteps(engine, document, goal.chainId),
   };
 }

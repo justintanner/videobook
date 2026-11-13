@@ -111,6 +111,21 @@ describe("shortPlannerBrief", () => {
     expect(shortPlannerBrief("he waits under @b3 holding @a1's umbrella, not @c4", references, document))
       .toBe("he waits under Source image 2 holding Source image 1's umbrella, not @c4");
   });
+
+  it("names mentions by the address they had when the brief was written, and the storyboard video as the storyboard", () => {
+    const photo = "019a1f3e-5b10-7c2a-9d41-3f6b2a8c1e01";
+    const video = "019a1f3e-5b10-7c2a-9d41-3f6b2a8c1e03";
+    const document = {
+      id: "019a1f3e-5b10-7c2a-9d41-3f6b2a8c1e30", name: "Umbrella", createdAt: "2026-11-13T00:00:00.000Z", edges: [],
+      cells: [
+        { id: "019a1f3e-5b10-7c2a-9d41-3f6b2a8c1e11", type: "image", slot: { row: 0, column: 0 }, outputArtifactId: photo },
+        { id: "019a1f3e-5b10-7c2a-9d41-3f6b2a8c1e12", type: "image", slot: { row: 0, column: 1 }, outputArtifactId: "019a1f3e-5b10-7c2a-9d41-3f6b2a8c1e02" },
+        { id: "019a1f3e-5b10-7c2a-9d41-3f6b2a8c1e13", type: "video", slot: { row: 3, column: 0 }, outputArtifactId: video },
+      ],
+    } satisfies NotebookDocument;
+    expect(shortPlannerBrief("a clip based on @a1 but with @a2 holding the umbrella", [{ artifactId: photo, address: "@a2" }], document, { artifactId: video, address: "@a1" }))
+      .toBe("a clip based on the storyboard but with Source image 1 holding the umbrella");
+  });
 });
 
 describe("shortPlannerResponseSchema", () => {

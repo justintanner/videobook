@@ -9,8 +9,7 @@ import type { Engine, NotebookCell } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { getChainRun, waitForChainRun } from "../chain-executor.js";
 import { createEngineForTest } from "../engine.js";
-import { probeVideo } from "../ffmpeg.js";
-import { buildLegacyGoalShortPlan } from "../goal-short-plan.js";
+import { buildLegacyGoalShortPlan, formatShortSeconds } from "../goal-short-plan.js";
 import { LEGACY_SHORT_SILENCE, SHORT_RULES } from "../goal-short-rules.js";
 import { createShortGoal, shortFingerprint } from "../goal-short-runtime.js";
 import { readGoal, saveGoal } from "../goal-store.js";
@@ -119,6 +118,18 @@ describe("video_goal shorts", () => {
     const plan = goal.shortPlan;
     if (!plan || plan.version !== 5) throw new Error("expected a version 5 plan");
     return plan.sourceImages;
+  }
+
+  function storyboardOf(goal: ShortGoalSnapshot) {
+    const plan = goal.shortPlan;
+    if (!plan || plan.version !== 5 || !plan.storyboard) throw new Error("expected a version 5 plan with a storyboard");
+    return plan.storyboard;
+  }
+
+  function storyboardNote(mention: string, frames: readonly { address: string; atSeconds: number }[]) {
+    const listed = frames.map((frame) => `${frame.address} at ${formatShortSeconds(frame.atSeconds)} s`);
+    const list = listed.length > 1 ? `${listed.slice(0, -1).join(", ")} and ${listed.at(-1)}` : listed.join("");
+    return `${mention} is a video, so the short follows its storyboard of ${frames.length} frames: ${list}. Their on-screen graphics are removed before the frame is made.`;
   }
 
   function stepPrompt(chainId: string | null, stepId: string): string {
@@ -230,48 +241,47 @@ describe("video_goal shorts", () => {
     return created.value.artifactId;
   }
 
-  it("extracts a frame from a mentioned video and reuses that frame cell", async () => {
+  it("takes the storyboard from a mentioned video at its time and reuses those frame cells", async () => {
     const videoId = await pinStairsVideo();
-    const goal = await short(`12 seconds, use @a1 at 2s and @a2, ${AUTHORED}`);
-    const frame = sourceImagesOf(goal)[0]!;
-    expect(sourceImagesOf(goal).map((reference) => reference.artifactId)).toEqual([frame.artifactId, imageIds[1]]);
-    expect(frame.label).toBe("Frame of @a1");
-    expect(goal.notes).toEqual([`@a1 is a video, so its frame at 2.0 s (${frame.address}) is the reference.`]);
+    const goal = await short(`12 seconds, use @a1 at 1s and @a2, ${AUTHORED}`);
+    expect(goal).toMatchObject({ stage: "storyboards", status: "review" });
+    expect(sourceImagesOf(goal).map((reference) => reference.artifactId)).toEqual([imageIds[1]]);
+    const storyboard = storyboardOf(goal);
+    expect(storyboard.video).toMatchObject({ artifactId: videoId, label: "Stairs" });
+    expect(storyboard.frames.map((frame) => frame.index)).toEqual([0, 1]);
+    expect(storyboard.frames[0]!.atSeconds).toBeCloseTo(1.5, 1);
+    expect(storyboard.frames[1]!.atSeconds).toBeCloseTo(2.5, 1);
+    expect(goal.notes).toEqual([storyboardNote("@a1", storyboard.frames)]);
     const placed = engine.notebooks.read(notebookId);
     if (!placed.ok) throw new Error(placed.error.message);
     const videoCell = placed.value.cells.find((cell) => cell.outputArtifactId === videoId);
     if (!videoCell) throw new Error("missing stairs video");
     const videoAddress = notebookGridTag(videoCell.slot);
-    const again = await short(`12 seconds, use ${videoAddress} at 2s, ${AUTHORED}`);
-    expect(sourceImagesOf(again).map((reference) => reference.artifactId)).toEqual([frame.artifactId]);
+    const again = await short(`12 seconds, use ${videoAddress} at 1s, ${AUTHORED}`);
+    expect(sourceImagesOf(again)).toEqual([]);
+    expect(storyboardOf(again).frames.map((frame) => frame.artifactId)).toEqual(storyboard.frames.map((frame) => frame.artifactId));
     const notebook = engine.notebooks.read(notebookId);
     if (!notebook.ok) throw new Error(notebook.error.message);
-    expect(notebook.value.cells.filter((cell) => cell.inputs?.mediaRole === "extract-frame-output")).toHaveLength(1);
-    expect(again.notes).toEqual([`${videoAddress} is a video, so its frame at 2.0 s (${sourceImagesOf(again)[0]!.address}) is the reference.`]);
+    expect(notebook.value.cells.filter((cell) => cell.inputs?.mediaRole === "extract-frame-output")).toHaveLength(2);
+    expect(again.notes).toEqual([storyboardNote(videoAddress, storyboardOf(again).frames)]);
   });
 
   it("makes a goal from a video mention and an image mention, including the operator's brief", async () => {
-    await pinStairsVideo();
-    const probed = await probeVideo(join(fixtures, "clip.mp4"));
-    const duration = probed.videoDuration || probed.duration;
+    const videoId = await pinStairsVideo();
     stub.plannerAnswers = [{ title: "Slippery stairs", frame: "He stands at a rainy bus stop at dusk.", beats: ["He checks the road, then steps back from a splash."] }];
     const planning = await invoke({ action: "create", brief: "use @a1 and @a2 to make a funny stairs are slippery video" });
-    expect(planning.status).toBe("planning");
+    expect(planning).toMatchObject({ status: "planning", stage: "storyboards" });
     expect(planning.shortPlan).toBeUndefined();
-    expect(planning.notes).toEqual([expect.stringMatching(/^@a1 is a video, so its frame at \d+\.\d s \(@[a-z]+\d+\) is the reference\.$/u)]);
+    expect(planning.notes).toEqual([expect.stringMatching(/^@a1 is a video, so the short follows its storyboard of 3 frames: @[a-z]+\d+ at 0\.5 s, @[a-z]+\d+ at 1\.5 s and @[a-z]+\d+ at 2\.5 s\. Their on-screen graphics are removed before the frame is made\.$/u)]);
     await expect.poll(() => readGoal(engine, planning.goalId).status, { timeout: testBudget(30_000) }).toBe("review");
     const goal = await status(planning.goalId);
-    const frame = sourceImagesOf(goal)[0]!;
-    const atSeconds = Number(goal.notes[0]!.match(/frame at (\d+\.\d) s/u)?.[1]);
-    expect(goal.notes).toEqual(planning.notes);
-    expect(goal.notes).toEqual([`@a1 is a video, so its frame at ${atSeconds.toFixed(1)} s (${frame.address}) is the reference.`]);
-    expect(atSeconds).toBeCloseTo(duration / 2, 1);
+    expect(goal).toMatchObject({ stage: "storyboards", status: "review" });
+    expect(goal.notes).toEqual([storyboardNote("@a1", storyboardOf(goal).frames)]);
+    expect(storyboardOf(goal)).toMatchObject({ video: { artifactId: videoId }, model: "fal:google/nano-banana-2.1/edit" });
+    expect(storyboardOf(goal).frames).toHaveLength(3);
     expect(stub.submissions).toEqual([]);
     expect(chainRuns()).toBe(0);
-    expect(sourceImagesOf(goal).map((reference) => [reference.artifactId, reference.label])).toEqual([
-      [frame.artifactId, "Frame of @a1"],
-      [imageIds[1], "Character 2"],
-    ]);
+    expect(sourceImagesOf(goal).map((reference) => [reference.artifactId, reference.label])).toEqual([[imageIds[1], "Character 2"]]);
   });
 
   it("clamps a 90 second brief to 60 seconds and notes the length", async () => {
@@ -353,7 +363,7 @@ describe("video_goal shorts", () => {
       `${empty} is empty and was skipped.`,
       `${audio} is audio and was skipped.`,
       `${pending} has no output yet and was skipped.`,
-      `${unreadableVideo} is a video, but its frame could not be read, so it was skipped.`,
+      `${unreadableVideo} is a video, but its frames could not be read, so it was skipped.`,
       `${unreadableImage} has no readable image and was skipped.`,
       `${tags[12]} was skipped because a short takes at most 12 mentioned images.`,
     ]);

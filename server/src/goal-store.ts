@@ -5,11 +5,10 @@ import { mutateNotebook } from "./notebook-mutations.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 
 export type GoalStatus = "planning" | "review" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
-export type GoalGenerationStage = "frame" | "videos";
-type StoredGoalStage = GoalGenerationStage | "storyboards";
+export type GoalGenerationStage = "storyboards" | "frame" | "videos";
 
 export type GoalEstimate = { usd: number | null; warnings: string[] };
-export type GoalEstimates = Record<StoredGoalStage | "total", GoalEstimate> & { segments?: GoalEstimate[] };
+export type GoalEstimates = Record<GoalGenerationStage | "total", GoalEstimate> & { segments?: GoalEstimate[]; storyboardFrames?: GoalEstimate[] };
 export type GoalStageOutput = { index: number; artifactId: string; cellId: string | null; producerCellId: string | null; address: string | null };
 export type GoalStillAttempt = {
   stage: GoalGenerationStage;
@@ -66,8 +65,8 @@ export function isCurrentShort(planVersion: number): planVersion is 4 | 5 {
 
 export type GoalRecord = {
   planVersion: 1 | 2 | 3 | 4 | 5;
-  stage: StoredGoalStage | "assembly";
-  stages: Partial<Record<StoredGoalStage, GoalStageRun>>;
+  stage: GoalGenerationStage | "assembly";
+  stages: Partial<Record<GoalGenerationStage, GoalStageRun>>;
   goalId: string;
   bookId: string;
   notebookId: string;
@@ -91,6 +90,10 @@ export type GoalRecord = {
   createdAt: string;
   updatedAt: string;
 };
+
+export function activeGoalStage(goal: GoalRecord): GoalGenerationStage {
+  return goal.stage === "storyboards" || goal.stage === "frame" ? goal.stage : "videos";
+}
 
 export type GoalShortContent = {
   brief: string;
@@ -155,6 +158,7 @@ function estimatesFrom(value: unknown): GoalEstimates {
   return {
     frame: estimateFrom(record.frame), storyboards: estimateFrom(record.storyboards), videos: estimateFrom(record.videos), total: estimateFrom(record.total),
     ...(Array.isArray(record.segments) ? { segments: record.segments.map(estimateFrom) } : {}),
+    ...(Array.isArray(record.storyboardFrames) ? { storyboardFrames: record.storyboardFrames.map(estimateFrom) } : {}),
   };
 }
 

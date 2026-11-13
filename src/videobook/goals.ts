@@ -155,7 +155,7 @@ function goalShots(goal: ShortGoalSnapshot, stage: GoalGenerationStage): GoalSho
   })
 }
 
-function goalPhase(goal: ShortGoalSnapshot, stage: GoalGenerationStage): GoalPhase {
+function goalPhase(goal: ShortGoalSnapshot, stage: 'frame' | 'videos'): GoalPhase {
   if (goal.status === 'cancelled') return 'stopped'
   if (goal.status === 'completed') return 'complete'
   if (goal.status !== 'running') return goal.status
@@ -163,7 +163,7 @@ function goalPhase(goal: ShortGoalSnapshot, stage: GoalGenerationStage): GoalPha
 }
 
 export function goalProgress(goal: ShortGoalSnapshot): GoalProgress {
-  const stage: GoalGenerationStage = goal.stage === 'frame' ? 'frame' : 'videos'
+  const stage = goal.stage === 'frame' ? 'frame' : 'videos'
   const shots = goalShots(goal, stage)
   const phase = goalPhase(goal, stage)
   const active = shots.find(shot => shot.state === 'failed')

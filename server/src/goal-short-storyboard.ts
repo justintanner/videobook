@@ -2,9 +2,10 @@ import sharp from "sharp";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { findPrimaryMediaFile } from "videobook-engine";
 import { firstEmptyNotebookGridSlots, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
-import type { ChainStep } from "./chain-plan.js";
-import type { GoalEstimate } from "./goal-store.js";
-import { assessToolCallEstimate } from "./jobs/cost-estimate-assessment.js";
+import {
+  formatShortSeconds, SHORT_STORYBOARD_ASPECT_RATIOS, SHORT_STORYBOARD_MODELS,
+  type ShortStoryboard, type ShortStoryboardAspectRatio, type ShortStoryboardVideo,
+} from "./goal-short-plan.js";
 import { EXTRACT_FRAME_OUTPUT_ROLE } from "./notebook-cell-outputs.js";
 import { existingFrameCell, readableImage, type UsableImage } from "./notebook-frame-cells.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
@@ -16,8 +17,6 @@ import { awaitScenes } from "./tools/detect-scenes.js";
 const STORYBOARD_COUNT = 4;
 const EDGE_GUARD_SECONDS = 0.25;
 const MIN_PART_SECONDS = 1;
-const CLEANUP_MODEL = "fal:google/nano-banana-2.1/edit";
-const CLEANUP_ASPECT_RATIOS = ["1:1", "16:9", "21:9", "9:16", "4:3", "3:4", "3:2", "5:4", "4:5", "2:3", "4:1", "1:4", "8:1", "1:8"] as const;
 const CLEANUP_PROMPT = [
   "Remove every on-screen graphic that was added on top of the camera picture: captions, titles and any other overlaid text, stickers and their underlines, emoji, platform logos and watermarks, creator credits and usernames with their icons, progress bars, borders, black or blurred bars, and darkening shade gradients.",
   "Fill each of those areas with what the camera saw there, so the scene continues naturally behind them.",
@@ -27,15 +26,13 @@ const CLEANUP_PROMPT = [
 
 type Span = { start: number; end: number };
 
-export type StoryboardAspectRatio = (typeof CLEANUP_ASPECT_RATIOS)[number];
-
 export type StoryboardVideo = { artifactId: string; cellId?: string };
 
 export type StoryboardFrame = UsableImage & {
   index: number;
   atSeconds: number;
   requestedSeconds: number;
-  aspectRatio: StoryboardAspectRatio;
+  aspectRatio: ShortStoryboardAspectRatio;
 };
 
 type CapturedFrame = { artifactId: string; atSeconds: number; label: string };
@@ -102,26 +99,22 @@ function readNotebook(engine: Engine, notebookId: string): NotebookDocument {
   return notebook.value;
 }
 
-function formatSeconds(seconds: number): string {
-  return (Math.round(seconds * 10) / 10).toFixed(1);
-}
-
 function storyboardLabel(index: number, total: number, seconds: number): string {
-  return `Storyboard ${index + 1} of ${total} · ${formatSeconds(seconds)} s`;
+  return `Storyboard ${index + 1} of ${total} · ${formatShortSeconds(seconds)} s`;
 }
 
-function ratioValue(ratio: StoryboardAspectRatio): number {
+function ratioValue(ratio: ShortStoryboardAspectRatio): number {
   const [width, height] = ratio.split(":").map(Number);
   return width! / height!;
 }
 
-function nearestAspectRatio(width: number, height: number): StoryboardAspectRatio {
+function nearestAspectRatio(width: number, height: number): ShortStoryboardAspectRatio {
   const target = Math.log(width / height);
-  const distance = (ratio: StoryboardAspectRatio) => Math.abs(Math.log(ratioValue(ratio)) - target);
-  return CLEANUP_ASPECT_RATIOS.reduce((best, ratio) => distance(ratio) < distance(best) ? ratio : best);
+  const distance = (ratio: ShortStoryboardAspectRatio) => Math.abs(Math.log(ratioValue(ratio)) - target);
+  return SHORT_STORYBOARD_ASPECT_RATIOS.reduce((best, ratio) => distance(ratio) < distance(best) ? ratio : best);
 }
 
-async function frameAspectRatio(engine: Engine, artifactId: string): Promise<StoryboardAspectRatio> {
+async function frameAspectRatio(engine: Engine, artifactId: string): Promise<ShortStoryboardAspectRatio> {
   const manifest = await engine.files.manifest(artifactId);
   const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, "image") : null;
   const bytes = file ? await engine.files.read(artifactId, file.name) : null;
@@ -205,28 +198,10 @@ export async function captureStoryboardFrames(engine: Engine, notebookId: string
   return Promise.all(moments.map((seconds, index) => storyboardFrame(engine, document, existing[index]?.id ?? placed.get(index)!, index, seconds)));
 }
 
-export function compileStoryboardCleanupStep(frameAddress: string, index: number, aspectRatio: StoryboardAspectRatio): ChainStep {
+export function shortStoryboard(video: ShortStoryboardVideo, frames: readonly StoryboardFrame[]): ShortStoryboard {
   return {
-    id: `storyboard${index + 1}`,
-    tool: "generate_image",
-    params: {
-      model: CLEANUP_MODEL,
-      prompt: CLEANUP_PROMPT,
-      refs: { image: [frameAddress] },
-      options: { aspect_ratio: aspectRatio, output_format: "jpeg" },
-    },
-  };
-}
-
-export async function estimateStoryboardCleanup(engine: Engine, frames: readonly StoryboardFrame[]): Promise<GoalEstimate> {
-  const bookId = engine.book.get().bookId;
-  const parts = await Promise.all(frames.map(async (frame) => {
-    const step = compileStoryboardCleanupStep(frame.address, frame.index, frame.aspectRatio);
-    const estimate = await assessToolCallEstimate(engine, step.tool, { book_id: bookId, ...step.params, refs: { image: [frame.artifactId] } });
-    return { usd: estimate.available ? estimate.usd : null, warnings: estimate.warnings };
-  }));
-  return {
-    usd: parts.every((part) => part.usd !== null) ? parts.reduce((sum, part) => sum + (part.usd ?? 0), 0) : null,
-    warnings: [...new Set(parts.flatMap((part) => part.warnings))],
+    video,
+    model: SHORT_STORYBOARD_MODELS[0],
+    frames: frames.map(({ requestedSeconds: _requested, ...frame }) => ({ ...frame, prompt: CLEANUP_PROMPT })),
   };
 }

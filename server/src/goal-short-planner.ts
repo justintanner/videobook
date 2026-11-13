@@ -4,7 +4,8 @@ import { resolveNotebookCellArtifactId } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { replaceNotebookMentions } from "videobook-engine/notebook-mentions";
 import { getApiKey } from "./api-key.js";
-import { grownShortSegments, SHORT_WORD_CEILINGS, type GoalShortPlan, type ShortAspectRatio } from "./goal-short-plan.js";
+import { grownShortSegments, shortStoryboardOf, SHORT_WORD_CEILINGS, type GoalShortPlan, type ShortAspectRatio } from "./goal-short-plan.js";
+import type { GoalGenerationStage } from "./goal-store.js";
 import { SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES, shortBannedWords, shortMentionsPhone } from "./goal-short-rules.js";
 import { loadGuide } from "./tools/rewrite-prompt.js";
 
@@ -14,6 +15,9 @@ const POSITIVE_LINE = 'Say what is there rather than what is not, such as "both 
 const QUOTED = /["“]([^"”]*)["”]/gu;
 const PROMPT_LIMIT = 2000;
 const PLANNED_FROM_BRIEF = "Planned from the brief as written. Add OPENAI_API_KEY in Settings for a written plan.";
+const FOLLOW_FEEDBACK = "Change only what the feedback asks for and keep every other detail, in the same words where you can.";
+const DROP_CONTRADICTED = "Remove or rewrite every sentence the feedback contradicts, so the prompt no longer says anything the feedback rules out. Never keep the old sentence and add the feedback beside it.";
+const OVERLAYS = "captions, titles, stickers, emoji, logos, usernames, icons, borders, bars or shade";
 
 export type ShortAuthoredCopy = {
   frame: string | null;
@@ -106,12 +110,24 @@ export function shortTitle(brief: string, framePrompt: string): string {
   return title || "Short";
 }
 
-export function shortPlannerBrief(brief: string, references: readonly { artifactId: string }[], document: NotebookDocument): string {
-  return replaceNotebookMentions(brief, references.flatMap((reference, index) => {
-    const replacement = `Source image ${index + 1}`;
-    const cells = document.cells.filter((cell) => resolveNotebookCellArtifactId(document, cell) === reference.artifactId);
-    return [{ reference: reference.artifactId, replacement }, ...cells.map((cell) => ({ reference: notebookGridTag(cell.slot), replacement }))];
-  }));
+type BriefReference = { artifactId: string; address?: string | null };
+
+export function shortPlannerBrief(
+  brief: string,
+  references: readonly BriefReference[],
+  document: NotebookDocument,
+  storyboardVideo: BriefReference | null = null,
+): string {
+  const named = (reference: BriefReference, replacement: string) => {
+    const addresses = reference.address !== undefined
+      ? [reference.address].filter((address): address is string => Boolean(address))
+      : document.cells.filter((cell) => resolveNotebookCellArtifactId(document, cell) === reference.artifactId).map((cell) => notebookGridTag(cell.slot));
+    return [{ reference: reference.artifactId, replacement }, ...addresses.map((address) => ({ reference: address, replacement }))];
+  };
+  return replaceNotebookMentions(brief, [
+    ...references.flatMap((reference, index) => named(reference, `Source image ${index + 1}`)),
+    ...(storyboardVideo ? named(storyboardVideo, "the storyboard") : []),
+  ]);
 }
 
 export function shortPlannerResponseSchema(segmentCount: number) {
@@ -152,7 +168,13 @@ export function shortPlannerIssues(response: ShortPlannerResponse, segmentCount:
   return issues;
 }
 
-export function shortRevisionPart(plan: GoalShortPlan, stage: "frame" | "videos", index: number): ShortRevisionPart & { prompt: string } {
+export function shortRevisionPart(plan: GoalShortPlan, stage: GoalGenerationStage, index: number): ShortRevisionPart & { prompt: string } {
+  if (stage === "storyboards") {
+    const storyboard = shortStoryboardOf(plan);
+    const frame = storyboard?.frames[index];
+    if (!frame) throw new RangeError(storyboard ? `The storyboard has ${storyboard.frames.length} frames.` : "This short has no storyboard.");
+    return { name: `storyboard frame ${index + 1} clean-up`, ceiling: SHORT_WORD_CEILINGS.cleanup, prompt: frame.prompt };
+  }
   if (stage === "frame") return { name: "frame", ceiling: SHORT_WORD_CEILINGS.frame, prompt: plan.frame.prompt };
   const segment = plan.segments[index];
   if (!segment) throw new RangeError(`This short has ${plan.segments.length} segments.`);
@@ -173,8 +195,26 @@ function shortStar(sourceImageCount: number): string {
   return sourceImageCount > 0 ? "the person in the source images" : "the person the brief describes";
 }
 
+function plannerImageLines(sourceImageCount: number, storyboardFrameCount: number): string[] {
+  if (storyboardFrameCount === 0) {
+    return ["The images are source images, labelled Source image 1, Source image 2 in order, and the brief names them the same way. Describe what they show in plain words instead of naming or numbering them, and write no @tokens."];
+  }
+  const frames = storyboardFrameCount === 1
+    ? "the storyboard frame, labelled Storyboard frame 1 of 1 with its time in the video"
+    : `the ${storyboardFrameCount} storyboard frames, labelled Storyboard frame 1 of ${storyboardFrameCount} and so on, each with its time in the video`;
+  const order = sourceImageCount > 0
+    ? `The images come in order: first the source images, labelled Source image 1, Source image 2 and so on, which the brief names the same way, then ${frames}.`
+    : `The images are ${frames}.`;
+  return [
+    `${order} The storyboard frames come from the video the brief calls the storyboard. Describe what the images show in plain words instead of naming or numbering them, and write no @tokens.`,
+    "Follow the storyboard's action, camera and order across the opening frame and the beats, and apply the brief's changes to it: the people come from the source images or the brief, and anything the brief swaps in, such as a different animal, replaces what the storyboard shows.",
+    `Never describe anything drawn on top of the picture in the storyboard frames, such as ${OVERLAYS}: those are removed before the frame is made.`,
+  ];
+}
+
 export async function shortPlannerInstructions(input: {
   sourceImageCount: number;
+  storyboardFrameCount?: number;
   aspectRatio: ShortAspectRatio;
   segmentSeconds: readonly number[];
 }): Promise<string> {
@@ -187,7 +227,7 @@ export async function shortPlannerInstructions(input: {
     "Beat 1 starts from the opening frame. Each later beat continues from where the previous one ends, in the same place, and every beat ends with that person in frame. One action per beat, in the present tense, with what the camera does and what is heard.",
     CAMERA_LINE,
     `${POSITIVE_LINE} Give that person a phone only when the brief does.`,
-    "The images are source images, labelled Source image 1, Source image 2 in order, and the brief names them the same way. Describe what they show in plain words instead of naming or numbering them, and write no @tokens.",
+    ...plannerImageLines(input.sourceImageCount, input.storyboardFrameCount ?? 0),
     "Write only the parts listed under write and keep the fixed parts exactly as given.",
     "These lines are added to the prompts after you write them. Do not repeat them and do not contradict them:",
     `Frame: ${SHORT_RULES.frame}`,
@@ -200,7 +240,21 @@ export async function shortPlannerInstructions(input: {
   ].join("\n");
 }
 
-export async function shortRevisionInstructions(plan: GoalShortPlan, stage: "frame" | "videos", index: number): Promise<string> {
+function storyboardRevisionInstructions(plan: GoalShortPlan, index: number): string {
+  const part = shortRevisionPart(plan, "storyboards", index);
+  const count = shortStoryboardOf(plan)?.frames.length ?? 1;
+  return [
+    `Revise the clean-up prompt for storyboard frame ${index + 1} of ${count}, one frame of a video. Nano Banana 2.1 edit follows it to remove the on-screen graphics added on top of the camera picture, such as ${OVERLAYS}, and to fill those areas with what the camera saw.`,
+    "Rewrite it so it follows the operator's feedback.",
+    FOLLOW_FEEDBACK,
+    DROP_CONTRADICTED,
+    "It edits this one frame: everything the feedback does not name stays as the camera saw it, including the people, animals, objects, place, light, framing and size, and printing that is physically on things.",
+    `Write at most ${part.ceiling} words, and answer with the whole revised ${part.name}.`,
+  ].join("\n");
+}
+
+export async function shortRevisionInstructions(plan: GoalShortPlan, stage: GoalGenerationStage, index: number): Promise<string> {
+  if (stage === "storyboards") return storyboardRevisionInstructions(plan, index);
   const frame = stage === "frame";
   const part = shortRevisionPart(plan, stage, index);
   const guide = await loadGuide(frame ? "gpt_image_26" : "minimax_h3");
@@ -210,8 +264,8 @@ export async function shortRevisionInstructions(plan: GoalShortPlan, stage: "fra
     frame
       ? "Rewrite the opening frame prompt for GPT Image 2.6 so it follows the operator's feedback. It describes the one still picture the short opens on."
       : `Rewrite beat ${index + 1} of ${plan.segments.length} for MiniMax H3 Max, which lasts ${plan.segments[index]!.seconds} seconds, so it follows the operator's feedback. One action in the present tense, with what the camera does and what is heard. ${index === 0 ? "It starts from the opening frame" : "It continues from where the beat before it ends, in the same place,"} and ends with that person in frame.`,
-    "Change only what the feedback asks for and keep every other detail, in the same words where you can.",
-    "Remove or rewrite every sentence the feedback contradicts, so the prompt no longer says anything the feedback rules out. Never keep the old sentence and add the feedback beside it.",
+    FOLLOW_FEEDBACK,
+    DROP_CONTRADICTED,
     CAMERA_LINE,
     `${POSITIVE_LINE} Give that person a phone only when the feedback or the brief does.`,
     `Write at most ${part.ceiling} words, and answer with the whole revised ${part.name}.`,

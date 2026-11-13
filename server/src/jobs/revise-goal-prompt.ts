@@ -2,13 +2,14 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { requireApiKey } from "../api-key.js";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
-import { readGoal, requireGoalShortContent } from "../goal-store.js";
+import { readGoal, requireGoalShortContent, type GoalGenerationStage, type GoalShortContent } from "../goal-store.js";
+import { isLegacyShortDraft, type GoalShortPlan } from "../goal-short-plan.js";
 import { shortPlannerBrief, shortRevisionInstructions, shortRevisionIssues, shortRevisionPart, shortRevisionResponseSchema, type ShortPlannerIssue } from "../goal-short-planner.js";
 import { shortRulesOutPhone, shortWantsPhone, stripShortBannedWords, withoutShortPhoneSentences } from "../goal-short-rules.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } from "../openai-intelligence.js";
 import { registerJobHandler } from "../queue.js";
 
-type RevisePayload = { goalId: string; stage: "frame" | "videos"; index: number; feedback: string; revision: number };
+type RevisePayload = { goalId: string; stage: GoalGenerationStage; index: number; feedback: string; revision: number };
 
 const answerSchema = z.object({ prompt: z.string() });
 
@@ -21,28 +22,44 @@ function revisedPrompt(text: string): string | null {
   }
 }
 
+function briefNames(content: GoalShortContent, plan: GoalShortPlan) {
+  const { draft } = content;
+  if (draft) {
+    return isLegacyShortDraft(draft)
+      ? { references: [...draft.character.references, ...draft.extraReferences], storyboard: null }
+      : { references: draft.sourceImages, storyboard: draft.storyboard?.video ?? null };
+  }
+  return plan.version === 5
+    ? { references: plan.sourceImages, storyboard: plan.storyboard?.video ?? null }
+    : { references: [...plan.character.references, ...plan.frame.references], storyboard: null };
+}
+
+function revisionContext(plan: GoalShortPlan, stage: GoalGenerationStage, index: number) {
+  if (stage === "storyboards") return {};
+  if (stage === "frame") return { next: plan.segments[0]?.prompt ?? null };
+  return { previous: index === 0 ? plan.frame.prompt : plan.segments[index - 1]!.prompt, next: plan.segments[index + 1]?.prompt ?? null };
+}
+
 async function reviseShortPrompt(engine: Engine, payload: RevisePayload, signal: AbortSignal): Promise<{ prompt: string }> {
   const goal = readGoal(engine, payload.goalId);
   const content = requireGoalShortContent(engine, goal);
   if (!content.plan || content.revision !== payload.revision) throw new Error("The goal changed. Review the current version before revising it.");
   const { plan } = content;
   const part = shortRevisionPart(plan, payload.stage, payload.index);
-  const phones = !shortRulesOutPhone(payload.feedback) && [content.brief, part.prompt, payload.feedback].some(shortWantsPhone);
+  const phones = payload.stage === "storyboards" || (!shortRulesOutPhone(payload.feedback) && [content.brief, part.prompt, payload.feedback].some(shortWantsPhone));
   const notebook = engine.notebooks.read(goal.notebookId);
   if (!notebook.ok) throw new Error(notebook.error.message);
-  const context = payload.stage === "frame"
-    ? { next: plan.segments[0]?.prompt ?? null }
-    : { previous: payload.index === 0 ? plan.frame.prompt : plan.segments[payload.index - 1]!.prompt, next: plan.segments[payload.index + 1]?.prompt ?? null };
   const options = chatIntelligenceRequestOptions();
   const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"), options);
+  const named = briefNames(content, plan);
   const request = {
     instructions: await shortRevisionInstructions(plan, payload.stage, payload.index),
     input: [{ role: "user" as const, content: JSON.stringify({
-      brief: shortPlannerBrief(content.brief, plan.version === 5 ? plan.sourceImages : [...plan.character.references, ...plan.frame.references], notebook.value),
+      brief: shortPlannerBrief(content.brief, named.references, notebook.value, named.storyboard),
       aspectRatio: plan.aspectRatio,
       revise: part.name,
       prompt: part.prompt,
-      ...context,
+      ...revisionContext(plan, payload.stage, payload.index),
       feedback: payload.feedback,
     }) }],
     text: { format: { type: "json_schema" as const, name: "short_revision", strict: true, schema: z.toJSONSchema(shortRevisionResponseSchema(part)) } },

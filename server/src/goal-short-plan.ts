@@ -15,8 +15,11 @@ export const SHORT_EXTEND_MODELS = ["fal:minimax/h3-max/extend-video"] as const;
 export const SHORT_RESOLUTIONS = ["1080P", "768P"] as const;
 export const SHORT_PROMPT_EXPANSIONS = ["disabled", "balanced"] as const;
 export const SHORT_EXTEND_OUTPUTS = ["extended"] as const;
+export const SHORT_STORYBOARD_MODELS = ["fal:google/nano-banana-2.1/edit"] as const;
+export const SHORT_STORYBOARD_ASPECT_RATIOS = ["1:1", "16:9", "21:9", "9:16", "4:3", "3:4", "3:2", "5:4", "4:5", "2:3", "4:1", "1:4", "8:1", "1:8"] as const;
 
 export type ShortAspectRatio = (typeof SHORT_ASPECT_RATIOS)[number];
+export type ShortStoryboardAspectRatio = (typeof SHORT_STORYBOARD_ASPECT_RATIOS)[number];
 
 export const GOAL_SHORT_DEFAULTS = {
   aspectRatio: "9:16",
@@ -52,7 +55,7 @@ export const GOAL_SHORT_DEFAULTS = {
   };
 };
 
-export const SHORT_WORD_CEILINGS = { title: 6, frame: 40, beat: 45 } as const;
+export const SHORT_WORD_CEILINGS = { title: 6, frame: 40, beat: 45, cleanup: 160 } as const;
 
 const SHORT_MIN_SECONDS = 5;
 const SHORT_MAX_SECONDS = 60;
@@ -61,6 +64,7 @@ const SEGMENT_LIMIT = 4;
 const CHARACTER_REFERENCE_LIMIT = 4;
 const FRAME_REFERENCE_LIMIT = 12;
 const SOURCE_IMAGE_LIMIT = 12;
+const STORYBOARD_FRAME_LIMIT = 4;
 
 const goalShortImageRefSchema = z.object({
   kind: z.literal("image"),
@@ -73,6 +77,31 @@ const goalShortImageRefSchema = z.object({
 }).strict();
 
 export type GoalShortImageRef = z.infer<typeof goalShortImageRefSchema>;
+
+const storyboardSchema = z.object({
+  video: z.object({
+    artifactId: z.string().min(1),
+    cellId: z.string().min(1).nullable(),
+    address: z.string().min(1).nullable(),
+    label: z.string(),
+  }).strict(),
+  model: z.enum(SHORT_STORYBOARD_MODELS),
+  frames: z.array(goalShortImageRefSchema.omit({ slot: true }).extend({
+    index: z.number().int().nonnegative(),
+    atSeconds: z.number().nonnegative(),
+    aspectRatio: z.enum(SHORT_STORYBOARD_ASPECT_RATIOS),
+    prompt: z.string().trim().min(1).max(2000),
+  }).strict()).min(1).max(STORYBOARD_FRAME_LIMIT),
+}).strict().superRefine((storyboard, context) => {
+  storyboard.frames.forEach((frame, position) => {
+    if (frame.index !== position) {
+      context.addIssue({ code: "custom", path: ["frames", position, "index"], message: `Expected storyboard frame index ${position}` });
+    }
+  });
+});
+
+export type ShortStoryboard = z.infer<typeof storyboardSchema>;
+export type ShortStoryboardVideo = ShortStoryboard["video"];
 
 const segmentsSchema = z.array(z.object({
   prompt: z.string().trim().min(1).max(2000),
@@ -161,6 +190,7 @@ const goalShortPlanV5Schema = z.object({
   title: titleSchema,
   aspectRatio: z.enum(SHORT_ASPECT_RATIOS),
   sourceImages: z.array(goalShortImageRefSchema).max(SOURCE_IMAGE_LIMIT),
+  storyboard: storyboardSchema.optional(),
   frame: frameSettingsSchema,
   segments: segmentsSchema,
   video: videoSettingsSchema,
@@ -202,6 +232,7 @@ const goalShortDraftV5Schema = z.object({
   aspectRatio: z.enum(SHORT_ASPECT_RATIOS),
   segmentSeconds: segmentSecondsSchema,
   sourceImages: z.array(shortReferenceInputSchema).max(SOURCE_IMAGE_LIMIT),
+  storyboard: storyboardSchema.optional(),
 }).strict();
 
 export const goalShortDraftSchema = z.union([goalShortDraftV5Schema, goalShortDraftV4Schema]);
@@ -210,6 +241,14 @@ export type GoalShortDraft = z.infer<typeof goalShortDraftSchema>;
 
 export function isLegacyShortPlan(plan: GoalShortPlan): plan is GoalShortPlanV4 {
   return plan.version === 4;
+}
+
+export function shortStoryboardOf(plan: GoalShortPlan | GoalShortDraft | null | undefined): ShortStoryboard | null {
+  return plan && "storyboard" in plan ? plan.storyboard ?? null : null;
+}
+
+export function formatShortSeconds(seconds: number): string {
+  return (Math.round(seconds * 10) / 10).toFixed(1);
 }
 
 export function isLegacyShortDraft(draft: GoalShortDraft): draft is z.infer<typeof goalShortDraftV4Schema> {
@@ -318,6 +357,7 @@ export function buildGoalShortPlan(input: {
   title: string;
   aspectRatio: ShortAspectRatio;
   sourceImages: readonly ShortReferenceInput[];
+  storyboard?: ShortStoryboard | null;
   framePrompt: string;
   beats: readonly string[];
   segmentSeconds: readonly number[];
@@ -327,6 +367,7 @@ export function buildGoalShortPlan(input: {
     version: 5,
     ...shortPlanBody(input),
     sourceImages: slotted(input.sourceImages, 0),
+    ...(input.storyboard ? { storyboard: input.storyboard } : {}),
     frame: frameSettings(input.aspectRatio, input.framePrompt),
     rules: { ...SHORT_RULES },
   });
@@ -361,8 +402,8 @@ export function buildLegacyGoalShortPlan(input: {
 }
 
 export function refreshGoalShortPlan(plan: GoalShortPlan, document: NotebookDocument): GoalShortPlan {
-  const live = (reference: GoalShortImageRef): GoalShortImageRef => {
-    const cell = document.cells.find((candidate) => candidate.id === reference.cellId);
+  const live = <T extends { cellId: string | null; address: string | null }>(reference: T): T => {
+    const cell = reference.cellId ? document.cells.find((candidate) => candidate.id === reference.cellId) : undefined;
     return cell ? { ...reference, address: notebookGridTag(cell.slot) } : reference;
   };
   if (plan.version === 4) {
@@ -372,7 +413,12 @@ export function refreshGoalShortPlan(plan: GoalShortPlan, document: NotebookDocu
       frame: { ...plan.frame, references: plan.frame.references.map(live) },
     };
   }
-  return { ...plan, sourceImages: plan.sourceImages.map(live) };
+  const { storyboard } = plan;
+  return {
+    ...plan,
+    sourceImages: plan.sourceImages.map(live),
+    ...(storyboard ? { storyboard: { ...storyboard, video: live(storyboard.video), frames: storyboard.frames.map(live) } } : {}),
+  };
 }
 
 function phrase(text: string): string {
@@ -393,6 +439,12 @@ function sourceImageLine(count: number, instruction: string): string | null {
   if (count === 0) return null;
   const noun = count > 1 ? "source images" : "a source image";
   return `${slotNames(count)} ${count > 1 ? "are" : "is"} ${noun}: ${instruction}`;
+}
+
+function storyboardFrameLine(sourceCount: number): string {
+  const slot = `@image${sourceCount + 1}`;
+  const people = sourceCount === 0 ? "this prompt" : `${sourceCount > 1 ? "the source images" : "the source image"} and this prompt`;
+  return `${slot} is the first frame of the storyboard: copy its camera angle, framing, pose and action, but take the people and animals from ${people}, never from ${slot}.`;
 }
 
 function paragraphs(...parts: (string | null)[]): string {
@@ -424,7 +476,22 @@ function frameStep(plan: GoalShortPlan, prompt: string, images: readonly string[
   };
 }
 
-export function compileShortFrameStep(plan: GoalShortPlan): ChainStep {
+export function compileShortStoryboardStep(storyboard: ShortStoryboard, index: number): ChainStep {
+  const frame = storyboard.frames[index];
+  if (!frame) throw new RangeError(`The storyboard has ${storyboard.frames.length} frames.`);
+  return {
+    id: `storyboard${index + 1}`,
+    tool: "generate_image",
+    params: {
+      model: storyboard.model,
+      prompt: frame.prompt,
+      refs: { image: [frame.address] },
+      options: { aspect_ratio: frame.aspectRatio, output_format: "jpeg" },
+    },
+  };
+}
+
+export function compileShortFrameStep(plan: GoalShortPlan, storyboardFrameAddress: string | null = null): ChainStep {
   if (plan.version === 4) {
     const { character, frame } = plan;
     const placeLine = frame.references.length === 0
@@ -437,13 +504,15 @@ export function compileShortFrameStep(plan: GoalShortPlan): ChainStep {
       plan.rules.frame,
     ), addresses([...character.references, ...frame.references]));
   }
+  const images = addresses(plan.sourceImages);
   return frameStep(plan, paragraphs(
     plan.frame.prompt,
-    sourceImageLine(plan.sourceImages.length, plan.sourceImages.length > 1
+    sourceImageLine(images.length, images.length > 1
       ? "keep each person exactly as photographed (face, hair, build and clothes), and keep whatever else the brief takes from them."
       : "keep that person exactly as photographed (face, hair, build and clothes), and keep whatever else the brief takes from it."),
+    storyboardFrameAddress ? storyboardFrameLine(images.length) : null,
     plan.rules.frame,
-  ), addresses(plan.sourceImages));
+  ), storyboardFrameAddress ? [...images, storyboardFrameAddress] : images);
 }
 
 function clipStep(plan: GoalShortPlan, frameAddress: string, prompt: string, images: readonly string[]): ChainStep {

@@ -131,7 +131,7 @@ describe("goals made by an earlier /goal", () => {
     expect((await legacy({ action: "dismiss", goal_id: goalId })).dismissedAt).toEqual(expect.any(String));
   });
 
-  it("lists earlier goals beside new shorts, places them below existing cells, and offers no assembly or storyboard argument", async () => {
+  it("lists earlier goals beside new shorts, places them below existing cells, and offers no assembly argument or earlier storyboard model", async () => {
     const image = await engine.artifacts.create("image", "Existing");
     if (!image.ok) throw new Error(image.error.message);
     const written = await engine.files.write(image.value.artifactId, "original.png", await sharp({ create: { width: 8, height: 8, channels: 3, background: "#123456" } }).png().toBuffer());
@@ -144,7 +144,7 @@ describe("goals made by an earlier /goal", () => {
     expect(tools.tools.map(tool => tool.name)).not.toContain("assemble_goal");
     const goalTool = tools.tools.find(tool => tool.name === "video_goal")!;
     const schema = JSON.stringify(goalTool.inputSchema);
-    for (const word of ["assemble", "combine", "shot_indexes", "storyboards"]) expect(schema).not.toContain(word);
-    expect(goalTool.description).not.toMatch(/storyboard|seedance|nano banana|kie/iu);
+    for (const word of ["assemble", "combine", "shot_indexes", "panel"]) expect(schema).not.toContain(word);
+    expect(goalTool.description).not.toMatch(/seedance|kie|panel/iu);
   });
 });

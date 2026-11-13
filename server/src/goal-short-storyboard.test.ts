@@ -9,8 +9,10 @@ import { findPrimaryMediaFile } from "videobook-engine";
 import { preflightAndAccept, waitForChainRun } from "./chain-executor.js";
 import { createEngineForTest } from "./engine.js";
 import { runFfmpeg } from "./ffmpeg.js";
+import { buildGoalShortPlan, compileShortStoryboardStep } from "./goal-short-plan.js";
+import { estimateShort } from "./goal-short-runtime.js";
 import {
-  captureStoryboardFrames, compileStoryboardCleanupStep, estimateStoryboardCleanup, storyboardMoments, videoStoryboardMoments,
+  captureStoryboardFrames, shortStoryboard, storyboardMoments, videoStoryboardMoments,
   type StoryboardVideo,
 } from "./goal-short-storyboard.js";
 import { installFalDynamicEstimator } from "./media/cost.js";
@@ -190,7 +192,9 @@ describe("goal short storyboard of a video", () => {
 
   it("builds and prices one on-screen-graphics clean-up per frame, and runs them through fal into connected clean-frame cells", async () => {
     const frames = await captureStoryboardFrames(engine, notebookId, video, await videoStoryboardMoments(engine, bookId, video.artifactId));
-    const steps = frames.map((frame) => compileStoryboardCleanupStep(frame.address, frame.index, frame.aspectRatio));
+    const storyboard = shortStoryboard({ artifactId: video.artifactId, cellId: video.cellId, address: "@a1", label: "Umbrella walk" }, frames);
+    expect(storyboard).toMatchObject({ model: CLEANUP_MODEL, frames: frames.map(({ requestedSeconds: _requested, ...frame }) => ({ ...frame, prompt: expect.any(String) })) });
+    const steps = frames.map((frame) => compileShortStoryboardStep(storyboard, frame.index));
     expect(steps[0]).toEqual({
       id: "storyboard1",
       tool: "generate_image",
@@ -213,13 +217,18 @@ describe("goal short storyboard of a video", () => {
     ]) expect(prompt).toContain(phrase);
     expect(steps[1]!.params).toEqual({ ...steps[0]!.params, refs: { image: ["@a3"] } });
 
-    const estimate = await estimateStoryboardCleanup(engine, frames);
-    expect(estimate.usd).toBeCloseTo(0.42);
+    const plan = buildGoalShortPlan({
+      title: "Umbrella", aspectRatio: "9:16", sourceImages: [], storyboard, framePrompt: "A walk in the rain.", beats: ["They walk on."], segmentSeconds: [12],
+    });
+    const estimate = await estimateShort(engine, plan);
+    expect(estimate.storyboards.usd).toBeCloseTo(0.42);
+    expect(estimate.storyboardFrames?.map((frame) => frame.usd)).toEqual([0.21, 0.21]);
     const restoreUnpriced = installFalDynamicEstimator(null);
     try {
-      const unpriced = await estimateStoryboardCleanup(engine, frames);
-      expect(unpriced.usd).toBeNull();
-      expect(unpriced.warnings.length).toBeGreaterThan(0);
+      const unpriced = await estimateShort(engine, plan);
+      expect(unpriced.storyboards.usd).toBeNull();
+      expect(unpriced.storyboards.warnings.length).toBeGreaterThan(0);
+      expect(unpriced.total.usd).toBeNull();
     } finally {
       restoreUnpriced();
     }

@@ -4,8 +4,8 @@ import type { Engine, NotebookDocument } from "videobook-engine";
 import { cancelChainRun } from "../chain-executor.js";
 import { goalShortPlanSchema } from "../goal-short-plan.js";
 import { createShortGoal, queueShortRealismCheck, retryShortGoal, selectShortVersion, shortFeedbackSchema, startShortStage, updateShortGoal } from "../goal-short-runtime.js";
-import { activeGoalStage, LEGACY_GOAL_MESSAGE, publicGoal, reconcileFinish, reconcileGoal } from "../goal-state.js";
-import { findGoalCell, isCurrentShort, listGoals, readGoal, readGoalCell, saveGoal, type GoalRecord } from "../goal-store.js";
+import { LEGACY_GOAL_MESSAGE, publicGoal, reconcileFinish, reconcileGoal } from "../goal-state.js";
+import { activeGoalStage, findGoalCell, isCurrentShort, listGoals, readGoal, readGoalCell, saveGoal, type GoalRecord } from "../goal-store.js";
 import { queueGoalFinish } from "../jobs/finish-goal.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -17,7 +17,7 @@ const failure = (error: unknown): ToolResult => ({ isError: true, content: [{ ty
 const ACTIVE_STATUSES = new Set(["planning", "review", "running"]);
 const LEGACY_ACTIONS = new Set(["status", "cancel", "dismiss"]);
 type GoalArgs = Record<string, unknown>;
-const stageSchema = z.enum(["frame", "videos"]);
+const stageSchema = z.enum(["storyboards", "frame", "videos"]);
 export type GoalSnapshot = Awaited<ReturnType<typeof publicGoal>>;
 export type ShortGoalSnapshot = Extract<GoalSnapshot, { legacy: false }>;
 export type LegacyGoalSnapshot = Extract<GoalSnapshot, { legacy: true }>;
@@ -112,7 +112,7 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Run Goal mode on a notebook. create makes a short from a brief: a real-looking phone video, 5 to 60 seconds, starring the person in the images the brief mentions, or the person the brief describes when it mentions none; that person never speaks. Every image the brief mentions is a source image, kept as photographed, up to 12. Videos are used through an extracted frame, and unusable mentions are skipped with a note. Lengths are clamped to 5-60 seconds, extra quoted beats are fitted or folded into the last beat, and without OPENAI_API_KEY the brief supplies a reviewable plan. Then list, status, update, approve, regenerate, select, revise, cancel, retry, finish (the reviewed take plus the saved watermark) or dismiss it by goal_id. revise (stage, index, feedback up to 2000 characters) rewrites an @ mention to the cell's label, then has OpenAI rewrite that frame prompt or beat with the feedback, billed like planning, replacing any sentence the feedback contradicts, and saves it in the plan before the paid regeneration. Each paid step needs its own approval with its estimate: the GPT Image 2.6 opening frame, the H3 Max base clip, and each H3 Max Extend continuation for the next beat. check (stage and index) looks at the selected frame, or 4 frames of a clip's new footage, for AI tells and stores up to 5 findings (note or warn) with that output; it is billed like planning, runs only when asked and never blocks an approval. Goals made by an earlier /goal are read-only: list, status, cancel and dismiss.",
+    description: "Run Goal mode on a notebook. create makes a short from a brief: a real-looking phone video, 5 to 60 seconds, starring the person in the images the brief mentions, or the person the brief describes when it mentions none; that person never speaks. Every image the brief mentions is a source image, kept as photographed, up to 12. The first video the brief mentions becomes the short's storyboard: 4 frames (one per shot when it has cuts, from its \"at Ns\" when given) captured into image cells at no cost, which the planner follows in order; further videos and unusable mentions are skipped with a note. Lengths are clamped to 5-60 seconds, extra quoted beats are fitted or folded into the last beat, and without OPENAI_API_KEY the brief supplies a reviewable plan. Then list, status, update, approve, regenerate, select, revise, cancel, retry, finish (the reviewed take plus the saved watermark) or dismiss it by goal_id. approve runs the stage under review, and naming another stage is refused. regenerate, select and revise take a stage (storyboards, frame or videos) and index. revise (stage, index, feedback up to 2000 characters) rewrites an @ mention to the cell's label, then has OpenAI rewrite that storyboard frame's clean-up prompt, the frame prompt or the beat with the feedback, billed like planning, replacing any sentence the feedback contradicts, and saves it in the plan before the paid regeneration. Each paid step needs its own approval with its estimate: the storyboard clean-up (one Nano Banana 2.1 edit per frame that removes captions, stickers, logos, credits and shade), the GPT Image 2.6 opening frame (from the source images and clean storyboard frame 1, which it cannot start without), the H3 Max base clip, and each H3 Max Extend continuation for the next beat. check (frame or videos, and index) looks at the selected frame, or 4 frames of a clip's new footage, for AI tells and stores up to 5 findings (note or warn) with that output; it is billed like planning, runs only when asked and never blocks an approval. Goals made by an earlier /goal are read-only: list, status, cancel and dismiss.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
       action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "retry", "dismiss", "finish", "check"]),

@@ -5,7 +5,7 @@ import { requireApiKey } from "../api-key.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } from "../openai-intelligence.js";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
 import { isCurrentShort, readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent, type GoalRecord } from "../goal-store.js";
-import { buildGoalShortPlan, buildLegacyGoalShortPlan, isLegacyShortDraft, type GoalShortDraft } from "../goal-short-plan.js";
+import { buildGoalShortPlan, buildLegacyGoalShortPlan, isLegacyShortDraft, shortStoryboardOf, type GoalShortDraft } from "../goal-short-plan.js";
 import { shortWantsPhone, stripShortBannedWords, withoutShortPhoneSentences } from "../goal-short-rules.js";
 import { estimateShort } from "../goal-short-runtime.js";
 import {
@@ -39,22 +39,25 @@ async function askShortPlanner(engine: Engine, goal: GoalRecord, brief: string, 
   const notebook = engine.notebooks.read(goal.notebookId);
   if (!notebook.ok) throw new Error(notebook.error.message);
   const references = isLegacyShortDraft(draft) ? [...draft.character.references, ...draft.extraReferences] : [...draft.sourceImages];
+  const storyboard = shortStoryboardOf(draft);
   const count = draft.segmentSeconds.length;
   const options = chatIntelligenceRequestOptions();
   const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"), options);
   const fixedBeats = authored.beats.flatMap((beat, index) => beat === null ? [] : [[`beat ${index + 1}`, beat] as const]);
   const phones = shortWantsPhone(brief);
   const request = {
-    instructions: await shortPlannerInstructions({ sourceImageCount: references.length, aspectRatio: draft.aspectRatio, segmentSeconds: draft.segmentSeconds }),
+    instructions: await shortPlannerInstructions({
+      sourceImageCount: references.length, storyboardFrameCount: storyboard?.frames.length ?? 0, aspectRatio: draft.aspectRatio, segmentSeconds: draft.segmentSeconds,
+    }),
     input: [{ role: "user" as const, content: [
       { type: "input_text" as const, text: JSON.stringify({
-        brief: shortPlannerBrief(brief, references, notebook.value),
+        brief: shortPlannerBrief(brief, references, notebook.value, storyboard?.video ?? null),
         aspectRatio: draft.aspectRatio,
         segments: draft.segmentSeconds.map((seconds, index) => ({ beat: index + 1, seconds })),
         fixed: Object.fromEntries([...(authored.frame === null ? [] : [["frame", authored.frame] as const]), ...fixedBeats]),
         write: ["title", ...(authored.frame === null ? ["frame"] : []), ...authored.beats.flatMap((beat, index) => beat === null ? [`beat ${index + 1}`] : [])],
       }) },
-      ...await goalPlannerImages(engine, references),
+      ...await goalPlannerImages(engine, references, storyboard?.frames ?? []),
     ] }],
     text: { format: { type: "json_schema" as const, name: "short_plan", strict: true, schema: z.toJSONSchema(shortPlannerResponseSchema(count)) } },
     max_output_tokens: 2000,
@@ -103,7 +106,7 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
         framePrompt, beats, segmentSeconds: plannedDraft.segmentSeconds, extraReferences: plannedDraft.extraReferences,
       })
       : buildGoalShortPlan({
-        title, aspectRatio: plannedDraft.aspectRatio, sourceImages: plannedDraft.sourceImages,
+        title, aspectRatio: plannedDraft.aspectRatio, sourceImages: plannedDraft.sourceImages, storyboard: shortStoryboardOf(plannedDraft),
         framePrompt, beats, segmentSeconds: plannedDraft.segmentSeconds,
       });
     const estimate = await estimateShort(engine, plan);
@@ -117,7 +120,7 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
         if (!notes.includes(note)) notes.push(note);
       }
       await writeGoalShortContent(engine, current, { ...latest, draft: plannedDraft, plan, estimate, notes, revision: latest.revision + 1 });
-      saveGoal(engine, { ...current, stage: "frame", status: "review", error: null });
+      saveGoal(engine, { ...current, stage: shortStoryboardOf(plan) ? "storyboards" : "frame", status: "review", error: null });
     });
     return { goalId };
   } catch (error) {

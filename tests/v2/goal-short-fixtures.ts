@@ -69,6 +69,7 @@ export function shortGoalFixture(extra: Partial<ShortGoalSnapshot> = {}, short: 
     createdAt: '2026-11-12T00:00:00Z', updatedAt: '2026-11-12T00:00:00Z', steps: [], finish: null, finalArtifactId: null, coldOpen: null,
     ...extra,
     notes: extra.notes ?? [],
+    storyboard: extra.storyboard ?? null,
   }
 }
 
