@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-13
+
 ### Added
 
 - Kie GPT Image 2.6 Sunburst and Flare, for text-to-image and edits, beside the
@@ -44,27 +46,29 @@ and the package uses [Semantic Versioning](https://semver.org/).
   2000 characters. Video character references also use extracted frames, and
   a character without reference images can generate a frame from its saved
   name and description. Paid generation keeps its approvals and estimates.
-
-- Download actions and `/download` in a non-loopback browser now save the original file through the browser. Local pages and direct MCP Downloads exports keep copying to the server Downloads folder.
-
-- Every @apicity package moves to 0.28.0. Apicity drops KIE's withdrawn
-  Midjourney calls, which Videobook never used.
-- `@hono/node-server` resolves 2.1.8, and the dependency override now requires
-  at least that version. 2.1.7 fixed `serveStatic` with `allowPercentInPath`,
-  which Videobook does not use: Express serves its files and the MCP endpoint
-  uses only Hono's request listener.
+- `/goal` shorts no longer start with a cold open; Finish keeps the reviewed
+  take and burns the saved watermark. To add a cold open, use
+  `/edit-cold-open` on the finished video.
+- A new `/goal` short opens on its Character tab, and the tab you choose stays
+  open while the short updates. The Character tab shows the notebook's images,
+  the ones the brief mentioned first, and takes an upload: pick up to four to
+  use as they are, or to make the character sheet from. A sheet made from
+  pictures keeps that person's face, hair, build and clothes.
+- Download actions and `/download` in a non-loopback browser now save the
+  original file through the browser. Local pages and direct MCP Downloads
+  exports keep copying to the server Downloads folder.
 - The model pickers rank the new Kie endpoints: GPT Image 2.6 on both image
   boards, Seedream 5.5 for text-to-image and edits, and Gemini Omni 1.2 Flash
   for text-to-video, references and video edits. Kie Wan 3.0, Wan 3.0 Prime and
   Seedance 2.5 also carry their video-editing ranks; Wan 3.0 edits a video
   connected in its References mode.
 - The GPT Image 2.6 prompting guide covers its Kie controls beside fal's.
-- `/goal` shorts no longer start with a cold open; Finish keeps the reviewed take and burns the saved watermark. Add a cold open separately with the cold-open tool.
-- A new `/goal` short opens on its Character tab, and the tab you choose stays
-  open while the short updates. The Character tab shows the notebook's images,
-  the ones the brief mentioned first, and takes an upload: pick up to four to
-  use as they are, or to make the character sheet from. A sheet made from
-  pictures keeps that person's face, hair, build and clothes.
+- Every @apicity package moves to 0.28.0. Apicity drops KIE's withdrawn
+  Midjourney calls, which Videobook never used.
+- `@hono/node-server` resolves 2.1.8, and the dependency override now requires
+  at least that version. 2.1.7 fixed `serveStatic` with `allowPercentInPath`,
+  which Videobook does not use: Express serves its files and the MCP endpoint
+  uses only Hono's request listener.
 
 ### Fixed
 
