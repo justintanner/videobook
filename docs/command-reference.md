@@ -334,7 +334,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/get-sequence-rhythm` — Read the selected master soundtrack and editable beat map with its revision and undo state; MCP: `get_sequence_rhythm`
 - `/get-timeline` — Get the selected book's typed v2 timeline; MCP: `get_timeline`
 - `/get-watermark-config` — Read the effective watermark profile for TikTok or X, including alias preferences and appearance. A fresh book returns the TikTok profile. The authenticated handle is available only for X.; MCP: `get_watermark_config`
-- `/goal` — Make a real-looking short starring the person in the images the brief mentions, or the person the brief describes, who never speaks: review the frame, the clip and each continuation, then finish; UI: `start_goal`
+- `/goal` — Make a real-looking short starring the person in the images the brief mentions, or the person the brief describes, who never speaks: clean the storyboard of a mentioned video, review the frame, the clip and each continuation, then finish; UI: `start_goal`
 - `/group-images` — Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots; preview or workspace operation
 - `/history` — View asset version history; UI: `show_history`
 - `/image-sheet` (aliases: `/concat`) — Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell; MCP: `concat_images`

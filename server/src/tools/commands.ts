@@ -292,7 +292,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/goal",
-    description: "Make a real-looking short starring the person in the images the brief mentions, or the person the brief describes, who never speaks: review the frame, the clip and each continuation, then finish",
+    description: "Make a real-looking short starring the person in the images the brief mentions, or the person the brief describes, who never speaks: clean the storyboard of a mentioned video, review the frame, the clip and each continuation, then finish",
     example: "/goal he waits for a bus in the rain",
     category: "action",
     icon: "Wand2",

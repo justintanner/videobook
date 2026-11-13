@@ -6,6 +6,30 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `/goal` shorts have no main character. Every image a brief mentions is a
+  source image kept as photographed, up to 12, and a brief with no image plans
+  the person from its own words. New shorts have no Character tab, and
+  `video_goal` has no `character` action. Shorts saved with a character keep it
+  read-only and still run and finish with their stored prompts.
+- The first video a `/goal` brief mentions becomes the short's storyboard
+  instead of one midpoint frame: 4 frames by default, one per shot when it has
+  cuts, starting at `@a1 at 3s` when given, captured at no cost. A Storyboard
+  stage and tab come before the frame: one estimated Nano Banana 2.1 edit per
+  frame removes captions, stickers, logos, credits and shade, and each clean
+  frame can be regenerated, revised or set back to an earlier version. The
+  planner follows the storyboard's action and camera with the brief's changes,
+  the opening frame is made from the source images and clean storyboard frame
+  1, and clips never receive storyboard frames.
+- `video_goal` `approve` refuses a stage other than the one under review.
+
+### Fixed
+
+- The `/goal` planner names a mentioned image or video by the address it had
+  when the brief was typed, so the goal's own notebook layout no longer points
+  a mention at the wrong cell.
+
 ## [0.7.1] - 2026-11-13
 
 ### Added

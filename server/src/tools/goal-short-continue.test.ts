@@ -6,9 +6,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { v7 as uuidv7 } from "uuid";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
+import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { waitForChainRun } from "../chain-executor.js";
 import { createEngineForTest } from "../engine.js";
-import { createShortGoal } from "../goal-short-runtime.js";
+import { buildLegacyGoalShortPlan } from "../goal-short-plan.js";
+import { LEGACY_SHORT_SILENCE, SHORT_RULES } from "../goal-short-rules.js";
+import { createShortGoal, shortFingerprint } from "../goal-short-runtime.js";
 import { readGoal, saveGoal } from "../goal-store.js";
 import { installFalDynamicEstimator, lowerBoundWarnings } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
@@ -34,6 +37,7 @@ describe("continuing a short with H3 Max Extend", () => {
   let client: Client;
   let bookId: string;
   let notebookId: string;
+  let imageIds: string[];
   let restoreFetch: () => void;
   let restoreEndpoints: () => void;
   let restoreEstimator: () => void;
@@ -74,7 +78,7 @@ describe("continuing a short with H3 Max Extend", () => {
     const notebook = await engine.notebooks.create("Shorts");
     if (!notebook.ok) throw new Error(notebook.error.message);
     notebookId = notebook.value.id;
-    await goalTestCharacters(engine, notebookId);
+    imageIds = await goalTestCharacters(engine, notebookId);
   });
 
   afterEach(async () => {
@@ -142,6 +146,38 @@ describe("continuing a short with H3 Max Extend", () => {
     expect(extended).toMatchObject({ stage: "videos", status: "review", finish: { status: "review", sourceArtifactId: wholeId } });
     await pauseBookQueueForTests(bookId);
     expect((await invoke({ action: "finish", goal_id: extended.goalId })).finish).toMatchObject({ status: "running", sourceArtifactId: wholeId });
+    expect(stub.unexpected).toEqual([]);
+  });
+
+  it("continues and finishes a version 4 short saved with a character, keeping its stored prompts", async () => {
+    const manifest = await engine.files.manifest(imageIds[0]!);
+    const notebook = engine.notebooks.read(notebookId);
+    if (!manifest.ok || !notebook.ok) throw new Error("missing the character image");
+    const cell = notebook.value.cells.find((candidate) => candidate.outputArtifactId === imageIds[0])!;
+    const plan = buildLegacyGoalShortPlan({
+      title: "Waiting", aspectRatio: "9:16",
+      character: {
+        name: "Main character", description: "a man in a green shirt",
+        references: [{ kind: "image", artifactId: imageIds[0]!, cellId: cell.id, address: notebookGridTag(cell.slot), label: "Character 1", objectHash: manifest.value.files[0]!.objectHash }],
+      },
+      framePrompt: "A bus stop at dusk.", beats: ["He waits under the shelter.", "He boards the bus."], segmentSeconds: [10, 10], extraReferences: [],
+    });
+    const created = await invoke({ action: "create", brief: TWO_BEATS, plan, request_id: uuidv7() });
+    expect(created).toMatchObject({ planVersion: 4, stage: "frame", status: "review", storyboard: null });
+    const frame = await approved(created);
+    const base = await approved(frame);
+    const frameId = frame.stages.frame!.outputs[0]!.artifactId;
+    const clipFingerprint = await shortFingerprint(engine, base.shortPlan!, "videos", 0, frameId);
+    const extended = await approved(base);
+    expect(stub.submissions.map((submission) => submission.path)).toEqual(["/openai/gpt-image-2.6/sunburst/edit", "/minimax/h3-max/reference-to-video", "/minimax/h3-max/extend-video"]);
+    expect(String(stub.submissions[1]!.body.prompt)).toContain(`reference image 1 is Main character: keep the same person in the same clothes.\n\n${SHORT_RULES.video}\n\n${LEGACY_SHORT_SILENCE}`);
+    expect(String(extensions()[0]!.body.prompt)).toBe(`He boards the bus.\n\nContinue the same shot: the same person, clothes, place and light.\n\n${SHORT_RULES.video}\n\n${LEGACY_SHORT_SILENCE}`);
+    expect(await shortFingerprint(engine, extended.shortPlan!, "videos", 0, frameId)).toBe(clipFingerprint);
+    const wholeId = output(extended, 1).artifactId;
+    expect(extended).toMatchObject({ planVersion: 4, stage: "videos", status: "review", finish: { status: "review", sourceArtifactId: wholeId } });
+    expect(extended.stages.frame!.outputs[0]!.artifactId).toBe(frameId);
+    await pauseBookQueueForTests(bookId);
+    expect((await invoke({ action: "finish", goal_id: created.goalId })).finish).toMatchObject({ status: "running", sourceArtifactId: wholeId });
     expect(stub.unexpected).toEqual([]);
   });
 

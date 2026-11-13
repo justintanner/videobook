@@ -234,6 +234,7 @@ describe("video_goal storyboard stage", () => {
     expect(request.instructions).toContain("then the 4 storyboard frames, labelled Storyboard frame 1 of 4 and so on");
     expect(request.instructions).toContain("Follow the storyboard's action, camera and order across the opening frame and the beats, and apply the brief's changes to it");
     expect(request.instructions).toContain("Never describe anything drawn on top of the picture in the storyboard frames");
+    expect(JSON.stringify(stub.plannerRequests)).not.toMatch(/Main character|a man in a green shirt/u);
 
     const runs = chainRuns();
     expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: goal.revision, stage: "frame" })).toBe(STORYBOARD_FIRST);
@@ -322,6 +323,8 @@ describe("video_goal storyboard stage", () => {
     const recovered = await invoke({ action: "select", goal_id: goal.goalId, stage: "storyboards", index: 0, artifact_id: restaled.stages.storyboards!.outputs[0]!.artifactId });
     expect(recovered).toMatchObject({ stage: "videos", status: "review", error: null, resumeStage: null, resumeOutputs: null, finish: { status: "review" } });
     expect(recovered.stages.frame!.outputs[0]!.stale).toBe(FRAME_STALE);
+    expect(new Set(stub.submissions.map((submission) => submission.path))).toEqual(new Set([CLEANUP, FRAME_EDIT, "/minimax/h3-max/reference-to-video"]));
+    expect(JSON.stringify(stub.submissions)).not.toMatch(/Main character|a man in a green shirt/u);
     expect(stub.unexpected).toEqual([]);
   });
 
