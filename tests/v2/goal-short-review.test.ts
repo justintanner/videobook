@@ -4,7 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { GoalShortReview } from '../../src/components/videobook/GoalShortReview'
 import { GoalPanel } from '../../src/components/videobook/GoalPanel'
 import type { AssetRecord } from '../../src/videobook/workspace-responses'
-import { defaultShortTab, type GoalCharacterImage, type MainCharacterView, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
+import type { NodeProps } from '@xyflow/react'
+import { GoalCellNode } from '../../src/components/videobook/GoalCellNode'
+import { GoalTileContext } from '../../src/components/videobook/notebook-canvas-context'
+import type { CanvasNode } from '../../src/videobook/notebook-canvas'
+import { defaultShortTab, LEGACY_GOAL_NOTE, type GoalCharacterImage, type GoalSnapshot, type MainCharacterView, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
 import { buildGoalShortPlan } from '../../server/src/goal-short-plan'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
 import { legacyGoalFixture, shortGoalFixture, shortPlanFixture, shortStage } from './goal-short-fixtures'
@@ -256,5 +260,25 @@ describe('GoalPanel with an earlier goal', () => {
     expect(html).toContain('src="/media/final-old.mp4"')
     expect(html).toMatch(/<span>Video<\/span><button type="button" class="goal-progress-address">@d1<\/button>/u)
     expect(button(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: { ...goal, dismissedAt: '2026-11-12T00:00:00Z' } })), 'Dismiss')).toContain('disabled=""')
+  })
+})
+
+describe('GoalCellNode with an earlier goal', () => {
+  const props = { id: 'legacy-tile', data: { slot: { row: 3, column: 0 }, label: 'The skateboard champion' }, selected: false } as unknown as NodeProps<CanvasNode>
+  const tile = (goals: ReadonlyMap<string, GoalSnapshot>) =>
+    renderToStaticMarkup(createElement(GoalTileContext.Provider, { value: goals }, createElement(GoalCellNode, props)))
+
+  it('shows the earlier-goal note, its outputs and its state once the goal list has loaded', () => {
+    const html = tile(new Map([['legacy-tile', legacyGoalFixture()]]))
+    expect(html).toContain(`<p class="goal-tile-note" data-tone="quiet">${LEGACY_GOAL_NOTE}</p>`)
+    expect(html).toContain('>4 outputs<')
+    expect(html).toContain('>Complete<')
+  })
+
+  it('shows a plain goal tile without the note until the goal list arrives', () => {
+    const html = tile(new Map())
+    expect(html).toContain('>The skateboard champion<')
+    expect(html).toContain('>Goal<')
+    expect(html).not.toContain(LEGACY_GOAL_NOTE)
   })
 })

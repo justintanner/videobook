@@ -316,7 +316,7 @@ describe('goal mode in the browser', () => {
       if (!earlier?.legacy || !scene?.legacy) throw new Error('expected two earlier goals')
       expect(earlier.outputs.map(output => output.stage)).toEqual(['frame', 'storyboards', 'storyboards', 'videos', 'videos'])
       await tile(earlier).waitFor({ state: 'visible', timeout: testBudget(30_000) })
-      expect(await tile(earlier).textContent()).toContain('Made by an earlier /goal')
+      await expect.poll(() => tile(earlier).textContent(), { timeout: testBudget(15_000) }).toContain('Made by an earlier /goal')
       await tile(earlier).click()
       await panel().waitFor({ state: 'visible', timeout: testBudget(15_000) })
       expect(await panel().getByText('Made by an earlier /goal.', { exact: false }).isVisible()).toBe(true)
