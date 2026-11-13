@@ -13,6 +13,7 @@ import type { GraphicsDocument } from "./model.js";
 import { MAX_GRAPHICS_NAME_LENGTH, parseGraphicsDocument } from "./model.js";
 import { clearGraphicsSlots } from "./slots.js";
 import { DEFAULT_GRAPHICS_STARTER_ID, GRAPHICS_STARTERS } from "./starters.js";
+import { watermarkTemplateDraws } from "./watermark-burn.js";
 
 const TEMPLATES_KEY = "graphics.templates.v1";
 export const MAX_GRAPHICS_TEMPLATES = 50;
@@ -198,6 +199,15 @@ export function watermarkGraphicsTemplate(engine: Engine, platform: WatermarkPla
   const store = readGraphicsTemplates(engine);
   const id = store.watermark[platform];
   return id ? store.templates.find((template) => template.id === id) ?? null : null;
+}
+
+type WatermarkTitleSlots = { headline: boolean; secondary: boolean };
+
+export function watermarkTitleSlots(engine: Engine, platform: WatermarkPlatform): WatermarkTitleSlots {
+  const template = watermarkGraphicsTemplate(engine, platform);
+  if (!template) return { headline: platform === "tiktok", secondary: platform === "tiktok" };
+  const draws = watermarkTemplateDraws(template.document);
+  return { headline: draws.headline, secondary: draws.headline && draws.secondary };
 }
 
 export async function setWatermarkGraphicsTemplate(engine: Engine, platform: WatermarkPlatform, templateId: string | null): Promise<string | null> {

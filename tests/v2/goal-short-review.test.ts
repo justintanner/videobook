@@ -10,6 +10,7 @@ import { GoalTileContext } from '../../src/components/videobook/notebook-canvas-
 import type { CanvasNode } from '../../src/videobook/notebook-canvas'
 import { defaultShortTab, LEGACY_GOAL_NOTE, type GoalSnapshot, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
+import { goalShortPlanSchema, withShortFinishTitle, type ShortFinishTitle } from '../../server/src/goal-short-plan'
 import { legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, storyboardPlanFixture } from './goal-short-fixtures'
 
 const noop = async () => shortGoalFixture()
@@ -20,10 +21,11 @@ function asset(artifactId: string): AssetRecord | null {
   return { mediaUrl: `/media/${artifactId}.mp4`, thumbnailUrl: null, duration: 20, fps: 24, objectHash: `${artifactId}-hash` } as unknown as AssetRecord
 }
 
-function render(goal: ShortGoalSnapshot, view: ShortTab = defaultShortTab(goal, goal.shortPlan!)): string {
+function render(goal: ShortGoalSnapshot, view: ShortTab = defaultShortTab(goal, goal.shortPlan!), titleOptions: readonly ShortFinishTitle[] = []): string {
   return renderToStaticMarkup(createElement(GoalShortReview, {
     goal, plan: goal.shortPlan!, view, disabled: false,
     resolveAsset: asset, onView: () => undefined, onPreviewCell: () => undefined, onRun: () => undefined, onAction: noop,
+    titleOptions, onWriteTitle: async () => undefined,
   }))
 }
 
@@ -175,6 +177,58 @@ describe('GoalShortReview', () => {
     expect(running).not.toContain('class="goal-panel-primary">Finish</button>')
   })
 
+  const finishable = (extra: Partial<ShortGoalSnapshot> = {}, plan = shortPlanFixture()) => shortGoalFixture({
+    stage: 'videos',
+    stages: { ...withFrame, videos: shortStage('videos', [{ index: 0, artifactId: 'clip-a' }, { index: 1, artifactId: 'clip-b' }]) },
+    finish: { status: 'review', sourceArtifactId: 'clip-b', finalArtifactId: null, error: null },
+    ...extra,
+  }, plan)
+
+  it('offers a typed or written burned title on Finish, with the Write title estimate shown first', () => {
+    const estimate = { ...shortGoalFixture().estimate, title: { usd: 0.42, warnings: [] } }
+    const html = render(finishable({ estimate }), 'finish')
+    expect(html).toContain('<fieldset class="goal-finish-title">')
+    expect(html.indexOf('aria-label="Burned title"')).toBeGreaterThan(-1)
+    expect(html.indexOf('aria-label="Burned title"')).toBeLessThan(html.indexOf('aria-label="English line"'))
+    expect(html).not.toContain('aria-label="Short title"')
+    expect(button(html, 'Write title')).toContain('Write title · $0.42')
+    expect(button(html, 'Write title')).not.toContain('disabled')
+    expect(html).toContain('Typing a title costs nothing.')
+    expect(html).not.toContain('aria-label="Title options"')
+    expect(html).toContain('class="goal-panel-primary">Finish</button>')
+    expect(button(render(finishable(), 'finish'), 'Write title')).toContain('Write title · estimate unavailable')
+  })
+
+  it('fills the fields from the saved title and marks the option they match', () => {
+    const plan = goalShortPlanSchema.parse(JSON.parse(JSON.stringify(withShortFinishTitle(shortPlanFixture(), { headline: 'รอรถเมล์กลางฝน', secondary: 'Waiting for the bus in the rain' }))))
+    const html = render(finishable({}, plan), 'finish', [
+      { headline: 'รอรถเมล์กลางฝน', secondary: 'Waiting for the bus in the rain' },
+      { headline: 'ฝนตกแต่รถเมล์ไม่มา', secondary: 'The rain came, the bus did not' },
+    ])
+    expect(html).toContain('>รอรถเมล์กลางฝน</textarea>')
+    expect(html).toContain('>Waiting for the bus in the rain</textarea>')
+    expect(html).toContain('aria-label="Title options"')
+    expect(html).toContain('aria-pressed="true"><strong>รอรถเมล์กลางฝน</strong><span>Waiting for the bus in the rain</span></button>')
+    expect(html).toContain('aria-pressed="false"><strong>ฝนตกแต่รถเมล์ไม่มา</strong><span>The rain came, the bus did not</span></button>')
+    expect(html).toContain('class="goal-panel-primary">Finish</button>')
+    expect(button(html, 'Save')).toBe('')
+    expect(html).toContain('Each paid step needs its own approval.')
+  })
+
+  it('disables the title with one line when the TikTok watermark template has no headline, and the English line when it has no line under it', () => {
+    const blocked = render(finishable({ titleSlots: { headline: false, secondary: false } }), 'finish')
+    expect(blocked).toContain('<fieldset class="goal-finish-title" disabled="">')
+    expect(blocked).toContain('The saved TikTok watermark template has no headline, so Finish burns the handle alone.')
+    expect(blocked).not.toContain('Typing a title costs nothing.')
+    expect(blocked).toContain('class="goal-panel-primary">Finish</button>')
+    const headlineOnly = render(finishable({ titleSlots: { headline: true, secondary: false } }), 'finish')
+    expect(headlineOnly).toContain('<fieldset class="goal-finish-title">')
+    expect(headlineOnly).toMatch(/<textarea aria-label="English line"[^>]*disabled=""/u)
+    expect(headlineOnly).toContain('has no line under its headline, so only the burned title is drawn.')
+    const goal = finishable()
+    expect(render({ ...goal, finish: { ...goal.finish!, status: 'running' } }, 'finish')).toContain('<fieldset class="goal-finish-title" disabled="">')
+  })
+
   it('plays an already finished short without a cold-open review', () => {
     const goal = shortGoalFixture({
       status: 'completed', stage: 'videos', finalArtifactId: 'final-a',
@@ -251,7 +305,7 @@ describe('GoalShortReview with a storyboard', () => {
   })
 })
 
-const panelProps = { connected: true, onAction: noop, onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
+const panelProps = { connected: true, onAction: noop, onWriteTitle: async () => [], onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
 
 describe('GoalPanel with a short', () => {
   it('opens a new short on Frame and a saved version 4 short on Character', () => {

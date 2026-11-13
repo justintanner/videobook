@@ -5,8 +5,9 @@ import type { Engine } from "videobook-engine";
 import { findPrimaryMediaFile } from "videobook-engine";
 import { coldOpenDestination, coldOpenSource } from "../cold-open.js";
 import { probeVideo } from "../ffmpeg.js";
-import { isCurrentShort, readGoal, saveGoal, type GoalFinish, type GoalRecord } from "../goal-store.js";
-import { watermarkGraphicsTemplate } from "../graphics/templates.js";
+import type { ShortFinishTitle } from "../goal-short-plan.js";
+import { isCurrentShort, readGoal, requireGoalShortContent, saveGoal, type GoalFinish, type GoalRecord } from "../goal-store.js";
+import { watermarkGraphicsTemplate, watermarkTitleSlots } from "../graphics/templates.js";
 import { shortFinishSource } from "../goal-short-runtime.js";
 import { finishingIdentityKey, watermarkProfileFor } from "../lightning-defaults.js";
 import { mutateNotebook } from "../notebook-mutations.js";
@@ -17,7 +18,7 @@ import { effectiveWatermarkProfile, readWatermarkConfig } from "../watermark-con
 
 const FINISH_MESSAGE = "Only a reviewed short can finish.";
 
-type FinishPayload = { goalId: string; identity: string };
+type FinishPayload = { goalId: string; identity: string; title: ShortFinishTitle | null };
 
 function textOf(result: { isError?: boolean; content?: Array<{ type?: string; text?: string }> }): string {
   return result.content?.find(entry => entry.type === "text")?.text ?? "";
@@ -43,8 +44,22 @@ async function duplicatePlayableVideo(engine: Engine, sourceArtifactId: string, 
   return artifactId;
 }
 
-async function burnSavedWatermark(engine: Engine, artifactId: string, sourceArtifactId: string): Promise<void> {
-  const apply = applyWatermarkDef(engine, { transcribe: false });
+function payloadTitle(value: unknown): ShortFinishTitle | null {
+  const title = value && typeof value === "object" ? value as Record<string, unknown> : null;
+  return title && typeof title.headline === "string" && typeof title.secondary === "string"
+    ? { headline: title.headline, secondary: title.secondary }
+    : null;
+}
+
+function burnedTitle(engine: Engine, goal: GoalRecord): ShortFinishTitle | null {
+  const title = requireGoalShortContent(engine, goal).plan?.finish.title;
+  const slots = watermarkTitleSlots(engine, "tiktok");
+  if (!title || !slots.headline) return null;
+  return { headline: title.headline, secondary: slots.secondary ? title.secondary : "" };
+}
+
+async function burnSavedWatermark(engine: Engine, artifactId: string, sourceArtifactId: string, title: ShortFinishTitle | null): Promise<void> {
+  const apply = applyWatermarkDef(engine, { transcribe: false, title });
   const result = await apply.handler({
     book_id: engine.book.get().bookId,
     asset_id: artifactId,
@@ -77,7 +92,7 @@ async function runFinish(engine: Engine, payload: FinishPayload, signal: AbortSi
   if (!goal?.finish || goal.finish.status === "completed") return { finalArtifactId: goal?.finish?.finalArtifactId ?? "" };
   signal.throwIfAborted();
   const finalArtifactId = await duplicatePlayableVideo(engine, goal.finish.sourceArtifactId, "Finished", goal.finish.sourceObjectHash ?? undefined);
-  await burnSavedWatermark(engine, finalArtifactId, goal.finish.sourceArtifactId);
+  await burnSavedWatermark(engine, finalArtifactId, goal.finish.sourceArtifactId, payload.title);
   const manifest = await engine.files.manifest(finalArtifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
   const file = findPrimaryMediaFile(manifest.value.files, "video");
@@ -101,7 +116,7 @@ export function registerFinishGoalJob(engine: Engine): void {
     const goalId = typeof input.goalId === "string" ? input.goalId : "";
     const identity = typeof input.identity === "string" ? input.identity : "";
     try {
-      return await runFinish(engine, { goalId, identity }, context.signal);
+      return await runFinish(engine, { goalId, identity, title: payloadTitle(input.title) }, context.signal);
     } catch (error) {
       const goal = readGoal(engine, goalId);
       if (goal.finish?.identity === identity && goal.finish.status === "running") {
@@ -129,6 +144,7 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise
   const config = await readWatermarkConfig(engine, "tiktok");
   const profile = effectiveWatermarkProfile(config, "tiktok");
   const template = watermarkGraphicsTemplate(engine, "tiktok");
+  const title = burnedTitle(engine, goal);
   const identity = "watermark-only:" + finishingIdentityKey({
     sourceObjectHash: source.file.objectHash,
     startSeconds: 0,
@@ -137,6 +153,7 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise
     qrStartSeconds: config.profile?.qrStartSeconds,
     qrEndSeconds: config.profile?.qrEndSeconds,
     watermarkTemplate: template ? createHash("sha256").update(JSON.stringify(template.document)).digest("hex") : null,
+    title,
   });
   const finish: GoalFinish = {
     status: "running",
@@ -153,6 +170,7 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise
     bookId: goal.bookId,
     goalId: goal.goalId,
     identity,
+    ...(title ? { title } : {}),
   });
   const queued = readGoal(engine, goal.goalId);
   if (!queued.finish || queued.finish.identity !== identity || queued.finish.status !== "running") return queued;

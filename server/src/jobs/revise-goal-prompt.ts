@@ -2,9 +2,9 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { requireApiKey } from "../api-key.js";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
-import { readGoal, requireGoalShortContent, type GoalGenerationStage, type GoalShortContent } from "../goal-store.js";
-import { isLegacyShortDraft, type GoalShortPlan } from "../goal-short-plan.js";
-import { shortPlannerBrief, shortRevisionInstructions, shortRevisionIssues, shortRevisionPart, shortRevisionResponseSchema, type ShortPlannerIssue } from "../goal-short-planner.js";
+import { readGoal, requireGoalShortContent, type GoalGenerationStage } from "../goal-store.js";
+import type { GoalShortPlan } from "../goal-short-plan.js";
+import { shortBriefNames, shortPlannerBrief, shortRevisionInstructions, shortRevisionIssues, shortRevisionPart, shortRevisionResponseSchema, type ShortPlannerIssue } from "../goal-short-planner.js";
 import { shortRulesOutPhone, shortWantsPhone, stripShortBannedWords, withoutShortPhoneSentences } from "../goal-short-rules.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } from "../openai-intelligence.js";
 import { registerJobHandler } from "../queue.js";
@@ -20,18 +20,6 @@ function revisedPrompt(text: string): string | null {
   } catch {
     return null;
   }
-}
-
-function briefNames(content: GoalShortContent, plan: GoalShortPlan) {
-  const { draft } = content;
-  if (draft) {
-    return isLegacyShortDraft(draft)
-      ? { references: [...draft.character.references, ...draft.extraReferences], storyboard: null }
-      : { references: draft.sourceImages, storyboard: draft.storyboard?.video ?? null };
-  }
-  return plan.version === 5
-    ? { references: plan.sourceImages, storyboard: plan.storyboard?.video ?? null }
-    : { references: [...plan.character.references, ...plan.frame.references], storyboard: null };
 }
 
 function revisionContext(plan: GoalShortPlan, stage: GoalGenerationStage, index: number) {
@@ -51,7 +39,7 @@ async function reviseShortPrompt(engine: Engine, payload: RevisePayload, signal:
   if (!notebook.ok) throw new Error(notebook.error.message);
   const options = chatIntelligenceRequestOptions();
   const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"), options);
-  const named = briefNames(content, plan);
+  const named = shortBriefNames(content, plan);
   const request = {
     instructions: await shortRevisionInstructions(plan, payload.stage, payload.index),
     input: [{ role: "user" as const, content: JSON.stringify({

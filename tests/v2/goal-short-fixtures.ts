@@ -107,6 +107,7 @@ export function shortGoalFixture(extra: Partial<ShortGoalSnapshot> = {}, short: 
     estimate,
     status: 'review', error: null, chainId: null, planningJobId: null, clipIds: [], trackId: null, assembly: null, dismissedAt: null,
     createdAt: '2026-11-12T00:00:00Z', updatedAt: '2026-11-12T00:00:00Z', steps: [], finish: null, finalArtifactId: null, coldOpen: null,
+    titleSlots: { headline: true, secondary: true },
     ...extra,
     notes: extra.notes ?? [],
     storyboard: extra.storyboard ?? storyboardView(short, extra.stages?.storyboards, extra.estimate ?? estimate),

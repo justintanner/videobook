@@ -1505,6 +1505,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     accept: acceptGoals,
     refresh: refreshGoals,
     act: actOnGoal,
+    writeTitle: writeGoalTitle,
   } = useVideoGoals(call, goalScope)
   const goalCellIds = useMemo(
     () => new Set((notebook?.cells ?? []).filter((cell) => cell.type === 'goal').map((cell) => cell.id)),
@@ -10381,6 +10382,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         goal={selectedGoal}
         connected={mcp.state === 'ready'}
         onAction={runGoalAction}
+        onWriteTitle={() => writeGoalTitle(selectedGoal.goalId)}
         onSelectCell={openCellInspector}
         resolveAsset={(artifactId) => assetById.get(artifactId) ?? null}
         onPreviewCell={(cellId) => {

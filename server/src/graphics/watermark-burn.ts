@@ -52,11 +52,19 @@ function onlyHandle(layer: GraphicsLayer): layer is GraphicsTextLayer {
   return layer.kind === "text" && layer.items.every((item) => item.slot === "handle");
 }
 
-export function watermarkTemplateDraws(template: GraphicsDocument): { qr: boolean; handle: boolean; credit: boolean } {
+function showsSlot(layer: GraphicsLayer, slot: "headline" | "secondary"): boolean {
+  return layer.visible && layer.kind === "text" && layer.items.some((item) => item.slot === slot);
+}
+
+type WatermarkTemplateDraws = { qr: boolean; handle: boolean; credit: boolean; headline: boolean; secondary: boolean };
+
+export function watermarkTemplateDraws(template: GraphicsDocument): WatermarkTemplateDraws {
   return {
     qr: template.layers.some(isProfileQr),
     handle: template.layers.some(holdsHandle),
     credit: template.layers.some((layer) => layer.kind === "text" && layer.items.some((item) => item.slot === "credit")),
+    headline: template.layers.some((layer) => showsSlot(layer, "headline")),
+    secondary: template.layers.some((layer) => showsSlot(layer, "secondary")),
   };
 }
 

@@ -31,6 +31,11 @@ import type { StartedProcess } from './e2e-harness.js'
 
 const live = process.env.VIDEOBOOK_RUN_MODEL_E2E === '1'
 const scenario = live ? it.skip : it
+const TITLE_OPTIONS = [
+  { headline: 'รอรถเมล์กลางฝน', secondary: 'Waiting for the bus in the rain' },
+  { headline: 'ฝนตกแต่รถเมล์ไม่มา', secondary: 'The rain came, the bus did not' },
+  { headline: 'ใครเคยรอแบบนี้บ้าง', secondary: 'Who has waited like this?' },
+]
 
 function shortGoal(goal: GoalSnapshot | undefined): ShortGoalSnapshot {
   if (!goal || goal.legacy) throw new Error('expected a short')
@@ -169,7 +174,7 @@ describe('goal mode in the browser', () => {
     await queue.startBook(bookId)
   })
 
-  scenario('makes a short from /goal without a mention: frame, clip, one continuation and finish', async () => {
+  scenario('makes a short from /goal without a mention: frame, clip, one continuation and finish with a written title', async () => {
     for (const goal of (await goals()).goals) {
       if (goal.status !== 'cancelled' && !goal.dismissedAt) await call('video_goal', { action: 'dismiss', goal_id: goal.goalId })
     }
@@ -239,9 +244,31 @@ describe('goal mode in the browser', () => {
       await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review finish · 0:17')
 
       await openTab('Finish')
+      const writeTitle = panel().getByRole('button', { name: /^Write title · \$\d+\.\d\d$/u })
+      await writeTitle.waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      expect(await panel().getByLabel('Burned title', { exact: true }).inputValue()).toBe('')
+      process.env.OPENAI_API_KEY = 'offline-openai-key'
+      stub.plannerAnswers = [{ options: TITLE_OPTIONS }]
+      await writeTitle.click()
+      const titleOptions = panel().getByRole('list', { name: 'Title options' })
+      await titleOptions.waitFor({ state: 'visible', timeout: testBudget(30_000) })
+      expect(stub.plannerRequests).toHaveLength(2)
+      if (savedKeys.OPENAI_API_KEY === undefined) delete process.env.OPENAI_API_KEY
+      else process.env.OPENAI_API_KEY = savedKeys.OPENAI_API_KEY
+      await titleOptions.getByRole('button', { name: /ฝนตกแต่รถเมล์ไม่มา/u }).click()
+      expect(await panel().getByLabel('Burned title', { exact: true }).inputValue()).toBe('ฝนตกแต่รถเมล์ไม่มา')
+      await panel().getByLabel('English line', { exact: true }).fill('The rain came. The bus did not.')
+      expect(await primary(/^Finish$/).isDisabled()).toBe(true)
+      await panel().getByRole('button', { name: 'Save', exact: true }).click()
+      await expect.poll(async () => shortGoal(await current(short)).shortPlan?.finish.title, { timeout: testBudget(15_000) })
+        .toEqual({ headline: 'ฝนตกแต่รถเมล์ไม่มา', secondary: 'The rain came. The bus did not.' })
+      await screenshot('goal-finish-title')
+      await openTab('Finish')
       await expect.poll(() => primary(/^Finish$/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
       await primary(/^Finish$/).click()
       await expect.poll(() => status().textContent(), { timeout: testBudget(240_000) }).toContain('Short ready · 0:17')
+      expect(engine.jobs.queue.list({ type: 'burn_watermark' }).map(job => job.payload))
+        .toContainEqual(expect.objectContaining({ headline: 'ฝนตกแต่รถเมล์ไม่มา', secondary: 'The rain came. The bus did not.' }))
       await openTab('Finish')
       const finished = panel().getByLabel('Finished short', { exact: true })
       await finished.waitFor({ state: 'visible', timeout: testBudget(30_000) })

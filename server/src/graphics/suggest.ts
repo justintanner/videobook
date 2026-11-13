@@ -4,6 +4,12 @@ import { getApiKey } from "../api-key.js";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
 import type { ClipAnalysis } from "../clip-context.js";
 import { clipAnalysisLines, readClipAnalysis, readClipTranscript } from "../clip-context.js";
+import { forecastLanguageCall } from "../cost.js";
+import type { GoalShortDraft, GoalShortPlan, ShortFinishTitle } from "../goal-short-plan.js";
+import { shortFinishTitleIssue, shortStoryboardOf } from "../goal-short-plan.js";
+import { shortBriefNames, shortPlannerBrief } from "../goal-short-planner.js";
+import type { GoalEstimate } from "../goal-store.js";
+import { isCurrentShort, readGoal, requireGoalShortContent } from "../goal-store.js";
 import type { ResponsesFn } from "../openai-intelligence.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } from "../openai-intelligence.js";
 import { queue } from "../queue.js";
@@ -15,6 +21,7 @@ import { MAX_GRAPHICS_TEXT_LENGTH } from "./model.js";
 import { requireVideo } from "./service.js";
 import type { GraphicsSuggestKind, GraphicsSuggestLanguage } from "./slots.js";
 import { GRAPHICS_SUGGEST_LANGUAGE_NAMES, GRAPHICS_SUGGEST_SLOTS, graphicsSlotValues, graphicsSuggestLanguage } from "./slots.js";
+import { watermarkTitleSlots } from "./templates.js";
 
 export const GRAPHICS_SUGGEST_JOB = "suggest_graphics";
 
@@ -241,4 +248,148 @@ export async function requestGraphicsSuggestions(
     `graphics-suggest-${artifactId}-${randomUUID()}`,
     { type: GRAPHICS_SUGGEST_JOB, bookId, assetId: artifactId, request },
   );
+}
+
+const GOAL_TITLE_OPTIONS = 3;
+const GOAL_TITLE_MAX_OUTPUT_TOKENS = 4096;
+const THAI_SCRIPT = /\p{Script=Thai}/u;
+const LATIN_SCRIPT = /\p{Script=Latin}/u;
+const GOAL_TITLE_RETRY = "Your last answer broke the rules: every headline must be in Thai and every English line in English, each short enough for its lines. Write the three options again.";
+const GOAL_TITLE_NO_HEADLINE = "The saved TikTok watermark template has no headline, so Finish cannot burn a title. Add a headline to that template in the graphics editor, or finish without a title.";
+
+const GOAL_TITLE_JSON_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  required: ["options"],
+  properties: {
+    options: {
+      type: "array",
+      minItems: GOAL_TITLE_OPTIONS,
+      maxItems: GOAL_TITLE_OPTIONS,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["headline", "secondary"],
+        properties: { headline: { type: "string" }, secondary: { type: "string" } },
+      },
+    },
+  },
+};
+
+export type GoalTitleShort = { brief: string; draft: GoalShortDraft | null };
+type GoalTitleSource = GoalTitleShort & { plan: GoalShortPlan };
+export type GoalTitleOptions = { goal_id: string; options: ShortFinishTitle[]; model: string };
+
+function labelled(label: string): string {
+  return label.trim() || "no label";
+}
+
+function shortSubjectLines(plan: GoalShortPlan): string[] {
+  if (plan.version === 4) return [`MAIN CHARACTER: ${plan.character.name}, ${plan.character.description}`];
+  if (plan.sourceImages.length === 0) return ["SOURCE IMAGES: none"];
+  return ["SOURCE IMAGES:", ...plan.sourceImages.map((image, index) => `Source image ${index + 1}: ${labelled(image.label)}`)];
+}
+
+function shortContextLines(source: GoalTitleSource): string[] {
+  const { plan } = source;
+  const names = shortBriefNames(source, plan);
+  const storyboard = shortStoryboardOf(plan);
+  return [
+    `BRIEF: ${shortPlannerBrief(source.brief, names.references, null, names.storyboard)}`,
+    `WORKING TITLE: ${plan.title}`,
+    "BEATS, in order:",
+    ...plan.segments.map((segment, index) => `${index + 1}. ${segment.prompt}`),
+    ...shortSubjectLines(plan),
+    ...(storyboard ? [`STORYBOARD VIDEO: ${labelled(storyboard.video.label)}`] : []),
+  ];
+}
+
+export function goalTitlePrompt(source: GoalTitleSource): string {
+  return [
+    `Write ${GOAL_TITLE_OPTIONS} title options for one short phone video. Each option is a headline in Thai, drawn big over the video as on TikTok and Reels, and an English line drawn smaller under it.`,
+    "",
+    "RULES:",
+    "- Write every headline in Thai, natural and conversational, the way a Thai creator titles a clip: at most about 8 words (about 30 characters).",
+    "- Write every English line in English, at most about 10 words: a natural line that says what its headline says, or adds to it.",
+    "- Ground every option in the short below. Never invent names, places, events or facts that are not there.",
+    "- Make the options different from each other, for example a question, a reaction, a hook and a plain description.",
+    "- Never mention the source images, the storyboard, prompts or how the video was made.",
+    "- No hashtags, no emoji and no quotation marks.",
+    "",
+    "THE SHORT:",
+    ...shortContextLines(source),
+  ].join("\n");
+}
+
+export function goalTitleEstimate(source: GoalTitleSource): GoalEstimate {
+  const prompt = goalTitlePrompt(source);
+  const { model } = chatIntelligenceRequestOptions();
+  const requests = [prompt, `${prompt}\n${GOAL_TITLE_RETRY}`].map((input) => forecastLanguageCall(model, input, GOAL_TITLE_MAX_OUTPUT_TOKENS));
+  return {
+    usd: requests.every((request) => request.status !== "unavailable") ? requests.reduce((sum, request) => sum + request.usd, 0) : null,
+    warnings: [...new Set(requests.flatMap((request) => request.warnings))],
+  };
+}
+
+function usableTitle(value: unknown): ShortFinishTitle | null {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const title = { headline: optionText(record.headline), secondary: optionText(record.secondary) };
+  if (!THAI_SCRIPT.test(title.headline)) return null;
+  if (THAI_SCRIPT.test(title.secondary) || !LATIN_SCRIPT.test(title.secondary)) return null;
+  return shortFinishTitleIssue(title) === null ? title : null;
+}
+
+function parseTitleOptions(raw: string): ShortFinishTitle[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  const record = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
+  return (Array.isArray(record.options) ? record.options : []).flatMap((option) => {
+    const title = usableTitle(option);
+    return title ? [title] : [];
+  });
+}
+
+function distinctTitles(titles: readonly ShortFinishTitle[]): ShortFinishTitle[] {
+  const seen = new Set<string>();
+  return titles.filter((title) => {
+    const key = title.headline.toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function goalTitleSource(engine: Engine, goalId: string): GoalTitleSource {
+  const goal = readGoal(engine, goalId);
+  if (!isCurrentShort(goal.planVersion)) throw new GraphicsServiceError("invalid", "Only a short made by /goal can have a burned title.");
+  const content = requireGoalShortContent(engine, goal);
+  if (!content.plan) throw new GraphicsServiceError("not_ready", "This short has no plan yet. Wait for planning to finish.");
+  return { brief: content.brief, draft: content.draft, plan: content.plan };
+}
+
+export async function suggestGoalTitles(engine: Engine, goalId: string, responses: ResponsesFn, signal?: AbortSignal): Promise<GoalTitleOptions> {
+  const prompt = goalTitlePrompt(goalTitleSource(engine, goalId));
+  const options = chatIntelligenceRequestOptions();
+  const ask = async (retry: boolean): Promise<ShortFinishTitle[]> => parseTitleOptions(firstResponseText(await responses(intelligenceRequest({
+    input: [{ role: "user", content: prompt }, ...(retry ? [{ role: "user" as const, content: GOAL_TITLE_RETRY }] : [])],
+    text: { format: { type: "json_schema", name: "goal_titles", schema: GOAL_TITLE_JSON_SCHEMA, strict: true } },
+    max_output_tokens: GOAL_TITLE_MAX_OUTPUT_TOKENS,
+  }, options), signal)));
+  const first = distinctTitles(await ask(false));
+  const titles = first.length >= GOAL_TITLE_OPTIONS ? first : distinctTitles([...first, ...await ask(true)]);
+  if (titles.length === 0) throw new Error("Astra did not write a title in Thai with an English line. Write title again, or type the title.");
+  return { goal_id: goalId, options: titles.slice(0, GOAL_TITLE_OPTIONS), model: options.model };
+}
+
+export async function requestGoalTitles(engine: Engine, bookId: string, goalId: string): Promise<GoalTitleOptions> {
+  goalTitleSource(engine, goalId);
+  if (!watermarkTitleSlots(engine, "tiktok").headline) throw new GraphicsServiceError("invalid", GOAL_TITLE_NO_HEADLINE);
+  if (!getApiKey("OPENAI_API_KEY")) {
+    throw new GraphicsServiceError("not_ready", "Writing a title needs an OpenAI API key, and OPENAI_API_KEY is not set. Type the title instead.");
+  }
+  return queue.enqueueAndWait<GoalTitleOptions>(`goal-title-${goalId}-${randomUUID()}`, { type: GRAPHICS_SUGGEST_JOB, bookId, goalId });
 }

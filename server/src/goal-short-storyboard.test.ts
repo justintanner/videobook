@@ -220,12 +220,12 @@ describe("goal short storyboard of a video", () => {
     const plan = buildGoalShortPlan({
       title: "Umbrella", aspectRatio: "9:16", sourceImages: [], storyboard, framePrompt: "A walk in the rain.", beats: ["They walk on."], segmentSeconds: [12],
     });
-    const estimate = await estimateShort(engine, plan);
+    const estimate = await estimateShort(engine, plan, { brief: "walk with the umbrella like @d1", draft: null });
     expect(estimate.storyboards.usd).toBeCloseTo(0.42);
     expect(estimate.storyboardFrames?.map((frame) => frame.usd)).toEqual([0.21, 0.21]);
     const restoreUnpriced = installFalDynamicEstimator(null);
     try {
-      const unpriced = await estimateShort(engine, plan);
+      const unpriced = await estimateShort(engine, plan, { brief: "walk with the umbrella like @d1", draft: null });
       expect(unpriced.storyboards.usd).toBeNull();
       expect(unpriced.storyboards.warnings.length).toBeGreaterThan(0);
       expect(unpriced.total.usd).toBeNull();

@@ -103,9 +103,26 @@ describe("watermark burn documents", () => {
     expect(handleLayer(document).items[0]).toMatchObject({ text: "justinwtanner", icon: "x" });
   });
 
+  it("burns a short's Thai title and English line in the TikTok title block, with its shade, beside the handle", () => {
+    const values = { ...watermarkSlotValues(LIGHTNING_WATERMARK_PROFILE), headline: "รอรถเมล์กลางฝน", secondary: "Waiting for the bus in the rain" };
+    const document = burned(input(LIGHTNING_WATERMARK_PROFILE, { values }));
+    expect(kinds(drawn(document))).toEqual(["scrim", "text", "text"]);
+    const title = document.layers.find((layer): layer is GraphicsTextLayer => layer.kind === "text" && layer.name === "Title");
+    expect(title?.items.map((item) => [item.slot, item.text])).toEqual([["headline", "รอรถเมล์กลางฝน"], ["secondary", "Waiting for the bus in the rain"]]);
+    expect(handleLayer(document).items[0]).toMatchObject({ text: "jtbkk", slot: "handle" });
+    expect(kinds(drawn(burned(input(LIGHTNING_WATERMARK_PROFILE, { values: { ...values, secondary: "" } }))))).toEqual(["scrim", "text", "text"]);
+  });
+
+  it("reports whether a saved template can draw a title, ignoring hidden layers", () => {
+    const titled = savedTemplate([{ kind: "text", name: "Title", position: { anchor: "bottom-left", x: 0, y: 1, space: "safe" }, items: [{ text: "", slot: "headline", size: 0.09 }, { text: "", slot: "secondary", size: 0.045 }] }]);
+    expect(watermarkTemplateDraws(titled)).toMatchObject({ headline: true, secondary: true });
+    expect(watermarkTemplateDraws({ ...titled, layers: titled.layers.map((layer) => ({ ...layer, visible: false })) })).toMatchObject({ headline: false, secondary: false });
+    expect(watermarkTemplateDraws(creditTemplate())).toMatchObject({ headline: false, secondary: false });
+  });
+
   it("fills a saved template's credit on a downloaded video, keeping its shade, and skips both on a generated one", () => {
     const template = creditTemplate();
-    expect(watermarkTemplateDraws(template)).toEqual({ qr: false, handle: true, credit: true });
+    expect(watermarkTemplateDraws(template)).toEqual({ qr: false, handle: true, credit: true, headline: false, secondary: false });
     const downloaded = burned(input(LIGHTNING_WATERMARK_PROFILE, { template, values: { ...watermarkSlotValues(LIGHTNING_WATERMARK_PROFILE), credit: CREDIT } }));
     expect(kinds(drawn(downloaded))).toEqual(["scrim", "text", "text"]);
     expect(downloaded.layers.find((layer) => layer.name === "Credit")).toMatchObject({ items: [{ text: CREDIT, slot: "credit" }] });

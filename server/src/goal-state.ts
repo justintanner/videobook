@@ -8,6 +8,8 @@ import {
 import { goalStageAttempts } from "./goal-stills.js";
 import { refreshGoalShortPlan, shortStoryboardOf, type GoalShortPlan } from "./goal-short-plan.js";
 import { currentShortClip, nextShortSegment, shortFrameStale, shortSegmentStale, storyboardReview } from "./goal-short-runtime.js";
+import { goalTitleEstimate } from "./graphics/suggest.js";
+import { watermarkTitleSlots } from "./graphics/templates.js";
 
 export const LEGACY_GOAL_MESSAGE = "This goal was made by an earlier /goal. Its images and videos stay in the notebook. Start a new /goal.";
 const SHORT_STALE_MESSAGE = "The frame or an earlier clip changed after this clip was made.";
@@ -229,9 +231,12 @@ function stageView(engine: Engine, goal: GoalRecord, document: NotebookDocument,
 async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: NotebookDocument) {
   const cell = findGoalCell(document, goal);
   const short = cell ? goalShortContent(cell) : null;
+  const estimate = short?.plan && !short.estimate.title
+    ? { ...short.estimate, title: goalTitleEstimate({ brief: short.brief, draft: short.draft, plan: short.plan }) }
+    : short?.estimate ?? emptyGoalEstimates();
   const content = short
-    ? { brief: short.brief, revision: short.revision, estimate: short.estimate, notes: short.notes }
-    : { brief: "", revision: 0, estimate: emptyGoalEstimates(), notes: [] };
+    ? { brief: short.brief, revision: short.revision, estimate, notes: short.notes }
+    : { brief: "", revision: 0, estimate, notes: [] };
   const shortPlan = short?.plan ? refreshGoalShortPlan(short.plan, document) : null;
   const runs = Object.entries(goal.stages) as [GoalGenerationStage, GoalStageRun][];
   const stages: Partial<Record<GoalGenerationStage, ReturnType<typeof stageView>>> = Object.fromEntries(runs.map(([stage, run]) => [stage, stageView(engine, goal, document, stage, run)]));
@@ -241,6 +246,7 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
     storyboard: storyboardView(shortPlan, stages.storyboards?.outputs ?? [], content.estimate),
     finish: goal.finish ?? null,
     finalArtifactId: goal.finish?.finalArtifactId ?? null,
+    titleSlots: watermarkTitleSlots(engine, "tiktok"),
     coldOpen: null,
     address: cell ? notebookGridTag(cell.slot) : null,
     stages,

@@ -122,8 +122,15 @@ own approval with its estimate:
    Regenerate any generated clip, revise it with clip feedback, or choose an
    earlier version.
 4. **Finish:** keeps the reviewed take and burns the saved
-   watermark into the finished short. To add a cold open, use `/edit-cold-open`
-   on the finished video.
+   watermark into the finished short, with its burned title when it has one:
+   a big Thai headline and an English line under it, in the watermark's title
+   block. Type them, or click **Write title**, which shows its estimate first
+   and asks Astra for three options from the short's brief, title, beats and
+   source images; pick one, edit it and save. A changed title finishes again
+   from the reviewed take, never over the earlier burn. When the saved TikTok
+   watermark template has no headline, the title stays disabled and Finish
+   burns the handle alone. To add a cold open, use `/edit-cold-open` on the
+   finished video.
 
 Shorts saved before source images keep their main character on a read-only
 **Character** tab and keep their stored prompts; they still continue and

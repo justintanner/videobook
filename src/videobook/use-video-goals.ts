@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { asGoal, asGoals, goalStatusLine, goalWake, type GoalSnapshot } from './goals'
+import { asGoal, asGoals, asGoalTitleOptions, goalStatusLine, goalWake, type GoalSnapshot } from './goals'
 import { jsonEqual } from './notebook-canvas'
 import type { ChatExecution } from './chat-turns'
 import { COMPOSER_HISTORY_CAP, type ComposerStatusRow } from './composer-history'
@@ -87,5 +87,15 @@ export function useVideoGoals(call: GoalToolCall, scope: GoalScope | null) {
     return goal
   }, [call, update])
 
-  return { goals, events, accept, refresh, act }
+  const writeTitle = useCallback(async (goalId: string) => {
+    if (!scope) throw new Error('Open the goal notebook first.')
+    return asGoalTitleOptions(await call('video_goal', {
+      action: 'title',
+      goal_id: goalId,
+      book_id: scope.bookId,
+      notebook_id: scope.notebookId,
+    }, { background: true }))
+  }, [call, scope])
+
+  return { goals, events, accept, refresh, act, writeTitle }
 }

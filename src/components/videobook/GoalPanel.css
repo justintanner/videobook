@@ -437,3 +437,39 @@ span.goal-progress-address {
 .goal-storyboard-pair { display: grid; grid-template-columns: repeat(2, minmax(120px, 180px)); gap: 8px; }
 .goal-storyboard-pair .goal-media img { height: 120px; }
 .goal-storyboard-pair .goal-media-pending { display: grid; place-items: center; min-height: 120px; border: 1px dashed rgba(143, 183, 160, 0.35); border-radius: 6px; }
+
+.goal-finish-title {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(143, 183, 160, 0.25);
+  border-radius: 6px;
+}
+
+.goal-title-options { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+
+.goal-title-option {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  color: #d8f0e2;
+  background: #030907;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.goal-title-option > strong { font-size: 13px; overflow-wrap: anywhere; }
+.goal-title-option > span { color: #8fb7a0; font-size: 11px; overflow-wrap: anywhere; }
+
+.goal-title-option[aria-pressed='true'] {
+  border-color: var(--green);
+  background: rgba(50, 147, 91, 0.2);
+}
+
+.goal-title-option:disabled { opacity: 0.5; cursor: default; }

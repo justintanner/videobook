@@ -228,6 +228,7 @@ export function finishingIdentityKey(input: {
   qrStartSeconds?: number | null;
   qrEndSeconds?: number | null;
   watermarkTemplate?: string | null;
+  title?: { headline: string; secondary: string } | null;
 }): string {
   const round = (value: number) => Math.round(value * 1000) / 1000;
   const qrStart = finiteSeconds(input.qrStartSeconds !== undefined ? input.qrStartSeconds : input.profile.qrStartSeconds);
@@ -239,6 +240,7 @@ export function finishingIdentityKey(input: {
     profile: canonicalWatermarkProfile(input.profile),
     ...(qrStart === null && qrEnd === null ? {} : { qrStartSeconds: qrStart, qrEndSeconds: qrEnd }),
     ...(input.watermarkTemplate ? { watermarkTemplate: input.watermarkTemplate } : {}),
+    ...(input.title ? { title: { headline: input.title.headline, secondary: input.title.secondary } } : {}),
   });
 }
 

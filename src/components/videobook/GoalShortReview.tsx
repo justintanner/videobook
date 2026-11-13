@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { formatShortSeconds, SHORT_WORD_CEILINGS, type GoalShortPlan } from '../../../server/src/goal-short-plan'
+import {
+  formatShortSeconds, shortFinishTitleInput, shortFinishTitleIssue, SHORT_WORD_CEILINGS, withShortFinishTitle, type GoalShortPlan, type ShortFinishTitle,
+} from '../../../server/src/goal-short-plan'
 import type { GoalGenerationStage } from '../../../server/src/goal-store'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
   goalCanRetry, goalNextSegment, goalPlanSeconds, goalStillStale, goalStillVersions, goalStoryboardClean, goalStoryboardEstimate, shortEstimateText,
   type GoalSnapshot, type ShortGoalSnapshot, type ShortTab,
 } from '@/videobook/goals'
+import { GoalFinishTitle } from './GoalFinishTitle'
 import { GoalPromptInput } from './GoalPromptInput'
 import { GoalMedia } from './GoalStillCard'
 
@@ -21,6 +24,8 @@ type ShortReviewProps = {
   onPreviewCell: (cellId: string) => void
   onRun: (work: () => Promise<unknown>) => void
   onAction: (args: GoalAction) => Promise<GoalSnapshot>
+  titleOptions: readonly ShortFinishTitle[]
+  onWriteTitle: () => Promise<unknown>
 }
 
 const CURRENT_TABS = [['frame', 'Frame'], ['video', 'Video'], ['finish', 'Finish']] as const
@@ -61,8 +66,10 @@ function shortSnapshot(goal: GoalSnapshot): ShortGoalSnapshot {
   return goal
 }
 
-export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onView, onPreviewCell, onRun, onAction }: ShortReviewProps) {
+export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onView, onPreviewCell, onRun, onAction, titleOptions, onWriteTitle }: ShortReviewProps) {
   const [title, setTitle] = useState(plan.title)
+  const [burnedTitle, setBurnedTitle] = useState(plan.finish.title?.headline ?? '')
+  const [englishLine, setEnglishLine] = useState(plan.finish.title?.secondary ?? '')
   const [framePrompt, setFramePrompt] = useState(plan.frame.prompt)
   const [beats, setBeats] = useState(() => plan.segments.map(segment => segment.prompt))
   const [feedback, setFeedback] = useState('')
@@ -73,11 +80,14 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const nextTitle = title.trim()
   const nextFrame = framePrompt.trim()
   const nextSegments = plan.segments.map((segment, index) => ({ ...segment, prompt: (beats[index] ?? '').trim() }))
-  const draft: GoalShortPlan = plan.version === 4
+  const typedTitle = shortFinishTitleInput(burnedTitle, englishLine)
+  const titleIssue = shortFinishTitleIssue(typedTitle)
+  const edited: GoalShortPlan = plan.version === 4
     ? { ...plan, title: nextTitle, frame: { ...plan.frame, prompt: nextFrame }, segments: nextSegments }
     : { ...plan, title: nextTitle, frame: { ...plan.frame, prompt: nextFrame }, segments: nextSegments }
+  const draft = withShortFinishTitle(edited, typedTitle)
   const dirty = JSON.stringify(draft) !== JSON.stringify(plan)
-  const promptsReady = Boolean(draft.title && draft.frame.prompt && draft.segments.every(segment => segment.prompt))
+  const promptsReady = Boolean(draft.title && draft.frame.prompt && draft.segments.every(segment => segment.prompt)) && titleIssue === null
   const frameOutput = goal.stages.frame?.outputs[0]
   const clips = [...(goal.stages.videos?.outputs ?? [])].sort((left, right) => left.index - right.index)
   const currentClip = clips.at(-1) ?? null
@@ -215,6 +225,10 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
       {!finishing && !goal.finalArtifactId && sourceAsset?.mediaUrl && <video className="goal-video-preview" aria-label="Reviewed take" src={sourceAsset.mediaUrl} poster={sourceAsset.thumbnailUrl ?? undefined} controls preload="metadata" />}
       <p className="goal-panel-muted">Finish keeps the reviewed take and burns the saved watermark.</p>
       {!finishing && sourceId && !sourceAsset?.mediaUrl && <p role="status">The short is not playable yet.</p>}
+      <GoalFinishTitle
+        headline={burnedTitle} secondary={englishLine} slots={goal.titleSlots} estimate={goal.estimate.title} options={titleOptions} issue={titleIssue}
+        disabled={disabled || finishing} onHeadline={setBurnedTitle} onSecondary={setEnglishLine} onWrite={() => onRun(onWriteTitle)}
+      />
     </>}
     <div className="goal-panel-bar">
       <div className="goal-panel-bar-copy"><span>{dirty ? 'Saving keeps the settings with this short.' : 'Each paid step needs its own approval.'}</span></div>

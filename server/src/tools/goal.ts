@@ -2,10 +2,11 @@ import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { Engine, NotebookDocument } from "videobook-engine";
 import { cancelChainRun } from "../chain-executor.js";
-import { goalShortPlanSchema } from "../goal-short-plan.js";
+import { goalShortPlanSchema, shortPlanTitleInput } from "../goal-short-plan.js";
 import { createShortGoal, queueShortRealismCheck, retryShortGoal, selectShortVersion, shortFeedbackSchema, startShortStage, updateShortGoal } from "../goal-short-runtime.js";
 import { LEGACY_GOAL_MESSAGE, publicGoal, reconcileFinish, reconcileGoal } from "../goal-state.js";
 import { activeGoalStage, findGoalCell, isCurrentShort, listGoals, readGoal, readGoalCell, saveGoal, type GoalRecord } from "../goal-store.js";
+import { requestGoalTitles, type GoalTitleOptions } from "../graphics/suggest.js";
 import { queueGoalFinish } from "../jobs/finish-goal.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -98,6 +99,17 @@ async function applyGoalAction(engine: Engine, notebookId: string, goalId: strin
   return goal;
 }
 
+async function writeGoalTitles(engine: Engine, bookId: string, notebookId: string, goalId: string): Promise<GoalTitleOptions> {
+  if (readGoal(engine, goalId).notebookId !== notebookId) throw new Error("Goal does not belong to this notebook");
+  try {
+    return await requestGoalTitles(engine, bookId, goalId);
+  } catch (error) {
+    const message = errorMessage(error);
+    if (/^Job \d+ timed out/u.test(message)) throw new Error("Writing the title took too long. Write title again, or type the title.");
+    throw new Error(message.replace(/^Job \d+ (?:failed|aborted): /u, ""));
+  }
+}
+
 async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Promise<GoalSnapshot[]> {
   const snapshots: GoalSnapshot[] = [];
   for (const goal of listGoals(engine, notebook.id)) {
@@ -112,12 +124,12 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Run Goal mode on a notebook. create makes a short from a brief: a real-looking phone video, 5 to 60 seconds, starring the person in the images the brief mentions, or the person the brief describes when it mentions none; that person never speaks. Every image the brief mentions is a source image, kept as photographed, up to 12. The first video the brief mentions becomes the short's storyboard: 4 frames (one per shot when it has cuts, from its \"at Ns\" when given) captured into image cells at no cost, which the planner follows in order; further videos and unusable mentions are skipped with a note. Lengths are clamped to 5-60 seconds, extra quoted beats are fitted or folded into the last beat, and without OPENAI_API_KEY the brief supplies a reviewable plan. Then list, status, update, approve, regenerate, select, revise, cancel, retry, finish (the reviewed take plus the saved watermark) or dismiss it by goal_id. approve runs the stage under review, and naming another stage is refused. regenerate, select and revise take a stage (storyboards, frame or videos) and index. revise (stage, index, feedback up to 2000 characters) rewrites an @ mention to the cell's label, then has OpenAI rewrite that storyboard frame's clean-up prompt, the frame prompt or the beat with the feedback, billed like planning, replacing any sentence the feedback contradicts, and saves it in the plan before the paid regeneration. Each paid step needs its own approval with its estimate: the storyboard clean-up (one Nano Banana 2.1 edit per frame that removes captions, stickers, logos, credits and shade), the GPT Image 2.6 opening frame (from the source images and clean storyboard frame 1, which it cannot start without), the H3 Max base clip, and each H3 Max Extend continuation for the next beat. check (frame or videos, and index) looks at the selected frame, or 4 frames of a clip's new footage, for AI tells and stores up to 5 findings (note or warn) with that output; it is billed like planning, runs only when asked and never blocks an approval. Goals made by an earlier /goal are read-only: list, status, cancel and dismiss.",
+    description: "Run Goal mode on a notebook. create makes a short from a brief: a real-looking phone video, 5 to 60 seconds, starring the person in the images the brief mentions, or the person the brief describes when it mentions none; that person never speaks. Every image the brief mentions is a source image, kept as photographed, up to 12. The first video the brief mentions becomes the short's storyboard: 4 frames (one per shot when it has cuts, from its \"at Ns\" when given) captured into image cells at no cost, which the planner follows in order; further videos and unusable mentions are skipped with a note. Lengths are clamped to 5-60 seconds, extra quoted beats are fitted or folded into the last beat, and without OPENAI_API_KEY the brief supplies a reviewable plan. Then list, status, update, approve, regenerate, select, revise, cancel, retry, finish (the reviewed take plus the saved watermark, with the burned title when the plan has one) or dismiss it by goal_id. approve runs the stage under review, and naming another stage is refused. regenerate, select and revise take a stage (storyboards, frame or videos) and index. revise (stage, index, feedback up to 2000 characters) rewrites an @ mention to the cell's label, then has OpenAI rewrite that storyboard frame's clean-up prompt, the frame prompt or the beat with the feedback, billed like planning, replacing any sentence the feedback contradicts, and saves it in the plan before the paid regeneration. Each paid step needs its own approval with its estimate: the storyboard clean-up (one Nano Banana 2.1 edit per frame that removes captions, stickers, logos, credits and shade), the GPT Image 2.6 opening frame (from the source images and clean storyboard frame 1, which it cannot start without), the H3 Max base clip, and each H3 Max Extend continuation for the next beat. check (frame or videos, and index) looks at the selected frame, or 4 frames of a clip's new footage, for AI tells and stores up to 5 findings (note or warn) with that output; it is billed like planning, runs only when asked and never blocks an approval. title answers 3 burned-title options (a Thai headline and an English line) from the short's brief, title, beats and source images without storing them, billed like planning (estimate.title covers one retry) and only when asked. update stores the chosen or typed title in plan.finish.title {headline, secondary}, removing it when both are empty; Finish burns it in the TikTok watermark's title block when the saved template has a headline (the default look does), and a changed title finishes again from the reviewed take. Goals made by an earlier /goal are read-only: list, status, cancel and dismiss.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
-      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "retry", "dismiss", "finish", "check"]),
+      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "retry", "dismiss", "finish", "check", "title"]),
       goal_id: z.string().uuid().optional(), request_id: z.string().min(1).max(200).optional(),
-      brief: z.string().trim().min(1).max(6000).optional(), plan: advertisedAs(goalShortPlanSchema, {
+      brief: z.string().trim().min(1).max(6000).optional(), plan: advertisedAs(z.preprocess(shortPlanTitleInput, goalShortPlanSchema), {
         type: "object",
         description: "A short's plan, usually the shortPlan from a video_goal status result with fields edited in place",
       }).optional(),
@@ -135,6 +147,7 @@ export function goalDefs(engine: Engine): ToolDef[] {
         if (args.action === "create") return json(await createGoal(engine, bookId, notebookId, args));
         if (args.action === "character") throw new Error("Unknown action: character");
         const goalId = z.string().uuid().parse(args.goal_id);
+        if (args.action === "title") return json(await writeGoalTitles(engine, bookId, notebookId, goalId));
         return await withNotebookMutation(`goal:${goalId}`, async () => json(await goalSnapshot(engine, await applyGoalAction(engine, notebookId, goalId, args))));
       } catch (error) { return failure(error); }
     },

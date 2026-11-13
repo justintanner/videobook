@@ -109,7 +109,7 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
         title, aspectRatio: plannedDraft.aspectRatio, sourceImages: plannedDraft.sourceImages, storyboard: shortStoryboardOf(plannedDraft),
         framePrompt, beats, segmentSeconds: plannedDraft.segmentSeconds,
       });
-    const estimate = await estimateShort(engine, plan);
+    const estimate = await estimateShort(engine, plan, content);
     const added = [authored.note, offline?.note ?? null].filter((note): note is string => note !== null);
     await withNotebookMutation(`goal:${goalId}`, async () => {
       const current = readGoal(engine, goalId);

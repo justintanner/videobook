@@ -11,7 +11,7 @@ import type { ChainStep } from "./chain-plan.js";
 import { probeVideo } from "./ffmpeg.js";
 import {
   buildGoalShortPlan, compileShortClipStep, compileShortContinuationStep, compileShortFrameStep, compileShortStoryboardStep, formatShortSeconds,
-  goalShortPlanSchema, refreshGoalShortPlan, shortStoryboardOf, shortTiming,
+  goalShortPlanSchema, refreshGoalShortPlan, shortPlanTitleInput, shortStoryboardOf, shortTiming,
   type GoalShortDraft, type GoalShortImageRef, type GoalShortPlan, type ShortStoryboard, type ShortStoryboardVideo,
 } from "./goal-short-plan.js";
 import { shortAuthoredCopy, shortBriefPlan, shortPlannerNeeded, shortTitle } from "./goal-short-planner.js";
@@ -21,8 +21,9 @@ import { goalReferenceHashes } from "./goal-reference-images.js";
 import { goalStageAttempts } from "./goal-stills.js";
 import {
   activeGoalStage, createGoalShortCell, emptyGoalEstimates, readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent,
-  type GoalEstimate, type GoalEstimates, type GoalGenerationStage, type GoalRecord, type GoalShortContent, type GoalStageOutput,
+  type GoalEstimate, type GoalEstimates, type GoalFinish, type GoalGenerationStage, type GoalRecord, type GoalShortContent, type GoalStageOutput,
 } from "./goal-store.js";
+import { goalTitleEstimate, type GoalTitleShort } from "./graphics/suggest.js";
 import { assessToolCallEstimate } from "./jobs/cost-estimate-assessment.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 import { mutateNotebook } from "./notebook-mutations.js";
@@ -43,6 +44,7 @@ const REFERENCES_LOCKED = "The source images stay with this short. Start a new /
 const STORYBOARD_LOCKED = "The storyboard's video and frames stay with this short. Start a new /goal to change them.";
 const STORYBOARD_FIRST = "Clean the storyboard first: approve the storyboard stage to remove its on-screen graphics before the frame is made.";
 const SEGMENT_LOCKED = "A generated segment keeps its place and seconds. Regenerate it, or start a new /goal to change them.";
+const TITLE_WHILE_FINISHING = "Wait until finishing stops before changing the burned title.";
 const STALE_RETRY = "The references or selected versions changed after this attempt. Regenerate using the current selection instead of retrying the older request.";
 const EXTEND_SOURCE_SECONDS = { minimum: 1.625, maximum: 60 };
 const PLACEHOLDER_FRAME = "https://videobook.invalid/short-frame.jpg";
@@ -163,7 +165,7 @@ function shortImageIds(plan: GoalShortPlan, clip: boolean): string[] {
   return (clip ? plan.character.references : [...plan.character.references, ...plan.frame.references]).map((reference) => reference.artifactId);
 }
 
-export async function estimateShort(engine: Engine, plan: GoalShortPlan): Promise<GoalEstimates> {
+export async function estimateShort(engine: Engine, plan: GoalShortPlan, short: GoalTitleShort): Promise<GoalEstimates> {
   const storyboard = shortStoryboardOf(plan);
   const firstFrame = storyboard?.frames[0] ?? null;
   const frameIds = [...shortImageIds(plan, false), ...(firstFrame ? [firstFrame.artifactId] : [])];
@@ -177,7 +179,8 @@ export async function estimateShort(engine: Engine, plan: GoalShortPlan): Promis
     : priced(engine, compileShortContinuationStep(plan, index, PLACEHOLDER_CLIP), { video: [PLACEHOLDER_CLIP] })));
   const storyboards = summed(storyboardFrames);
   const videos = summed(segments);
-  return { frame, storyboards, videos, total: summed([storyboards, frame, videos]), segments, ...(storyboard ? { storyboardFrames } : {}) };
+  const title = goalTitleEstimate({ brief: short.brief, draft: short.draft, plan });
+  return { frame, storyboards, videos, total: summed([storyboards, frame, videos]), segments, ...(storyboard ? { storyboardFrames } : {}), title };
 }
 
 export async function shortFingerprint(engine: Engine, plan: GoalShortPlan, stage: GoalGenerationStage, index: number, sourceArtifactId: string | null): Promise<string> {
@@ -320,7 +323,7 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
   let referenceNotes: ReferenceNote[] = [];
   if (input.plan) {
     const plan = goalShortPlanSchema.parse(input.plan);
-    content = { brief, revision: 1, draft: null, plan, estimate: await estimateShort(engine, plan), notes: [] };
+    content = { brief, revision: 1, draft: null, plan, estimate: await estimateShort(engine, plan, { brief, draft: null }), notes: [] };
   } else {
     const timing = shortTiming(brief);
     const authored = shortAuthoredCopy(brief, timing.segmentSeconds);
@@ -348,7 +351,7 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
         framePrompt: written.frame,
         beats: written.beats,
       });
-      content = { brief, revision: 1, draft, plan, estimate: await estimateShort(engine, plan), notes };
+      content = { brief, revision: 1, draft, plan, estimate: await estimateShort(engine, plan, { brief, draft }), notes };
     }
   }
   const goalId = uuidv7();
@@ -391,7 +394,7 @@ function withStagePrompt(plan: GoalShortPlan, stage: GoalGenerationStage, index:
 async function revisedShortContent(engine: Engine, goal: GoalRecord, content: GoalShortContent & { plan: GoalShortPlan }, stage: GoalGenerationStage, index: number, feedback: string) {
   const prompt = await rewrittenShortPrompt(goal, stage, index, feedback, content.revision);
   const plan = goalShortPlanSchema.parse(withStagePrompt(content.plan, stage, index, prompt));
-  const next = { ...content, plan, estimate: await estimateShort(engine, plan), revision: content.revision + 1 };
+  const next = { ...content, plan, estimate: await estimateShort(engine, plan, content), revision: content.revision + 1 };
   await writeGoalShortContent(engine, goal, next);
   return next;
 }
@@ -601,12 +604,21 @@ function lockedSettings(plan: GoalShortPlan) {
 
 function lockedReferences(plan: GoalShortPlan) {
   const reference = (item: GoalShortImageRef) => ({ artifactId: item.artifactId, cellId: item.cellId, objectHash: item.objectHash, slot: item.slot });
-  if (plan.version === 5) return { sourceImages: plan.sourceImages.map(reference), finish: plan.finish };
+  const { title: _title, ...finish } = plan.finish;
+  if (plan.version === 5) return { sourceImages: plan.sourceImages.map(reference), finish };
   return {
     character: { ...plan.character, references: plan.character.references.map(reference) },
     frame: plan.frame.references.map(reference),
-    finish: plan.finish,
+    finish,
   };
+}
+
+function titleFinish(goal: GoalRecord, previous: GoalShortPlan, plan: GoalShortPlan): GoalFinish | null | undefined {
+  if (JSON.stringify(previous.finish.title ?? null) === JSON.stringify(plan.finish.title ?? null)) return undefined;
+  if (goal.finish?.status === "running") throw new Error(TITLE_WHILE_FINISHING);
+  if (goal.finish?.status !== "completed") return undefined;
+  const clip = nextShortSegment(goal, plan) === null ? currentShortClip(goal) : null;
+  return clip ? { status: "review", sourceArtifactId: clip.artifactId, finalArtifactId: null, error: null } : null;
 }
 
 function lockedStoryboard(plan: GoalShortPlan) {
@@ -623,7 +635,7 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
   if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Wait until generation stops before editing the goal");
   const content = assertShortRevision(engine, goal, args.revision);
   const previous = content.plan;
-  const plan = goalShortPlanSchema.parse(args.plan);
+  const plan = goalShortPlanSchema.parse(shortPlanTitleInput(args.plan));
   if (JSON.stringify(lockedReferences(previous)) !== JSON.stringify(lockedReferences(plan))) throw new Error(REFERENCES_LOCKED);
   if (JSON.stringify(lockedStoryboard(previous)) !== JSON.stringify(lockedStoryboard(plan))) throw new Error(STORYBOARD_LOCKED);
   const frameMade = (goal.stages.frame?.outputs.length ?? 0) > 0;
@@ -633,12 +645,13 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
   if (JSON.stringify(previous) === JSON.stringify(plan)) return goal;
   const generatedPromptChanged = (frameMade && previous.frame.prompt !== plan.frame.prompt)
     || generated.some((index) => previous.segments[index]?.prompt !== plan.segments[index]?.prompt);
-  await writeGoalShortContent(engine, goal, { ...content, plan, estimate: await estimateShort(engine, plan), revision: content.revision + 1 });
-  const reopened = generatedPromptChanged || plan.segments.length !== previous.segments.length;
+  const retitled = titleFinish(goal, previous, plan);
+  await writeGoalShortContent(engine, goal, { ...content, plan, estimate: await estimateShort(engine, plan, content), revision: content.revision + 1 });
+  const reopened = generatedPromptChanged || retitled !== undefined || plan.segments.length !== previous.segments.length;
   return saveGoal(engine, {
     ...goal,
     ...(reopened ? { status: "review" as const, error: null } : {}),
-    ...(generatedPromptChanged ? { finish: null } : {}),
+    ...(generatedPromptChanged ? { finish: null } : retitled !== undefined ? { finish: retitled } : {}),
   });
 }
 

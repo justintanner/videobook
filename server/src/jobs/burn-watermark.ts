@@ -89,6 +89,8 @@ export type BurnWatermarkPayload = {
   handleEndSeconds?: number;
   cardAssetId?: string;
   credit?: string | null;
+  headline?: string;
+  secondary?: string;
   template?: BurnWatermarkTemplate | null;
   patches?: WatermarkPatch[];
   transcribe?: false;
@@ -201,7 +203,12 @@ export async function watermarkPayloadDocument(
     handleWindow: includeHandle
       ? watermarkWindow("Handle watermark", duration, payload.handleStartSeconds ?? payload.startSeconds, payload.handleEndSeconds ?? payload.endSeconds)
       : WHOLE_CLIP,
-    values: { ...watermarkSlotValues(profile), ...(payload.credit ? { credit: payload.credit } : {}) },
+    values: {
+      ...watermarkSlotValues(profile),
+      ...(payload.credit ? { credit: payload.credit } : {}),
+      ...(payload.headline ? { headline: payload.headline } : {}),
+      ...(payload.secondary ? { secondary: payload.secondary } : {}),
+    },
     template: burnTemplate(payload.template),
     patches: payload.patches ?? [],
     card,

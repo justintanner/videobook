@@ -6,14 +6,18 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Removed
+### Added
 
-- Removed `set_video_overlay`, the render-time image overlay, `render_video`'s
-  `osg_*` arguments, and `apply_watermark` mode `overlay`. External callers get
-  unknown-tool or invalid-argument errors. Use the graphics editor or watermark
-  burn instead. Stored overlay render settings are ignored; saved watermark
-  profiles with mode `overlay` use `burn`. `render_video` keeps subtitles and
-  keyword graphics and does not draw graphics documents.
+- A `/goal` short's Finish tab has a burned title: a Thai headline and an
+  English line under it, burned into the watermark's title block when the short
+  finishes. Type it, or click Write title, which shows its estimate first and
+  makes one text call (asked again once when the answer is not a Thai headline
+  with an English line within the slot limits) for three options from the
+  short's brief, title, beats and source images to pick from and edit.
+  `video_goal` gains the `title` action, `update` stores the title in
+  `plan.finish.title`, and a changed title finishes again from the reviewed
+  take. A short without a title, or whose saved TikTok watermark template has no
+  headline, finishes as before.
 
 ### Changed
 
@@ -32,6 +36,15 @@ and the package uses [Semantic Versioning](https://semver.org/).
   the opening frame is made from the source images and clean storyboard frame
   1, and clips never receive storyboard frames.
 - `video_goal` `approve` refuses a stage other than the one under review.
+
+### Removed
+
+- Removed `set_video_overlay`, the render-time image overlay, `render_video`'s
+  `osg_*` arguments, and `apply_watermark` mode `overlay`. External callers get
+  unknown-tool or invalid-argument errors. Use the graphics editor or watermark
+  burn instead. Stored overlay render settings are ignored; saved watermark
+  profiles with mode `overlay` use `burn`. `render_video` keeps subtitles and
+  keyword graphics and does not draw graphics documents.
 
 ### Fixed
 

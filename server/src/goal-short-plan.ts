@@ -3,6 +3,7 @@ import type { NotebookDocument } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import type { ChainStep } from "./chain-plan.js";
 import { LEGACY_SHORT_SILENCE, SHORT_RULES } from "./goal-short-rules.js";
+import { MAX_GRAPHICS_TEXT_LENGTH } from "./graphics/model.js";
 import { LIGHTNING_WATERMARK_PROFILE } from "./lightning-defaults.js";
 
 export const SHORT_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
@@ -138,6 +139,26 @@ const rulesSchema = z.object({
   silence: z.string().trim().min(1),
 }).strict();
 
+export const SHORT_FINISH_TITLE_LIMITS = {
+  headline: { name: "The burned title", characters: MAX_GRAPHICS_TEXT_LENGTH, lines: 3 },
+  secondary: { name: "The English line", characters: MAX_GRAPHICS_TEXT_LENGTH, lines: 2 },
+} as const;
+
+function titleLine(limit: (typeof SHORT_FINISH_TITLE_LIMITS)[keyof typeof SHORT_FINISH_TITLE_LIMITS], required: boolean) {
+  const text = z.string().trim();
+  return (required ? text.min(1, `${limit.name} is empty.`) : text)
+    .max(limit.characters, `${limit.name} runs at most ${limit.characters} characters.`)
+    .refine((value) => !value.includes("\r"), `${limit.name} has a carriage return.`)
+    .refine((value) => value.split("\n").length <= limit.lines, `${limit.name} runs at most ${limit.lines} lines.`);
+}
+
+const finishTitleSchema = z.object({
+  headline: titleLine(SHORT_FINISH_TITLE_LIMITS.headline, true),
+  secondary: titleLine(SHORT_FINISH_TITLE_LIMITS.secondary, false),
+}).strict();
+
+export type ShortFinishTitle = z.infer<typeof finishTitleSchema>;
+
 const finishSchema = z.object({
   suggestedColdOpenSeconds: z.number().positive().optional(),
   watermark: z.object({
@@ -151,6 +172,7 @@ const finishSchema = z.object({
     qrOpacity: z.number(),
     fadeSeconds: z.number(),
   }).strict(),
+  title: finishTitleSchema.optional(),
 }).strict();
 
 const titleSchema = z.string().trim().min(1).max(120);
@@ -238,6 +260,35 @@ const goalShortDraftV5Schema = z.object({
 export const goalShortDraftSchema = z.union([goalShortDraftV5Schema, goalShortDraftV4Schema]);
 
 export type GoalShortDraft = z.infer<typeof goalShortDraftSchema>;
+
+export function shortFinishTitleInput(headline: string, secondary: string): { headline: string; secondary: string } | null {
+  const line = (text: string) => text.replace(/\r\n?/gu, "\n").trim();
+  const title = { headline: line(headline), secondary: line(secondary) };
+  return title.headline || title.secondary ? title : null;
+}
+
+export function shortPlanTitleInput(value: unknown): unknown {
+  if (!value || typeof value !== "object" || !("finish" in value)) return value;
+  const { finish } = value as { finish: unknown };
+  if (!finish || typeof finish !== "object" || !("title" in finish)) return value;
+  const { title, ...rest } = finish as { title: unknown };
+  const lines = title && typeof title === "object" ? title as Record<string, unknown> : null;
+  const typed = lines && typeof lines.headline === "string" && typeof lines.secondary === "string"
+    ? shortFinishTitleInput(lines.headline, lines.secondary)
+    : title;
+  return { ...value, finish: typed === null || typed === undefined ? rest : { ...rest, title: typed } };
+}
+
+export function shortFinishTitleIssue(title: { headline: string; secondary: string } | null): string | null {
+  if (!title) return null;
+  const parsed = finishTitleSchema.safeParse(title);
+  return parsed.success ? null : parsed.error.issues[0]?.message ?? "The burned title cannot be saved.";
+}
+
+export function withShortFinishTitle<Plan extends GoalShortPlan>(plan: Plan, title: ShortFinishTitle | null): Plan {
+  const { title: _title, ...finish } = plan.finish;
+  return { ...plan, finish: title ? { ...finish, title } : finish };
+}
 
 export function isLegacyShortPlan(plan: GoalShortPlan): plan is GoalShortPlanV4 {
   return plan.version === 4;

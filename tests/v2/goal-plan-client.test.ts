@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { composerGoal, defaultShortTab, goalCanRetry, goalGenerationMarks, goalOutputEstimate, goalPlanSeconds, goalStatusLine, goalStillVersions, goalTileView, goalWake, LEGACY_GOAL_NOTE, shortEstimateText } from '../../src/videobook/goals'
+import { asGoalTitleOptions, composerGoal, defaultShortTab, goalCanRetry, goalGenerationMarks, goalOutputEstimate, goalPlanSeconds, goalStatusLine, goalStillVersions, goalTileView, goalWake, LEGACY_GOAL_NOTE, shortEstimateText } from '../../src/videobook/goals'
 import { LOWER_BOUND, legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, shortStep, storyboardPlanFixture } from './goal-short-fixtures'
 
 describe('legacy goal model', () => {
@@ -101,6 +101,16 @@ describe('short goal model', () => {
     })
     expect(defaultShortTab(finished, twoClips)).toBe('finish')
     expect(defaultShortTab(finished, shortPlanFixture([10, 10, 5]))).toBe('video')
+  })
+})
+
+describe('burned title options', () => {
+  it('reads the options of a title answer and refuses an answer without one', () => {
+    const options = [{ headline: 'รอรถเมล์กลางฝน', secondary: 'Waiting for the bus in the rain' }, { headline: 'ฝนตกแต่รถเมล์ไม่มา', secondary: '' }]
+    expect(asGoalTitleOptions({ goal_id: 'short-1', options: [...options, { headline: 3 }, null], model: 'gpt-6-astra' })).toEqual(options)
+    expect(() => asGoalTitleOptions({ goal_id: 'short-1', options: [] })).toThrow('The server returned no title options')
+    expect(() => asGoalTitleOptions(null)).toThrow('The server returned no title options')
+    expect(shortEstimateText({ usd: 0.4194, warnings: ['Forecast: input tokens use chars/4.'] })).toBe('$0.42')
   })
 })
 

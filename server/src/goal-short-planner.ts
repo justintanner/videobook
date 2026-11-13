@@ -4,7 +4,7 @@ import { resolveNotebookCellArtifactId } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { replaceNotebookMentions } from "videobook-engine/notebook-mentions";
 import { getApiKey } from "./api-key.js";
-import { grownShortSegments, shortStoryboardOf, SHORT_WORD_CEILINGS, type GoalShortPlan, type ShortAspectRatio } from "./goal-short-plan.js";
+import { grownShortSegments, isLegacyShortDraft, shortStoryboardOf, SHORT_WORD_CEILINGS, type GoalShortDraft, type GoalShortPlan, type ShortAspectRatio } from "./goal-short-plan.js";
 import type { GoalGenerationStage } from "./goal-store.js";
 import { SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES, shortBannedWords, shortMentionsPhone } from "./goal-short-rules.js";
 import { loadGuide } from "./tools/rewrite-prompt.js";
@@ -112,16 +112,30 @@ export function shortTitle(brief: string, framePrompt: string): string {
 
 type BriefReference = { artifactId: string; address?: string | null };
 
+export function shortBriefNames(content: { draft: GoalShortDraft | null }, plan: GoalShortPlan) {
+  const { draft } = content;
+  if (draft) {
+    return isLegacyShortDraft(draft)
+      ? { references: [...draft.character.references, ...draft.extraReferences], storyboard: null }
+      : { references: draft.sourceImages, storyboard: draft.storyboard?.video ?? null };
+  }
+  return plan.version === 5
+    ? { references: plan.sourceImages, storyboard: plan.storyboard?.video ?? null }
+    : { references: [...plan.character.references, ...plan.frame.references], storyboard: null };
+}
+
 export function shortPlannerBrief(
   brief: string,
   references: readonly BriefReference[],
-  document: NotebookDocument,
+  document: NotebookDocument | null,
   storyboardVideo: BriefReference | null = null,
 ): string {
   const named = (reference: BriefReference, replacement: string) => {
     const addresses = reference.address !== undefined
       ? [reference.address].filter((address): address is string => Boolean(address))
-      : document.cells.filter((cell) => resolveNotebookCellArtifactId(document, cell) === reference.artifactId).map((cell) => notebookGridTag(cell.slot));
+      : document
+        ? document.cells.filter((cell) => resolveNotebookCellArtifactId(document, cell) === reference.artifactId).map((cell) => notebookGridTag(cell.slot))
+        : [];
     return [{ reference: reference.artifactId, replacement }, ...addresses.map((address) => ({ reference: address, replacement }))];
   };
   return replaceNotebookMentions(brief, [

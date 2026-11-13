@@ -26,7 +26,10 @@ import {
   compileShortFrameStep,
   goalShortPlanSchema,
   refreshGoalShortPlan,
+  shortFinishTitleInput,
+  shortFinishTitleIssue,
   shortTiming,
+  withShortFinishTitle,
   type GoalShortPlan,
   type GoalShortPlanV4,
   type GoalShortPlanV5,
@@ -331,6 +334,48 @@ describe("goalShortPlanSchema", () => {
   });
 });
 
+describe("the burned title", () => {
+  it("parses stored version 4 and 5 plans without a title unchanged", () => {
+    for (const plan of [shortPlan(), legacyPlan()]) {
+      const stored = JSON.parse(JSON.stringify(plan)) as GoalShortPlan;
+      expect(stored.finish).not.toHaveProperty("title");
+      expect(goalShortPlanSchema.parse(stored)).toEqual(stored);
+    }
+  });
+
+  it("keeps a Thai title with an English line, which may be empty, on both versions, and removes it again", () => {
+    for (const plan of [shortPlan(), legacyPlan()]) {
+      for (const title of [{ headline: "รอรถเมล์\nกลางฝน", secondary: "Waiting for the bus in the rain" }, { headline: "รอรถเมล์กลางฝน", secondary: "" }]) {
+        const titled = withShortFinishTitle(plan, title);
+        expect(goalShortPlanSchema.parse(titled).finish.title).toEqual(title);
+        expect(withShortFinishTitle(titled, null)).toEqual(plan);
+      }
+    }
+  });
+
+  it("holds the title to the headline and English line slot limits", () => {
+    const titled = (headline: string, secondary = "Waiting") => issues(withShortFinishTitle(shortPlan(), { headline, secondary }));
+    expect(titled("")).toEqual(["finish.title.headline: The burned title is empty."]);
+    expect(titled("ก".repeat(280))).toEqual([]);
+    expect(titled("ก".repeat(281))).toEqual(["finish.title.headline: The burned title runs at most 280 characters."]);
+    expect(titled("หนึ่ง\nสอง\nสาม")).toEqual([]);
+    expect(titled("หนึ่ง\nสอง\nสาม\nสี่")).toEqual(["finish.title.headline: The burned title runs at most 3 lines."]);
+    expect(titled("หนึ่ง", "one\ntwo\nthree")).toEqual(["finish.title.secondary: The English line runs at most 2 lines."]);
+    expect(titled("หนึ่ง", "w".repeat(281))).toEqual(["finish.title.secondary: The English line runs at most 280 characters."]);
+    expect(titled("หนึ่ง\r\nสอง")).toEqual(["finish.title.headline: The burned title has a carriage return."]);
+    const plan = shortPlan();
+    expect(issues({ ...plan, finish: { ...plan.finish, title: { headline: "หนึ่ง", secondary: "", size: 0.09 } } })).toEqual([expect.stringMatching(/^finish\.title: .*size/u)]);
+  });
+
+  it("reads typed lines, and a title with both lines empty is no title", () => {
+    expect(shortFinishTitleInput("  รอรถเมล์\r\nกลางฝน ", " Waiting ")).toEqual({ headline: "รอรถเมล์\nกลางฝน", secondary: "Waiting" });
+    expect(shortFinishTitleInput(" ", "\n")).toBeNull();
+    expect(shortFinishTitleIssue(shortFinishTitleInput("", "Waiting"))).toBe("The burned title is empty.");
+    expect(shortFinishTitleIssue(shortFinishTitleInput("รอรถเมล์", ""))).toBeNull();
+    expect(shortFinishTitleIssue(null)).toBeNull();
+  });
+});
+
 describe("compiled short steps", () => {
   it("makes the frame with GPT Image 2.6 edit from the source images, ending on the frame rule", () => {
     const step = compileShortFrameStep(shortPlan());
@@ -583,7 +628,7 @@ describe("browser-safe short modules", () => {
 
   it("follows relative imports and notices a forbidden one", () => {
     expect([...reachable(join(here, "goal-short-plan.ts"))].map((file) => relative(here, file)).sort())
-      .toEqual(["goal-short-plan.ts", "goal-short-rules.ts", "lightning-defaults.ts"]);
+      .toEqual(["goal-short-plan.ts", "goal-short-rules.ts", "graphics/model.ts", "lightning-defaults.ts"]);
     expect(valueImports(join(here, "test-budget.ts")).filter(forbidden)).toEqual(["node:os"]);
   });
 });

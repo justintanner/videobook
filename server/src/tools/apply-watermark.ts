@@ -262,7 +262,9 @@ function burnedPosition(includeQr: boolean, placement: { corner: OsgPosition; pl
   return includeQr && placement.placementSource !== "template" ? placement.corner : null;
 }
 
-export function applyWatermarkDef(engine: Engine, options: { transcribe?: false } = {}): ToolDef {
+type BurnTitle = { headline: string; secondary: string };
+
+export function applyWatermarkDef(engine: Engine, options: { transcribe?: false; title?: BurnTitle | null } = {}): ToolDef {
   return {
     name: "apply_watermark",
     description:
@@ -609,6 +611,8 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false 
           : {}),
         ...(card_asset_id ? { cardAssetId: card_asset_id } : {}),
         credit,
+        ...(options.title?.headline ? { headline: options.title.headline } : {}),
+        ...(options.title?.headline && options.title.secondary ? { secondary: options.title.secondary } : {}),
         template: template ? { id: template.id, document: template.document } : null,
         patches: burnPatches(input),
         ...(options.transcribe === false ? { transcribe: false as const } : {}),

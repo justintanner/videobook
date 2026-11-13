@@ -8,7 +8,7 @@ export type GoalStatus = "planning" | "review" | "running" | "completed" | "fail
 export type GoalGenerationStage = "storyboards" | "frame" | "videos";
 
 export type GoalEstimate = { usd: number | null; warnings: string[] };
-export type GoalEstimates = Record<GoalGenerationStage | "total", GoalEstimate> & { segments?: GoalEstimate[]; storyboardFrames?: GoalEstimate[] };
+export type GoalEstimates = Record<GoalGenerationStage | "total", GoalEstimate> & { segments?: GoalEstimate[]; storyboardFrames?: GoalEstimate[]; title?: GoalEstimate };
 export type GoalStageOutput = { index: number; artifactId: string; cellId: string | null; producerCellId: string | null; address: string | null };
 export type GoalStillAttempt = {
   stage: GoalGenerationStage;
@@ -159,6 +159,7 @@ function estimatesFrom(value: unknown): GoalEstimates {
     frame: estimateFrom(record.frame), storyboards: estimateFrom(record.storyboards), videos: estimateFrom(record.videos), total: estimateFrom(record.total),
     ...(Array.isArray(record.segments) ? { segments: record.segments.map(estimateFrom) } : {}),
     ...(Array.isArray(record.storyboardFrames) ? { storyboardFrames: record.storyboardFrames.map(estimateFrom) } : {}),
+    ...(record.title && typeof record.title === "object" ? { title: estimateFrom(record.title) } : {}),
   };
 }
 

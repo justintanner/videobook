@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
+import type { ShortFinishTitle } from '../../../server/src/goal-short-plan'
 import { Flag } from 'lucide-react'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
@@ -14,6 +15,7 @@ type GoalPanelProps = {
   goal: GoalSnapshot
   connected: boolean
   onAction: (args: GoalAction) => Promise<GoalSnapshot>
+  onWriteTitle: () => Promise<ShortFinishTitle[]>
   onSelectCell: (cellId: string) => void
   onPreviewCell: (cellId: string) => void
   resolveAsset: (artifactId: string) => AssetRecord | null
@@ -36,8 +38,9 @@ function LegacyGoalSummary({ goal, onSelectCell, resolveAsset }: { goal: LegacyG
   </div>
 }
 
-export function GoalPanel({ goal, connected, onAction, onSelectCell, onPreviewCell, resolveAsset }: GoalPanelProps) {
+export function GoalPanel({ goal, connected, onAction, onWriteTitle, onSelectCell, onPreviewCell, resolveAsset }: GoalPanelProps) {
   const [pending, setPending] = useState(false)
+  const [titleOptions, setTitleOptions] = useState<ShortFinishTitle[]>([])
   const pendingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<ShortTab | null>(null)
@@ -94,6 +97,8 @@ export function GoalPanel({ goal, connected, onAction, onSelectCell, onPreviewCe
         onPreviewCell={onPreviewCell}
         onRun={work => { void perform(work) }}
         onAction={args => onAction({ ...args, goal_id: goal.goalId })}
+        titleOptions={titleOptions}
+        onWriteTitle={async () => setTitleOptions(await onWriteTitle())}
       />}
       {!connected && <p role="status" className="goal-panel-muted">Reconnecting. Your goal is saved; generation continues on the server.</p>}
       {error && <p role="alert" className="goal-panel-error">{error}</p>}

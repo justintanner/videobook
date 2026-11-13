@@ -1,6 +1,6 @@
 import type { GoalSnapshot, LegacyGoalSnapshot, ShortGoalSnapshot } from '../../server/src/tools/goal'
 import type { GoalGenerationStage } from '../../server/src/goal-store'
-import { shortStoryboardOf, type GoalShortPlan } from '../../server/src/goal-short-plan'
+import { shortStoryboardOf, type GoalShortPlan, type ShortFinishTitle } from '../../server/src/goal-short-plan'
 import { lowerBoundCost } from './command-plan'
 import { lowerBoundEstimate } from './provider-payload-preview'
 
@@ -132,6 +132,16 @@ function stoppedStillLabel(previous: ShortGoalSnapshot, before: GoalProgress, af
 export function asGoal(value: unknown): GoalSnapshot {
   if (!value || typeof value !== 'object' || !('kind' in value) || value.kind !== 'video-goal') throw new Error('The server returned an invalid video goal')
   return value as GoalSnapshot
+}
+
+export function asGoalTitleOptions(value: unknown): ShortFinishTitle[] {
+  const record = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+  const options = (Array.isArray(record.options) ? record.options : []).flatMap((option: unknown) => {
+    const title = option && typeof option === 'object' ? option as Record<string, unknown> : {}
+    return typeof title.headline === 'string' && typeof title.secondary === 'string' ? [{ headline: title.headline, secondary: title.secondary }] : []
+  })
+  if (options.length === 0) throw new Error('The server returned no title options')
+  return options
 }
 
 export function asGoals(value: unknown): GoalSnapshot[] {
