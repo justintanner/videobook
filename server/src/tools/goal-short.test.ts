@@ -114,7 +114,7 @@ describe("video_goal shorts", () => {
   const chainRuns = () => Object.keys(engine.settings.get<{ runs: Record<string, unknown> }>("application.chain-runs.v1")?.runs ?? {}).length;
 
   async function short(brief = AUTHORED): Promise<ShortGoalSnapshot> {
-    return status((await createShortGoal(engine, bookId, notebookId, { brief, requestId: uuidv7() })).goalId);
+    return status((await invoke({ action: "create", brief, request_id: uuidv7() })).goalId);
   }
 
   async function settled(goal: ShortGoalSnapshot): Promise<ShortGoalSnapshot> {
@@ -242,6 +242,8 @@ describe("video_goal shorts", () => {
     expect(goal.notes).toEqual(planning.notes);
     expect(goal.notes).toEqual([`@a1 is a video, so its frame at ${atSeconds.toFixed(1)} s (${frame.address}) is the reference.`]);
     expect(atSeconds).toBeCloseTo(duration / 2, 1);
+    expect(stub.submissions).toEqual([]);
+    expect(chainRuns()).toBe(0);
     expect(goal.shortPlan!.frame.references.map((reference) => [reference.artifactId, reference.label])).toEqual([
       [frame.artifactId, "Frame of @a1"],
       [imageIds[1], "Character 2"],
@@ -279,6 +281,17 @@ describe("video_goal shorts", () => {
       { prompt: "He looks up.", seconds: 5 },
       { prompt: "He leaves.", seconds: 5 },
     ]);
+  });
+
+  it("folds a quoted beat beyond four into the last beat through MCP", async () => {
+    const goal = await short('a 60 second short, frame: "He waits." beat 1: "He looks up." beat 2: "He stands." beat 3: "He walks." beat 4: "He stops." beat 5: "He waves."');
+    expect(goal.status).toBe("review");
+    expect(goal.shortPlan!.segments).toHaveLength(4);
+    expect(goal.shortPlan!.segments[3]!.prompt).toBe("He stops. He waves.");
+    expect(goal.notes).toContain("The brief quotes beat 5, so that line is part of the last beat.");
+    expect(stub.plannerRequests).toEqual([]);
+    expect(stub.submissions).toEqual([]);
+    expect(chainRuns()).toBe(0);
   });
 
   it("plans an unquoted brief from its own words when OPENAI_API_KEY is unset", async () => {

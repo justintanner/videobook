@@ -36,6 +36,15 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `/goal` accepts video references by extracting a frame locally for free,
+  skips unusable mentions, and keeps the first 12 usable images. The review
+  panel explains each adaptation. Lengths are clamped to 5–60 seconds, extra
+  quoted beats are fitted or folded in, and a missing OpenAI key produces a
+  reviewable plan from the brief. Revise feedback accepts @mentions and up to
+  2000 characters. Video character references also use extracted frames, and
+  a character without reference images can generate a frame from its saved
+  name and description. Paid generation keeps its approvals and estimates.
+
 - Download actions and `/download` in a non-loopback browser now save the original file through the browser. Local pages and direct MCP Downloads exports keep copying to the server Downloads folder.
 
 - Every @apicity package moves to 0.28.0. Apicity drops KIE's withdrawn
@@ -62,6 +71,10 @@ and the package uses [Semantic Versioning](https://semver.org/).
 - An image the brief mentioned that then becomes the main character is no
   longer also sent as a place or prop reference when the short's frame is
   approved.
+
+### Removed
+
+- The `video_goal` tool no longer accepts `start_seconds` or `end_seconds`.
 
 ## [0.7.0] - 2026-11-12
 

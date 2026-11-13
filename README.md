@@ -72,14 +72,29 @@ sheet** that becomes his only reference. A sheet made from picked pictures keeps
 that person's face, hair, build and clothes. He belongs to the book and applies
 to every new goal: a new short copies him, and a short made before he had images
 takes them when its frame is approved. An image picked as the character stops
-being a place or prop reference for that frame.
+being a place or prop reference for that frame. A video passed as a character
+reference uses a locally extracted frame. With no reference image, Generate
+frame uses the saved name and description; the panel explains how to add
+references for a more consistent character.
 
 **Starting a short.** Enter an idea such as `/goal he waits for a bus in the
 rain`; no @mention is needed. Mention image cells to use them as place or prop
 references for the opening frame, name a length such as `20 seconds` (5 to 60,
 12 by default), or ask for `square` or `landscape` (portrait 9:16 by default).
-The planner writes the title, the frame prompt and one beat per clip. Quote
-them as `frame: "…"` and `beat 1: "…"` to write them yourself and skip planning.
+A mentioned video supplies a locally extracted frame, saved as an image cell;
+no manual extraction is needed. For example, `/goal use @a1 and @a2 to make a
+funny stairs are slippery video` works when @a1 is a video and @a2 is an image.
+Extraction uses the midpoint, or a time such as `@a1 at 2s`, and costs nothing.
+Empty cells, audio, pending outputs and unreadable media are skipped; the first
+12 usable images are kept. Notes above the plan name each adaptation, including
+the source video, extracted frame cell and timestamp.
+
+Lengths outside 5–60 seconds are clamped to that range. Extra quoted beats get
+segments where they fit, or are folded into the last beat. The planner writes
+the title, the frame prompt and one beat per clip. Quote them as `frame: "…"`
+and `beat 1: "…"` to write them yourself and skip planning. Without an OpenAI
+key, the brief itself supplies a reviewable plan, with a note explaining how
+to enable the planner.
 
 **Review.** The goal panel has four tabs, and every paid step has its own
 approval with its estimate:
@@ -95,7 +110,9 @@ approval with its estimate:
    watermark into the finished short. To add a cold open, use `/edit-cold-open`
    on the finished video.
 
-**Revising.** A revision is a short instruction for the frame or a clip.
+**Revising.** A revision is an instruction of up to 2000 characters for the
+frame or a clip. You can include @mentions: they become cell labels (or bare
+addresses when unresolved) before the planner reads them.
 Before the paid step, the planner's model rewrites that frame prompt or beat to
 follow it, replacing any sentence the instruction contradicts instead of adding
 the instruction beside it, and the short keeps the rewritten prompt. Revising
@@ -124,7 +141,8 @@ speech. It is billed like planning and never blocks a step.
 **Models and keys.** Frames, character sheets and clips use GPT Image 2.6 and
 MiniMax H3 Max through fal with `FAL_API_KEY`. Planning, revising and the
 AI-tell check use `OPENAI_API_KEY`; a brief that quotes the frame and every
-beat needs no planning. A short's clips and finished video skip the speech-to-text pass that
+beat needs no planning, and without that key an unquoted brief uses the
+plain plan described above. A short's clips and finished video skip the speech-to-text pass that
 imported videos get, so no transcription provider is called. H3 Max is billed per requested second, so its estimates are lower
 bounds and read "at least". GPT Image 2.6 is priced from fal's historical
 average, which needs `FAL_ADMIN_API_KEY`; without it the frame and the sheet
