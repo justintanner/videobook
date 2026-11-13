@@ -109,7 +109,7 @@ describe("shortPlannerBrief", () => {
     } satisfies NotebookDocument;
     const references = [{ artifactId: "019a1f3e-5b10-7c2a-9d41-3f6b2a8c1e01" }, { artifactId: "019a1f3e-5b10-7c2a-9d41-3f6b2a8c1e02" }];
     expect(shortPlannerBrief("he waits under @b3 holding @a1's umbrella, not @c4", references, document))
-      .toBe("he waits under Reference 2 holding Reference 1's umbrella, not @c4");
+      .toBe("he waits under Source image 2 holding Source image 1's umbrella, not @c4");
   });
 });
 
@@ -165,31 +165,34 @@ describe("shortPlannerIssues", () => {
 });
 
 describe("shortPlannerInstructions", () => {
-  it("tells the planner the character, segments, ceilings, continuity, rule lines, avoid list and both guides", async () => {
-    const instructions = await shortPlannerInstructions({
-      character: { name: "Main character", description: "a man in a green shirt" }, aspectRatio: "9:16", segmentSeconds: [11, 10, 10],
-    });
+  it("tells the planner the person, segments, ceilings, continuity, rule lines, avoid list and both guides", async () => {
+    const instructions = await shortPlannerInstructions({ sourceImageCount: 1, aspectRatio: "9:16", segmentSeconds: [11, 10, 10] });
     for (const line of Object.values(SHORT_RULES)) expect(instructions).toContain(line);
     for (const avoid of SHORT_AVOID) expect(instructions).toContain(avoid);
     for (const word of SHORT_BANNED_WORDS) expect(instructions).toContain(word);
-    expect(instructions).toContain("starring Main character: a man in a green shirt. The main character never speaks.");
+    expect(instructions).toContain("starring the person in the source images. That person never speaks.");
+    expect(instructions).not.toMatch(/Main character|a man in a green shirt/u);
     expect(instructions).toContain("3 beats for MiniMax H3 Max, one per segment: beat 1 lasts 11 seconds, beat 2 lasts 10 seconds, beat 3 lasts 10 seconds. The aspect ratio is 9:16.");
     expect(instructions).toContain("Word ceilings, not targets: title 6, frame 40, each beat 45.");
-    expect(instructions).toContain("Each later beat continues from where the previous one ends, in the same place, and every beat ends with the main character in frame.");
+    expect(instructions).toContain("Each later beat continues from where the previous one ends, in the same place, and every beat ends with that person in frame.");
     expect(instructions).toContain("Plan a short that looks like real phone footage filmed by someone off screen, starring");
     expect(instructions).toContain("Call it the camera, never the phone: someone off screen holds it.");
     expect(instructions).toContain('Say what is there rather than what is not, such as "both hands hang empty at the sides" rather than "no phone in hand"');
-    expect(instructions).toContain("Give the main character a phone only when the brief does.");
+    expect(instructions).toContain("Give that person a phone only when the brief does.");
+    expect(instructions).toContain("The images are source images, labelled Source image 1, Source image 2");
     expect(instructions).toContain((await loadGuide("minimax_h3")).trim());
     expect(instructions).toContain((await loadGuide("gpt_image_26")).trim());
+    const fromWords = await shortPlannerInstructions({ sourceImageCount: 0, aspectRatio: "9:16", segmentSeconds: [12] });
+    expect(fromWords).toContain("starring the person the brief describes. That person never speaks.");
+    expect(fromWords).not.toMatch(/Main character|a man in a green shirt/u);
   });
 });
 
 describe("short revisions", () => {
   const plan = buildGoalShortPlan({
-    title: "Waiting", aspectRatio: "9:16", character: { name: "Main character", description: "a man in a green shirt", references: [] },
+    title: "Waiting", aspectRatio: "9:16", sourceImages: [],
     framePrompt: "He stands under a bus shelter at dusk.", beats: ["He checks the road. The phone stays at chest height, keeping him framed.", "He boards the bus."],
-    segmentSeconds: [10, 10], extraReferences: [],
+    segmentSeconds: [10, 10],
   });
 
   it("names the part it rewrites with its ceiling and current prompt", () => {
@@ -205,18 +208,18 @@ describe("short revisions", () => {
     const saved = { ...plan, rules: { frame: "Earlier frame rule.", video: "Earlier video rule.", silence: "Earlier silence rule." } };
     const beat = await shortRevisionInstructions(saved, "videos", 0);
     expect(beat).toContain("Rewrite beat 1 of 2 for MiniMax H3 Max, which lasts 10 seconds, so it follows the operator's feedback.");
-    expect(beat).toContain("It starts from the opening frame and ends with the main character in frame.");
+    expect(beat).toContain("It starts from the opening frame and ends with that person in frame.");
     expect(beat).toContain("Remove or rewrite every sentence the feedback contradicts, so the prompt no longer says anything the feedback rules out.");
     expect(beat).toContain("Call it the camera, never the phone: someone off screen holds it.");
     expect(beat).toContain('"both hands hang empty at the sides" rather than "no phone in hand"');
-    expect(beat).toContain("Give the main character a phone only when the feedback or the brief does.");
+    expect(beat).toContain("Give that person a phone only when the feedback or the brief does.");
     expect(beat).toContain("Write at most 45 words, and answer with the whole revised beat 1.");
     expect(beat).toContain("Video: Earlier video rule.\nSilence: Earlier silence rule.");
     expect(beat).not.toContain("Earlier frame rule.");
     for (const avoid of SHORT_AVOID) expect(beat).toContain(avoid);
     expect(beat).toContain((await loadGuide("minimax_h3")).trim());
     expect(beat).not.toContain((await loadGuide("gpt_image_26")).trim());
-    expect(await shortRevisionInstructions(saved, "videos", 1)).toContain("It continues from where the beat before it ends, in the same place, and ends with the main character in frame.");
+    expect(await shortRevisionInstructions(saved, "videos", 1)).toContain("It continues from where the beat before it ends, in the same place, and ends with that person in frame.");
     const frame = await shortRevisionInstructions(saved, "frame", 0);
     expect(frame).toContain("Rewrite the opening frame prompt for GPT Image 2.6 so it follows the operator's feedback.");
     expect(frame).toContain("Frame: Earlier frame rule.");

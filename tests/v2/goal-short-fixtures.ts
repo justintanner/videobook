@@ -1,4 +1,4 @@
-import { buildGoalShortPlan, type GoalShortPlan } from '../../server/src/goal-short-plan'
+import { buildGoalShortPlan, buildLegacyGoalShortPlan, type GoalShortPlan } from '../../server/src/goal-short-plan'
 import type { LegacyGoalSnapshot, ShortGoalSnapshot } from '../../src/videobook/goals'
 
 type Stage = NonNullable<ShortGoalSnapshot['stages']['frame']>
@@ -16,6 +16,13 @@ function shortReference(index: number, label: string) {
 
 export function shortPlanFixture(seconds: readonly number[] = [10, 10], references = [shortReference(1, 'Character sheet')]): GoalShortPlan {
   return buildGoalShortPlan({
+    title: 'Waiting for the bus', aspectRatio: '9:16', sourceImages: references,
+    framePrompt: 'A bus stop at dusk.', beats: seconds.map((_, index) => `Beat ${index + 1}.`), segmentSeconds: seconds,
+  })
+}
+
+export function legacyShortPlanFixture(seconds: readonly number[] = [10, 10], references = [shortReference(1, 'Character sheet')]): GoalShortPlan {
+  return buildLegacyGoalShortPlan({
     title: 'Waiting for the bus', aspectRatio: '9:16',
     character: { name: 'Main character', description: 'a man in a green shirt', references },
     framePrompt: 'A bus stop at dusk.', beats: seconds.map((_, index) => `Beat ${index + 1}.`), segmentSeconds: seconds, extraReferences: [],
@@ -51,7 +58,7 @@ export function shortStage(stage: 'frame' | 'videos', outputs: readonly { index:
 
 export function shortGoalFixture(extra: Partial<ShortGoalSnapshot> = {}, short: GoalShortPlan = shortPlanFixture()): ShortGoalSnapshot {
   return {
-    kind: 'video-goal', legacy: false, planVersion: 4, stage: 'frame', stages: {}, goalId: 'short-1', bookId: 'book', notebookId: 'notebook',
+    kind: 'video-goal', legacy: false, planVersion: short.version, stage: 'frame', stages: {}, goalId: 'short-1', bookId: 'book', notebookId: 'notebook',
     cellId: 'short-tile', address: '@b1', requestId: 'request', brief: 'he waits for a bus', revision: 2, shortPlan: short,
     estimate: {
       frame: { usd: 0.21, warnings: [] }, storyboards: { usd: 0, warnings: [] }, videos: { usd: 1.2, warnings: [LOWER_BOUND] },

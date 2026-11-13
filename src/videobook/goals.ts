@@ -1,16 +1,11 @@
 import type { GoalSnapshot, LegacyGoalSnapshot, ShortGoalSnapshot } from '../../server/src/tools/goal'
 import type { GoalGenerationStage } from '../../server/src/goal-store'
 import type { GoalShortPlan } from '../../server/src/goal-short-plan'
-import type { MainCharacterView } from '../../server/src/goal-short-character'
-import type { NotebookDocument } from 'videobook-engine'
-import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { lowerBoundCost } from './command-plan'
 import { lowerBoundEstimate } from './provider-payload-preview'
 
-export type { GoalSnapshot, LegacyGoalSnapshot, MainCharacterView, ShortGoalSnapshot }
+export type { GoalSnapshot, LegacyGoalSnapshot, ShortGoalSnapshot }
 export type ShortTab = 'character' | 'frame' | 'video' | 'finish'
-export type GoalCharacterImage = { artifactId: string, cellId: string, address: string, label: string | null }
-export type GoalCharacterChoice = GoalCharacterImage & { mentioned: boolean }
 export type GoalShotState = 'planned' | 'waiting' | 'submitting' | 'generating' | 'done' | 'failed' | 'skipped' | 'stopped'
 export type GoalPhase = 'planning' | 'review' | 'frame' | 'videos' | 'complete' | 'failed' | 'interrupted' | 'stopped'
 export type GoalShotView = {
@@ -57,12 +52,6 @@ export function shortPlanOf(goal: GoalSnapshot | null | undefined): GoalShortPla
   return goal && !goal.legacy ? goal.shortPlan ?? null : null
 }
 
-export function asMainCharacter(value: unknown): MainCharacterView {
-  const record = value && typeof value === 'object' ? value as Record<string, unknown> : null
-  if (!record || !record.character || !Array.isArray(record.references) || !record.sheet) throw new Error('The server returned an invalid main character')
-  return value as MainCharacterView
-}
-
 export function goalStillVersions(goal: ShortGoalSnapshot, stage: GoalGenerationStage, index: number) {
   return goal.stages[stage]?.outputs.find(output => output.index === index)?.versions ?? []
 }
@@ -79,30 +68,7 @@ export function goalNextSegment(goal: ShortGoalSnapshot, plan: GoalShortPlan): n
 export function defaultShortTab(goal: ShortGoalSnapshot, plan: GoalShortPlan): ShortTab {
   if (goal.finish && goalNextSegment(goal, plan) === null) return 'finish'
   if (goal.stage === 'videos') return 'video'
-  return goal.stages.frame ? 'frame' : 'character'
-}
-
-export function goalCharacterImages(cells: NotebookDocument['cells']): GoalCharacterImage[] {
-  const seen = new Set<string>()
-  return [...cells]
-    .sort((left, right) => left.slot.row - right.slot.row || left.slot.column - right.slot.column)
-    .flatMap(cell => {
-      const artifactId = cell.type === 'image' ? cell.outputArtifactId : null
-      if (!artifactId || seen.has(artifactId)) return []
-      seen.add(artifactId)
-      return [{ artifactId, cellId: cell.id, address: notebookGridTag(cell.slot), label: cell.label ?? null }]
-    })
-}
-
-export function goalCharacterChoices(images: readonly GoalCharacterImage[], plan: GoalShortPlan): GoalCharacterChoice[] {
-  const mentioned = plan.frame.references.map(reference => reference.artifactId)
-  const rank = (image: GoalCharacterImage) => {
-    const index = mentioned.indexOf(image.artifactId)
-    return index < 0 ? mentioned.length : index
-  }
-  return [...images]
-    .sort((left, right) => rank(left) - rank(right))
-    .map(image => ({ ...image, mentioned: mentioned.includes(image.artifactId) }))
+  return plan.version === 4 && !goal.stages.frame ? 'character' : 'frame'
 }
 
 export function goalOutputEstimate(goal: ShortGoalSnapshot, stage: GoalGenerationStage, index: number): number | null {

@@ -35,7 +35,7 @@ export const WORKFLOW_TOOLS: Readonly<Record<string, { actionId: string; reason:
   edit_cold_open: { actionId: "command.edit-cold-open", reason: "Creates the reviewed cold-open copy." },
   video_goal: {
     actionId: "command.goal",
-    reason: "Goal mode makes a real-looking short starring the book's main character, who never speaks. Review the character, then approve the opening frame, the base clip and each continuation separately, each with its own estimate; frame and clip versions stay selectable and revisable, and Finish burns the saved watermark onto the reviewed take.",
+    reason: "Goal mode makes a real-looking short starring the person in the images the brief mentions, or the person the brief describes, who never speaks. Approve the opening frame, the base clip and each continuation separately, each with its own estimate; frame and clip versions stay selectable and revisable, and Finish burns the saved watermark onto the reviewed take.",
   },
   list_workspace_actions: {
     actionId: "command.actions",

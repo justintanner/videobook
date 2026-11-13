@@ -9,7 +9,6 @@ import type { Engine } from "videobook-engine";
 import { waitForChainRun } from "../chain-executor.js";
 import { createEngineForTest } from "../engine.js";
 import { runFfmpeg } from "../ffmpeg.js";
-import { saveMainCharacter } from "../goal-short-character.js";
 import { createShortGoal } from "../goal-short-runtime.js";
 import { readGoal } from "../goal-store.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
@@ -24,7 +23,7 @@ import type { ShortGoalSnapshot } from "../tools/goal.js";
 
 type ResponsesRequest = { input: Array<{ content: Array<{ type: string; text?: string; image_url?: string }> }> };
 
-const ONE_BEAT = 'he waits, frame: "A bus stop at dusk." beat 1: "He waits under the shelter."';
+const ONE_BEAT = '@a1 he waits, frame: "A bus stop at dusk." beat 1: "He waits under the shelter."';
 const SEVEN = [
   { severity: "note", text: "Slight waxiness on the left cheek." },
   { severity: "warn", text: "Six fingers on the right hand." },
@@ -91,8 +90,7 @@ describe("check_goal_realism", () => {
     const notebook = await engine.notebooks.create("Shorts");
     if (!notebook.ok) throw new Error(notebook.error.message);
     notebookId = notebook.value.id;
-    const imageIds = await goalTestCharacters(engine, notebookId);
-    await saveMainCharacter(engine, { referenceArtifactIds: [imageIds[0]!] }, notebookId);
+    await goalTestCharacters(engine, notebookId);
   });
 
   afterEach(async () => {
@@ -134,7 +132,7 @@ describe("check_goal_realism", () => {
     return stats.channels.slice(0, 3).map(channel => Math.round(channel.mean));
   }
 
-  it("checks the frame against the character reference and keeps five findings, warnings first", async () => {
+  it("checks the frame against the source image and keeps five findings, warnings first", async () => {
     const frame = await approved(await short(ONE_BEAT));
     const output = frame.stages.frame!.outputs[0]!;
     stub.plannerAnswers = [{ findings: SEVEN }];

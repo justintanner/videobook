@@ -1,18 +1,17 @@
 import { join } from "node:path";
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
-import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
+import type { Engine, NotebookDocument } from "videobook-engine";
 import { findPrimaryMediaFile, resolveNotebookCellArtifactId } from "videobook-engine";
-import { firstEmptyNotebookGridSlot, notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
+import { notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
 import { replaceNotebookMentions, scanNotebookMentions, type NotebookMention } from "videobook-engine/notebook-mentions";
 import { getApiKey } from "./api-key.js";
 import { getChainRun, preflightAndAccept, retryChainRun } from "./chain-executor.js";
 import type { ChainStep } from "./chain-plan.js";
 import { probeVideo } from "./ffmpeg.js";
-import { reconcileMainCharacter } from "./goal-short-character.js";
 import {
   buildGoalShortPlan, compileShortClipStep, compileShortContinuationStep, compileShortFrameStep, goalShortPlanSchema, refreshGoalShortPlan,
-  shortTiming, withShortCharacterReferences, type GoalShortDraft, type GoalShortImageRef, type GoalShortPlan,
+  shortTiming, type GoalShortDraft, type GoalShortImageRef, type GoalShortPlan,
 } from "./goal-short-plan.js";
 import { shortAuthoredCopy, shortBriefPlan, shortPlannerNeeded, shortTitle } from "./goal-short-planner.js";
 import { renderReferenceNotes, usableImageReference, type ReferenceNote } from "./goal-short-references.js";
@@ -37,7 +36,7 @@ const NO_FAL_KEY = "Set FAL_API_KEY in Settings before generating this stage";
 const NO_OPENAI_KEY = "Set OPENAI_API_KEY in Settings to revise with feedback, or edit the prompt and regenerate.";
 const REVISE_TIMEOUT_MS = 240_000;
 const SETTINGS_LOCKED = "Models, resolution, aspect ratio and rules stay with this short once its frame exists. Start a new /goal to change them.";
-const REFERENCES_LOCKED = "The character and references stay with this short. Start a new /goal to change them.";
+const REFERENCES_LOCKED = "The source images stay with this short. Start a new /goal to change them.";
 const SEGMENT_LOCKED = "A generated segment keeps its place and seconds. Regenerate it, or start a new /goal to change them.";
 const STALE_RETRY = "The references or selected versions changed after this attempt. Regenerate using the current selection instead of retrying the older request.";
 const EXTEND_SOURCE_SECONDS = { minimum: 1.625, maximum: 60 };
@@ -45,10 +44,6 @@ const PLACEHOLDER_FRAME = "https://videobook.invalid/short-frame.jpg";
 const PLACEHOLDER_CLIP = "https://videobook.invalid/short-clip.mp4";
 const stageSchema = z.enum(["frame", "videos"]);
 export const shortFeedbackSchema = z.string().trim().min(1).max(2000);
-
-function noReferenceNote(name: string): string {
-  return `No reference image for ${name}, so the frame is generated from the description. Pick image cells or generate a character sheet to keep him the same across shorts.`;
-}
 
 function feedbackLabel(engine: Engine, document: NotebookDocument, mention: NotebookMention): string {
   const resolved = resolveNotebookArtifactReference({ engine, documents: [document], reference: mention.reference });
@@ -73,41 +68,6 @@ function readNotebook(engine: Engine, notebookId: string): NotebookDocument {
   const notebook = engine.notebooks.read(notebookId);
   if (!notebook.ok) throw new Error(notebook.error.message);
   return notebook.value;
-}
-
-function cellHolding(document: NotebookDocument, artifactId: string): NotebookCell | undefined {
-  return document.cells.find((cell) => cell.outputArtifactId === artifactId);
-}
-
-async function imageReference(engine: Engine, artifactId: string, cell: NotebookCell): Promise<ShortReference> {
-  const address = notebookGridTag(cell.slot);
-  const manifest = await engine.files.manifest(artifactId);
-  const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, "image") : null;
-  if (!file) throw new Error(`${address} has no readable image`);
-  const artifact = engine.artifacts.get(artifactId);
-  return { kind: "image", artifactId, cellId: cell.id, address, label: (artifact.ok && artifact.value.label) || cell.label || address, objectHash: file.objectHash };
-}
-
-async function characterReferences(engine: Engine, notebookId: string, artifactIds: readonly string[]): Promise<ShortReference[]> {
-  if (artifactIds.some((artifactId) => !cellHolding(readNotebook(engine, notebookId), artifactId))) {
-    const placed = await mutateNotebook(engine, notebookId, "goal_character_references", (document) => {
-      const cells = [...document.cells];
-      for (const artifactId of artifactIds) {
-        if (cellHolding({ ...document, cells }, artifactId)) continue;
-        const artifact = engine.artifacts.get(artifactId);
-        cells.push(engine.notebooks.createCell({
-          type: "image",
-          label: (artifact.ok && artifact.value.label) || "Main character",
-          slot: firstEmptyNotebookGridSlot(notebookOccupiedSlots(cells)),
-          outputArtifactId: artifactId,
-        }));
-      }
-      return arrangeGoalNotebook({ ...document, cells });
-    });
-    if (!placed.ok) throw new Error(placed.error.message);
-  }
-  const document = readNotebook(engine, notebookId);
-  return Promise.all(artifactIds.map((artifactId) => imageReference(engine, artifactId, cellHolding(document, artifactId)!)));
 }
 
 function mentionTimestamp(brief: string, mention: NotebookMention): number | null {
@@ -157,26 +117,32 @@ function summed(parts: readonly GoalEstimate[]): GoalEstimate {
   };
 }
 
+function shortImageIds(plan: GoalShortPlan, clip: boolean): string[] {
+  if (plan.version === 5) return plan.sourceImages.map((reference) => reference.artifactId);
+  return (clip ? plan.character.references : [...plan.character.references, ...plan.frame.references]).map((reference) => reference.artifactId);
+}
+
 export async function estimateShort(engine: Engine, plan: GoalShortPlan): Promise<GoalEstimates> {
-  const characters = plan.character.references.map((reference) => reference.artifactId);
-  const images = [...characters, ...plan.frame.references.map((reference) => reference.artifactId)];
-  const frame = await priced(engine, compileShortFrameStep(plan), images.length > 0 ? { image: images } : {});
+  const frameIds = shortImageIds(plan, false);
+  const clipIds = shortImageIds(plan, true);
+  const frame = await priced(engine, compileShortFrameStep(plan), frameIds.length > 0 ? { image: frameIds } : {});
   const segments = await Promise.all(plan.segments.map((_, index) => index === 0
-    ? priced(engine, compileShortClipStep(plan, PLACEHOLDER_FRAME), { first_frame: [PLACEHOLDER_FRAME], ...(characters.length > 0 ? { image: characters } : {}) })
+    ? priced(engine, compileShortClipStep(plan, PLACEHOLDER_FRAME), { first_frame: [PLACEHOLDER_FRAME], ...(clipIds.length > 0 ? { image: clipIds } : {}) })
     : priced(engine, compileShortContinuationStep(plan, index, PLACEHOLDER_CLIP), { video: [PLACEHOLDER_CLIP] })));
   const videos = summed(segments);
   return { frame, storyboards: { usd: 0, warnings: [] }, videos, total: summed([frame, videos]), segments };
 }
 
 export async function shortFingerprint(engine: Engine, plan: GoalShortPlan, stage: ShortStage, index: number, sourceArtifactId: string | null): Promise<string> {
-  const characters = plan.character.references.map((reference) => reference.artifactId);
   if (stage === "frame") {
     const { prompt, ...settings } = plan.frame;
     return JSON.stringify({
       prompt,
       rules: plan.rules.frame,
-      settings: { ...settings, references: undefined, aspectRatio: plan.aspectRatio },
-      references: await goalReferenceHashes(engine, [...characters, ...plan.frame.references.map((reference) => reference.artifactId)]),
+      settings: plan.version === 5
+        ? { ...settings, aspectRatio: plan.aspectRatio }
+        : { ...settings, references: undefined, aspectRatio: plan.aspectRatio },
+      references: await goalReferenceHashes(engine, shortImageIds(plan, false)),
     });
   }
   return JSON.stringify({
@@ -184,7 +150,7 @@ export async function shortFingerprint(engine: Engine, plan: GoalShortPlan, stag
     seconds: plan.segments[index]?.seconds ?? null,
     rules: { video: plan.rules.video, silence: plan.rules.silence },
     settings: { ...plan.video, aspectRatio: plan.aspectRatio },
-    references: await goalReferenceHashes(engine, characters),
+    references: await goalReferenceHashes(engine, shortImageIds(plan, true)),
     sourceArtifactId,
   });
 }
@@ -260,15 +226,12 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
     const timing = shortTiming(brief);
     const authored = shortAuthoredCopy(brief, timing.segmentSeconds);
     const planning = shortPlannerNeeded(brief, authored.segmentSeconds);
-    const character = await reconcileMainCharacter(engine);
-    const references = await characterReferences(engine, notebookId, character.referenceArtifactIds);
-    const mentioned = await briefReferences(engine, notebookId, brief, new Set(character.referenceArtifactIds));
+    const mentioned = await briefReferences(engine, notebookId, brief, new Set());
     referenceNotes = mentioned.notes;
     const draft: GoalShortDraft = {
       aspectRatio: timing.aspectRatio,
       segmentSeconds: authored.segmentSeconds,
-      character: { name: character.name, description: character.description, references },
-      extraReferences: mentioned.references,
+      sourceImages: mentioned.references,
     };
     const notes = [timing.note, authored.note].filter((note): note is string => note !== null);
     if (planning) {
@@ -276,7 +239,14 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
     } else {
       const written = shortBriefPlan(brief, authored);
       if (written.note) notes.push(written.note);
-      const plan = buildGoalShortPlan({ ...draft, title: shortTitle(brief, written.frame), framePrompt: written.frame, beats: written.beats });
+      const plan = buildGoalShortPlan({
+        aspectRatio: draft.aspectRatio,
+        segmentSeconds: draft.segmentSeconds,
+        sourceImages: draft.sourceImages,
+        title: shortTitle(brief, written.frame),
+        framePrompt: written.frame,
+        beats: written.beats,
+      });
       content = { brief, revision: 1, draft, plan, estimate: await estimateShort(engine, plan), notes };
     }
   }
@@ -284,7 +254,7 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
   const cell = await createGoalShortCell(engine, notebookId, goalId, content);
   const timestamp = new Date().toISOString();
   const goal: GoalRecord = {
-    goalId, bookId, notebookId, cellId: cell.id, requestId: input.requestId, status: content.plan ? "review" : "planning", planVersion: 4,
+    goalId, bookId, notebookId, cellId: cell.id, requestId: input.requestId, status: content.plan ? "review" : "planning", planVersion: content.plan?.version ?? 5,
     stage: "frame", stages: {}, chainId: null, planningJobId: null, clipIds: [], trackId: null, assembly: null, error: null,
     dismissedAt: null, createdAt: timestamp, updatedAt: timestamp,
   };
@@ -294,29 +264,6 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
   }
   const saved = saveGoal(engine, goal);
   return content.plan ? saved : queueShortPlanning(engine, saved);
-}
-
-async function adoptCharacterReferences(engine: Engine, goal: GoalRecord, content: GoalShortContent & { plan: GoalShortPlan }) {
-  const character = await reconcileMainCharacter(engine);
-  if (character.referenceArtifactIds.length === 0) {
-    const note = noReferenceNote(content.plan.character.name);
-    if (content.notes.includes(note)) return content;
-    const next = { ...content, notes: [...content.notes, note] };
-    await writeGoalShortContent(engine, goal, next);
-    return next;
-  }
-  const plan = withShortCharacterReferences(content.plan, await characterReferences(engine, goal.notebookId, character.referenceArtifactIds));
-  const next = { ...content, plan, estimate: await estimateShort(engine, plan), revision: content.revision + 1 };
-  await writeGoalShortContent(engine, goal, next);
-  return next;
-}
-
-export async function priceShortFrame(engine: Engine, goal: GoalRecord, characterIds: readonly string[]): Promise<void> {
-  if (goal.planVersion !== 4 || goal.status !== "review" || characterIds.length === 0 || (goal.stages.frame?.outputs.length ?? 0) > 0) return;
-  const content = requireGoalShortContent(engine, goal);
-  if (!content.plan || content.plan.character.references.length > 0 || content.estimate.frame.usd !== null) return;
-  const plan = withShortCharacterReferences(content.plan, await characterReferences(engine, goal.notebookId, characterIds));
-  await writeGoalShortContent(engine, goal, { ...content, estimate: await estimateShort(engine, plan) });
 }
 
 async function rewrittenShortPrompt(goal: GoalRecord, stage: ShortStage, index: number, feedback: string, revision: number): Promise<string> {
@@ -402,7 +349,6 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   const feedback = args.action === "revise" ? plainFeedback(engine, goal.notebookId, shortFeedbackSchema.parse(args.feedback)) : null;
   if (!process.env.FAL_API_KEY) throw new Error(NO_FAL_KEY);
   if (feedback && !getApiKey("OPENAI_API_KEY")) throw new Error(NO_OPENAI_KEY);
-  if (stage === "frame" && content.plan.character.references.length === 0) content = await adoptCharacterReferences(engine, goal, content);
   if (stage === "videos") outputAddress(readNotebook(engine, goal.notebookId), selectedOutput(goal, "frame", 0));
   const sourceClip = stage === "videos" && index > 0 ? await continuationSource(engine, goal, index) : null;
   await ensureShortSpace(engine, goal, stage);
@@ -483,11 +429,16 @@ export function selectShortVersion(engine: Engine, goal: GoalRecord, args: GoalA
 }
 
 function lockedSettings(plan: GoalShortPlan) {
+  if (plan.version === 5) {
+    const { prompt: _prompt, ...frame } = plan.frame;
+    return { aspectRatio: plan.aspectRatio, video: plan.video, rules: plan.rules, frame };
+  }
   return { aspectRatio: plan.aspectRatio, video: plan.video, rules: plan.rules, frame: { ...plan.frame, prompt: "", references: [] } };
 }
 
 function lockedReferences(plan: GoalShortPlan) {
   const reference = (item: GoalShortImageRef) => ({ artifactId: item.artifactId, cellId: item.cellId, objectHash: item.objectHash, slot: item.slot });
+  if (plan.version === 5) return { sourceImages: plan.sourceImages.map(reference), finish: plan.finish };
   return {
     character: { ...plan.character, references: plan.character.references.map(reference) },
     frame: plan.frame.references.map(reference),

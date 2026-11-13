@@ -14,7 +14,7 @@ import { configureProviderEndpoints } from "../media/endpoints.js";
 import { goalTestCharacters } from "../test-goals.js";
 import { testBudget } from "../test-budget.js";
 import { shortTiming, SHORT_WORD_CEILINGS, type GoalShortDraft } from "../goal-short-plan.js";
-import { SHORT_AVOID, SHORT_RULES, shortBannedWords } from "../goal-short-rules.js";
+import { LEGACY_SHORT_SILENCE, SHORT_AVOID, SHORT_RULES, shortBannedWords } from "../goal-short-rules.js";
 import { loadGuide } from "../tools/rewrite-prompt.js";
 import {
   createGoalShortCell, emptyGoalEstimates, readGoal, readGoalCell, requireGoalShortContent, saveGoal, type GoalRecord,
@@ -109,19 +109,18 @@ describe("plan_goal for a short", () => {
     };
   }
 
-  async function plannedShort(brief: string): Promise<GoalRecord> {
+  async function plannedShort(brief: string, draftOverride?: GoalShortDraft): Promise<GoalRecord> {
     const timing = shortTiming(brief);
-    const draft: GoalShortDraft = {
+    const draft: GoalShortDraft = draftOverride ?? {
       aspectRatio: timing.aspectRatio,
       segmentSeconds: timing.segmentSeconds,
-      character: { name: "Main character", description: "a man in a green shirt", references: [await reference(0)] },
-      extraReferences: [await reference(1)],
+      sourceImages: [await reference(0), await reference(1)],
     };
     const goalId = uuidv7();
     const cell = await createGoalShortCell(engine, notebookId, goalId, { brief, revision: 1, draft, plan: null, estimate: emptyGoalEstimates(), notes: [] });
     const timestamp = new Date().toISOString();
     const goal = saveGoal(engine, {
-      goalId, bookId: engine.book.get().bookId, notebookId, cellId: cell.id, requestId: goalId, status: "planning", planVersion: 4,
+      goalId, bookId: engine.book.get().bookId, notebookId, cellId: cell.id, requestId: goalId, status: "planning", planVersion: "character" in draft ? 4 : 5,
       stage: "frame", stages: {}, chainId: null, planningJobId: null, clipIds: [], trackId: null, assembly: null, error: null,
       dismissedAt: null, createdAt: timestamp, updatedAt: timestamp,
     });
@@ -150,28 +149,55 @@ describe("plan_goal for a short", () => {
     expect(request!.instructions).toContain((await loadGuide("gpt_image_26")).trim());
     expect(request!.text.format.schema.properties.beats).toMatchObject({ minItems: 2, maxItems: 2 });
     expect(userText(request!)).toMatchObject({
-      brief: "he waits for a bus in the rain under Reference 2, 20 seconds",
-      character: { name: "Main character", description: "a man in a green shirt" },
+      brief: "he waits for a bus in the rain under Source image 2, 20 seconds",
       aspectRatio: "9:16",
       segments: [{ beat: 1, seconds: 10 }, { beat: 2, seconds: 10 }],
       fixed: {},
       write: ["title", "frame", "beat 1", "beat 2"],
     });
+    expect(userText(request!)).not.toHaveProperty("character");
+    expect(JSON.stringify(request)).not.toMatch(/Main character|a man in a green shirt/u);
     const content = request!.input[0]!.content as Array<{ type: string; text?: string }>;
     expect(content.filter((part) => part.type === "input_image")).toHaveLength(2);
-    expect(content.filter((part) => part.type === "input_text").map((part) => part.text).slice(1)).toEqual(["Reference 1: Character 1", "Reference 2: Character 2"]);
+    expect(content.filter((part) => part.type === "input_text").map((part) => part.text).slice(1)).toEqual(["Source image 1: Character 1", "Source image 2: Character 2"]);
     const saved = requireGoalShortContent(engine, goal);
     expect(saved.revision).toBe(2);
     expect(saved.plan).toMatchObject({
-      version: 4, title: PLAN.title, aspectRatio: "9:16",
-      character: { name: "Main character", references: [{ artifactId: imageIds[0], slot: "@image1" }] },
-      frame: { prompt: PLAN.frame, references: [{ artifactId: imageIds[1], slot: "@image2" }] },
+      version: 5, title: PLAN.title, aspectRatio: "9:16",
+      sourceImages: [{ artifactId: imageIds[0], slot: "@image1" }, { artifactId: imageIds[1], slot: "@image2" }],
+      frame: { prompt: PLAN.frame },
       segments: [{ prompt: PLAN.beats[0], seconds: 10 }, { prompt: PLAN.beats[1], seconds: 10 }],
       rules: SHORT_RULES,
     });
+    expect(saved.plan).not.toHaveProperty("character");
     expect(saved.plan!.frame.prompt.split(/\s+/u).length).toBeLessThanOrEqual(SHORT_WORD_CEILINGS.frame);
     for (const segment of saved.plan!.segments) expect(segment.prompt.split(/\s+/u).length).toBeLessThanOrEqual(SHORT_WORD_CEILINGS.beat);
     expect(readGoalCell(engine, goal)?.label).toBe(PLAN.title);
+  });
+
+  it("keeps an in-flight version 4 draft as a version 4 plan and sends no character to the planner", async () => {
+    answers = [PLAN];
+    const timing = shortTiming("he waits for a bus, 20 seconds");
+    const goal = await plan(await plannedShort("he waits for a bus in the rain under @a2, 20 seconds", {
+      aspectRatio: timing.aspectRatio,
+      segmentSeconds: timing.segmentSeconds,
+      character: { name: "Main character", description: "a man in a green shirt", references: [await reference(0)] },
+      extraReferences: [await reference(1)],
+    }));
+    expect(goal.status).toBe("review");
+    const [request] = requests;
+    expect(userText(request!)).not.toHaveProperty("character");
+    expect(JSON.stringify(request)).not.toMatch(/Main character|a man in a green shirt/u);
+    const content = request!.input[0]!.content as Array<{ type: string; text?: string }>;
+    expect(content.filter((part) => part.type === "input_text").map((part) => part.text).slice(1)).toEqual(["Source image 1: Character 1", "Source image 2: Character 2"]);
+    const saved = requireGoalShortContent(engine, goal).plan!;
+    if (saved.version !== 4) throw new Error("expected a version 4 plan");
+    expect(saved).toMatchObject({
+      version: 4,
+      character: { name: "Main character", description: "a man in a green shirt", references: [{ artifactId: imageIds[0], slot: "@image1" }] },
+      frame: { references: [{ artifactId: imageIds[1], slot: "@image2" }] },
+      rules: { silence: LEGACY_SHORT_SILENCE },
+    });
   });
 
   it.each([

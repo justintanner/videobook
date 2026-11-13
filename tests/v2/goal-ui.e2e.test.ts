@@ -10,7 +10,6 @@ import sharp from 'sharp'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import type { Engine } from 'videobook-engine'
-import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
@@ -169,7 +168,7 @@ describe('goal mode in the browser', () => {
     await queue.startBook(bookId)
   })
 
-  scenario('makes a short from /goal without a mention: character, frame, clip, one continuation and finish', async () => {
+  scenario('makes a short from /goal without a mention: frame, clip, one continuation and finish', async () => {
     for (const goal of (await goals()).goals) {
       if (goal.status !== 'cancelled' && !goal.dismissedAt) await call('video_goal', { action: 'dismiss', goal_id: goal.goalId })
     }
@@ -195,8 +194,9 @@ describe('goal mode in the browser', () => {
       await command(`/goal ${brief}`)
       await expect.poll(async () => (await goals()).goals.find(goal => goal.brief === brief)?.status, { timeout: testBudget(30_000) }).toBe('review')
       const short = shortGoal((await goals()).goals.find(goal => goal.brief === brief))
-      expect(short).toMatchObject({ planVersion: 4, shortPlan: { version: 4, title: 'Bus in the rain', segments: [{ seconds: 12 }] } })
+      expect(short).toMatchObject({ planVersion: 5, shortPlan: { version: 5, title: 'Bus in the rain', segments: [{ seconds: 12 }] } })
       expect(JSON.stringify(short)).not.toMatch(/nano-banana|seedance|kie:/iu)
+      expect(JSON.stringify(short)).not.toMatch(/Main character|a man in a green shirt/)
       expect(stub.plannerRequests).toHaveLength(1)
       if (savedKeys.OPENAI_API_KEY === undefined) delete process.env.OPENAI_API_KEY
       else process.env.OPENAI_API_KEY = savedKeys.OPENAI_API_KEY
@@ -214,49 +214,12 @@ describe('goal mode in the browser', () => {
         await tile(short).click()
         await panel().waitFor({ state: 'visible', timeout: testBudget(15_000) })
       }
-      expect(await tabs.getByRole('button', { name: 'Character', exact: true }).getAttribute('aria-pressed')).toBe('true')
-      await panel().getByRole('group', { name: 'Character images', exact: true }).waitFor({ state: 'visible', timeout: testBudget(15_000) })
-      await screenshot('goal-character-first')
-      await openTab('Frame')
-      expect(await tabs.getByRole('button').allTextContents()).toEqual(['Character', 'Frame', 'Video', 'Finish'])
-      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review frame · estimate unavailable')
-      expect(short.mainCharacterReferences).toBe(0)
+      expect(await tabs.getByRole('button', { name: 'Frame', exact: true }).getAttribute('aria-pressed')).toBe('true')
+      expect(await tabs.getByRole('button').allTextContents()).toEqual(['Frame', 'Video', 'Finish'])
+      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review frame · $0.21')
       expect(await primary(/^Generate frame/).isDisabled()).toBe(false)
-      expect(await panel().getByText('No reference image for Main character, so the frame is generated from the description.').isVisible()).toBe(true)
-
-      await openTab('Character')
-      await panel().getByLabel('Character description', { exact: true }).fill('a man in his thirties in a green shirt')
-      await panel().getByRole('button', { name: 'Save character', exact: true }).click()
-      await expect.poll(async () => (await call<{ character: { description: string } }>('video_goal', { action: 'character' })).character.description, { timeout: testBudget(15_000) }).toBe('a man in his thirties in a green shirt')
-      const read = engine.notebooks.read(notebookId)
-      if (!read.ok) throw new Error(read.error.message)
-      const imageCell = read.value.cells.find(cell => cell.type === 'image' && cell.outputArtifactId)
-      if (!imageCell?.outputArtifactId) throw new Error('missing image cell')
-      const imageCellCount = read.value.cells.filter(cell => cell.type === 'image').length
-      await openTab('Character')
-      const pick = (address: string) => panel().getByRole('button', { name: `Pick ${address}`, exact: true })
-      await pick(notebookGridTag(imageCell.slot)).click()
-      expect(await pick(notebookGridTag(imageCell.slot)).getAttribute('aria-pressed')).toBe('true')
-      const photo = await sharp({ create: { width: 120, height: 160, channels: 3, background: '#a4552f' } }).png().toBuffer()
-      await panel().getByLabel('Upload a character image', { exact: true }).setInputFiles({ name: 'character-photo.png', mimeType: 'image/png', buffer: photo })
-      const uploadedCell = async () => {
-        const after = engine.notebooks.read(notebookId)
-        if (!after.ok) throw new Error(after.error.message)
-        return after.value.cells.filter(cell => cell.type === 'image').length > imageCellCount
-          ? after.value.cells.find(cell => cell.type === 'image' && cell.outputArtifactId && !read.value.cells.some(before => before.id === cell.id)) ?? null
-          : null
-      }
-      await expect.poll(async () => Boolean((await uploadedCell())?.outputArtifactId), { timeout: testBudget(30_000) }).toBe(true)
-      const upload = (await uploadedCell())!
-      await expect.poll(() => pick(notebookGridTag(upload.slot)).getAttribute('aria-pressed'), { timeout: testBudget(15_000) }).toBe('true')
-      await primary(/^Generate character sheet from these 2 images · /).waitFor({ state: 'visible', timeout: testBudget(15_000) })
-      await screenshot('goal-character-picked')
-      await panel().getByRole('button', { name: 'Use these images', exact: true }).click()
-      await expect.poll(async () => (await call<{ references: Array<{ artifactId: string }> }>('video_goal', { action: 'character' })).references.map(reference => reference.artifactId), { timeout: testBudget(15_000) })
-        .toEqual([imageCell.outputArtifactId, upload.outputArtifactId])
-      expect(await tabs.getByRole('button', { name: 'Character', exact: true }).getAttribute('aria-pressed')).toBe('true')
-
-      await openTab('Frame')
+      expect(await panel().getByText('No reference image for Main character, so the frame is generated from the description.').count()).toBe(0)
+      await screenshot('goal-frame-first')
       await expect.poll(() => primary(/^Generate frame · \$0\.21$/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
       await primary(/^Generate frame/).click()
       await expect.poll(() => status().textContent(), { timeout: testBudget(90_000) }).toContain('Review clip 1 of 1 · at least $')

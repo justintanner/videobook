@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { NotebookDocument } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import type { ChainStep } from "./chain-plan.js";
-import { SHORT_RULES } from "./goal-short-rules.js";
+import { LEGACY_SHORT_SILENCE, SHORT_RULES } from "./goal-short-rules.js";
 import { LIGHTNING_WATERMARK_PROFILE } from "./lightning-defaults.js";
 
 export const SHORT_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
@@ -60,8 +60,7 @@ const SEGMENT_MAX_SECONDS = 15;
 const SEGMENT_LIMIT = 4;
 const CHARACTER_REFERENCE_LIMIT = 4;
 const FRAME_REFERENCE_LIMIT = 12;
-const SHEET_TEXT_MODEL = "fal:openai/gpt-image-2.6/sunburst/text-to-image";
-const SHEET_EDIT_MODEL = GOAL_SHORT_DEFAULTS.frame.model;
+const SOURCE_IMAGE_LIMIT = 12;
 
 const goalShortImageRefSchema = z.object({
   kind: z.literal("image"),
@@ -88,9 +87,48 @@ const segmentsSchema = z.array(z.object({
   }
 });
 
-export const goalShortPlanSchema = z.object({
+const frameSettingsSchema = z.object({
+  prompt: z.string().trim().min(1).max(2000),
+  model: z.enum(SHORT_FRAME_MODELS),
+  imageSize: z.enum(SHORT_IMAGE_SIZES),
+  quality: z.enum(SHORT_FRAME_QUALITIES),
+  outputFormat: z.enum(SHORT_FRAME_FORMATS),
+}).strict();
+
+const videoSettingsSchema = z.object({
+  model: z.enum(SHORT_VIDEO_MODELS),
+  extendModel: z.enum(SHORT_EXTEND_MODELS),
+  resolution: z.enum(SHORT_RESOLUTIONS),
+  promptExpansion: z.enum(SHORT_PROMPT_EXPANSIONS),
+  extendOutput: z.enum(SHORT_EXTEND_OUTPUTS),
+}).strict();
+
+const rulesSchema = z.object({
+  frame: z.string().trim().min(1),
+  video: z.string().trim().min(1),
+  silence: z.string().trim().min(1),
+}).strict();
+
+const finishSchema = z.object({
+  suggestedColdOpenSeconds: z.number().positive().optional(),
+  watermark: z.object({
+    platform: z.literal("tiktok"),
+    handle: z.string().min(1),
+    profileUrl: z.string().min(1),
+    mode: z.literal("burn"),
+    handleEndSeconds: z.number().nullable(),
+    qrLeadSeconds: z.number().nullable(),
+    handleOpacity: z.number(),
+    qrOpacity: z.number(),
+    fadeSeconds: z.number(),
+  }).strict(),
+}).strict();
+
+const titleSchema = z.string().trim().min(1).max(120);
+
+const goalShortPlanV4Schema = z.object({
   version: z.literal(4),
-  title: z.string().trim().min(1).max(120),
+  title: titleSchema,
   aspectRatio: z.enum(SHORT_ASPECT_RATIOS),
   character: z.object({
     name: z.string().trim().min(1).max(80),
@@ -98,41 +136,13 @@ export const goalShortPlanSchema = z.object({
     silent: z.literal(true),
     references: z.array(goalShortImageRefSchema).max(CHARACTER_REFERENCE_LIMIT),
   }).strict(),
-  frame: z.object({
-    prompt: z.string().trim().min(1).max(2000),
-    model: z.enum(SHORT_FRAME_MODELS),
-    imageSize: z.enum(SHORT_IMAGE_SIZES),
-    quality: z.enum(SHORT_FRAME_QUALITIES),
-    outputFormat: z.enum(SHORT_FRAME_FORMATS),
+  frame: frameSettingsSchema.extend({
     references: z.array(goalShortImageRefSchema).max(FRAME_REFERENCE_LIMIT),
   }).strict(),
   segments: segmentsSchema,
-  video: z.object({
-    model: z.enum(SHORT_VIDEO_MODELS),
-    extendModel: z.enum(SHORT_EXTEND_MODELS),
-    resolution: z.enum(SHORT_RESOLUTIONS),
-    promptExpansion: z.enum(SHORT_PROMPT_EXPANSIONS),
-    extendOutput: z.enum(SHORT_EXTEND_OUTPUTS),
-  }).strict(),
-  rules: z.object({
-    frame: z.string().trim().min(1),
-    video: z.string().trim().min(1),
-    silence: z.string().trim().min(1),
-  }).strict(),
-  finish: z.object({
-    suggestedColdOpenSeconds: z.number().positive().optional(),
-    watermark: z.object({
-      platform: z.literal("tiktok"),
-      handle: z.string().min(1),
-      profileUrl: z.string().min(1),
-      mode: z.literal("burn"),
-      handleEndSeconds: z.number().nullable(),
-      qrLeadSeconds: z.number().nullable(),
-      handleOpacity: z.number(),
-      qrOpacity: z.number(),
-      fadeSeconds: z.number(),
-    }).strict(),
-  }).strict(),
+  video: videoSettingsSchema,
+  rules: rulesSchema,
+  finish: finishSchema,
 }).strict().superRefine((plan, context) => {
   const groups = [["character", plan.character.references], ["frame", plan.frame.references]] as const;
   let expected = 0;
@@ -146,24 +156,65 @@ export const goalShortPlanSchema = z.object({
   }
 });
 
+const goalShortPlanV5Schema = z.object({
+  version: z.literal(5),
+  title: titleSchema,
+  aspectRatio: z.enum(SHORT_ASPECT_RATIOS),
+  sourceImages: z.array(goalShortImageRefSchema).max(SOURCE_IMAGE_LIMIT),
+  frame: frameSettingsSchema,
+  segments: segmentsSchema,
+  video: videoSettingsSchema,
+  rules: rulesSchema,
+  finish: finishSchema,
+}).strict().superRefine((plan, context) => {
+  plan.sourceImages.forEach((reference, index) => {
+    const slot = `@image${index + 1}`;
+    if (reference.slot !== slot) {
+      context.addIssue({ code: "custom", path: ["sourceImages", index, "slot"], message: `Expected ${slot}` });
+    }
+  });
+});
+
+export const goalShortPlanSchema = z.discriminatedUnion("version", [goalShortPlanV4Schema, goalShortPlanV5Schema]);
+
+export type GoalShortPlanV4 = z.infer<typeof goalShortPlanV4Schema>;
+export type GoalShortPlanV5 = z.infer<typeof goalShortPlanV5Schema>;
 export type GoalShortPlan = z.infer<typeof goalShortPlanSchema>;
 
 type ShortReferenceInput = Omit<GoalShortImageRef, "slot">;
 
 const shortReferenceInputSchema = goalShortImageRefSchema.omit({ slot: true });
 
-export const goalShortDraftSchema = z.object({
+const segmentSecondsSchema = z.array(z.number().int().min(2).max(SEGMENT_MAX_SECONDS)).min(1).max(SEGMENT_LIMIT);
+
+const goalShortDraftV4Schema = z.object({
   aspectRatio: z.enum(SHORT_ASPECT_RATIOS),
-  segmentSeconds: z.array(z.number().int().min(2).max(SEGMENT_MAX_SECONDS)).min(1).max(SEGMENT_LIMIT),
+  segmentSeconds: segmentSecondsSchema,
   character: z.object({
-    name: goalShortPlanSchema.shape.character.shape.name,
-    description: goalShortPlanSchema.shape.character.shape.description,
+    name: z.string().trim().min(1).max(80),
+    description: z.string().trim().min(1).max(400),
     references: z.array(shortReferenceInputSchema).max(CHARACTER_REFERENCE_LIMIT),
   }).strict(),
   extraReferences: z.array(shortReferenceInputSchema).max(FRAME_REFERENCE_LIMIT),
 }).strict();
 
+const goalShortDraftV5Schema = z.object({
+  aspectRatio: z.enum(SHORT_ASPECT_RATIOS),
+  segmentSeconds: segmentSecondsSchema,
+  sourceImages: z.array(shortReferenceInputSchema).max(SOURCE_IMAGE_LIMIT),
+}).strict();
+
+export const goalShortDraftSchema = z.union([goalShortDraftV5Schema, goalShortDraftV4Schema]);
+
 export type GoalShortDraft = z.infer<typeof goalShortDraftSchema>;
+
+export function isLegacyShortPlan(plan: GoalShortPlan): plan is GoalShortPlanV4 {
+  return plan.version === 4;
+}
+
+export function isLegacyShortDraft(draft: GoalShortDraft): draft is z.infer<typeof goalShortDraftV4Schema> {
+  return "character" in draft;
+}
 
 export type ShortTiming = {
   aspectRatio: ShortAspectRatio;
@@ -224,41 +275,19 @@ function slotted(references: readonly ShortReferenceInput[], offset: number): Go
   }));
 }
 
-export function buildGoalShortPlan(input: {
-  title: string;
-  aspectRatio: ShortAspectRatio;
-  character: { name: string; description: string; references: readonly ShortReferenceInput[] };
-  framePrompt: string;
-  beats: readonly string[];
-  segmentSeconds: readonly number[];
-  extraReferences: readonly ShortReferenceInput[];
-}): GoalShortPlan {
-  if (input.beats.length !== input.segmentSeconds.length) {
-    throw new Error(`A short needs one beat per segment: ${input.segmentSeconds.length} segments, ${input.beats.length} beats.`);
+function assertBeatCount(segmentSeconds: readonly number[], beats: readonly string[]): void {
+  if (beats.length !== segmentSeconds.length) {
+    throw new Error(`A short needs one beat per segment: ${segmentSeconds.length} segments, ${beats.length} beats.`);
   }
+}
+
+function shortPlanBody(input: { title: string; aspectRatio: ShortAspectRatio; framePrompt: string; beats: readonly string[]; segmentSeconds: readonly number[] }) {
   const profile = LIGHTNING_WATERMARK_PROFILE;
-  const characterCount = input.character.references.length;
-  return goalShortPlanSchema.parse({
-    version: 4,
+  return {
     title: input.title,
     aspectRatio: input.aspectRatio,
-    character: {
-      name: input.character.name,
-      description: input.character.description,
-      silent: true,
-      references: slotted(input.character.references, 0),
-    },
-    frame: {
-      prompt: input.framePrompt,
-      model: GOAL_SHORT_DEFAULTS.frame.model,
-      imageSize: GOAL_SHORT_DEFAULTS.frame.imageSize[input.aspectRatio],
-      quality: GOAL_SHORT_DEFAULTS.frame.quality,
-      outputFormat: GOAL_SHORT_DEFAULTS.frame.outputFormat,
-      references: slotted(input.extraReferences, characterCount),
-    },
     segments: input.segmentSeconds.map((seconds, index) => ({ prompt: input.beats[index], seconds })),
     video: { ...GOAL_SHORT_DEFAULTS.video },
-    rules: { ...SHORT_RULES },
     finish: {
       watermark: {
         platform: "tiktok",
@@ -272,16 +301,62 @@ export function buildGoalShortPlan(input: {
         fadeSeconds: profile.fadeSeconds,
       },
     },
+  };
+}
+
+function frameSettings(aspectRatio: ShortAspectRatio, prompt: string) {
+  return {
+    prompt,
+    model: GOAL_SHORT_DEFAULTS.frame.model,
+    imageSize: GOAL_SHORT_DEFAULTS.frame.imageSize[aspectRatio],
+    quality: GOAL_SHORT_DEFAULTS.frame.quality,
+    outputFormat: GOAL_SHORT_DEFAULTS.frame.outputFormat,
+  };
+}
+
+export function buildGoalShortPlan(input: {
+  title: string;
+  aspectRatio: ShortAspectRatio;
+  sourceImages: readonly ShortReferenceInput[];
+  framePrompt: string;
+  beats: readonly string[];
+  segmentSeconds: readonly number[];
+}): GoalShortPlanV5 {
+  assertBeatCount(input.segmentSeconds, input.beats);
+  return goalShortPlanV5Schema.parse({
+    version: 5,
+    ...shortPlanBody(input),
+    sourceImages: slotted(input.sourceImages, 0),
+    frame: frameSettings(input.aspectRatio, input.framePrompt),
+    rules: { ...SHORT_RULES },
   });
 }
 
-export function withShortCharacterReferences(plan: GoalShortPlan, references: readonly ShortReferenceInput[]): GoalShortPlan {
-  const characterIds = new Set(references.map((reference) => reference.artifactId));
-  const places = plan.frame.references.filter((reference) => !characterIds.has(reference.artifactId));
-  return goalShortPlanSchema.parse({
-    ...plan,
-    character: { ...plan.character, references: slotted(references, 0) },
-    frame: { ...plan.frame, references: slotted(places, references.length) },
+export function buildLegacyGoalShortPlan(input: {
+  title: string;
+  aspectRatio: ShortAspectRatio;
+  character: { name: string; description: string; references: readonly ShortReferenceInput[] };
+  framePrompt: string;
+  beats: readonly string[];
+  segmentSeconds: readonly number[];
+  extraReferences: readonly ShortReferenceInput[];
+}): GoalShortPlanV4 {
+  assertBeatCount(input.segmentSeconds, input.beats);
+  const characterCount = input.character.references.length;
+  return goalShortPlanV4Schema.parse({
+    version: 4,
+    ...shortPlanBody(input),
+    character: {
+      name: input.character.name,
+      description: input.character.description,
+      silent: true,
+      references: slotted(input.character.references, 0),
+    },
+    frame: {
+      ...frameSettings(input.aspectRatio, input.framePrompt),
+      references: slotted(input.extraReferences, characterCount),
+    },
+    rules: { frame: SHORT_RULES.frame, video: SHORT_RULES.video, silence: LEGACY_SHORT_SILENCE },
   });
 }
 
@@ -290,11 +365,14 @@ export function refreshGoalShortPlan(plan: GoalShortPlan, document: NotebookDocu
     const cell = document.cells.find((candidate) => candidate.id === reference.cellId);
     return cell ? { ...reference, address: notebookGridTag(cell.slot) } : reference;
   };
-  return {
-    ...plan,
-    character: { ...plan.character, references: plan.character.references.map(live) },
-    frame: { ...plan.frame, references: plan.frame.references.map(live) },
-  };
+  if (plan.version === 4) {
+    return {
+      ...plan,
+      character: { ...plan.character, references: plan.character.references.map(live) },
+      frame: { ...plan.frame, references: plan.frame.references.map(live) },
+    };
+  }
+  return { ...plan, sourceImages: plan.sourceImages.map(live) };
 }
 
 function phrase(text: string): string {
@@ -306,10 +384,15 @@ function slotNames(count: number): string {
   return slots.length > 1 ? `${slots.slice(0, -1).join(", ")} and ${slots.at(-1)}` : slots.join("");
 }
 
-function characterLine(plan: GoalShortPlan, who: string, instruction: string): string {
-  const count = plan.character.references.length;
+function characterLine(count: number, who: string, instruction: string): string {
   if (count === 0) return `${who}: ${instruction}`;
   return `${slotNames(count)} ${count > 1 ? "are" : "is"} ${who}: ${instruction}`;
+}
+
+function sourceImageLine(count: number, instruction: string): string | null {
+  if (count === 0) return null;
+  const noun = count > 1 ? "source images" : "a source image";
+  return `${slotNames(count)} ${count > 1 ? "are" : "is"} ${noun}: ${instruction}`;
 }
 
 function paragraphs(...parts: (string | null)[]): string {
@@ -320,48 +403,58 @@ function addresses(references: readonly GoalShortImageRef[]): string[] {
   return references.map((reference) => reference.address);
 }
 
-export function compileShortFrameStep(plan: GoalShortPlan): ChainStep {
-  const { character, frame } = plan;
-  const placeLine = frame.references.length === 0
-    ? null
-    : `${character.references.length > 0 ? "The other images" : "The images"} are references for the place and props.`;
-  const images = addresses([...character.references, ...frame.references]);
+function frameModel(plan: GoalShortPlan, images: readonly string[]): string {
+  return images.length > 0 ? plan.frame.model : plan.frame.model.replace(/\/edit$/u, "/text-to-image");
+}
+
+function frameStep(plan: GoalShortPlan, prompt: string, images: readonly string[]): ChainStep {
   return {
     id: "frame",
     tool: "generate_image",
     params: {
-      model: frame.model,
-      prompt: paragraphs(
-        frame.prompt,
-        characterLine(plan, `${phrase(character.name)} (${phrase(character.description)})`, "keep the face, hair, build and clothes exactly."),
-        placeLine,
-        plan.rules.frame,
-      ),
+      model: frameModel(plan, images),
+      prompt,
       ...(images.length > 0 ? { refs: { image: images } } : {}),
       options: {
-        image_size: frame.imageSize,
-        quality: frame.quality,
-        output_format: frame.outputFormat,
+        image_size: plan.frame.imageSize,
+        quality: plan.frame.quality,
+        output_format: plan.frame.outputFormat,
       },
     },
   };
 }
 
-export function compileShortClipStep(plan: GoalShortPlan, frameAddress: string): ChainStep {
-  const characters = addresses(plan.character.references);
+export function compileShortFrameStep(plan: GoalShortPlan): ChainStep {
+  if (plan.version === 4) {
+    const { character, frame } = plan;
+    const placeLine = frame.references.length === 0
+      ? null
+      : `${character.references.length > 0 ? "The other images" : "The images"} are references for the place and props.`;
+    return frameStep(plan, paragraphs(
+      frame.prompt,
+      characterLine(character.references.length, `${phrase(character.name)} (${phrase(character.description)})`, "keep the face, hair, build and clothes exactly."),
+      placeLine,
+      plan.rules.frame,
+    ), addresses([...character.references, ...frame.references]));
+  }
+  return frameStep(plan, paragraphs(
+    plan.frame.prompt,
+    sourceImageLine(plan.sourceImages.length, plan.sourceImages.length > 1
+      ? "keep each person exactly as photographed (face, hair, build and clothes), and keep whatever else the brief takes from them."
+      : "keep that person exactly as photographed (face, hair, build and clothes), and keep whatever else the brief takes from it."),
+    plan.rules.frame,
+  ), addresses(plan.sourceImages));
+}
+
+function clipStep(plan: GoalShortPlan, frameAddress: string, prompt: string, images: readonly string[]): ChainStep {
   const segment = plan.segments[0];
   return {
     id: "clip1",
     tool: "generate_video",
     params: {
       model: plan.video.model,
-      prompt: paragraphs(
-        segment.prompt,
-        characterLine(plan, phrase(plan.character.name), "keep the same person in the same clothes."),
-        plan.rules.video,
-        plan.rules.silence,
-      ),
-      refs: { first_frame: [frameAddress], ...(characters.length > 0 ? { image: characters } : {}) },
+      prompt,
+      refs: { first_frame: [frameAddress], ...(images.length > 0 ? { image: images } : {}) },
       options: {
         duration: segment.seconds,
         resolution: plan.video.resolution,
@@ -371,6 +464,26 @@ export function compileShortClipStep(plan: GoalShortPlan, frameAddress: string):
       transcribe: false,
     },
   };
+}
+
+export function compileShortClipStep(plan: GoalShortPlan, frameAddress: string): ChainStep {
+  const segment = plan.segments[0];
+  if (plan.version === 4) {
+    return clipStep(plan, frameAddress, paragraphs(
+      segment.prompt,
+      characterLine(plan.character.references.length, phrase(plan.character.name), "keep the same person in the same clothes."),
+      plan.rules.video,
+      plan.rules.silence,
+    ), addresses(plan.character.references));
+  }
+  return clipStep(plan, frameAddress, paragraphs(
+    segment.prompt,
+    sourceImageLine(plan.sourceImages.length, plan.sourceImages.length > 1
+      ? "keep each person exactly, in the same clothes."
+      : "keep that person exactly, in the same clothes."),
+    plan.rules.video,
+    plan.rules.silence,
+  ), addresses(plan.sourceImages));
 }
 
 export function compileShortContinuationStep(plan: GoalShortPlan, index: number, clipAddress: string): ChainStep {
@@ -402,29 +515,4 @@ export function compileShortContinuationStep(plan: GoalShortPlan, index: number,
   };
 }
 
-export type ShortSheetCharacter = {
-  description: string;
-  references: readonly string[];
-};
 
-function sheetPrompt(description: string, count: number): string {
-  const subject = count === 0 ? phrase(description) : `the person in ${slotNames(count)} (${phrase(description)})`;
-  return paragraphs(
-    `Character reference sheet of ${subject}: the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.`,
-    count === 0 ? null : `Keep the face, hair, build and clothes from ${slotNames(count)} exactly.`,
-  );
-}
-
-export function shortSheetStep(character: ShortSheetCharacter): ChainStep {
-  const references = [...character.references];
-  return {
-    id: "sheet",
-    tool: "generate_image",
-    params: {
-      model: references.length > 0 ? SHEET_EDIT_MODEL : SHEET_TEXT_MODEL,
-      prompt: sheetPrompt(character.description, references.length),
-      ...(references.length > 0 ? { refs: { image: references } } : {}),
-      options: { image_size: "landscape_16_9", quality: "high" },
-    },
-  };
-}

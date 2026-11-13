@@ -2,12 +2,11 @@ import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { cancelChainRun, getChainRun, type ChainRunRecord } from "./chain-executor.js";
 import {
-  emptyGoalEstimates, findGoalCell, goalShortContent, legacyGoalText, requireGoalShortContent, saveGoal, writeGoalShortContent,
+  emptyGoalEstimates, findGoalCell, goalShortContent, isCurrentShort, legacyGoalText, requireGoalShortContent, saveGoal, writeGoalShortContent,
   type GoalGenerationStage, type GoalRecord, type GoalStageOutput,
 } from "./goal-store.js";
 import { goalStageAttempts } from "./goal-stills.js";
 import { refreshGoalShortPlan } from "./goal-short-plan.js";
-import { readMainCharacter } from "./goal-short-character.js";
 import { currentShortClip, nextShortSegment, shortSegmentStale } from "./goal-short-runtime.js";
 
 export const LEGACY_GOAL_MESSAGE = "This goal was made by an earlier /goal. Its images and videos stay in the notebook. Start a new /goal.";
@@ -74,7 +73,7 @@ function allGoalChainSteps(engine: Engine, document: NotebookDocument, chainId: 
 
 export function reconcileFinish(engine: Engine, goal: GoalRecord): GoalRecord {
   const finish = goal.finish;
-  if (goal.planVersion !== 4 || !finish || finish.status !== "running") return goal;
+  if (!isCurrentShort(goal.planVersion) || !finish || finish.status !== "running") return goal;
   const job = finish.jobId ? engine.jobs.queue.get(finish.jobId) : null;
   if (job && ["queued", "running", "completing"].includes(job.state)) return goal;
   if (job?.state === "done") {
@@ -125,7 +124,7 @@ function settleRealismChecks(engine: Engine, goal: GoalRecord): GoalRecord {
 }
 
 export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: NotebookDocument): Promise<GoalRecord> {
-  if (goal.planVersion !== 4) return stopLegacyGoal(engine, goal);
+  if (!isCurrentShort(goal.planVersion)) return stopLegacyGoal(engine, goal);
   goal = settleRealismChecks(engine, goal);
   if (["completed", "cancelled", "review"].includes(goal.status)) return goal;
   if (goal.status === "planning") {
@@ -211,7 +210,7 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
   }] satisfies [string, unknown]));
   return {
     kind: "video-goal" as const, legacy: false as const, ...goal, ...content,
-    ...(short?.plan ? { shortPlan: refreshGoalShortPlan(short.plan, document), mainCharacterReferences: readMainCharacter(engine).referenceArtifactIds.length } : {}),
+    ...(short?.plan ? { shortPlan: refreshGoalShortPlan(short.plan, document) } : {}),
     finish: goal.finish ?? null,
     finalArtifactId: goal.finish?.finalArtifactId ?? null,
     coldOpen: null,
@@ -222,5 +221,5 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
 }
 
 export async function publicGoal(engine: Engine, goal: GoalRecord, document: NotebookDocument) {
-  return goal.planVersion === 4 ? shortGoalSnapshot(engine, goal, document) : legacyGoalSnapshot(engine, goal, document);
+  return isCurrentShort(goal.planVersion) ? shortGoalSnapshot(engine, goal, document) : legacyGoalSnapshot(engine, goal, document);
 }

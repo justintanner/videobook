@@ -19,8 +19,10 @@ function goalReferenceCellIds(goal: NotebookCell): string[] {
   const { characters, plan, draft } = goal.inputs ?? {};
   return [
     ...cellIdsOf(characters),
+    ...cellIdsOf(field(plan, "sourceImages")),
     ...cellIdsOf(field(field(plan, "character"), "references")),
     ...cellIdsOf(field(field(plan, "frame"), "references")),
+    ...cellIdsOf(field(draft, "sourceImages")),
     ...cellIdsOf(field(field(draft, "character"), "references")),
     ...cellIdsOf(field(draft, "extraReferences")),
   ];

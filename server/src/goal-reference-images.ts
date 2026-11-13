@@ -5,11 +5,11 @@ export async function goalPlannerImages(engine: Engine, references: readonly { a
   return Promise.all(references.map(async (reference, index) => {
     const manifest = await engine.files.manifest(reference.artifactId);
     const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, "image") : null;
-    if (!file) throw new Error(`Reference ${index + 1} has no readable image`);
+    if (!file) throw new Error(`Source image ${index + 1} has no readable image`);
     const bytes = await engine.files.read(reference.artifactId, file.name);
     if (!bytes.ok) throw new Error(bytes.error.message);
     return [
-      { type: "input_text" as const, text: `Reference ${index + 1}: ${reference.label}` },
+      { type: "input_text" as const, text: `Source image ${index + 1}: ${reference.label}` },
       { type: "input_image" as const, image_url: `data:${mimeForImageFilename(file.name)};base64,${bytes.value.toString("base64")}`, detail: "high" as const },
     ];
   })).then(images => images.flat());

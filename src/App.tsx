@@ -308,7 +308,7 @@ import type {
 import { useLastWorkSlot } from '@/videobook/last-work-slot'
 import { useNotebookViewport } from '@/videobook/useNotebookViewport'
 import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
-import { composerGoal, goalCharacterImages, goalGenerationMarks } from '@/videobook/goals'
+import { composerGoal, goalGenerationMarks } from '@/videobook/goals'
 import { useVideoGoals } from '@/videobook/use-video-goals'
 import { parseSequenceSlashCommand } from '@/videobook/sequence-slash-command'
 import { parseExportSequenceCommand } from '@/videobook/export-sequence-command'
@@ -1505,13 +1505,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     accept: acceptGoals,
     refresh: refreshGoals,
     act: actOnGoal,
-    character: characterOfGoal,
   } = useVideoGoals(call, goalScope)
   const goalCellIds = useMemo(
     () => new Set((notebook?.cells ?? []).filter((cell) => cell.type === 'goal').map((cell) => cell.id)),
     [notebook],
   )
-  const goalImages = useMemo(() => goalCharacterImages(notebook?.cells ?? []), [notebook])
   const visibleGoals = useMemo(
     () => goalSnapshots.filter((goal) => goalCellIds.has(goal.cellId)),
     [goalCellIds, goalSnapshots],
@@ -3548,13 +3546,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return { ok: true, message: goal.status === 'planning' ? `Planning your short in ${where}` : `Your short in ${where} is ready to review` }
   }
 
-  const runGoalCharacter = async (args: Record<string, unknown>) => {
-    if (!goalScope) throw new Error('Open the goal notebook first.')
-    const scope = goalScope
-    const view = await characterOfGoal(scope, args)
-    if (args.generate === true || args.reference_ids !== undefined) await refreshBookData(scope.bookId, scope.notebookId)
-    return view
-  }
   const runGoalAction = async (args: Record<string, unknown>) => {
     if (!goalScope) throw new Error('Open the goal notebook first.')
     const scope = goalScope
@@ -4988,25 +4979,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         : message)
     }
     return cellId
-  }
-
-  const addGoalCharacterImage = async (file: File): Promise<string> => {
-    if (!bookId || !notebook) throw new Error('Open the goal notebook first.')
-    if (mediaKindForFile(file) !== 'image') throw new Error(`${file.name} is not an image. Choose a picture of the main character.`)
-    const target = { bookId, notebookId: notebook.id }
-    const { artifactRef } = await resolveMediaFileArtifact(file, 'image')
-    if (notebook.cells.some((cell) => cell.type === 'image' && cell.outputArtifactId === artifactRef)) return artifactRef
-    const placement = notebookCreationPlacement('image', notebook.cells)
-    const cellId = await attachArtifactToNewMediaCell(target, artifactRef, 'image', placement.slot, placement.makeRoom)
-    await refreshBookData(target.bookId, target.notebookId)
-    setNotice(`Added ${notebookGridTag(placement.slot)} for the main character`)
-    void watchUploadedMediaAsset({
-      ...target,
-      cellId,
-      address: notebookGridAddress(placement.slot),
-      artifactId: artifactRef,
-    })
-    return artifactRef
   }
 
   const createMediaCellFromFile = async (
@@ -10397,10 +10369,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         key={selectedGoal.goalId}
         goal={selectedGoal}
         connected={mcp.state === 'ready'}
-        images={goalImages}
         onAction={runGoalAction}
-        onCharacter={runGoalCharacter}
-        onUploadImage={addGoalCharacterImage}
         onSelectCell={openCellInspector}
         resolveAsset={(artifactId) => assetById.get(artifactId) ?? null}
         onPreviewCell={(cellId) => {

@@ -1,7 +1,9 @@
+export const LEGACY_SHORT_SILENCE = "The main character never speaks: no dialogue, voiceover, narration or singing, lips closed. No music. Natural ambient sound only.";
+
 export const SHORT_RULES = {
   frame: "Candid phone photo taken in available light in an ordinary real place. Natural colour, unretouched skin, slightly imperfect framing. No text, captions, logos, borders or watermarks.",
   video: "Real phone footage filmed by someone off screen, in one continuous take at real-time speed, with slight handheld camera movement and natural weight and physics. No slow motion, cuts, zooms, effects or on-screen text.",
-  silence: "The main character never speaks: no dialogue, voiceover, narration or singing, lips closed. No music. Natural ambient sound only.",
+  silence: "The person never speaks: no dialogue, voiceover, narration or singing, lips closed. No music. Natural ambient sound only.",
 } as const;
 
 export const SHORT_BANNED_WORDS = [

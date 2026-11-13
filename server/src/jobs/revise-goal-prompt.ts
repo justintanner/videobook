@@ -38,8 +38,7 @@ async function reviseShortPrompt(engine: Engine, payload: RevisePayload, signal:
   const request = {
     instructions: await shortRevisionInstructions(plan, payload.stage, payload.index),
     input: [{ role: "user" as const, content: JSON.stringify({
-      brief: shortPlannerBrief(content.brief, [...plan.character.references, ...plan.frame.references], notebook.value),
-      character: { name: plan.character.name, description: plan.character.description },
+      brief: shortPlannerBrief(content.brief, plan.version === 5 ? plan.sourceImages : [...plan.character.references, ...plan.frame.references], notebook.value),
       aspectRatio: plan.aspectRatio,
       revise: part.name,
       prompt: part.prompt,

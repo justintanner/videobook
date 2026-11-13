@@ -292,7 +292,7 @@ Review is what the action sheet asks before Run action. A tool billed per operat
 | `upload_file` | `command.upload` | Import opens a native file picker and uploads media through the file workflow; users do not enter base64 data. |
 | `prepare_cold_open` | `command.edit-cold-open` | Selects a highlight in the cold-open review. |
 | `edit_cold_open` | `command.edit-cold-open` | Creates the reviewed cold-open copy. |
-| `video_goal` | `command.goal` | Goal mode makes a real-looking short starring the book's main character, who never speaks. Review the character, then approve the opening frame, the base clip and each continuation separately, each with its own estimate; frame and clip versions stay selectable and revisable, and Finish burns the saved watermark onto the reviewed take. |
+| `video_goal` | `command.goal` | Goal mode makes a real-looking short starring the person in the images the brief mentions, or the person the brief describes, who never speaks. Approve the opening frame, the base clip and each continuation separately, each with its own estimate; frame and clip versions stay selectable and revisable, and Finish burns the saved watermark onto the reviewed take. |
 | `record_prompt` | `tool.chat` | Records text entered through the composer and generation editors; browsing history is a separate action. |
 | `slash_commands` | `command.actions` | Loads slash suggestions and dynamic project shortcuts in the Actions launcher. |
 | `draft_post_copy` | `command.post` | Drafts the caption and tags in the post sheet from the clip analysis, and rewrites them with an Astra prompt. |

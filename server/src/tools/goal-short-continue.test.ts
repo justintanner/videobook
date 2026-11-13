@@ -8,7 +8,6 @@ import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 import { waitForChainRun } from "../chain-executor.js";
 import { createEngineForTest } from "../engine.js";
-import { saveMainCharacter } from "../goal-short-character.js";
 import { createShortGoal } from "../goal-short-runtime.js";
 import { readGoal, saveGoal } from "../goal-store.js";
 import { installFalDynamicEstimator, lowerBoundWarnings } from "../media/cost.js";
@@ -75,8 +74,7 @@ describe("continuing a short with H3 Max Extend", () => {
     const notebook = await engine.notebooks.create("Shorts");
     if (!notebook.ok) throw new Error(notebook.error.message);
     notebookId = notebook.value.id;
-    const [character] = await goalTestCharacters(engine, notebookId);
-    await saveMainCharacter(engine, { referenceArtifactIds: [character!] }, notebookId);
+    await goalTestCharacters(engine, notebookId);
   });
 
   afterEach(async () => {

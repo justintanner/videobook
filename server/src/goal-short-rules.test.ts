@@ -9,16 +9,16 @@ describe("short rule lines", () => {
     expect(SHORT_RULES).toEqual({
       frame: "Candid phone photo taken in available light in an ordinary real place. Natural colour, unretouched skin, slightly imperfect framing. No text, captions, logos, borders or watermarks.",
       video: "Real phone footage filmed by someone off screen, in one continuous take at real-time speed, with slight handheld camera movement and natural weight and physics. No slow motion, cuts, zooms, effects or on-screen text.",
-      silence: "The main character never speaks: no dialogue, voiceover, narration or singing, lips closed. No music. Natural ambient sound only.",
+      silence: "The person never speaks: no dialogue, voiceover, narration or singing, lips closed. No music. Natural ambient sound only.",
     });
   });
 
-  it("puts the phone of the video line with whoever films off screen, never in the main character's hand", () => {
+  it("puts the phone of the video line with whoever films off screen, never in a person's hand", () => {
     expect(SHORT_RULES.video.match(/[^.]*phone[^.]*/giu)).toEqual(["Real phone footage filmed by someone off screen, in one continuous take at real-time speed, with slight handheld camera movement and natural weight and physics"]);
     expect(`${SHORT_RULES.video} ${SHORT_RULES.silence}`).not.toMatch(/\b(?:holds?|holding|carr(?:y|ies|ying)|hand)\b/iu);
   });
 
-  it("names the main character and the same person rather than a pronoun, so a new description still reads", () => {
+  it("names the person rather than a pronoun, so a new description still reads", () => {
     for (const line of Object.values(SHORT_RULES)) expect(line).not.toMatch(/\b(?:he|him|his|she|her)\b/iu);
   });
 

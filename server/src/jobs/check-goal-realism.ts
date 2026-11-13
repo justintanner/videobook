@@ -17,13 +17,19 @@ const REALISM_FINDING_LIMIT = 5;
 const REALISM_WORD_LIMIT = 20;
 const SEGMENT_SAMPLES = 4;
 
-const INSTRUCTIONS = [
-  "You check a frame or a clip of a short that must look like real phone footage of one person, never like AI.",
-  "The first image is the reference of the main character. The other images are the frame or frames to check.",
-  "Look only for these giveaways: extra, missing or fused fingers; garbled or melting text; waxy or airbrushed skin; warped or flickering objects; a face, build or shirt that differs from the reference; mouth movement that reads as speech.",
-  "Answer with at most 5 findings, each at most 20 words, naming where it shows. Use warn for a giveaway a viewer would notice and note for a small one.",
-  "If none of these shows, answer with no findings. Do not mention anything else.",
-].join(" ");
+function realismInstructions(legacy: boolean): string {
+  return [
+    "You check a frame or a clip of a short that must look like real phone footage of one person, never like AI.",
+    legacy
+      ? "The first image, when attached, is the character reference. The other images are the frame or frames to check."
+      : "When a source image is attached, it is the first image. Otherwise every image is a frame to check.",
+    legacy
+      ? "Look only for these giveaways: extra, missing or fused fingers; garbled or melting text; waxy or airbrushed skin; warped or flickering objects; a face, build or shirt that differs from the reference; mouth movement that reads as speech."
+      : "Look only for these giveaways: extra, missing or fused fingers; garbled or melting text; waxy or airbrushed skin; warped or flickering objects; a face, build or clothes that differs from the source image when one is attached; mouth movement that reads as speech.",
+    "Answer with at most 5 findings, each at most 20 words, naming where it shows. Use warn for a giveaway a viewer would notice and note for a small one.",
+    "If none of these shows, answer with no findings. Do not mention anything else.",
+  ].join(" ");
+}
 
 const answerSchema = z.object({
   findings: z.array(z.object({ severity: z.enum(["note", "warn"]), text: z.string() })),
@@ -87,17 +93,19 @@ async function checkRealism(engine: Engine, payload: RealismPayload, signal: Abo
   const goal = readGoal(engine, payload.goalId);
   const plan = requireGoalShortContent(engine, goal).plan;
   if (!plan) throw new Error("This short has no plan to check against");
-  const reference = plan.character.references[0];
+  const legacy = plan.version === 4;
+  const reference = legacy ? plan.character.references[0] : plan.sourceImages[0];
+  const checking = payload.stage === "frame" ? "opening frame" : `clip ${payload.index + 1}`;
   const subject = payload.stage === "frame"
     ? await storedImage(engine, payload.artifactId, "Frame to check")
     : await segmentFrames(engine, payload.artifactId, plan.segments[payload.index]?.seconds ?? 0, signal);
   const options = chatIntelligenceRequestOptions();
   const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"), options);
   const request = {
-    instructions: INSTRUCTIONS,
+    instructions: realismInstructions(legacy),
     input: [{ role: "user" as const, content: [
-      { type: "input_text" as const, text: JSON.stringify({ character: plan.character.description, checking: payload.stage === "frame" ? "opening frame" : `clip ${payload.index + 1}` }) },
-      ...(reference ? await storedImage(engine, reference.artifactId, "Character reference") : []),
+      { type: "input_text" as const, text: JSON.stringify(legacy ? { character: plan.character.description, checking } : { checking }) },
+      ...(reference ? await storedImage(engine, reference.artifactId, legacy ? "Character reference" : "Source image") : []),
       ...subject,
     ] }],
     text: { format: { type: "json_schema" as const, name: "realism_findings", strict: true, schema: z.toJSONSchema(answerSchema) } },

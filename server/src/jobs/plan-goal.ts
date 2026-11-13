@@ -4,8 +4,8 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } from "../openai-intelligence.js";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
-import { readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent, type GoalRecord } from "../goal-store.js";
-import { buildGoalShortPlan, type GoalShortDraft } from "../goal-short-plan.js";
+import { isCurrentShort, readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent, type GoalRecord } from "../goal-store.js";
+import { buildGoalShortPlan, buildLegacyGoalShortPlan, isLegacyShortDraft, type GoalShortDraft } from "../goal-short-plan.js";
 import { shortWantsPhone, stripShortBannedWords, withoutShortPhoneSentences } from "../goal-short-rules.js";
 import { estimateShort } from "../goal-short-runtime.js";
 import {
@@ -38,18 +38,17 @@ function cleanedAnswer(answer: ShortPlannerResponse, authored: ShortAuthoredCopy
 async function askShortPlanner(engine: Engine, goal: GoalRecord, brief: string, draft: GoalShortDraft, authored: ShortAuthoredCopy, signal: AbortSignal): Promise<ShortPlannerResponse> {
   const notebook = engine.notebooks.read(goal.notebookId);
   if (!notebook.ok) throw new Error(notebook.error.message);
-  const references = [...draft.character.references, ...draft.extraReferences];
+  const references = isLegacyShortDraft(draft) ? [...draft.character.references, ...draft.extraReferences] : [...draft.sourceImages];
   const count = draft.segmentSeconds.length;
   const options = chatIntelligenceRequestOptions();
   const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"), options);
   const fixedBeats = authored.beats.flatMap((beat, index) => beat === null ? [] : [[`beat ${index + 1}`, beat] as const]);
   const phones = shortWantsPhone(brief);
   const request = {
-    instructions: await shortPlannerInstructions({ character: draft.character, aspectRatio: draft.aspectRatio, segmentSeconds: draft.segmentSeconds }),
+    instructions: await shortPlannerInstructions({ sourceImageCount: references.length, aspectRatio: draft.aspectRatio, segmentSeconds: draft.segmentSeconds }),
     input: [{ role: "user" as const, content: [
       { type: "input_text" as const, text: JSON.stringify({
         brief: shortPlannerBrief(brief, references, notebook.value),
-        character: { name: draft.character.name, description: draft.character.description },
         aspectRatio: draft.aspectRatio,
         segments: draft.segmentSeconds.map((seconds, index) => ({ beat: index + 1, seconds })),
         fixed: Object.fromEntries([...(authored.frame === null ? [] : [["frame", authored.frame] as const]), ...fixedBeats]),
@@ -96,12 +95,17 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
       : null;
     const offline = written ? null : shortBriefPlan(content.brief, authored);
     const framePrompt = authored.frame ?? written?.frame ?? offline?.frame ?? "";
-    const plan = buildGoalShortPlan({
-      ...plannedDraft,
-      title: written?.title || shortTitle(content.brief, framePrompt),
-      framePrompt,
-      beats: authored.beats.map((beat, index) => beat ?? written?.beats[index] ?? offline?.beats[index] ?? ""),
-    });
+    const title = written?.title || shortTitle(content.brief, framePrompt);
+    const beats = authored.beats.map((beat, index) => beat ?? written?.beats[index] ?? offline?.beats[index] ?? "");
+    const plan = isLegacyShortDraft(plannedDraft)
+      ? buildLegacyGoalShortPlan({
+        title, aspectRatio: plannedDraft.aspectRatio, character: plannedDraft.character,
+        framePrompt, beats, segmentSeconds: plannedDraft.segmentSeconds, extraReferences: plannedDraft.extraReferences,
+      })
+      : buildGoalShortPlan({
+        title, aspectRatio: plannedDraft.aspectRatio, sourceImages: plannedDraft.sourceImages,
+        framePrompt, beats, segmentSeconds: plannedDraft.segmentSeconds,
+      });
     const estimate = await estimateShort(engine, plan);
     const added = [authored.note, offline?.note ?? null].filter((note): note is string => note !== null);
     await withNotebookMutation(`goal:${goalId}`, async () => {
@@ -129,6 +133,6 @@ export function registerPlanGoalJob(engine: Engine): void {
   registerJobHandler("plan_goal", async (payload, context) => {
     const goalId = String(payload.goalId);
     const goal = readGoal(engine, goalId);
-    return goal.planVersion === 4 && goal.status === "planning" ? planShortGoal(engine, goalId, context.signal) : { goalId };
+    return isCurrentShort(goal.planVersion) && goal.status === "planning" ? planShortGoal(engine, goalId, context.signal) : { goalId };
   });
 }

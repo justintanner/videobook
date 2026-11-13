@@ -3,9 +3,8 @@ import { Flag } from 'lucide-react'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
   defaultShortTab, goalCanRetry, goalProgress, goalStatusLine, goalStopLabel, goalTileView, LEGACY_GOAL_NOTE, shortPlanOf,
-  type GoalCharacterImage, type GoalSnapshot, type LegacyGoalSnapshot, type MainCharacterView, type ShortTab,
+  type GoalSnapshot, type LegacyGoalSnapshot, type ShortTab,
 } from '@/videobook/goals'
-import { useMainCharacter } from '@/videobook/use-main-character'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
 import { GoalShortReview } from './GoalShortReview'
 import './GoalPanel.css'
@@ -14,10 +13,7 @@ type GoalAction = Record<string, unknown>
 type GoalPanelProps = {
   goal: GoalSnapshot
   connected: boolean
-  images: readonly GoalCharacterImage[]
   onAction: (args: GoalAction) => Promise<GoalSnapshot>
-  onCharacter: (args: GoalAction) => Promise<MainCharacterView>
-  onUploadImage: (file: File) => Promise<string>
   onSelectCell: (cellId: string) => void
   onPreviewCell: (cellId: string) => void
   resolveAsset: (artifactId: string) => AssetRecord | null
@@ -40,14 +36,13 @@ function LegacyGoalSummary({ goal, onSelectCell, resolveAsset }: { goal: LegacyG
   </div>
 }
 
-export function GoalPanel({ goal, connected, images, onAction, onCharacter, onUploadImage, onSelectCell, onPreviewCell, resolveAsset }: GoalPanelProps) {
+export function GoalPanel({ goal, connected, onAction, onSelectCell, onPreviewCell, resolveAsset }: GoalPanelProps) {
   const [pending, setPending] = useState(false)
   const pendingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<ShortTab | null>(null)
   const shortPlan = shortPlanOf(goal)
   const shortView = goal.legacy || !shortPlan ? null : tab ?? defaultShortTab(goal, shortPlan)
-  const mainCharacter = useMainCharacter(onCharacter, connected && shortView === 'character')
   const line = goalStatusLine(goal)
   const view = goalTileView(goal, undefined)
   const disabled = pending || !connected
@@ -94,16 +89,11 @@ export function GoalPanel({ goal, connected, images, onAction, onCharacter, onUp
         plan={shortPlan}
         view={shortView}
         disabled={disabled}
-        character={mainCharacter.character}
-        characterError={mainCharacter.error}
-        images={images}
         resolveAsset={resolveAsset}
         onView={setTab}
         onPreviewCell={onPreviewCell}
         onRun={work => { void perform(work) }}
         onAction={args => onAction({ ...args, goal_id: goal.goalId })}
-        onCharacter={mainCharacter.act}
-        onUploadImage={onUploadImage}
       />}
       {!connected && <p role="status" className="goal-panel-muted">Reconnecting. Your goal is saved; generation continues on the server.</p>}
       {error && <p role="alert" className="goal-panel-error">{error}</p>}

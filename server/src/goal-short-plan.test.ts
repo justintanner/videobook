@@ -20,17 +20,18 @@ import {
   SHORT_VIDEO_MODELS,
   SHORT_WORD_CEILINGS,
   buildGoalShortPlan,
+  buildLegacyGoalShortPlan,
   compileShortClipStep,
   compileShortContinuationStep,
   compileShortFrameStep,
   goalShortPlanSchema,
   refreshGoalShortPlan,
-  shortSheetStep,
   shortTiming,
-  withShortCharacterReferences,
   type GoalShortPlan,
+  type GoalShortPlanV4,
+  type GoalShortPlanV5,
 } from "./goal-short-plan.js";
-import { SHORT_RULES } from "./goal-short-rules.js";
+import { LEGACY_SHORT_SILENCE, SHORT_RULES } from "./goal-short-rules.js";
 import { LIGHTNING_WATERMARK_PROFILE } from "./lightning-defaults.js";
 import { resolveModel } from "./media/descriptor.js";
 import { applyPromptDialect } from "./media/prompt-dialects.js";
@@ -56,8 +57,20 @@ const CHARACTER = { name: "Main character", description: "a man in a green shirt
 const FRAME_PROMPT = "He stands under a bus shelter at dusk, rain on the road.";
 const BEATS = ["He checks the road for the bus.", "He steps back from a splash.", "He boards the bus."];
 
-function shortPlan(overrides: Partial<Parameters<typeof buildGoalShortPlan>[0]> = {}): GoalShortPlan {
+function shortPlan(overrides: Partial<Parameters<typeof buildGoalShortPlan>[0]> = {}): GoalShortPlanV5 {
   return buildGoalShortPlan({
+    title: "Waiting for the bus",
+    aspectRatio: "9:16",
+    sourceImages: [sheet, sideView, shelter, umbrella],
+    framePrompt: FRAME_PROMPT,
+    beats: BEATS,
+    segmentSeconds: [11, 10, 10],
+    ...overrides,
+  });
+}
+
+function legacyPlan(): GoalShortPlanV4 {
+  return buildLegacyGoalShortPlan({
     title: "Waiting for the bus",
     aspectRatio: "9:16",
     character: { ...CHARACTER, references: [sheet, sideView] },
@@ -65,7 +78,6 @@ function shortPlan(overrides: Partial<Parameters<typeof buildGoalShortPlan>[0]> 
     beats: BEATS,
     segmentSeconds: [11, 10, 10],
     extraReferences: [shelter, umbrella],
-    ...overrides,
   });
 }
 
@@ -165,38 +177,43 @@ describe("shortTiming", () => {
 });
 
 describe("buildGoalShortPlan", () => {
-  it("builds a version-4 plan the schema accepts, with the rules and defaults copied in", () => {
+  it("builds a version-5 plan the schema accepts, with the rules and defaults copied in", () => {
     const plan = shortPlan();
     expect(goalShortPlanSchema.parse(saved(plan))).toEqual(plan);
     expect(plan).toMatchObject({
-      version: 4,
+      version: 5,
       title: "Waiting for the bus",
       aspectRatio: "9:16",
-      character: { ...CHARACTER, silent: true },
       frame: { prompt: FRAME_PROMPT, model: GOAL_SHORT_DEFAULTS.frame.model, imageSize: "portrait_16_9", quality: "high", outputFormat: "jpeg" },
       segments: [{ prompt: BEATS[0], seconds: 11 }, { prompt: BEATS[1], seconds: 10 }, { prompt: BEATS[2], seconds: 10 }],
       video: GOAL_SHORT_DEFAULTS.video,
       rules: SHORT_RULES,
     });
+    expect(plan).not.toHaveProperty("character");
   });
 
-  it("gives the character references the first image slots and the extra references the next", () => {
+  it("gives every source image the next image slot, with no character or place split", () => {
     const plan = shortPlan();
-    expect(plan.character.references).toEqual([{ ...sheet, slot: "@image1" }, { ...sideView, slot: "@image2" }]);
-    expect(plan.frame.references).toEqual([{ ...shelter, slot: "@image3" }, { ...umbrella, slot: "@image4" }]);
+    expect(plan.sourceImages).toEqual([
+      { ...sheet, slot: "@image1" },
+      { ...sideView, slot: "@image2" },
+      { ...shelter, slot: "@image3" },
+      { ...umbrella, slot: "@image4" },
+    ]);
+    expect(plan.frame).not.toHaveProperty("references");
   });
 
-  it("moves an image picked as the character out of the place and prop references", () => {
-    const plan = shortPlan({ character: { ...CHARACTER, references: [] }, extraReferences: [shelter, umbrella] });
-    const picked = withShortCharacterReferences(plan, [umbrella]);
-    expect(picked.character.references).toEqual([{ ...umbrella, slot: "@image1" }]);
-    expect(picked.frame.references).toEqual([{ ...shelter, slot: "@image2" }]);
-    expect(withShortCharacterReferences(plan, [sheet]).frame.references).toEqual([{ ...shelter, slot: "@image2" }, { ...umbrella, slot: "@image3" }]);
+  it("keeps a version-4 plan's character slots and the silence line it was saved with", () => {
+    const plan = legacyPlan();
+    expect(goalShortPlanSchema.parse(saved(plan))).toEqual(plan);
+    expect(plan.character.references.map((reference) => reference.slot)).toEqual(["@image1", "@image2"]);
+    expect(plan.frame.references.map((reference) => reference.slot)).toEqual(["@image3", "@image4"]);
+    expect(plan.rules.silence).toBe(LEGACY_SHORT_SILENCE);
   });
 
   it("keeps only the reference fields, whatever slot a reference arrives with", () => {
     const moved = { ...shelter, slot: "@image9", note: "from an older plan" };
-    expect(shortPlan({ extraReferences: [moved] }).frame.references).toEqual([{ ...shelter, slot: "@image3" }]);
+    expect(shortPlan({ sourceImages: [moved] }).sourceImages).toEqual([{ ...shelter, slot: "@image1" }]);
   });
 
   it("frames each aspect ratio at its own GPT Image size", () => {
@@ -285,33 +302,37 @@ describe("goalShortPlanSchema", () => {
     }
   });
 
-  it("rejects a fifth character reference and a thirteenth frame reference", () => {
-    const characters = [1, 2, 3, 4, 5].map((index) => imageRef(index, `Character ${index}`));
-    expect(issues(shortPlan({ character: { ...CHARACTER, references: characters.slice(0, 4) }, extraReferences: [] }))).toEqual([]);
-    expect(() => shortPlan({ character: { ...CHARACTER, references: characters }, extraReferences: [] })).toThrow(/character/u);
-    expect(issues({ ...shortPlan(), character: { ...shortPlan().character, references: characters.map((reference, index) => ({ ...reference, slot: `@image${index + 1}` })) }, frame: { ...shortPlan().frame, references: [] } }))
-      .toEqual([expect.stringMatching(/^character\.references: .*<=4/u)]);
-    const extras = Array.from({ length: 13 }, (_, index) => imageRef(index + 1, `Place ${index + 1}`));
-    expect(() => shortPlan({ character: { ...CHARACTER, references: [] }, extraReferences: extras.slice(0, 12) })).not.toThrow();
-    expect(() => shortPlan({ character: { ...CHARACTER, references: [] }, extraReferences: extras })).toThrow(/frame/u);
+  it("rejects a thirteenth source image and a source-image slot out of order", () => {
+    const images = Array.from({ length: 13 }, (_, index) => imageRef(index + 1, `Source ${index + 1}`));
+    expect(() => shortPlan({ sourceImages: images.slice(0, 12) })).not.toThrow();
+    expect(() => shortPlan({ sourceImages: images })).toThrow(/sourceImages/u);
+    const plan = shortPlan();
+    const swapped = { ...plan, sourceImages: [{ ...plan.sourceImages[0]!, slot: "@image2" }, ...plan.sourceImages.slice(1)] };
+    expect(issues(swapped)).toEqual(["sourceImages.0.slot: Expected @image1"]);
   });
 
-  it("rejects image slots that do not follow the character references and then the frame references", () => {
-    const plan = shortPlan();
+  it("keeps rejecting a version-4 plan with a fifth character reference, a thirteenth frame reference, a swapped slot or a character who speaks", () => {
+    const characters = [1, 2, 3, 4, 5].map((index) => imageRef(index, `Character ${index}`));
+    const plan = legacyPlan();
+    expect(issues({ ...plan, character: { ...plan.character, references: characters.slice(0, 4).map((reference, index) => ({ ...reference, slot: `@image${index + 1}` })) }, frame: { ...plan.frame, references: [] } })).toEqual([]);
+    expect(issues({ ...plan, character: { ...plan.character, references: characters.map((reference, index) => ({ ...reference, slot: `@image${index + 1}` })) }, frame: { ...plan.frame, references: [] } }))
+      .toEqual([expect.stringMatching(/^character\.references: .*<=4/u)]);
+    const extras = Array.from({ length: 13 }, (_, index) => ({ ...imageRef(index + 1, `Place ${index + 1}`), slot: `@image${index + 1}` }));
+    expect(issues({ ...plan, character: { ...plan.character, references: [] }, frame: { ...plan.frame, references: extras } })).toEqual([expect.stringMatching(/^frame\.references: .*<=12/u)]);
     const swapped = { ...plan, frame: { ...plan.frame, references: [{ ...plan.frame.references[0]!, slot: "@image1" }, plan.frame.references[1]!] } };
     expect(issues(swapped)).toEqual(["frame.references.0.slot: Expected @image3: character references take the first image slots and frame references the next"]);
+    expect(issues({ ...plan, character: { ...plan.character, silent: false } })).toEqual([expect.stringMatching(/^character\.silent: /u)]);
   });
 
-  it("rejects a character who speaks, an unknown field and an empty prompt", () => {
+  it("rejects an unknown field and an empty prompt", () => {
     const plan = shortPlan();
-    expect(issues({ ...plan, character: { ...plan.character, silent: false } })).toEqual([expect.stringMatching(/^character\.silent: /u)]);
     expect(issues({ ...plan, style: "cinematic" })).toEqual([expect.stringMatching(/style/u)]);
     expect(issues({ ...plan, frame: { ...plan.frame, prompt: "  " } })).toEqual([expect.stringMatching(/^frame\.prompt: /u)]);
   });
 });
 
 describe("compiled short steps", () => {
-  it("makes the frame with GPT Image 2.6 edit from the character references, then the extra references, ending on the frame rule", () => {
+  it("makes the frame with GPT Image 2.6 edit from the source images, ending on the frame rule", () => {
     const step = compileShortFrameStep(shortPlan());
     expect(step).toEqual({
       id: "frame",
@@ -320,53 +341,64 @@ describe("compiled short steps", () => {
         model: "fal:openai/gpt-image-2.6/sunburst/edit",
         prompt: [
           FRAME_PROMPT,
-          "@image1 and @image2 are Main character (a man in a green shirt): keep the face, hair, build and clothes exactly.",
-          "The other images are references for the place and props.",
+          "@image1, @image2, @image3 and @image4 are source images: keep each person exactly as photographed (face, hair, build and clothes), and keep whatever else the brief takes from them.",
           SHORT_RULES.frame,
         ].join("\n\n"),
         refs: { image: ["@a1", "@a2", "@a3", "@a4"] },
         options: { image_size: "portrait_16_9", quality: "high", output_format: "jpeg" },
       },
     });
+    expect((step.params as StepParams).prompt).not.toMatch(/Main character|a man in a green shirt/u);
     expect((step.params as StepParams).prompt.endsWith(SHORT_RULES.frame)).toBe(true);
   });
 
-  it("describes the character from the saved name when the frame has no reference image", () => {
-    const step = compileShortFrameStep(shortPlan({ character: { ...CHARACTER, references: [] }, extraReferences: [] }));
+  it("makes a frame from the brief alone when there is no source image", () => {
+    const step = compileShortFrameStep(shortPlan({ sourceImages: [] }));
     expect(step.params).toEqual({
-      model: "fal:openai/gpt-image-2.6/sunburst/edit",
-      prompt: [FRAME_PROMPT, "Main character (a man in a green shirt): keep the face, hair, build and clothes exactly.", SHORT_RULES.frame].join("\n\n"),
+      model: "fal:openai/gpt-image-2.6/sunburst/text-to-image",
+      prompt: [FRAME_PROMPT, SHORT_RULES.frame].join("\n\n"),
       options: { image_size: "portrait_16_9", quality: "high", output_format: "jpeg" },
     });
+    expect((step.params as StepParams).prompt).not.toMatch(/source image|Main character/u);
   });
 
-  it("names one character reference as @image1 and three by all their slots, and leaves out the place line without extras", () => {
-    const one = compileShortFrameStep(shortPlan({ character: { ...CHARACTER, references: [sheet] }, extraReferences: [] }));
+  it("names one source image as @image1 and three by all their slots", () => {
+    const one = compileShortFrameStep(shortPlan({ sourceImages: [sheet] }));
     expect(one.params).toMatchObject({
-      prompt: [FRAME_PROMPT, "@image1 is Main character (a man in a green shirt): keep the face, hair, build and clothes exactly.", SHORT_RULES.frame].join("\n\n"),
+      prompt: [FRAME_PROMPT, "@image1 is a source image: keep that person exactly as photographed (face, hair, build and clothes), and keep whatever else the brief takes from it.", SHORT_RULES.frame].join("\n\n"),
       refs: { image: ["@a1"] },
     });
-    const three = compileShortFrameStep(shortPlan({ character: { name: "Mr Green.", description: "a man in a green shirt.", references: [sheet, sideView, shelter] }, extraReferences: [] }));
-    expect((three.params as StepParams).prompt).toContain("\n\n@image1, @image2 and @image3 are Mr Green (a man in a green shirt): keep the face");
+    const three = compileShortFrameStep(shortPlan({ sourceImages: [sheet, sideView, shelter] }));
+    expect((three.params as StepParams).prompt).toContain("\n\n@image1, @image2 and @image3 are source images: keep each person exactly as photographed");
   });
 
-  it("starts the base clip with H3 Max on the approved frame, keeping the character references", () => {
+  it("starts the base clip with H3 Max on the approved frame and sends the source images", () => {
     expect(compileShortClipStep(shortPlan(), "@c1")).toEqual({
       id: "clip1",
       tool: "generate_video",
       params: {
         model: "fal:minimax/h3-max/reference-to-video",
-        prompt: [BEATS[0], "@image1 and @image2 are Main character: keep the same person in the same clothes.", SHORT_RULES.video, SHORT_RULES.silence].join("\n\n"),
-        refs: { first_frame: ["@c1"], image: ["@a1", "@a2"] },
+        prompt: [BEATS[0], "@image1, @image2, @image3 and @image4 are source images: keep each person exactly, in the same clothes.", SHORT_RULES.video, SHORT_RULES.silence].join("\n\n"),
+        refs: { first_frame: ["@c1"], image: ["@a1", "@a2", "@a3", "@a4"] },
         options: { duration: 11, resolution: "1080P", aspect_ratio: "9:16", prompt_expansion_mode: "disabled" },
         transcribe: false,
       },
     });
-    const single = compileShortClipStep(shortPlan({ character: { ...CHARACTER, references: [sheet] } }), "@c2");
+    const single = compileShortClipStep(shortPlan({ sourceImages: [sheet] }), "@c2");
     expect(single.params).toMatchObject({
-      prompt: [BEATS[0], "@image1 is Main character: keep the same person in the same clothes.", SHORT_RULES.video, SHORT_RULES.silence].join("\n\n"),
+      prompt: [BEATS[0], "@image1 is a source image: keep that person exactly, in the same clothes.", SHORT_RULES.video, SHORT_RULES.silence].join("\n\n"),
       refs: { first_frame: ["@c2"], image: ["@a1"] },
     });
+    expect(compileShortClipStep(shortPlan({ sourceImages: [] }), "@c1").params).not.toHaveProperty("refs.image");
+    expect((compileShortClipStep(shortPlan({ sourceImages: [] }), "@c1").params as StepParams).refs).toEqual({ first_frame: ["@c1"] });
+  });
+
+  it("compiles a saved version-4 short with its character line and the silence line stored on the plan", () => {
+    const plan = legacyPlan();
+    expect((compileShortFrameStep(plan).params as StepParams).prompt).toContain("@image1 and @image2 are Main character (a man in a green shirt): keep the face, hair, build and clothes exactly.");
+    expect((compileShortFrameStep(plan).params as StepParams).prompt).toContain("The other images are references for the place and props.");
+    expect((compileShortClipStep(plan, "@c1").params as StepParams).prompt).toContain(`@image1 and @image2 are Main character: keep the same person in the same clothes.\n\n${SHORT_RULES.video}\n\n${LEGACY_SHORT_SILENCE}`);
+    expect(compileShortClipStep(plan, "@c1").params.refs).toEqual({ first_frame: ["@c1"], image: ["@a1", "@a2"] });
   });
 
   it("continues the current clip with H3 Max Extend, one step per later beat", () => {
@@ -418,27 +450,6 @@ describe("compiled short steps", () => {
     expect((compileShortContinuationStep(plan, 1, "@d1").params as StepParams).prompt).toMatch(/\n\nEarlier video rule\.\n\nEarlier silence rule\.$/u);
   });
 
-  it("makes the character sheet on a plain background with GPT Image 2.6 text-to-image, or with the edit model from the person in the references", () => {
-    const views = "the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.";
-    const options = { image_size: "landscape_16_9", quality: "high" };
-    expect(shortSheetStep({ description: "a man in a green shirt", references: [] })).toEqual({
-      id: "sheet",
-      tool: "generate_image",
-      params: { model: "fal:openai/gpt-image-2.6/sunburst/text-to-image", prompt: `Character reference sheet of a man in a green shirt: ${views}`, options },
-    });
-    expect(shortSheetStep({ description: "a man in a green shirt.", references: [sheet.artifactId, "@b2"] })).toEqual({
-      id: "sheet",
-      tool: "generate_image",
-      params: {
-        model: "fal:openai/gpt-image-2.6/sunburst/edit",
-        prompt: `Character reference sheet of the person in @image1 and @image2 (a man in a green shirt): ${views}\n\nKeep the face, hair, build and clothes from @image1 and @image2 exactly.`,
-        refs: { image: [sheet.artifactId, "@b2"] },
-        options,
-      },
-    });
-    expect((shortSheetStep({ description: "a woman with a red umbrella", references: ["@a1"] }).params as StepParams).prompt)
-      .toBe(`Character reference sheet of the person in @image1 (a woman with a red umbrella): ${views}\n\nKeep the face, hair, build and clothes from @image1 exactly.`);
-  });
 });
 
 describe("short provider requests", () => {
@@ -446,8 +457,8 @@ describe("short provider requests", () => {
     ["frame", () => compileShortFrameStep(shortPlan())],
     ["base clip", () => compileShortClipStep(shortPlan(), "@c1")],
     ["continuation", () => compileShortContinuationStep(shortPlan(), 1, "@d1")],
-    ["character sheet", () => shortSheetStep({ description: CHARACTER.description, references: [] })],
-    ["character sheet from references", () => shortSheetStep({ description: CHARACTER.description, references: ["@a1", "@a2"] })],
+    ["version 4 frame", () => compileShortFrameStep(legacyPlan())],
+    ["version 4 base clip", () => compileShortClipStep(legacyPlan(), "@c1")],
   ];
 
   it.each(steps)("builds the %s request through the catalog and apicity's schema accepts it", (_name, step) => {
@@ -464,7 +475,7 @@ describe("short provider requests", () => {
     });
     expect(expectAccepted(compileShortClipStep(plan, "@c1"))).toMatchObject({
       image_url: "https://example.com/c1.jpg",
-      reference_image_urls: ["https://example.com/a1.jpg", "https://example.com/a2.jpg"],
+      reference_image_urls: ["https://example.com/a1.jpg", "https://example.com/a2.jpg", "https://example.com/a3.jpg", "https://example.com/a4.jpg"],
       duration: 11,
       resolution: "1080P",
       aspect_ratio: "9:16",
@@ -478,7 +489,6 @@ describe("short provider requests", () => {
       output: "extended",
       enable_prompt_expansion: false,
     });
-    expect(expectAccepted(shortSheetStep({ description: CHARACTER.description, references: [] }))).toMatchObject({ image_size: "landscape_16_9", quality: "high" });
   });
 });
 
@@ -531,11 +541,16 @@ describe("refreshGoalShortPlan", () => {
       ],
     };
     const refreshed = refreshGoalShortPlan(shortPlan(), document);
-    expect(refreshed.character.references.map((reference) => reference.address)).toEqual(["@c5", "@a2"]);
-    expect(refreshed.frame.references.map((reference) => reference.address)).toEqual(["@a8", "@a4"]);
+    if (refreshed.version !== 5) throw new Error("expected a version 5 plan");
+    expect(refreshed.sourceImages.map((reference) => reference.address)).toEqual(["@c5", "@a2", "@a8", "@a4"]);
     expect(goalShortPlanSchema.parse(refreshed)).toEqual(refreshed);
     expect(compileShortFrameStep(refreshed).params.refs).toEqual({ image: ["@c5", "@a2", "@a8", "@a4"] });
-    expect(compileShortClipStep(refreshed, "@d1").params.refs).toEqual({ first_frame: ["@d1"], image: ["@c5", "@a2"] });
+    expect(compileShortClipStep(refreshed, "@d1").params.refs).toEqual({ first_frame: ["@d1"], image: ["@c5", "@a2", "@a8", "@a4"] });
+    const legacy = refreshGoalShortPlan(legacyPlan(), document);
+    if (legacy.version !== 4) throw new Error("expected a version 4 plan");
+    expect(legacy.character.references.map((reference) => reference.address)).toEqual(["@c5", "@a2"]);
+    expect(legacy.frame.references.map((reference) => reference.address)).toEqual(["@a8", "@a4"]);
+    expect(compileShortClipStep(legacy, "@d1").params.refs).toEqual({ first_frame: ["@d1"], image: ["@c5", "@a2"] });
   });
 });
 

@@ -1,6 +1,6 @@
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
-import { goalShortDraftSchema, goalShortPlanSchema, type GoalShortDraft, type GoalShortPlan } from "./goal-short-plan.js";
+import { goalShortDraftSchema, goalShortPlanSchema, isLegacyShortDraft, isLegacyShortPlan, type GoalShortDraft, type GoalShortPlan } from "./goal-short-plan.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 
@@ -60,8 +60,12 @@ export type GoalFinish = {
   jobId?: number | null;
 };
 
+export function isCurrentShort(planVersion: number): planVersion is 4 | 5 {
+  return planVersion === 4 || planVersion === 5;
+}
+
 export type GoalRecord = {
-  planVersion: 1 | 2 | 3 | 4;
+  planVersion: 1 | 2 | 3 | 4 | 5;
   stage: StoredGoalStage | "assembly";
   stages: Partial<Record<StoredGoalStage, GoalStageRun>>;
   goalId: string;
@@ -224,9 +228,21 @@ function shortTileInputs(goalId: string, content: GoalShortContent): Record<stri
   return { goalId, revision: content.revision, plan: content.plan, draft: content.draft, estimate: content.estimate, notes: content.notes };
 }
 
+const GOAL_IMAGE_EDGE_LIMIT = 8;
+
 function shortTileSources(content: GoalShortContent): GoalTileSource[] {
-  const characters = content.plan?.character.references ?? content.draft?.character.references ?? [];
-  return characters.map((reference, index) => ({ cellId: reference.cellId, targetInput: index === 0 ? "character" : `character_${index + 1}` }));
+  const plan = content.plan;
+  const draft = content.draft;
+  const references = plan
+    ? isLegacyShortPlan(plan) ? plan.character.references : plan.sourceImages
+    : draft
+      ? isLegacyShortDraft(draft) ? draft.character.references : draft.sourceImages
+      : [];
+  // A goal cell accepts only character, character_2 … character_8. Later source images stay on the plan.
+  return references.slice(0, GOAL_IMAGE_EDGE_LIMIT).map((reference, index) => ({
+    cellId: reference.cellId,
+    targetInput: index === 0 ? "character" : `character_${index + 1}`,
+  }));
 }
 
 export async function createGoalShortCell(engine: Engine, notebookId: string, goalId: string, content: GoalShortContent): Promise<NotebookCell> {

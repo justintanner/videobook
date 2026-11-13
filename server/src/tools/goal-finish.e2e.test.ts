@@ -12,7 +12,6 @@ import { goalTestCharacters, settleGoalChain } from "../test-goals.js";
 import { v7 as uuidv7 } from "uuid";
 import { readGoal, saveGoal } from "../goal-store.js";
 import { probeVideo } from "../ffmpeg.js";
-import { saveMainCharacter } from "../goal-short-character.js";
 import { createShortGoal } from "../goal-short-runtime.js";
 import type { ShortGoalSnapshot } from "./goal.js";
 
@@ -52,19 +51,12 @@ describe("goal finishing burns the saved watermark through the graphics renderer
   }
   const status = (goalId: string) => invoke({ action: "status", goal_id: goalId });
   const approve = (goal: ShortGoalSnapshot) => invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
-  const notebook = () => {
-    const result = engine.notebooks.read(notebookId);
-    if (!result.ok) throw new Error(result.error.message);
-    return result.value;
-  };
   const settleChain = (chainId: string, kind: "image" | "video") => settleGoalChain(engine, root, chainId, kind);
 
   it.each(["new", "saved-running", "saved-failed"])("finishes %s from the reviewed take with only a burned watermark", async (savedState) => {
     const oldFal = process.env.FAL_API_KEY;
     process.env.FAL_API_KEY = "test-goal-key";
     try {
-      const character = notebook().cells.find((cell) => cell.type === "image" && cell.outputArtifactId)!.outputArtifactId!;
-      await saveMainCharacter(engine, { referenceArtifactIds: [character] }, notebookId);
       await pauseBookQueueForTests(bookId);
       const created = await createShortGoal(engine, bookId, notebookId, { brief: 'he waits, frame: "A bus stop at dusk." beat 1: "He checks the road."', requestId: uuidv7() });
       const frame = await approve(await status(created.goalId));

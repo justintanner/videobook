@@ -8,15 +8,11 @@ import type { NodeProps } from '@xyflow/react'
 import { GoalCellNode } from '../../src/components/videobook/GoalCellNode'
 import { GoalTileContext } from '../../src/components/videobook/notebook-canvas-context'
 import type { CanvasNode } from '../../src/videobook/notebook-canvas'
-import { defaultShortTab, LEGACY_GOAL_NOTE, type GoalCharacterImage, type GoalSnapshot, type MainCharacterView, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
-import { buildGoalShortPlan } from '../../server/src/goal-short-plan'
+import { defaultShortTab, LEGACY_GOAL_NOTE, type GoalSnapshot, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
-import { legacyGoalFixture, shortGoalFixture, shortPlanFixture, shortStage } from './goal-short-fixtures'
+import { legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage } from './goal-short-fixtures'
 
 const noop = async () => shortGoalFixture()
-const mainCharacter: MainCharacterView = { character: { name: 'Main character', description: 'a man in a green shirt', silent: true }, references: [], notes: [], sheet: { estimate: { usd: 0.12, warnings: [] }, pending: null, lastError: null } }
-const noCharacter = async (): Promise<MainCharacterView> => mainCharacter
-const uploaded = async () => 'uploaded-photo'
 
 function asset(artifactId: string): AssetRecord | null {
   if (artifactId.startsWith('photo')) return { mediaUrl: `/media/${artifactId}.jpg`, thumbnailUrl: `/thumbs/${artifactId}.jpg` } as unknown as AssetRecord
@@ -24,12 +20,10 @@ function asset(artifactId: string): AssetRecord | null {
   return { mediaUrl: `/media/${artifactId}.mp4`, thumbnailUrl: null, duration: 20, fps: 24, objectHash: `${artifactId}-hash` } as unknown as AssetRecord
 }
 
-type ReviewExtras = { character?: MainCharacterView | null, characterError?: string | null, images?: readonly GoalCharacterImage[] }
-
-function render(goal: ShortGoalSnapshot, view: ShortTab = defaultShortTab(goal, goal.shortPlan!), extras: ReviewExtras = {}): string {
+function render(goal: ShortGoalSnapshot, view: ShortTab = defaultShortTab(goal, goal.shortPlan!)): string {
   return renderToStaticMarkup(createElement(GoalShortReview, {
-    goal, plan: goal.shortPlan!, view, disabled: false, character: extras.character ?? null, characterError: extras.characterError ?? null, images: extras.images ?? [],
-    resolveAsset: asset, onView: () => undefined, onPreviewCell: () => undefined, onRun: () => undefined, onAction: noop, onCharacter: noCharacter, onUploadImage: uploaded,
+    goal, plan: goal.shortPlan!, view, disabled: false,
+    resolveAsset: asset, onView: () => undefined, onPreviewCell: () => undefined, onRun: () => undefined, onAction: noop,
   }))
 }
 
@@ -52,51 +46,34 @@ describe('GoalShortReview', () => {
     expect(render(shortGoalFixture())).not.toContain('aria-label="Notes"')
   })
 
-  it('opens a new short on the Character tab, first of the four, while the main character loads', () => {
+  it('opens a new short on Frame, the first of Frame, Video and Finish', () => {
     const html = render(shortGoalFixture())
+    expect([...html.matchAll(/aria-pressed="(true|false)">(\w+)<\/button>/gu)].map(match => [match[2], match[1]]).slice(0, 3))
+      .toEqual([['Frame', 'true'], ['Video', 'false'], ['Finish', 'false']])
+    expect(html).not.toContain('>Character</button>')
+    expect(html).toContain('aria-label="Short title"')
+    expect(html).toContain('aria-label="Source images"')
+    expect(button(html, 'Generate frame')).toContain('Generate frame · $0.21')
+  })
+
+  it('shows a saved version 4 character read-only', () => {
+    const html = render(shortGoalFixture({}, legacyShortPlanFixture([12], [])), 'character')
     expect([...html.matchAll(/aria-pressed="(true|false)">(\w+)<\/button>/gu)].map(match => [match[2], match[1]]).slice(0, 4))
       .toEqual([['Character', 'true'], ['Frame', 'false'], ['Video', 'false'], ['Finish', 'false']])
-    expect(html).toContain('Loading the main character…')
-    expect(html).not.toContain('aria-label="Short title"')
-    expect(button(html, 'Generate frame')).toBe('')
-  })
-
-  it('offers the notebook images as the character, the ones the brief mentioned first, and an upload', () => {
-    const photo = (artifactId: string, column: number): GoalCharacterImage => ({ artifactId, cellId: `${artifactId}-cell`, address: `@a${column}`, label: artifactId })
-    const steps = { kind: 'image' as const, artifactId: 'photo-man', cellId: 'photo-man-cell', address: '@a2', label: 'umbrella_water', objectHash: 'a'.repeat(64) }
-    const plan = buildGoalShortPlan({
-      title: 'Every day, these steps', aspectRatio: '9:16', character: { name: 'Main character', description: 'a man in a green shirt', references: [] },
-      framePrompt: 'He stands at the top of wet steps.', beats: ['He slips.'], segmentSeconds: [12], extraReferences: [steps],
-    })
-    const html = render(shortGoalFixture({}, plan), 'character', { character: mainCharacter, images: [photo('photo-steps', 1), photo('photo-man', 2)] })
-    expect(html).toContain('<legend>Use an image</legend>')
-    const picks = [...html.matchAll(/aria-label="Pick (@\w+)"/gu)].map(match => match[1])
-    expect(picks).toEqual(['@a2', '@a1'])
-    const pick = (address: string) => new RegExp(`<button[^>]*aria-label="Pick ${address}"[^>]*>(?:(?!</button>).)*</button>`, 'u').exec(html)?.[0] ?? ''
-    expect(pick('@a2')).toMatch(/aria-pressed="false".*src="\/thumbs\/photo-man\.jpg".*<span>@a2<\/span><small>In brief<\/small>/u)
-    expect(pick('@a1')).toContain('<span>@a1</span>')
-    expect(pick('@a1')).not.toContain('In brief')
-    expect(html).toMatch(/<input type="file" accept="image\/\*" aria-label="Upload a character image"\/>/u)
-    expect(html).not.toContain('Character image cells')
-    expect(button(html, 'Use these images')).toContain('disabled=""')
-    expect(button(html, 'Generate character sheet')).toContain('Generate character sheet · $0.12')
-    expect(button(html, 'Generate character sheet')).not.toContain('disabled')
-    expect(button(html, 'Save character')).not.toContain('disabled')
-    expect(html).toContain('aria-label="Character name" maxLength="80" value="Main character"/>')
-    expect(html).toContain('>a man in a green shirt</textarea>')
-  })
-
-  it('says why the main character did not load and offers to try again', () => {
-    const html = render(shortGoalFixture(), 'character', { characterError: 'Reconnecting to the server' })
-    expect(html).toContain('role="alert" class="goal-panel-warning">Reconnecting to the server</p>')
-    expect(html).not.toContain('Loading the main character…')
-    expect(button(html, 'Try again')).not.toContain('disabled')
-    expect(button(html, 'Generate character sheet')).toBe('')
+    expect(html).toContain('This short was saved with a character. The name, description and pictures stay as they were.')
+    expect(html).toContain('No reference image was saved with this short.')
+    expect(html).toContain('aria-label="Character name">Main character</p>')
+    expect(html).toContain('aria-label="Character description">a man in a green shirt</p>')
+    expect(html).not.toContain('Save character')
+    expect(html).not.toContain('Generate character sheet')
+    expect(html).not.toContain('Upload a character image')
+    expect(html).not.toContain('<input')
   })
 
   it('shows the frame tab with its estimate and the read-only rule lines', () => {
     const html = render(shortGoalFixture(), 'frame')
-    for (const tab of ['Character', 'Frame', 'Video', 'Finish']) expect(html).toContain(`>${tab}</button>`)
+    for (const tab of ['Frame', 'Video', 'Finish']) expect(html).toContain(`>${tab}</button>`)
+    expect(html).not.toContain('>Character</button>')
     expect(button(html, 'Generate frame')).toContain('Generate frame · $0.21')
     expect(button(html, 'Generate frame')).not.toContain('disabled')
     expect(html).toContain('aria-label="Always added"')
@@ -105,13 +82,12 @@ describe('GoalShortReview', () => {
     expect(html).toContain('/ 40 words')
   })
 
-  it('approves a frame from the description while the character has no reference image', () => {
+  it('approves a frame from the brief when the short has no source image', () => {
     const html = render(shortGoalFixture({}, shortPlanFixture([12], [])), 'frame')
     expect(button(html, 'Generate frame')).not.toContain('disabled')
-    expect(html).toContain('No reference image for Main character, so the frame is generated from the description.')
-    const ready = render(shortGoalFixture({ mainCharacterReferences: 1 }, shortPlanFixture([12], [])), 'frame')
-    expect(button(ready, 'Generate frame')).not.toContain('disabled')
-    expect(ready).not.toContain('No reference image for')
+    expect(html).toContain('aria-label="Source images"')
+    expect(html).not.toContain('No reference image')
+    expect(html).not.toContain('Main character')
   })
 
   it('shows each clip with its state and estimate, continues the next one and offers another beat', () => {
@@ -214,19 +190,21 @@ describe('GoalShortReview', () => {
   })
 })
 
-const panelProps = { connected: true, images: [], onAction: noop, onCharacter: noCharacter, onUploadImage: uploaded, onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
+const panelProps = { connected: true, onAction: noop, onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
 
 describe('GoalPanel with a short', () => {
-  it('opens a new short on the Character tab and a short with a frame on the Frame tab', () => {
+  it('opens a new short on Frame and a saved version 4 short on Character', () => {
     const fresh = renderToStaticMarkup(createElement(GoalPanel, { ...panelProps, goal: shortGoalFixture() }))
-    expect(fresh).toContain('aria-pressed="true">Character</button>')
-    expect(fresh).toContain('Loading the main character…')
+    expect(fresh).toContain('aria-pressed="true">Frame</button>')
+    expect(fresh).not.toContain('>Character</button>')
+    const saved = renderToStaticMarkup(createElement(GoalPanel, { ...panelProps, goal: shortGoalFixture({}, legacyShortPlanFixture()) }))
+    expect(saved).toContain('aria-pressed="true">Character</button>')
+    expect(saved).toContain('This short was saved with a character.')
     const framed = renderToStaticMarkup(createElement(GoalPanel, { ...panelProps, goal: shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]) } }) }))
     expect(framed).toContain('aria-pressed="true">Frame</button>')
-    expect(framed).not.toContain('Loading the main character…')
   })
 
-  it('opens the short review for a version-4 goal and the older reviews for others', () => {
+  it('opens the short review for a current short and the older reviews for earlier goals', () => {
     const props = panelProps
     expect(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture() }))).toContain('aria-label="Short stages"')
     expect(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture({ status: 'planning', shortPlan: undefined }) }))).toContain('Planning the frame and the beats of your short')

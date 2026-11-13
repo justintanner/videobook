@@ -108,7 +108,7 @@ export function shortTitle(brief: string, framePrompt: string): string {
 
 export function shortPlannerBrief(brief: string, references: readonly { artifactId: string }[], document: NotebookDocument): string {
   return replaceNotebookMentions(brief, references.flatMap((reference, index) => {
-    const replacement = `Reference ${index + 1}`;
+    const replacement = `Source image ${index + 1}`;
     const cells = document.cells.filter((cell) => resolveNotebookCellArtifactId(document, cell) === reference.artifactId);
     return [{ reference: reference.artifactId, replacement }, ...cells.map((cell) => ({ reference: notebookGridTag(cell.slot), replacement }))];
   }));
@@ -169,21 +169,25 @@ export function shortRevisionResponseSchema(part: ShortRevisionPart) {
   }).strict();
 }
 
+function shortStar(sourceImageCount: number): string {
+  return sourceImageCount > 0 ? "the person in the source images" : "the person the brief describes";
+}
+
 export async function shortPlannerInstructions(input: {
-  character: { name: string; description: string };
+  sourceImageCount: number;
   aspectRatio: ShortAspectRatio;
   segmentSeconds: readonly number[];
 }): Promise<string> {
   const [h3Guide, imageGuide] = await Promise.all([loadGuide("minimax_h3"), loadGuide("gpt_image_26")]);
   const count = input.segmentSeconds.length;
   return [
-    `Plan a short that looks like real phone footage filmed by someone off screen, starring ${input.character.name}: ${input.character.description}. The main character never speaks.`,
+    `Plan a short that looks like real phone footage filmed by someone off screen, starring ${shortStar(input.sourceImageCount)}. That person never speaks.`,
     `Return JSON with a title, one opening frame prompt for GPT Image 2.6 and ${count === 1 ? "one beat" : `${count} beats`} for MiniMax H3 Max, one per segment: ${input.segmentSeconds.map((seconds, index) => `beat ${index + 1} lasts ${seconds} seconds`).join(", ")}. The aspect ratio is ${input.aspectRatio}.`,
     `Word ceilings, not targets: title ${SHORT_WORD_CEILINGS.title}, frame ${SHORT_WORD_CEILINGS.frame}, each beat ${SHORT_WORD_CEILINGS.beat}.`,
-    "Beat 1 starts from the opening frame. Each later beat continues from where the previous one ends, in the same place, and every beat ends with the main character in frame. One action per beat, in the present tense, with what the camera does and what is heard.",
+    "Beat 1 starts from the opening frame. Each later beat continues from where the previous one ends, in the same place, and every beat ends with that person in frame. One action per beat, in the present tense, with what the camera does and what is heard.",
     CAMERA_LINE,
-    `${POSITIVE_LINE} Give the main character a phone only when the brief does.`,
-    "The images are references, labelled Reference 1, Reference 2 in order, and the brief names them the same way. Describe what they show in plain words instead of naming or numbering them, and write no @tokens.",
+    `${POSITIVE_LINE} Give that person a phone only when the brief does.`,
+    "The images are source images, labelled Source image 1, Source image 2 in order, and the brief names them the same way. Describe what they show in plain words instead of naming or numbering them, and write no @tokens.",
     "Write only the parts listed under write and keep the fixed parts exactly as given.",
     "These lines are added to the prompts after you write them. Do not repeat them and do not contradict them:",
     `Frame: ${SHORT_RULES.frame}`,
@@ -200,15 +204,16 @@ export async function shortRevisionInstructions(plan: GoalShortPlan, stage: "fra
   const frame = stage === "frame";
   const part = shortRevisionPart(plan, stage, index);
   const guide = await loadGuide(frame ? "gpt_image_26" : "minimax_h3");
+  const images = plan.version === 5 ? plan.sourceImages.length : plan.character.references.length;
   return [
-    `Revise one prompt of a short that looks like real phone footage filmed by someone off screen, starring ${plan.character.name}: ${plan.character.description}. The main character never speaks.`,
+    `Revise one prompt of a short that looks like real phone footage filmed by someone off screen, starring ${shortStar(images)}. That person never speaks.`,
     frame
       ? "Rewrite the opening frame prompt for GPT Image 2.6 so it follows the operator's feedback. It describes the one still picture the short opens on."
-      : `Rewrite beat ${index + 1} of ${plan.segments.length} for MiniMax H3 Max, which lasts ${plan.segments[index]!.seconds} seconds, so it follows the operator's feedback. One action in the present tense, with what the camera does and what is heard. ${index === 0 ? "It starts from the opening frame" : "It continues from where the beat before it ends, in the same place,"} and ends with the main character in frame.`,
+      : `Rewrite beat ${index + 1} of ${plan.segments.length} for MiniMax H3 Max, which lasts ${plan.segments[index]!.seconds} seconds, so it follows the operator's feedback. One action in the present tense, with what the camera does and what is heard. ${index === 0 ? "It starts from the opening frame" : "It continues from where the beat before it ends, in the same place,"} and ends with that person in frame.`,
     "Change only what the feedback asks for and keep every other detail, in the same words where you can.",
     "Remove or rewrite every sentence the feedback contradicts, so the prompt no longer says anything the feedback rules out. Never keep the old sentence and add the feedback beside it.",
     CAMERA_LINE,
-    `${POSITIVE_LINE} Give the main character a phone only when the feedback or the brief does.`,
+    `${POSITIVE_LINE} Give that person a phone only when the feedback or the brief does.`,
     `Write at most ${part.ceiling} words, and answer with the whole revised ${part.name}.`,
     "These lines are added to the prompt after you write it. Do not repeat them and do not contradict them:",
     ...(frame ? [`Frame: ${plan.rules.frame}`] : [`Video: ${plan.rules.video}`, `Silence: ${plan.rules.silence}`]),

@@ -5,7 +5,7 @@ import type { Engine } from "videobook-engine";
 import { findPrimaryMediaFile } from "videobook-engine";
 import { coldOpenDestination, coldOpenSource } from "../cold-open.js";
 import { probeVideo } from "../ffmpeg.js";
-import { readGoal, saveGoal, type GoalFinish, type GoalRecord } from "../goal-store.js";
+import { isCurrentShort, readGoal, saveGoal, type GoalFinish, type GoalRecord } from "../goal-store.js";
 import { watermarkGraphicsTemplate } from "../graphics/templates.js";
 import { shortFinishSource } from "../goal-short-runtime.js";
 import { finishingIdentityKey, watermarkProfileFor } from "../lightning-defaults.js";
@@ -117,7 +117,7 @@ export function registerFinishGoalJob(engine: Engine): void {
 }
 
 export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
-  if (goal.planVersion !== 4) throw new Error(FINISH_MESSAGE);
+  if (!isCurrentShort(goal.planVersion)) throw new Error(FINISH_MESSAGE);
   if (goal.status === "running") throw new Error("Wait until the video is ready before finishing it");
   if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Review the video before finishing it");
   if (goal.finish?.status === "completed") return goal;

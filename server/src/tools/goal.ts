@@ -3,13 +3,9 @@ import { z } from "zod";
 import type { Engine, NotebookDocument } from "videobook-engine";
 import { cancelChainRun } from "../chain-executor.js";
 import { goalShortPlanSchema } from "../goal-short-plan.js";
-import { createShortGoal, priceShortFrame, queueShortRealismCheck, retryShortGoal, selectShortVersion, shortFeedbackSchema, startShortStage, updateShortGoal } from "../goal-short-runtime.js";
-import {
-  clearMainCharacterError, describeMainCharacter, reconcileMainCharacter, requireCharacterSheetKey, resolveCharacterReferences,
-  saveMainCharacter, startCharacterSheet, type MainCharacterView,
-} from "../goal-short-character.js";
+import { createShortGoal, queueShortRealismCheck, retryShortGoal, selectShortVersion, shortFeedbackSchema, startShortStage, updateShortGoal } from "../goal-short-runtime.js";
 import { activeGoalStage, LEGACY_GOAL_MESSAGE, publicGoal, reconcileFinish, reconcileGoal } from "../goal-state.js";
-import { findGoalCell, listGoals, readGoal, readGoalCell, saveGoal, type GoalRecord } from "../goal-store.js";
+import { findGoalCell, isCurrentShort, listGoals, readGoal, readGoalCell, saveGoal, type GoalRecord } from "../goal-store.js";
 import { queueGoalFinish } from "../jobs/finish-goal.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -70,12 +66,12 @@ function stopStillRun(engine: Engine, goal: GoalRecord): GoalRecord | null {
 }
 
 async function cancelGoal(engine: Engine, goal: GoalRecord, options: { discard?: boolean } = {}): Promise<GoalRecord> {
-  if (goal.planVersion === 4 && goal.finish?.status === "running") {
+  if (isCurrentShort(goal.planVersion) && goal.finish?.status === "running") {
     if (goal.finish.jobId) await engine.jobs.queue.abort(goal.finish.jobId, "Finishing cancelled");
     return saveGoal(engine, { ...goal, status: "review", error: null, finish: { ...goal.finish, status: "cancelled", error: null } });
   }
   if (!ACTIVE_STATUSES.has(goal.status)) return goal;
-  const resumed = options.discard || goal.planVersion !== 4 ? null : stopStillRun(engine, goal);
+  const resumed = options.discard || !isCurrentShort(goal.planVersion) ? null : stopStillRun(engine, goal);
   if (resumed) return resumed;
   const cancelled = saveGoal(engine, { ...goal, status: "cancelled", error: null });
   if (cancelled.chainId) cancelChainRun(engine, cancelled.chainId);
@@ -87,7 +83,7 @@ async function applyGoalAction(engine: Engine, notebookId: string, goalId: strin
   const stored = readGoal(engine, goalId);
   if (stored.notebookId !== notebookId) throw new Error("Goal does not belong to this notebook");
   const goal = await reconcileGoal(engine, stored, readNotebook(engine, notebookId));
-  if (goal.planVersion !== 4 && !LEGACY_ACTIONS.has(String(args.action))) throw new Error(LEGACY_GOAL_MESSAGE);
+  if (!isCurrentShort(goal.planVersion) && !LEGACY_ACTIONS.has(String(args.action))) throw new Error(LEGACY_GOAL_MESSAGE);
   if (args.action === "update") return updateShortGoal(engine, goal, args);
   if (args.action === "select") return selectShortVersion(engine, goal, args);
   if (args.action === "approve" || args.action === "regenerate" || args.action === "revise") return startShortStage(engine, goal, args, args.action !== "approve");
@@ -100,32 +96,6 @@ async function applyGoalAction(engine: Engine, notebookId: string, goalId: strin
     return saveGoal(engine, { ...goal, dismissedAt: new Date().toISOString() });
   }
   return goal;
-}
-
-async function mainCharacterAction(engine: Engine, bookId: string, notebookId: string, args: GoalArgs): Promise<MainCharacterView> {
-  return withNotebookMutation(`goal-character:${bookId}`, async () => {
-    if (args.generate === true) requireCharacterSheetKey();
-    let character = await reconcileMainCharacter(engine);
-    let notes: string[] = [];
-    if (args.name !== undefined || args.description !== undefined || args.reference_ids !== undefined) {
-      const selected = Array.isArray(args.reference_ids)
-        ? await resolveCharacterReferences(engine, notebookId, z.array(z.string()).parse(args.reference_ids))
-        : null;
-      notes = selected?.notes ?? [];
-      character = await saveMainCharacter(engine, {
-        ...(typeof args.name === "string" ? { name: args.name } : {}),
-        ...(typeof args.description === "string" ? { description: args.description } : {}),
-        ...(selected ? { referenceArtifactIds: selected.artifactIds } : {}),
-      }, notebookId);
-    }
-    if (args.generate === true) character = await startCharacterSheet(engine, bookId, notebookId);
-    for (const goal of character.referenceArtifactIds.length > 0 ? listGoals(engine, notebookId) : []) {
-      await withNotebookMutation(`goal:${goal.goalId}`, () => priceShortFrame(engine, readGoal(engine, goal.goalId), character.referenceArtifactIds));
-    }
-    const view = await describeMainCharacter(engine, readNotebook(engine, notebookId), character);
-    clearMainCharacterError(engine, view.sheet.lastError);
-    return { ...view, notes };
-  });
 }
 
 async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Promise<GoalSnapshot[]> {
@@ -142,14 +112,10 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Run Goal mode on a notebook. create makes a short from a brief: a real-looking phone video, 5 to 60 seconds, starring the book's main character, who never speaks; image cells mentioned in the brief become place or prop references for the opening frame. Videos are used through an extracted frame, and unusable mentions are skipped with a note; keep the first 12 usable images. Lengths are clamped to 5-60 seconds, extra quoted beats are fitted or folded into the last beat, and without OPENAI_API_KEY the brief supplies a reviewable plan. Then list, status, update, approve, regenerate, select, revise, cancel, retry, finish (the reviewed take plus the saved watermark) or dismiss it by goal_id. revise (stage, index, feedback up to 2000 characters) rewrites an @ mention to the cell's label, then has OpenAI rewrite that frame prompt or beat with the feedback, billed like planning, replacing any sentence the feedback contradicts, and saves it in the plan before the paid regeneration. Each paid step needs its own approval with its estimate: the GPT Image 2.6 opening frame, the H3 Max base clip, and each H3 Max Extend continuation for the next beat. The character action reads the main character, saves its name, description or reference_ids (image cells, or a video through an extracted frame; at most 4 are kept), and with generate makes a paid GPT Image 2.6 character sheet. With no character reference image, frame approval uses the saved name and description and adds a note. check (stage and index) looks at the selected frame, or 4 frames of a clip's new footage, for AI tells and stores up to 5 findings (note or warn) with that output; it is billed like planning, runs only when asked and never blocks an approval. Goals made by an earlier /goal are read-only: list, status, cancel and dismiss.",
+    description: "Run Goal mode on a notebook. create makes a short from a brief: a real-looking phone video, 5 to 60 seconds, starring the person in the images the brief mentions, or the person the brief describes when it mentions none; that person never speaks. Every image the brief mentions is a source image, kept as photographed, up to 12. Videos are used through an extracted frame, and unusable mentions are skipped with a note. Lengths are clamped to 5-60 seconds, extra quoted beats are fitted or folded into the last beat, and without OPENAI_API_KEY the brief supplies a reviewable plan. Then list, status, update, approve, regenerate, select, revise, cancel, retry, finish (the reviewed take plus the saved watermark) or dismiss it by goal_id. revise (stage, index, feedback up to 2000 characters) rewrites an @ mention to the cell's label, then has OpenAI rewrite that frame prompt or beat with the feedback, billed like planning, replacing any sentence the feedback contradicts, and saves it in the plan before the paid regeneration. Each paid step needs its own approval with its estimate: the GPT Image 2.6 opening frame, the H3 Max base clip, and each H3 Max Extend continuation for the next beat. check (stage and index) looks at the selected frame, or 4 frames of a clip's new footage, for AI tells and stores up to 5 findings (note or warn) with that output; it is billed like planning, runs only when asked and never blocks an approval. Goals made by an earlier /goal are read-only: list, status, cancel and dismiss.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
-      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "retry", "dismiss", "finish", "character", "check"]),
-      name: goalShortPlanSchema.shape.character.shape.name.optional().describe("character: the main character's name"),
-      description: goalShortPlanSchema.shape.character.shape.description.optional().describe("character: what the main character looks like"),
-      reference_ids: z.array(z.string().min(1).max(200)).min(1).max(32).optional().describe("character: grid addresses or artifact ids that replace the references. A video cell is used through an extracted frame. At most 4 are kept; the rest are noted"),
-      generate: z.boolean().optional().describe("character: true makes a paid character sheet that becomes the only reference"),
+      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "retry", "dismiss", "finish", "check"]),
       goal_id: z.string().uuid().optional(), request_id: z.string().min(1).max(200).optional(),
       brief: z.string().trim().min(1).max(6000).optional(), plan: advertisedAs(goalShortPlanSchema, {
         type: "object",
@@ -167,7 +133,7 @@ export function goalDefs(engine: Engine): ToolDef[] {
         const notebook = readNotebook(engine, notebookId);
         if (args.action === "list") return json({ goals: await listGoalSnapshots(engine, notebook) });
         if (args.action === "create") return json(await createGoal(engine, bookId, notebookId, args));
-        if (args.action === "character") return json(await mainCharacterAction(engine, bookId, notebookId, args));
+        if (args.action === "character") throw new Error("Unknown action: character");
         const goalId = z.string().uuid().parse(args.goal_id);
         return await withNotebookMutation(`goal:${goalId}`, async () => json(await goalSnapshot(engine, await applyGoalAction(engine, notebookId, goalId, args))));
       } catch (error) { return failure(error); }
