@@ -162,7 +162,7 @@ describe("enqueueLazyTimelineRender", () => {
     expect(payload.audioFadeOut).toBe(300);
   });
 
-  it("carries stored watermark OSG settings through to the render payload", async () => {
+  it("ignores stored watermark OSG settings in the render payload", async () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
       id: 1,
       operationId: "test-job",
@@ -196,10 +196,7 @@ describe("enqueueLazyTimelineRender", () => {
 
     expect(enqueue).toHaveBeenCalledTimes(1);
     const payload = enqueue.mock.calls[0][1];
-    expect(payload.osgAssetId).toBe("img-badge");
-    expect(payload.osgPosition).toBe("bottom-left");
-    expect(payload.osgScale).toBe(1.1429);
-    expect(payload.osgOpacity).toBe(0.5);
+    expect(Object.keys(payload).some((key) => key.startsWith("osg"))).toBe(false);
   });
 
   it("carries a stored subtitleLanguage through to the render payload", async () => {

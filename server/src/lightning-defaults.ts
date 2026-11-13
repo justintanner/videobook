@@ -45,7 +45,7 @@ export type LightningWatermarkProfile = {
   handlePaddingY: number;
   handleRounding: number;
   scale: number;
-  mode: "burn" | "overlay";
+  mode: "burn";
   handlePlacement: "center" | "above-qr" | "on-qr" | "below-qr";
   handleVerticalPercent: number;
   handleStartSeconds: number;
@@ -101,7 +101,8 @@ export const X_WATERMARK_PROFILE: LightningWatermarkProfile = {
   fadeSeconds: 0.5,
 };
 
-export type StoredWatermarkProfile = Partial<Omit<LightningWatermarkProfile, "platform">> & {
+export type StoredWatermarkProfile = Partial<Omit<LightningWatermarkProfile, "platform" | "mode">> & {
+  mode?: "burn" | "overlay";
   qrStartSeconds?: number | null;
   qrEndSeconds?: number | null;
 };
@@ -173,7 +174,7 @@ export function watermarkProfileFor(
   stored: StoredWatermarkProfile | null | undefined,
 ): LightningWatermarkProfile {
   const base = platform === "tiktok" ? LIGHTNING_WATERMARK_PROFILE : X_WATERMARK_PROFILE;
-  return { ...base, ...definedProfileFields(stored), platform };
+  return { ...base, ...definedProfileFields(stored), mode: "burn", platform };
 }
 
 function canonicalWatermarkProfile(profile: LightningWatermarkProfile): LightningWatermarkProfile {

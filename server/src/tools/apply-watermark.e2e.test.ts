@@ -280,7 +280,7 @@ describe("apply_watermark burns through the graphics renderer", () => {
 
   it("burns separate QR and floating handle watermarks and clears overlay settings", async () => {
     const assetId = await fixtureAsset();
-    await apply({ asset_id: assetId, handle: "someone", mode: "overlay" });
+    expect((await engine.metadata.artifacts.write(assetId, "landscape.render", { osgAssetId: "retired-overlay", osgOpacity: 0.5 })).ok).toBe(true);
     const before = await engine.files.manifest(assetId);
     if (!before.ok) throw new Error(before.error.message);
     const beforeHash = findVideoFile(before.value.files)!.objectHash;
@@ -413,7 +413,7 @@ describe("apply_watermark burns through the graphics renderer", () => {
 
   it("queues the burn without waiting when wait is false", async () => {
     const assetId = await fixtureAsset();
-    await apply({ asset_id: assetId, handle: "someone", mode: "overlay" });
+    expect((await engine.metadata.artifacts.write(assetId, "landscape.render", { osgAssetId: "retired-overlay", osgOpacity: 0.5 })).ok).toBe(true);
     const before = await engine.files.manifest(assetId);
     if (!before.ok) throw new Error(before.error.message);
     const beforeHash = findVideoFile(before.value.files)!.objectHash;

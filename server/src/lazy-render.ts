@@ -6,7 +6,6 @@ import type {
   Orientation,
   SubtitlePosition,
 } from "./remotion/subtitles/types.js";
-import { isOsgPosition, isOsgSize } from "./osg-assets.js";
 import { queue } from "./queue.js";
 import { readTimeline } from "./timeline-helpers.js";
 import { isLanguageSetting } from "./jobs/_translate-transcript.js";
@@ -55,10 +54,6 @@ function stringOr(value: unknown, fallback: string): string {
 
 function numberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function nullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
 }
 
 function stringArrayOrNull(value: unknown): string[] | null {
@@ -167,15 +162,6 @@ export async function enqueueLazyTimelineRender(
     audioFadeIn: numberOr(stored.audioFadeIn, 0),
     audioFadeOut: numberOr(stored.audioFadeOut, 0),
     audioVolume: numberOr(stored.audioVolume, 100),
-    osgImagePath: nullableString(stored.osgImagePath),
-    osgAssetId: nullableString(stored.osgAssetId),
-    osgPosition: isOsgPosition(stored.osgPosition) ? stored.osgPosition : "top-right",
-    osgSize: isOsgSize(stored.osgSize) ? stored.osgSize : "medium",
-    osgScale: numberOr(stored.osgScale, 1),
-    osgOpacity: numberOr(stored.osgOpacity, 1),
-    osgStartSeconds: typeof stored.osgStartSeconds === "number" ? stored.osgStartSeconds : null,
-    osgEndSeconds: typeof stored.osgEndSeconds === "number" ? stored.osgEndSeconds : null,
-    osgTailSeconds: typeof stored.osgTailSeconds === "number" ? stored.osgTailSeconds : null,
     keywordGraphicsEnabled: stored.keywordGraphicsEnabled === true,
     keywordGraphicsMaxCount: numberOr(stored.keywordGraphicsMaxCount, DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT),
     keywordGraphicsLingerSeconds: numberOr(

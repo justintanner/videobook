@@ -192,7 +192,7 @@ function uiCommandAction(command: Command): WorkspaceAction {
   if (!action || !uiActions.has(action)) throw new Error(`No UI action handler contract for ${command.command}: ${action}`);
   const group = uiGroup(action as UiActionId);
   const schema = commandSchema(command);
-  if (["viewer_set_original", "viewer_set_landscape", "viewer_set_portrait", "viewer_focus_file", "viewer_show_settings", "settings_landscape", "settings_portrait", "settings_square", "settings_audio", "settings_subs", "settings_bg", "settings_osg"].includes(action)) {
+  if (["viewer_set_original", "viewer_set_landscape", "viewer_set_portrait", "viewer_focus_file", "viewer_show_settings", "settings_landscape", "settings_portrait", "settings_square", "settings_audio", "settings_subs", "settings_bg"].includes(action)) {
     schema.properties = { asset_id: { type: "string", description: "Media to view or edit" }, ...schema.properties };
     schema.required = ["asset_id", ...(schema.required ?? [])];
   }

@@ -4,20 +4,7 @@ import {
   orientationDimensions,
 } from "./keyword-placement.js";
 import type { KeywordOccupiedRegion, NormalizedRect } from "./keyword-placement.js";
-import type { Orientation, OsgPosition, OsgSize } from "./subtitles/types.js";
-
-// Max edge of the graphic as a fraction of the video width. Sized for a
-// visible on-screen graphic (TV-style logo bug): `medium` ≈ 14% of width,
-// `small` half that, `large` 1.5×. The previous 5%/2.5%/7.5% presets rendered
-// a near-invisible corner thumbnail that users read as "OSG didn't apply".
-const SIZE_FACTOR: Record<OsgSize, number> = {
-  small: 0.07,
-  medium: 0.14,
-  large: 0.21,
-};
-
-// The OSG always eases in/out over this window so it never pops abruptly.
-export const FADE_SECONDS = 0.4;
+import type { Orientation, OsgPosition } from "./subtitles/types.js";
 
 interface OsgWindow {
   startFrame: number;
@@ -56,78 +43,13 @@ export function resolveOsgWindow(opts: {
   return { startFrame, endFrame, hasExplicitEnd: endFrame < durationInFrames };
 }
 
-function ramp(frame: number, x0: number, x1: number, y0: number, y1: number): number {
-  if (frame <= x0) return y0;
-  if (frame >= x1) return y1;
-  return y0 + ((frame - x0) / (x1 - x0)) * (y1 - y0);
-}
-
-/**
- * Opacity envelope for a frame within a window: eases in over FADE_SECONDS and
- * symmetrically eases out toward the window end — including the implicit
- * end-of-clip, so a whole-video watermark fades at both edges. Frames outside
- * [startFrame, endFrame) are hard-gated to 0 so a collapsed fade on a
- * sub-second span can't leave the graphic showing past its window.
- */
-export function osgFadeEnvelope(frame: number, window: OsgWindow, fps: number): number {
-  const { startFrame, endFrame } = window;
-  if (frame < startFrame || frame >= endFrame) return 0;
-  const span = Math.max(1, endFrame - startFrame);
-  const maxFade = Math.max(1, Math.round(FADE_SECONDS * fps));
-  const fade = Math.max(1, Math.min(maxFade, Math.floor(span / 2)));
-  const inEnd = startFrame + fade;
-  const outStart = endFrame - fade;
-  if (outStart > inEnd) {
-    if (frame >= outStart) return ramp(frame, outStart, endFrame, 1, 0);
-    return ramp(frame, startFrame, inEnd, 0, 1);
-  }
-  return ramp(frame, startFrame, inEnd, 0, 1);
-}
-
-export function osgMaxSize(width: number, size: OsgSize, scale: number): number {
-  return Math.round(width * SIZE_FACTOR[size] * scale);
-}
-
 export function osgPadding(width: number): number {
   return Math.round(width * 0.02);
 }
 
-interface OsgAnchorPlacement {
-  top?: number | string;
-  bottom?: number | string;
-  left?: number | string;
-  right?: number | string;
-  transforms: string[];
-}
-
-export function osgAnchorPlacement(position: OsgPosition, padding: number): OsgAnchorPlacement {
-  const [vertical, horizontal] = position.split("-");
-  const placement: OsgAnchorPlacement = { transforms: [] };
-  if (vertical === "top") placement.top = padding;
-  else if (vertical === "bottom") placement.bottom = padding;
-  else {
-    placement.top = "50%";
-    placement.transforms.push("translateY(-50%)");
-  }
-  if (horizontal === "left") placement.left = padding;
-  else if (horizontal === "right") placement.right = padding;
-  else {
-    placement.left = "50%";
-    placement.transforms.push("translateX(-50%)");
-  }
-  return placement;
-}
-
-// ---------------------------------------------------------------------------
-// Floating watermark: a faint QR + @handle badge shown for the whole clip.
-// Sized off the canvas's min dimension (via a per-orientation osgScale) so the
-// badge is the same physical size on landscape, portrait, and square renders.
-// ---------------------------------------------------------------------------
-
 // Badge height as a fraction of min(width, height) — ≈173px on a 1080 min dim,
 // keeping the QR (~2/3 of badge height) scannable while staying unobtrusive.
 export const WATERMARK_MIN_DIM_FRACTION = 0.16;
-export const WATERMARK_OSG_SIZE: OsgSize = "medium";
 export const WATERMARK_OPACITY = 0.5;
 
 // Candidate anchors in tie-break preference order.
@@ -144,18 +66,6 @@ const REGION_KIND_WEIGHT: Record<KeywordOccupiedRegion["kind"], number> = {
   text: 2,
   graphic: 1,
 };
-
-/**
- * OsgOverlay sizes off canvas width; translate the min-dim target into the
- * equivalent per-orientation osgScale for the `medium` preset, clamped to the
- * set_video_overlay schema range.
- */
-export function watermarkOsgScale(orientation: Orientation, userScale = 1): number {
-  const { width, height } = orientationDimensions(orientation);
-  const minDim = Math.min(width, height);
-  const raw = (WATERMARK_MIN_DIM_FRACTION / SIZE_FACTOR[WATERMARK_OSG_SIZE]) * (minDim / width) * userScale;
-  return Math.min(2, Math.max(0.1, Number(raw.toFixed(4))));
-}
 
 /**
  * On-canvas rect of the contain-fitted badge at a given anchor, normalized to

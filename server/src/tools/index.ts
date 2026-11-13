@@ -46,7 +46,6 @@ import { splitVideoDef } from "./split-video.js";
 import { padVideoDef } from "./pad-video.js";
 import { cropAssetDef } from "./crop-asset.js";
 import { invertImageDef } from "./invert-image.js";
-import { setVideoOverlayDef } from "./set-osg.js";
 import { animateKeywordsDef } from "./animate-keywords.js";
 import { captionVideoDef } from "./caption-video.js";
 import { videoGraphicsDef } from "./video-graphics.js";
@@ -141,7 +140,6 @@ export function getVideoEditingToolDefs(engine: Engine, books?: BookManager): To
     padVideoDef(engine),
     cropAssetDef(engine),
     invertImageDef(engine),
-    setVideoOverlayDef(engine),
     animateKeywordsDef(engine),
     captionVideoDef(engine),
     videoGraphicsDef(engine, books),
@@ -240,7 +238,7 @@ const preparedTools = new WeakMap<Engine, WeakMap<BookManager, readonly Prepared
 function prepareTools(engine: Engine, books: BookManager): readonly PreparedTool[] {
   return getAllToolDefs(engine, books)
     .map((def) => scopeTool(withLogging(def, engine), books, engine))
-    .map((def) => ({ def, inputSchema: toolInputSchema(def.schema) }));
+    .map((def) => ({ def, inputSchema: toolInputSchema(def.schema, def.name === "render_video") }));
 }
 
 export function preparedToolsFor(engine: Engine, books: BookManager): readonly PreparedTool[] {

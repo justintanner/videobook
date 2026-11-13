@@ -5,10 +5,9 @@ import { logger } from "../logger.js";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
 import { isValidHex } from "../remotion/util.js";
-import type { Orientation, OsgPosition, SubtitleStyle } from "../remotion/subtitles/types.js";
+import type { Orientation, SubtitleStyle } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
 import { requireArtifactKind } from "./_shared.js";
-import { isOsgPosition, isOsgSize, resolveOsgImagePath } from "../osg-assets.js";
 import {
   readTimeline,
   timelineInput,
@@ -72,46 +71,6 @@ export function renderVideoDef(engine: Engine): ToolDef {
         .number()
         .optional()
         .describe("Audio volume percent 0-100 (default: 100)"),
-      osg_asset_id: z
-        .string()
-        .optional()
-        .describe("Image asset ID (img- prefix) for on-screen graphic overlay"),
-      osg_position: z
-        .enum([
-          "top-left", "top-center", "top-right",
-          "middle-left", "middle-center", "middle-right",
-          "bottom-left", "bottom-center", "bottom-right",
-        ])
-        .optional()
-        .describe("OSG position (default: top-right)"),
-      osg_size: z
-        .enum(["small", "medium", "large"])
-        .optional()
-        .describe("OSG size preset; small ≈ half (default: medium)"),
-      osg_scale: z
-        .number()
-        .min(0.1)
-        .max(2)
-        .optional()
-        .describe("OSG size multiplier applied on top of osg_size (default: 1)"),
-      osg_opacity: z
-        .number()
-        .min(0.05)
-        .max(1)
-        .optional()
-        .describe("OSG opacity 0.05-1; the floating watermark uses 0.5 (default: 1)"),
-      osg_start_seconds: z
-        .number()
-        .min(0)
-        .nullable()
-        .optional()
-        .describe("OSG visibility window start in seconds; null/omit ⇒ from clip start"),
-      osg_end_seconds: z
-        .number()
-        .min(0)
-        .nullable()
-        .optional()
-        .describe("OSG visibility window end in seconds; null/omit ⇒ to clip end"),
       keyword_graphics_enabled: z
         .boolean()
         .optional()
@@ -157,6 +116,10 @@ export function renderVideoDef(engine: Engine): ToolDef {
         .describe("Subtitle shadow opacity 0-100 (default: 60)"),
     },
     handler: async (args) => {
+      const retired = Object.keys(args).filter((key) => key.startsWith("osg_"));
+      if (retired.length > 0) {
+        return { isError: true, content: [{ type: "text", text: `Invalid arguments: ${retired.join(", ")}. Render-time overlays have been removed; use video_graphics.` }] };
+      }
       const {
         asset_id,
         book_id,
@@ -171,13 +134,6 @@ export function renderVideoDef(engine: Engine): ToolDef {
         audio_fade_in = 0,
         audio_fade_out = 0,
         audio_volume = 100,
-        osg_asset_id,
-        osg_position,
-        osg_size,
-        osg_scale,
-        osg_opacity,
-        osg_start_seconds,
-        osg_end_seconds,
         keyword_graphics_enabled,
         keyword_graphics_max_count,
         keyword_graphics_linger_seconds,
@@ -201,13 +157,6 @@ export function renderVideoDef(engine: Engine): ToolDef {
         audio_fade_in?: number;
         audio_fade_out?: number;
         audio_volume?: number;
-        osg_asset_id?: string;
-        osg_position?: OsgPosition;
-        osg_size?: "small" | "medium" | "large";
-        osg_scale?: number;
-        osg_opacity?: number;
-        osg_start_seconds?: number | null;
-        osg_end_seconds?: number | null;
         keyword_graphics_enabled?: boolean;
         keyword_graphics_max_count?: number;
         keyword_graphics_linger_seconds?: number;
@@ -296,25 +245,6 @@ export function renderVideoDef(engine: Engine): ToolDef {
 
       const subsEnabled = subtitles_enabled ?? false;
 
-      // Resolve an explicitly passed OSG image up front so a bad reference
-      // fails the tool call. Stored per-orientation OSG settings are resolved
-      // inside the orientation loop instead (a stale stored id skips the OSG
-      // rather than failing the render).
-      let osgImagePath: string | null = null;
-      if (osg_asset_id) {
-        const osgGate = await requireArtifactKind(engine, osg_asset_id, ["image"], "osg_asset_id");
-        if (osgGate) return osgGate;
-        const resolved = await resolveOsgImagePath(engine, osg_asset_id);
-        if (!resolved.ok) {
-          return {
-            isError: true as const,
-            content: [{ type: "text" as const, text: resolved.error }],
-          };
-        }
-        osgImagePath = resolved.path;
-      }
-      const storedOsgPathCache = new Map<string, string | null>();
-
       // A previously failed job leaves the assets row at status='error',
       // which beginAssetWork refuses to lease — and enqueue never resets it.
       // An explicit render is a retry: clear the stale failure first so the
@@ -351,43 +281,6 @@ export function renderVideoDef(engine: Engine): ToolDef {
             ? storedKeywords
             : null;
 
-        // Explicit OSG args win; else fall back to the settings set_video_overlay
-        // stored on this orientation (position may differ per orientation — the
-        // frame-aware watermark picks a corner for each).
-        const storedOsgAssetId = typeof stored.osgAssetId === "string" && stored.osgAssetId.length > 0
-          ? stored.osgAssetId
-          : null;
-        let orientOsgAssetId = osg_asset_id ?? storedOsgAssetId;
-        let orientOsgImagePath = osgImagePath;
-        if (!osg_asset_id && storedOsgAssetId) {
-          if (!storedOsgPathCache.has(storedOsgAssetId)) {
-            const resolved = await resolveOsgImagePath(engine, storedOsgAssetId);
-            if (!resolved.ok) {
-              logger.warn("overlay-skipped", { assetId: storedOsgAssetId, error: resolved.error });
-            }
-            storedOsgPathCache.set(storedOsgAssetId, resolved.ok ? resolved.path : null);
-          }
-          orientOsgImagePath = storedOsgPathCache.get(storedOsgAssetId) ?? null;
-          if (orientOsgImagePath === null) orientOsgAssetId = null;
-        }
-        const osgPosition = osg_position
-          ?? (isOsgPosition(stored.osgPosition) ? stored.osgPosition : "top-right");
-        const osgSize = osg_size
-          ?? (isOsgSize(stored.osgSize) ? stored.osgSize : "medium");
-        const osgScale = osg_scale
-          ?? (typeof stored.osgScale === "number" && Number.isFinite(stored.osgScale) ? stored.osgScale : 1);
-        const osgOpacity = osg_opacity
-          ?? (typeof stored.osgOpacity === "number" && stored.osgOpacity >= 0.05 && stored.osgOpacity <= 1
-            ? stored.osgOpacity
-            : 1);
-        const osgStartSeconds = osg_start_seconds !== undefined
-          ? osg_start_seconds
-          : typeof stored.osgStartSeconds === "number" ? stored.osgStartSeconds : null;
-        const osgEndSeconds = osg_end_seconds !== undefined
-          ? osg_end_seconds
-          : typeof stored.osgEndSeconds === "number" ? stored.osgEndSeconds : null;
-        const osgTailSeconds = typeof stored.osgTailSeconds === "number" ? stored.osgTailSeconds : null;
-
         const jobId = `render-${asset_id}-${orientation}-${Date.now()}`;
         await queue.enqueue(jobId, {
           type: "render_project",
@@ -410,15 +303,6 @@ export function renderVideoDef(engine: Engine): ToolDef {
           audioFadeIn: audio_fade_in,
           audioFadeOut: audio_fade_out,
           audioVolume: audio_volume,
-          osgImagePath: orientOsgImagePath,
-          osgAssetId: orientOsgAssetId ?? null,
-          osgPosition,
-          osgSize,
-          osgScale,
-          osgOpacity,
-          osgStartSeconds,
-          osgEndSeconds,
-          osgTailSeconds,
           keywordGraphicsEnabled,
           keywordGraphicsMaxCount,
           keywordGraphicsLingerSeconds,

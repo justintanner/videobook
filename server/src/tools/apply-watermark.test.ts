@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import { readWatermarkConfig } from "../watermark-config.js";
-import { watermarkOsgScale } from "../remotion/osg-spec.js";
 import { graphicsDocumentFromLayers } from "../graphics/model.js";
 import { saveGraphicsTemplate, setWatermarkGraphicsTemplate } from "../graphics/templates.js";
 import { watermarkLayerInputs } from "../graphics/watermark-profile.js";
@@ -112,235 +111,24 @@ describe("apply_watermark tool", () => {
     return JSON.parse((result.content as TextContent)[0].text) as ApplyResult;
   }
 
-  it("falls back to the analyze-video corner and stores faint whole-clip settings", async () => {
+  it("rejects overlay mode without changing the video or settings", async () => {
     const assetId = await createRealVideoAsset();
-    const analysisWrite = await fs.files.write(
-      assetId,
-      ".original.analysis.json",
-      Buffer.from(JSON.stringify({ recommendedOsgPosition: "bottom-left" })),
-    );
-    if (!analysisWrite.ok) throw new Error(analysisWrite.error.message);
-
-    const parsed = await apply({ asset_id: assetId, handle: "someone", mode: "overlay" });
-
-    expect(parsed.placement_source).toBe("analysis");
-    expect(parsed.positions).toEqual({
-      landscape: "bottom-left",
-      portrait: "bottom-left",
-      square: "bottom-left",
-    });
-    expect(parsed.opacity).toBe(0.5);
-    expect(parsed.handle).toBe("someone");
-    expect(parsed.url).toBe("https://x.com/someone");
-    expect(parsed.handle_padding).toBe(32);
-    expect(parsed.handle_padding_y).toBe(28);
-    expect(parsed.handle_rounding).toBe(100);
-
-    const card = fs.artifacts.get(parsed.card_asset_id);
-    expect(card.ok && card.value.kind).toBe("image");
-
-    for (const orient of ORIENTATIONS) {
-      const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
-      if (!meta.ok) throw new Error(`missing ${orient}.render`);
-      expect(meta.value.osgAssetId).toBe(parsed.card_asset_id);
-      expect(meta.value.osgImagePath).toBeNull();
-      expect(meta.value.osgPosition).toBe("bottom-left");
-      expect(meta.value.osgSize).toBe("medium");
-      expect(meta.value.osgScale).toBeCloseTo(watermarkOsgScale(orient), 4);
-      expect(meta.value.osgOpacity).toBe(0.5);
-      expect(meta.value.osgStartSeconds).toBeNull();
-      expect(meta.value.osgEndSeconds).toBeNull();
-      expect(meta.value.osgTailSeconds).toBeNull();
-    }
+    const before = await fs.files.manifest(assetId);
+    const result = await client.callTool({ name: "apply_watermark", arguments: { book_id: bookId, asset_id: assetId, mode: "overlay" } });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("mode");
+    expect(await fs.files.manifest(assetId)).toEqual(before);
+    for (const orientation of ORIENTATIONS) expect((await fs.metadata.artifacts.read(assetId, `${orientation}.render`)).ok).toBe(false);
   });
 
-  it("defaults to bottom-right when no analysis exists", async () => {
+  it("burns when a stored profile still names overlay mode", async () => {
+    await pauseBookQueueForTests(fs.book.get().bookId);
+    expect(fs.settings.set("application.watermark.v1", { profile: { mode: "overlay", handle: "alice" } }).ok).toBe(true);
     const assetId = await createRealVideoAsset();
-    const parsed = await apply({ asset_id: assetId, handle: "someone", mode: "overlay" });
-    expect(parsed.placement_source).toBe("default");
-    expect(parsed.positions?.landscape).toBe("bottom-right");
-  });
-
-  it("stores explicit placement, timing, and a handle-only badge", async () => {
-    const assetId = await createRealVideoAsset();
-    const parsed = await apply({
-      asset_id: assetId,
-      handle: "someone",
-      include_qr: false,
-      position: "middle-center",
-      handle_start_seconds: 0.25,
-      handle_end_seconds: 0.75,
-      mode: "overlay",
-    });
-
-    expect(parsed.include_qr).toBe(false);
-    expect(parsed.requested_position).toBe("middle-center");
-    expect(parsed.handle_start_seconds).toBe(0.25);
-    expect(parsed.handle_end_seconds).toBe(0.75);
-    expect(parsed.placement_source).toBe("explicit");
-    expect(parsed.positions).toEqual({
-      landscape: "middle-center",
-      portrait: "middle-center",
-      square: "middle-center",
-    });
-
-    const cardMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      parsed.card_asset_id,
-      "original",
-    );
-    if (!cardMeta.ok) throw new Error(cardMeta.error.message);
-    expect(cardMeta.value.layout).toBe("handle-v5");
-    expect(cardMeta.value.include_qr).toBe(false);
-    expect(cardMeta.value.include_x_icon).toBe(true);
-    expect(cardMeta.value.include_handle_border).toBe(true);
-    expect(cardMeta.value.handle_padding).toBe(32);
-    expect(cardMeta.value.handle_padding_y).toBe(28);
-    expect(cardMeta.value.handle_rounding).toBe(100);
-    expect(cardMeta.value.height).toBe(80);
-
-    for (const orient of ORIENTATIONS) {
-      const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
-      if (!meta.ok) throw new Error(`missing ${orient}.render`);
-      expect(meta.value.osgPosition).toBe("middle-center");
-      expect(meta.value.osgStartSeconds).toBe(0.25);
-      expect(meta.value.osgEndSeconds).toBe(0.75);
-    }
-  });
-
-  it("stores a QR-only overlay without requiring a handle", async () => {
-    const assetId = await createRealVideoAsset();
-    const parsed = await apply({
-      asset_id: assetId,
-      handle: "",
-      url: "https://example.com/qr-only",
-      include_qr: true,
-      include_handle: false,
-      position: "top-right",
-      handle_start_seconds: 0.8,
-      handle_end_seconds: 0.2,
-      mode: "overlay",
-    });
-
-    expect(parsed.handle).toBeNull();
-    expect(parsed.url).toBe("https://example.com/qr-only");
-    expect(parsed.include_qr).toBe(true);
-    expect(parsed.include_handle).toBe(false);
-    expect(parsed.handle_start_seconds).toBeNull();
-    expect(parsed.handle_end_seconds).toBeNull();
-    expect(parsed.positions).toEqual({
-      landscape: "top-right",
-      portrait: "top-right",
-      square: "top-right",
-    });
-
-    const cardMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      parsed.card_asset_id,
-      "original",
-    );
-    if (!cardMeta.ok) throw new Error(cardMeta.error.message);
-    expect(cardMeta.value.layout).toBe("qr-v1");
-    expect(cardMeta.value.include_handle).toBe(false);
-  });
-
-  it("reuses the badge asset across applies and honors custom opacity/scale", async () => {
-    const firstAsset = await createRealVideoAsset();
-    const secondAsset = await createRealVideoAsset();
-
-    const first = await apply({ asset_id: firstAsset, handle: "someone", mode: "overlay" });
-    const second = await apply({
-      asset_id: secondAsset,
-      handle: "someone",
-      mode: "overlay",
-      qr_opacity: 0.35,
-      handle_opacity: 0.35,
-      scale: 1.5,
-    });
-
-    expect(second.card_asset_id).toBe(first.card_asset_id);
-    expect(second.opacity).toBe(0.35);
-    const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(secondAsset, "portrait.render");
-    if (!meta.ok) throw new Error("missing portrait.render");
-    expect(meta.value.osgOpacity).toBe(0.35);
-    expect(meta.value.osgScale).toBeCloseTo(watermarkOsgScale("portrait", 1.5), 4);
-
-    const alternateAppearance = await apply({
-      asset_id: firstAsset,
-      handle: "someone",
-      include_platform_icon: false,
-      include_handle_border: false,
-      mode: "overlay",
-    });
-    expect(alternateAppearance.card_asset_id).not.toBe(first.card_asset_id);
-
-    const alternateGeometry = await apply({
-      asset_id: firstAsset,
-      handle: "someone",
-      handle_padding: 64,
-      handle_rounding: 25,
-      mode: "overlay",
-    });
-    expect(alternateGeometry.card_asset_id).not.toBe(first.card_asset_id);
-
-    // A different handle mints a fresh badge instead of reusing the old one.
-    const other = await apply({ asset_id: firstAsset, handle: "other", mode: "overlay" });
-    expect(other.card_asset_id).not.toBe(first.card_asset_id);
-  });
-
-  it("separates platform badge caches and keeps legacy X badges reusable", async () => {
-    const assetId = await createRealVideoAsset();
-    const args = { asset_id: assetId, handle: "someone", include_qr: false, mode: "overlay" };
-    const x = await apply(args);
-    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(x.card_asset_id, "original");
-    if (!metadata.ok) throw new Error(metadata.error.message);
-    const legacy = { ...metadata.value };
-    delete legacy.platform;
-    delete legacy.include_platform_icon;
-    expect((await fs.metadata.artifacts.write(x.card_asset_id, "original", legacy)).ok).toBe(true);
-    expect((await apply(args)).card_asset_id).toBe(x.card_asset_id);
-    const tiktok = await apply({ ...args, platform: "tiktok", save_default: true });
-    expect(tiktok.card_asset_id).not.toBe(x.card_asset_id);
-    expect(tiktok).toMatchObject({ platform: "tiktok", include_platform_icon: true });
-    expect((await apply({ ...args, platform: "tiktok" })).card_asset_id).toBe(tiktok.card_asset_id);
-    const withoutIcon = await apply({ ...args, platform: "tiktok", include_platform_icon: false });
-    expect(withoutIcon.card_asset_id).not.toBe(tiktok.card_asset_id);
-    const tiktokPixels = await fs.files.read(tiktok.card_asset_id, "original.png");
-    const xPixels = await fs.files.read(x.card_asset_id, "original.png");
-    expect(tiktokPixels.ok && tiktokPixels.value).not.toEqual(xPixels.ok && xPixels.value);
-    expect(await readWatermarkConfig(fs, "tiktok")).toMatchObject({ savedHandle: "someone" });
-    expect(await readWatermarkConfig(fs)).toMatchObject({ savedHandle: null });
-  });
-
-  it("records handles and defaults to the saved handle", async () => {
-    const assetId = await createRealVideoAsset();
-    await apply({ asset_id: assetId, handle: "alice", save_default: true, mode: "overlay" });
-
-    const config = await readWatermarkConfig(fs);
-    expect(config.savedHandle).toBe("alice");
-    expect(config.recent[0]).toBe("alice");
-
-    const parsed = await apply({ asset_id: assetId, mode: "overlay" });
-    expect(parsed.handle).toBe("alice");
-  });
-
-  it("records handle placement and vertical padding on overlay cards", async () => {
-    const assetId = await createRealVideoAsset();
-    const parsed = await apply({
-      asset_id: assetId,
-      handle: "someone",
-      include_qr: true,
-      handle_position: "on-qr",
-      handle_padding_y: 64,
-      mode: "overlay",
-    });
-    expect(parsed.handle_position).toBe("on-qr");
-    expect(parsed.handle_padding_y).toBe(64);
-    const cardMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      parsed.card_asset_id,
-      "original",
-    );
-    if (!cardMeta.ok) throw new Error(cardMeta.error.message);
-    expect(cardMeta.value.handle_padding_y).toBe(64);
-    expect(cardMeta.value.height).toBe(644);
+    const parsed = await apply({ asset_id: assetId, wait: false, save_default: true });
+    expect(parsed.mode).toBe("burn");
+    expect(await queuedPayload(parsed.job_id)).toMatchObject({ type: "burn_watermark", assetId, handle: "alice" });
+    expect((await readWatermarkConfig(fs, "x")).profile?.mode).toBe("burn");
   });
 
   it("rejects non-video targets", async () => {
@@ -425,7 +213,7 @@ describe("apply_watermark tool", () => {
     const replay = await apply({ asset_id: assetId, platform: "tiktok", include_qr: true, wait: false });
     expect(replay).toMatchObject({ handle_end_seconds: 0.5, qr_start_seconds: 0.2, qr_end_seconds: 0.8 });
     expect((await readWatermarkConfig(fs, "tiktok")).profile?.qrLeadSeconds).toBeNull();
-    await apply({ asset_id: assetId, platform: "x", handle: "alice", save_default: true, mode: "overlay" });
+    await apply({ asset_id: assetId, platform: "x", handle: "alice", save_default: true, wait: false });
     expect((await readWatermarkConfig(fs, "tiktok")).profile).toMatchObject({ qrStartSeconds: 0.2, qrEndSeconds: 0.8 });
     expect(await readWatermarkConfig(fs, "x")).toMatchObject({
       savedHandle: "alice",

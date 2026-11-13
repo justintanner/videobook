@@ -17,13 +17,10 @@ import type {
   SubtitleStyle,
   SubtitlePosition,
   FontSizePreset,
-  OsgPosition,
-  OsgSize,
   BackgroundMode,
   Chunk,
   RenderInputProps,
 } from "../remotion/subtitles/types.js";
-import { resolveOsgImagePath } from "../osg-assets.js";
 import { claimLockedLease } from "./_lease.js";
 import { ensureElevenLabsTranscript } from "./_transcribe.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
@@ -87,15 +84,6 @@ type RenderProjectPayload = {
   audioFadeIn: number;
   audioFadeOut: number;
   audioVolume: number;
-  osgImagePath: string | null;
-  osgAssetId?: string | null;
-  osgPosition: OsgPosition;
-  osgSize: OsgSize;
-  osgScale?: number;
-  osgOpacity?: number;
-  osgStartSeconds?: number | null;
-  osgEndSeconds?: number | null;
-  osgTailSeconds?: number | null;
   keywordGraphicsEnabled?: boolean;
   keywordGraphicsMaxCount?: number;
   keywordGraphicsLingerSeconds?: number;
@@ -239,15 +227,6 @@ export function registerRenderProjectJob(engine: Engine): void {
       audioFadeIn,
       audioFadeOut,
       audioVolume,
-      osgImagePath: payloadOsgImagePath,
-      osgAssetId,
-      osgPosition,
-      osgSize,
-      osgScale,
-      osgOpacity,
-      osgStartSeconds,
-      osgEndSeconds,
-      osgTailSeconds,
       keywordGraphicsEnabled = false,
       keywordGraphicsMaxCount = DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
       keywordGraphicsLingerSeconds = DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
@@ -260,9 +239,6 @@ export function registerRenderProjectJob(engine: Engine): void {
     } = payload as RenderProjectPayload;
 
     let bundleDir: string;
-    let osgImagePath = payloadOsgImagePath;
-    let osgCopyName: string | null = null;
-    let osgCopyPath: string | null = null;
     try {
       ctx.signal.throwIfAborted();
       bundleDir = await Promise.race([
@@ -270,19 +246,6 @@ export function registerRenderProjectJob(engine: Engine): void {
         abortRace(ctx.signal),
       ]);
       ctx.signal.throwIfAborted();
-      if (!osgImagePath && osgAssetId) {
-        const resolved = await resolveOsgImagePath(engine, osgAssetId);
-        if (resolved.ok) {
-          osgImagePath = resolved.path;
-        } else {
-          logger.warn("overlay-skipped", { assetId: osgAssetId, error: resolved.error });
-        }
-      }
-      if (osgImagePath) {
-        osgCopyName = `osg-project-${Date.now()}${basename(osgImagePath).replace(/^[^.]*/, "")}`;
-        osgCopyPath = join(bundleDir, osgCopyName);
-        await copyFile(resolve(osgImagePath), osgCopyPath);
-      }
     } catch (error) {
       const assetIds = Array.isArray(assets)
         ? assets.flatMap((asset) => (asset && typeof asset.assetId === "string" ? [asset.assetId] : []))
@@ -306,302 +269,281 @@ export function registerRenderProjectJob(engine: Engine): void {
     const rendered: string[] = [];
     const failed: Array<{ assetId: string; error: string }> = [];
 
-    try {
-      for (const asset of assets) {
-        const playable = await clearRenderErrorIfPlayable(engine, asset.assetId);
-        try {
-          ctx.signal.throwIfAborted();
-          const claim = await claimLockedLease(
-            engine,
-            asset.assetId,
-            asset.assetDir,
-            "render",
-            { durationMs: LOCK_DURATION_MS, data: { state: `rendering-${orientation}` } },
-            { durationMs: LOCK_DURATION_MS, waitForActiveMs: CLAIM_WAIT_MS, meta: { orientation } },
-          );
-          if (!claim.ok) {
-            failed.push({ assetId: asset.assetId, error: claim.reason });
-            if (playable) await releaseQueuedRenderIfPlayable(engine, asset.assetId);
-            continue;
+    for (const asset of assets) {
+      const playable = await clearRenderErrorIfPlayable(engine, asset.assetId);
+      try {
+        ctx.signal.throwIfAborted();
+        const claim = await claimLockedLease(
+          engine,
+          asset.assetId,
+          asset.assetDir,
+          "render",
+          { durationMs: LOCK_DURATION_MS, data: { state: `rendering-${orientation}` } },
+          { durationMs: LOCK_DURATION_MS, waitForActiveMs: CLAIM_WAIT_MS, meta: { orientation } },
+        );
+        if (!claim.ok) {
+          failed.push({ assetId: asset.assetId, error: claim.reason });
+          if (playable) await releaseQueuedRenderIfPlayable(engine, asset.assetId);
+          continue;
+        }
+        const lease = { ownerId: claim.ownerId };
+        const heartbeat = setInterval(() => {
+          try {
+            engine.jobs.artifactWork.renew(asset.assetId, lease.ownerId, 60_000
+            );
+          } catch (error) {
+            logger.warn("heartbeat-failed", { assetId: asset.assetId, error });
           }
-          const lease = { ownerId: claim.ownerId };
-          const heartbeat = setInterval(() => {
-            try {
-              engine.jobs.artifactWork.renew(asset.assetId, lease.ownerId, 60_000
+        }, 20_000);
+        let renderSucceeded = false;
+
+        try {
+          const probe = await probeVideo(asset.videoPath, { signal: ctx.signal });
+          const durationInSeconds = probe.duration;
+          const fps = Math.round(probe.fps) || 30;
+          const durationInFrames = Math.max(1, Math.round(durationInSeconds * fps));
+
+          // Detect the transcript at render time rather than trusting the
+          // payload flag (captured at enqueue, before any auto-transcribe).
+          // When subtitles are requested but no transcript exists yet,
+          // transcribe inline under this asset's render lease.
+          let allSegments = null;
+          let rawTranscript: unknown = null;
+          if ((subtitlesEnabled || keywordGraphicsEnabled) && !(await engine.files.read(asset.assetId, "elevenlabs.json")).ok) {
+            await ensureElevenLabsTranscript(engine, asset.assetId);
+          }
+          const elevenlabsResult = await engine.files.read(asset.assetId, "elevenlabs.json");
+          if (elevenlabsResult.ok) {
+            rawTranscript = JSON.parse(elevenlabsResult.value.toString()) as unknown;
+            allSegments = await resolveSubtitleSegments(engine, asset.assetId, rawTranscript, subtitleLanguage, ctx.signal);
+          }
+
+          let chunks: Chunk[] = [];
+          if (subtitlesEnabled && allSegments && highlightStyle !== "alive") {
+            chunks = chunkSegments(allSegments, orientation, highlightStyle);
+          }
+          const captions = subtitlesEnabled && highlightStyle === "alive" && rawTranscript
+            ? await captionDocumentForRender(engine, asset.assetId, ORIENTATION_CAPTION_ASPECTS[orientation], ctx.signal)
+            : null;
+          const keywordSegments = rawTranscript ? parseKeywordTranscript(rawTranscript) : [];
+          const selectedKeywordGraphics = keywordGraphicsEnabled && rawTranscript
+            ? keywordGraphicsKeywords?.length
+              ? selectRequestedKeywordGraphics(keywordSegments, keywordGraphicsKeywords, {
+                  lingerSeconds: keywordGraphicsLingerSeconds,
+                }).graphics
+              : selectKeywordGraphics(keywordSegments, {
+                  maxCount: keywordGraphicsMaxCount,
+                  lingerSeconds: keywordGraphicsLingerSeconds,
+                })
+            : [];
+          let keywordGraphics = selectedKeywordGraphics;
+          let keywordGraphicsSkipped: string[] = [];
+          let keywordGraphicsPlacementFingerprint: string | null = null;
+          if (keywordGraphicsEnabled && rawTranscript && elevenlabsResult.ok) {
+            const manifestResult = await engine.files.manifest(asset.assetId);
+            if (!manifestResult.ok) throw new Error(manifestResult.error.message);
+            const sourceVideoFile = findVideoFile(manifestResult.value.files);
+            if (!sourceVideoFile) throw new Error(`No source video found for ${asset.assetId}`);
+            const fingerprint = keywordPlacementFingerprint(
+              sourceVideoFile,
+              elevenlabsResult.value,
+              selectedKeywordGraphics,
+            );
+            const analysis = await readKeywordPlacementAnalysis(engine, asset.assetId);
+            const valid = await isKeywordPlacementCacheValid(
+              engine,
+              asset.assetId,
+              analysis,
+              fingerprint,
+              selectedKeywordGraphics,
+            );
+            if (!analysis || !valid) {
+              throw new Error(
+                `Face-safe keyword placement is missing or stale for ${asset.assetId}. Run /keywords @${asset.assetId} again.`,
               );
-            } catch (error) {
-              logger.warn("heartbeat-failed", { assetId: asset.assetId, error });
             }
-          }, 20_000);
-          let renderSucceeded = false;
+            const resolved = resolveKeywordPlacements(
+              selectedKeywordGraphics,
+              analysis,
+              orientation,
+              {
+                subtitlesEnabled,
+                subtitlePosition: position,
+                subtitleStyle: highlightStyle,
+                subtitleFontSize: fontSize,
+              },
+            );
+            keywordGraphics = resolved.graphics;
+            keywordGraphicsSkipped = resolved.skipped;
+            keywordGraphicsPlacementFingerprint = analysis.fingerprint;
+          }
+
+          // Copy video into bundle dir
+          const videoCopyName = `source-${asset.assetId}-${Date.now()}${basename(asset.videoPath).replace(/^[^.]*/, "")}`;
+          const videoCopyPath = join(bundleDir, videoCopyName);
+          await copyFile(resolve(asset.videoPath), videoCopyPath);
 
           try {
-            const probe = await probeVideo(asset.videoPath, { signal: ctx.signal });
-            const durationInSeconds = probe.duration;
-            const fps = Math.round(probe.fps) || 30;
-            const durationInFrames = Math.max(1, Math.round(durationInSeconds * fps));
+            const inputProps: RenderInputProps = {
+              videoSrc: videoCopyName,
+              targetWidth,
+              targetHeight,
+              sourceWidth: probe.width,
+              sourceHeight: probe.height,
+              durationInFrames,
+              fps,
+              subtitlesEnabled,
+              chunks,
+              style: highlightStyle,
+              position,
+              fontSize,
+              textColor,
+              highlightColor,
+              audioFadeIn,
+              audioFadeOut,
+              audioVolume,
+              keywordGraphics,
+              backgroundMode,
+              strokeWidth,
+              strokeColor,
+              shadowBlur,
+              shadowOpacity,
+              captionDocument: captions?.document ?? null,
+              captionRegions: captions?.regions ?? [],
+            };
 
-            // Detect the transcript at render time rather than trusting the
-            // payload flag (captured at enqueue, before any auto-transcribe).
-            // When subtitles are requested but no transcript exists yet,
-            // transcribe inline under this asset's render lease.
-            let allSegments = null;
-            let rawTranscript: unknown = null;
-            if ((subtitlesEnabled || keywordGraphicsEnabled) && !(await engine.files.read(asset.assetId, "elevenlabs.json")).ok) {
-              await ensureElevenLabsTranscript(engine, asset.assetId);
-            }
-            const elevenlabsResult = await engine.files.read(asset.assetId, "elevenlabs.json");
-            if (elevenlabsResult.ok) {
-              rawTranscript = JSON.parse(elevenlabsResult.value.toString()) as unknown;
-              allSegments = await resolveSubtitleSegments(engine, asset.assetId, rawTranscript, subtitleLanguage, ctx.signal);
-            }
+            const outputPath = join(asset.assetDir, outputFilename);
 
-            let chunks: Chunk[] = [];
-            if (subtitlesEnabled && allSegments && highlightStyle !== "alive") {
-              chunks = chunkSegments(allSegments, orientation, highlightStyle);
-            }
-            const captions = subtitlesEnabled && highlightStyle === "alive" && rawTranscript
-              ? await captionDocumentForRender(engine, asset.assetId, ORIENTATION_CAPTION_ASPECTS[orientation], ctx.signal)
-              : null;
-            const keywordSegments = rawTranscript ? parseKeywordTranscript(rawTranscript) : [];
-            const selectedKeywordGraphics = keywordGraphicsEnabled && rawTranscript
-              ? keywordGraphicsKeywords?.length
-                ? selectRequestedKeywordGraphics(keywordSegments, keywordGraphicsKeywords, {
-                    lingerSeconds: keywordGraphicsLingerSeconds,
-                  }).graphics
-                : selectKeywordGraphics(keywordSegments, {
-                    maxCount: keywordGraphicsMaxCount,
-                    lingerSeconds: keywordGraphicsLingerSeconds,
-                  })
-              : [];
-            let keywordGraphics = selectedKeywordGraphics;
-            let keywordGraphicsSkipped: string[] = [];
-            let keywordGraphicsPlacementFingerprint: string | null = null;
-            if (keywordGraphicsEnabled && rawTranscript && elevenlabsResult.ok) {
-              const manifestResult = await engine.files.manifest(asset.assetId);
-              if (!manifestResult.ok) throw new Error(manifestResult.error.message);
-              const sourceVideoFile = findVideoFile(manifestResult.value.files);
-              if (!sourceVideoFile) throw new Error(`No source video found for ${asset.assetId}`);
-              const fingerprint = keywordPlacementFingerprint(
-                sourceVideoFile,
-                elevenlabsResult.value,
-                selectedKeywordGraphics,
-              );
-              const analysis = await readKeywordPlacementAnalysis(engine, asset.assetId);
-              const valid = await isKeywordPlacementCacheValid(
-                engine,
-                asset.assetId,
-                analysis,
-                fingerprint,
-                selectedKeywordGraphics,
-              );
-              if (!analysis || !valid) {
-                throw new Error(
-                  `Face-safe keyword placement is missing or stale for ${asset.assetId}. Run /keywords @${asset.assetId} again.`,
-                );
-              }
-              const resolved = resolveKeywordPlacements(
-                selectedKeywordGraphics,
-                analysis,
-                orientation,
-                {
-                  subtitlesEnabled,
-                  subtitlePosition: position,
-                  subtitleStyle: highlightStyle,
-                  subtitleFontSize: fontSize,
-                },
-              );
-              keywordGraphics = resolved.graphics;
-              keywordGraphicsSkipped = resolved.skipped;
-              keywordGraphicsPlacementFingerprint = analysis.fingerprint;
-            }
+            const browserExecutable = await renderBrowserExecutable();
+            const composition = await selectComposition({
+              serveUrl: bundleDir,
+              id: "render",
+              inputProps: inputProps as unknown as Record<string, unknown>,
+              timeoutInMilliseconds: 60_000,
+              ...(browserExecutable ? { browserExecutable } : {}),
+            });
+            ctx.signal.throwIfAborted();
 
-            // Copy video into bundle dir
-            const videoCopyName = `source-${asset.assetId}-${Date.now()}${basename(asset.videoPath).replace(/^[^.]*/, "")}`;
-            const videoCopyPath = join(bundleDir, videoCopyName);
-            await copyFile(resolve(asset.videoPath), videoCopyPath);
-
-            try {
-              const inputProps: RenderInputProps = {
-                videoSrc: videoCopyName,
-                targetWidth,
-                targetHeight,
-                sourceWidth: probe.width,
-                sourceHeight: probe.height,
-                durationInFrames,
-                fps,
-                subtitlesEnabled,
-                chunks,
-                style: highlightStyle,
-                position,
-                fontSize,
-                textColor,
-                highlightColor,
-                audioFadeIn,
-                audioFadeOut,
-                audioVolume,
-                osgSrc: osgCopyName,
-                osgPosition: osgPosition ?? "top-right",
-                osgSize: osgSize ?? "medium",
-                osgScale: osgScale ?? 1,
-                osgOpacity: osgOpacity ?? 1,
-                osgStartSeconds: osgStartSeconds ?? null,
-                osgEndSeconds: osgEndSeconds ?? null,
-                osgTailSeconds: osgTailSeconds ?? null,
-                keywordGraphics,
-                backgroundMode,
-                strokeWidth,
-                strokeColor,
-                shadowBlur,
-                shadowOpacity,
-                captionDocument: captions?.document ?? null,
-                captionRegions: captions?.regions ?? [],
-              };
-
-              const outputPath = join(asset.assetDir, outputFilename);
-
-              const browserExecutable = await renderBrowserExecutable();
-              const composition = await selectComposition({
+            await withRemotionCancellation(ctx.signal, (cancelSignal) =>
+              renderH264WithEncoderFallback((hardwareAcceleration) => renderMedia({
+                composition,
                 serveUrl: bundleDir,
-                id: "render",
+                codec: "h264",
+                outputLocation: outputPath,
                 inputProps: inputProps as unknown as Record<string, unknown>,
-                timeoutInMilliseconds: 60_000,
+                videoBitrate: "8M",
+                concurrency: 1,
+                hardwareAcceleration,
+                cancelSignal,
                 ...(browserExecutable ? { browserExecutable } : {}),
-              });
+              })),
+            );
+
+            // Extract first frame as {orientation}.jpg
+            const jpgFilename = outputFilename.replace(".mp4", ".jpg");
+            const jpgPath = join(asset.assetDir, jpgFilename);
+            try {
+              await runFfmpeg(["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", jpgPath], { signal: ctx.signal });
+            } catch {
               ctx.signal.throwIfAborted();
+            }
 
-              await withRemotionCancellation(ctx.signal, (cancelSignal) =>
-                renderH264WithEncoderFallback((hardwareAcceleration) => renderMedia({
-                  composition,
-                  serveUrl: bundleDir,
-                  codec: "h264",
-                  outputLocation: outputPath,
-                  inputProps: inputProps as unknown as Record<string, unknown>,
-                  videoBitrate: "8M",
-                  concurrency: 1,
-                  hardwareAcceleration,
-                  cancelSignal,
-                  ...(browserExecutable ? { browserExecutable } : {}),
-                })),
-              );
-
-              // Extract first frame as {orientation}.jpg
-              const jpgFilename = outputFilename.replace(".mp4", ".jpg");
-              const jpgPath = join(asset.assetDir, jpgFilename);
-              try {
-                await runFfmpeg(["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", jpgPath], { signal: ctx.signal });
-              } catch {
-                ctx.signal.throwIfAborted();
-              }
-
-              // Extract orientation frames at timestamps
-              const orientFramesDirName = `${orientation}_frames`;
-              const orientFramesDir = join(asset.assetDir, orientFramesDirName);
-              try {
-                await mkdir(orientFramesDir, { recursive: true });
-                const timestamps = generateTimestamps(durationInSeconds);
-                for (const ts of timestamps) {
-                  const framePath = join(orientFramesDir, `${formatTimestamp(ts)}.jpg`);
-                  try {
-                    await runFfmpeg([
-                      "-y", "-i", outputPath,
-                      "-ss", String(ts),
-                      "-frames:v", "1",
-                      "-q:v", "2",
-                      "-strict", "unofficial",
-                      framePath,
-                    ], { signal: ctx.signal });
-                  } catch {
-                    ctx.signal.throwIfAborted();
-                  }
+            // Extract orientation frames at timestamps
+            const orientFramesDirName = `${orientation}_frames`;
+            const orientFramesDir = join(asset.assetDir, orientFramesDirName);
+            try {
+              await mkdir(orientFramesDir, { recursive: true });
+              const timestamps = generateTimestamps(durationInSeconds);
+              for (const ts of timestamps) {
+                const framePath = join(orientFramesDir, `${formatTimestamp(ts)}.jpg`);
+                try {
+                  await runFfmpeg([
+                    "-y", "-i", outputPath,
+                    "-ss", String(ts),
+                    "-frames:v", "1",
+                    "-q:v", "2",
+                    "-strict", "unofficial",
+                    framePath,
+                  ], { signal: ctx.signal });
+                } catch {
+                  ctx.signal.throwIfAborted();
                 }
-              } catch {
-                ctx.signal.throwIfAborted();
               }
-
-              const renderedPaths = [outputFilename];
-              if ((await stat(jpgPath).catch(() => null))?.isFile()) {
-                renderedPaths.push(jpgFilename);
-              }
-              if (
-                (await stat(orientFramesDir).catch(() => null))?.isDirectory()
-              ) {
-                renderedPaths.push(orientFramesDirName);
-              }
-              await ingestWorkspaceOutputs(
-                engine,
-                asset.assetId,
-                renderedPaths,
-                "render",
-                { orientation },
-              );
-
-              const renderSettings = {
-                subtitlesEnabled,
-                subtitleLanguage,
-                highlightStyle,
-                position,
-                fontSize,
-                textColor,
-                highlightColor,
-                audioFadeIn,
-                audioFadeOut,
-                audioVolume,
-                backgroundMode,
-                strokeWidth,
-                strokeColor,
-                shadowBlur,
-                shadowOpacity,
-                osgImagePath: osgImagePath ?? undefined,
-                osgAssetId: osgAssetId ?? undefined,
-                osgPosition,
-                osgSize,
-                osgScale: osgScale ?? 1,
-                osgOpacity: osgOpacity ?? 1,
-                osgStartSeconds: osgStartSeconds ?? null,
-                osgEndSeconds: osgEndSeconds ?? null,
-                osgTailSeconds: osgTailSeconds ?? null,
-                keywordGraphicsEnabled,
-                keywordGraphicsMaxCount,
-                keywordGraphicsLingerSeconds,
-                keywordGraphicsKeywords,
-                keywordGraphicsPlacementFingerprint,
-                keywordGraphicsSkipped,
-                renderedAt: new Date().toISOString(),
-                outputs: [outputFilename, jpgFilename, orientFramesDirName],
-              };
-              await engine.metadata.artifacts.write(asset.assetId, `${orientation}.render`, renderSettings);
-
-              rendered.push(asset.assetId);
-              renderSucceeded = true;
-            } finally {
-              await unlink(videoCopyPath).catch(() => {});
+            } catch {
+              ctx.signal.throwIfAborted();
             }
+
+            const renderedPaths = [outputFilename];
+            if ((await stat(jpgPath).catch(() => null))?.isFile()) {
+              renderedPaths.push(jpgFilename);
+            }
+            if (
+              (await stat(orientFramesDir).catch(() => null))?.isDirectory()
+            ) {
+              renderedPaths.push(orientFramesDirName);
+            }
+            await ingestWorkspaceOutputs(
+              engine,
+              asset.assetId,
+              renderedPaths,
+              "render",
+              { orientation },
+            );
+
+            const renderSettings = {
+              subtitlesEnabled,
+              subtitleLanguage,
+              highlightStyle,
+              position,
+              fontSize,
+              textColor,
+              highlightColor,
+              audioFadeIn,
+              audioFadeOut,
+              audioVolume,
+              backgroundMode,
+              strokeWidth,
+              strokeColor,
+              shadowBlur,
+              shadowOpacity,
+              keywordGraphicsEnabled,
+              keywordGraphicsMaxCount,
+              keywordGraphicsLingerSeconds,
+              keywordGraphicsKeywords,
+              keywordGraphicsPlacementFingerprint,
+              keywordGraphicsSkipped,
+              renderedAt: new Date().toISOString(),
+              outputs: [outputFilename, jpgFilename, orientFramesDirName],
+            };
+            await engine.metadata.artifacts.write(asset.assetId, `${orientation}.render`, renderSettings);
+
+            rendered.push(asset.assetId);
+            renderSucceeded = true;
           } finally {
-            clearInterval(heartbeat);
-            if (renderSucceeded || playable) {
-              await engine.jobs.artifactWork.complete(asset.assetId, lease.ownerId);
-              await clearRenderError(engine, asset.assetId);
-            } else {
-              await engine.jobs.artifactWork.fail(asset.assetId, lease.ownerId, {
-                message: "render failed",
-              });
-            }
-            await engine.jobs.locks.release(asset.assetDir);
+            await unlink(videoCopyPath).catch(() => {});
           }
-        } catch (err) {
-          if (ctx.signal.aborted) {
-            if (playable) {
-              ctx.markAssetFailureHandled();
-              throw preserveArtifactState(err);
-            }
-            throw err;
+        } finally {
+          clearInterval(heartbeat);
+          if (renderSucceeded || playable) {
+            await engine.jobs.artifactWork.complete(asset.assetId, lease.ownerId);
+            await clearRenderError(engine, asset.assetId);
+          } else {
+            await engine.jobs.artifactWork.fail(asset.assetId, lease.ownerId, {
+              message: "render failed",
+            });
           }
-          failed.push({ assetId: asset.assetId, error: err instanceof Error ? err.message : String(err) });
+          await engine.jobs.locks.release(asset.assetDir);
         }
+      } catch (err) {
+        if (ctx.signal.aborted) {
+          if (playable) {
+            ctx.markAssetFailureHandled();
+            throw preserveArtifactState(err);
+          }
+          throw err;
+        }
+        failed.push({ assetId: asset.assetId, error: err instanceof Error ? err.message : String(err) });
       }
-    } finally {
-      if (osgCopyPath) await unlink(osgCopyPath).catch(() => {});
     }
 
     if (rendered.length === 0 && failed.length > 0) {

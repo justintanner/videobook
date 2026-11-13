@@ -490,7 +490,7 @@ describe("slash commands e2e", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect((result.content as TextContent)[0].text).toContain("requires image media");
+      expect((result.content as TextContent)[0].text).toContain("osg_asset_id");
     });
   });
 
@@ -1057,7 +1057,7 @@ describe("slash commands e2e", () => {
       });
       expect(result.isError).toBe(true);
       expect((result.content as TextContent)[0].text)
-        .toContain("osg_asset_id: Artifact not found");
+        .toContain("osg_asset_id");
     });
 
     it("renders with background_mode=black", async () => {
@@ -1618,84 +1618,6 @@ describe("slash commands e2e", () => {
         });
         expect(result.isError).toBeFalsy();
         expect(parseResult(result).status).toBe("enqueued");
-      }
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // 30. /render — OSG with valid image asset
-  // -----------------------------------------------------------------------
-  describe("/render with OSG image", () => {
-    it("renders with valid osg_asset_id", async () => {
-      const fs = createEngineForTest(tempDir);
-      // Create vid asset
-      const vid = await fs.artifacts.create("vid", "osg-vid");
-      if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.files.write(vid.value.artifactId, "original.mp4", Buffer.from("fake-mp4"));
-
-      // Create img asset for OSG
-      const img = await fs.artifacts.create("img", "logo");
-      if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.files.write(img.value.artifactId, "logo.png", Buffer.from("fake-png"));
-
-      const result = await client.callTool({
-        name: "render_video",
-        arguments: {
-          asset_id: vid.value.artifactId,
-          book_id: "test-proj",
-          osg_asset_id: img.value.artifactId,
-          osg_position: "bottom-left",
-        },
-      });
-      expect(result.isError).toBeFalsy();
-      const parsed = parseResult(result);
-      expect(parsed.status).toBe("enqueued");
-    });
-
-    it("errors for osg_asset_id with no image file", async () => {
-      const fs = createEngineForTest(tempDir);
-      const vid = await fs.artifacts.create("vid", "osg-vid2");
-      if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.files.write(vid.value.artifactId, "original.mp4", Buffer.from("fake-mp4"));
-
-      // Create img asset with only a text file (no actual image)
-      const img = await fs.artifacts.create("img", "no-image");
-      if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.files.write(img.value.artifactId, "notes.txt", "no image here");
-
-      const result = await client.callTool({
-        name: "render_video",
-        arguments: {
-          asset_id: vid.value.artifactId,
-          book_id: "test-proj",
-          osg_asset_id: img.value.artifactId,
-        },
-      });
-      expect(result.isError).toBe(true);
-      expect((result.content as TextContent)[0].text).toContain("No image file found");
-    });
-
-    it("accepts all four osg_position values", async () => {
-      const fs = createEngineForTest(tempDir);
-      const vid = await fs.artifacts.create("vid", "osg-pos-test");
-      if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.files.write(vid.value.artifactId, "original.mp4", Buffer.from("fake-mp4"));
-
-      const img = await fs.artifacts.create("img", "pos-logo");
-      if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.files.write(img.value.artifactId, "logo.png", Buffer.from("fake-png"));
-
-      for (const pos of ["top-left", "top-right", "bottom-left", "bottom-right"] as const) {
-        const result = await client.callTool({
-          name: "render_video",
-          arguments: {
-            asset_id: vid.value.artifactId,
-            book_id: "test-proj",
-            osg_asset_id: img.value.artifactId,
-            osg_position: pos,
-          },
-        });
-        expect(result.isError).toBeFalsy();
       }
     });
   });
@@ -2589,71 +2511,6 @@ describe("slash commands e2e", () => {
           audio_fade_in: 5000,
           audio_fade_out: 3000,
           audio_volume: 50,
-        },
-      });
-      expect(result.isError).toBeFalsy();
-    });
-
-    it("renders with OSG using .webp image", async () => {
-      const fs = createEngineForTest(tempDir);
-      const vid = await fs.artifacts.create("vid", "osg-webp");
-      if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.files.write(vid.value.artifactId, "original.mp4", Buffer.from("fake-mp4"));
-
-      const img = await fs.artifacts.create("img", "webp-logo");
-      if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.files.write(img.value.artifactId, "logo.webp", Buffer.from("fake-webp"));
-
-      const result = await client.callTool({
-        name: "render_video",
-        arguments: {
-          asset_id: vid.value.artifactId,
-          book_id: "test-proj",
-          osg_asset_id: img.value.artifactId,
-          osg_position: "top-left",
-        },
-      });
-      expect(result.isError).toBeFalsy();
-    });
-
-    it("renders with OSG using .svg image", async () => {
-      const fs = createEngineForTest(tempDir);
-      const vid = await fs.artifacts.create("vid", "osg-svg");
-      if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.files.write(vid.value.artifactId, "original.mp4", Buffer.from("fake-mp4"));
-
-      const img = await fs.artifacts.create("img", "svg-logo");
-      if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.files.write(img.value.artifactId, "icon.svg", Buffer.from("<svg></svg>"));
-
-      const result = await client.callTool({
-        name: "render_video",
-        arguments: {
-          asset_id: vid.value.artifactId,
-          book_id: "test-proj",
-          osg_asset_id: img.value.artifactId,
-          osg_position: "bottom-right",
-        },
-      });
-      expect(result.isError).toBeFalsy();
-    });
-
-    it("renders with OSG using .gif image", async () => {
-      const fs = createEngineForTest(tempDir);
-      const vid = await fs.artifacts.create("vid", "osg-gif");
-      if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.files.write(vid.value.artifactId, "original.mp4", Buffer.from("fake-mp4"));
-
-      const img = await fs.artifacts.create("img", "gif-logo");
-      if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.files.write(img.value.artifactId, "badge.gif", Buffer.from("GIF89a"));
-
-      const result = await client.callTool({
-        name: "render_video",
-        arguments: {
-          asset_id: vid.value.artifactId,
-          book_id: "test-proj",
-          osg_asset_id: img.value.artifactId,
         },
       });
       expect(result.isError).toBeFalsy();

@@ -107,8 +107,9 @@ export function toolInputJsonSchema(
 
 export function toolInputSchema(
   shape: ZodRawShape,
+  strict = false,
 ): StandardSchemaWithJSON<Record<string, unknown>> {
-  const standard = z.object(shape)["~standard"];
+  const standard = (strict ? z.strictObject(shape) : z.object(shape))["~standard"];
   const advertisedInputs = new Map<string, JsonSchema>();
   return {
     "~standard": {

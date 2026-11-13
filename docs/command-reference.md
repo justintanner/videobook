@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (214)
+## MCP endpoints (213)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
@@ -18,7 +18,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `analyze_video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.
 - `animate_keywords` — Turn transcript-timed keyword titles on or off for a video's renders, placed by vision away from faces, subtitles and on-screen text. Pass keywords for exact transcript words, or omit them for automatic picks.
 - `apply_sfx` — Generate ElevenLabs sound effects and mix them into a video's audio in place, one cue per entry at its timestamp and duration. Get entries from suggest_sfx.
-- `apply_watermark` — Burn the X or TikTok handle and an optional positioned QR code (off by default), or the platform's saved watermark template, onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued. mode=overlay stores a legacy render-time overlay instead.
+- `apply_watermark` — Burn the X or TikTok handle and an optional positioned QR code (off by default), or the platform's saved watermark template, onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued.
 - `archive_clip` — Save a URL or a video or audio asset to the global clip archive (B2 when configured, otherwise local), deduplicated by content and transcribed; restore it with restore_archive_clips.
 - `asset_history` — Get immutable Dolt revision history for an asset
 - `asset_manifest` — List all files in an asset directory
@@ -195,7 +195,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `set_notebook_cell_inputs` — Replace every media input of a generation cell in one step. Each input names its source cell, the port it fills (image, image_2, first_frame, last_frame, loop, keyframe, keyframe_2, video, audio, replace_audio, ...) and optional per-item params such as {timestamp_s: 4.7}. Unchanged connections keep their ids, moved inputs keep their params and prompt tokens, and non-media edges such as prompt inputs are left alone. An optional model validates and plans those ports for a draft picked in the inspector and is not saved.
 - `set_notebook_media_slot` — Attach or clear a passive notebook media slot
 - `set_timeline` — Replace a book's typed v2 timeline using stable artifact UUIDs
-- `set_video_overlay` — Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.
 - `slash_commands` — List the UI slash commands as command, description, aliases and the tool or UI action each runs; detail full returns the complete records the app renders (params, examples, icons).
 - `smooth_scene_concat` — Join two video scenes into a new video, aligning overlapping boundary audio to avoid repeated speech and dissolving across it, otherwise crossfading briefly.
 - `splice_video` — Join two or more videos in playback order into a new video. overlap 0 concatenates whole clips; a positive overlap cuts each boundary at the best-matching frame within that many seconds.
@@ -225,7 +224,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_graphics` — On-screen graphics drawn over a video: text blocks, images, QR codes and shades, each with a position, size, opacity and time window. get reads the saved layers, or the book's default look for a video without any (built in: the TikTok handle, an empty Thai title and an English line, no QR code), with the handle, profile URL and source credit to fill slots, the starter layouts, the book's saved templates, the latest render and any graphics already burned in; update saves edits or a replacement document against the revision from get; render burns the reviewed revision in the background into a new connected video cell (the source is kept) or into the source video in place; suggest (paid, one model call) offers headline options from the video's existing analysis, transcript and download text, or translations of the headline for the second line, for the operator to pick; check_placement says for free whether a layer covers a face or on-screen text already found in the video and where the clearest spot is, and detect_regions (paid when frames are unchecked) finds them first. Templates are named layouts saved per book: save_template, rename_template, delete_template, set_default_template (the look videos without graphics start from) and copy_templates (from another book, with the images they use). watermark: true edits the platform's watermark, what apply_watermark and goal finishing burn; save_watermark saves it as their watermark template and set_watermark_template picks a saved template instead. Videos only.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (265; 106 dedicated command routes)
+## Slash actions (264; 106 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
@@ -236,7 +235,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/analyze-music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.; MCP: `analyze_music`
 - `/analyze-video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.; MCP: `analyze_video`
 - `/apply-graphics-template` — Apply a saved or built-in look to selected videos. Replaces layers while keeping typed text by slot and each video's frame. Render creates a new video cell for each successful video.; MCP: `video_graphics`
-- `/apply-watermark` — Burn the X or TikTok handle and an optional positioned QR code (off by default), or the platform's saved watermark template, onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued. mode=overlay stores a legacy render-time overlay instead.; MCP: `apply_watermark`
+- `/apply-watermark` — Burn the X or TikTok handle and an optional positioned QR code (off by default), or the platform's saved watermark template, onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued.; MCP: `apply_watermark`
 - `/archive` — Archive a full video or audio asset to the global clip archive and transcribe it; MCP: `archive_clip`
 - `/archive-browse` — Open the clip archive browser, optionally with an initial search; UI: `open_archive`
 - `/archive-restore` — Restore archived clips into the current project by archive ID; MCP: `restore_archive_clips`
@@ -450,7 +449,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/set-notebook-cell-input` — Atomically replace or clear one named notebook cell input; MCP: `set_notebook_cell_input`
 - `/set-notebook-media-slot` — Attach or clear a passive notebook media slot; MCP: `set_notebook_media_slot`
 - `/set-timeline` — Replace a book's typed v2 timeline using stable artifact UUIDs; MCP: `set_timeline`
-- `/set-video-overlay` — Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.; MCP: `set_video_overlay`
 - `/settings` (aliases: `/settings-landscape`, `/settings-portrait`, `/settings-square`, `/bg`, `/audio-settings`) — Render settings for the open media: orientation (landscape, portrait, square), background (bg blur|black) and audio (volume, fade-in, fade-out); UI: `viewer_show_settings`
 - `/sfx` (aliases: `/suggest-sfx`, `/apply-sfx`, `/sound-effects`) — Sound effects: suggest placements for a video (/sfx @a1), add one with a time, type and description (/sfx @a1 2.5 whoosh fast transition), or review suggestions for the whole sequence when run bare; MCP: `suggest_sfx`
 - `/skeleton` — Review an AI pose skeleton guide generated from a reference image; UI: `extract_skeleton`

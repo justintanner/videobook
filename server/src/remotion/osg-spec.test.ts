@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  FADE_SECONDS,
-  osgAnchorPlacement,
-  osgFadeEnvelope,
-  osgMaxSize,
   osgPadding,
   resolveOsgWindow,
   scoreWatermarkCorners,
   scoreWatermarkCornersForCanvas,
   WATERMARK_CORNERS,
-  WATERMARK_MIN_DIM_FRACTION,
-  watermarkOsgScale,
   watermarkRectForCorner,
 } from "./osg-spec.js";
 import type { KeywordOccupiedRegion } from "./keyword-placement.js";
@@ -74,100 +68,6 @@ describe("resolveOsgWindow", () => {
       fps: FPS,
     });
     expect(inverted.endFrame).toBe(inverted.startFrame);
-  });
-});
-
-describe("osgFadeEnvelope", () => {
-  const fade = Math.round(FADE_SECONDS * FPS); // 12 frames
-
-  it("fades in at the start and stays opaque mid-clip", () => {
-    const window = fullWindow();
-    expect(osgFadeEnvelope(0, window, FPS)).toBe(0);
-    expect(osgFadeEnvelope(fade / 2, window, FPS)).toBeCloseTo(0.5, 5);
-    expect(osgFadeEnvelope(fade, window, FPS)).toBe(1);
-    expect(osgFadeEnvelope(DURATION / 2, window, FPS)).toBe(1);
-  });
-
-  it("fades out at the implicit end of the clip", () => {
-    const window = fullWindow();
-    expect(osgFadeEnvelope(DURATION - fade, window, FPS)).toBe(1);
-    expect(osgFadeEnvelope(DURATION - fade / 2, window, FPS)).toBeCloseTo(0.5, 5);
-    expect(osgFadeEnvelope(DURATION - 1, window, FPS)).toBeCloseTo(1 / fade, 5);
-  });
-
-  it("hard-gates frames outside the window", () => {
-    const window = resolveOsgWindow({
-      startSeconds: 2,
-      endSeconds: 4,
-      tailSeconds: null,
-      durationInFrames: DURATION,
-      fps: FPS,
-    });
-    expect(osgFadeEnvelope(59, window, FPS)).toBe(0);
-    expect(osgFadeEnvelope(90, window, FPS)).toBe(1);
-    // Explicit end fades out over the last FADE_SECONDS of the window…
-    expect(osgFadeEnvelope(119, window, FPS)).toBeCloseTo(1 / fade, 5);
-    // …and is hard-gated from the end frame on.
-    expect(osgFadeEnvelope(120, window, FPS)).toBe(0);
-    expect(osgFadeEnvelope(DURATION - 1, window, FPS)).toBe(0);
-  });
-
-  it("collapses gracefully on sub-second windows", () => {
-    const window = resolveOsgWindow({
-      startSeconds: 1,
-      endSeconds: 1.1,
-      tailSeconds: null,
-      durationInFrames: DURATION,
-      fps: FPS,
-    });
-    for (let frame = window.startFrame; frame < window.endFrame; frame++) {
-      const value = osgFadeEnvelope(frame, window, FPS);
-      expect(value).toBeGreaterThanOrEqual(0);
-      expect(value).toBeLessThanOrEqual(1);
-    }
-    expect(osgFadeEnvelope(window.endFrame, window, FPS)).toBe(0);
-  });
-});
-
-describe("osgAnchorPlacement", () => {
-  const PAD = 38;
-
-  it("maps every anchor to the expected edges", () => {
-    expect(osgAnchorPlacement("top-left", PAD)).toEqual({ top: PAD, left: PAD, transforms: [] });
-    expect(osgAnchorPlacement("top-right", PAD)).toEqual({ top: PAD, right: PAD, transforms: [] });
-    expect(osgAnchorPlacement("bottom-left", PAD)).toEqual({ bottom: PAD, left: PAD, transforms: [] });
-    expect(osgAnchorPlacement("bottom-right", PAD)).toEqual({ bottom: PAD, right: PAD, transforms: [] });
-    expect(osgAnchorPlacement("top-center", PAD)).toEqual({ top: PAD, left: "50%", transforms: ["translateX(-50%)"] });
-    expect(osgAnchorPlacement("bottom-center", PAD)).toEqual({ bottom: PAD, left: "50%", transforms: ["translateX(-50%)"] });
-    expect(osgAnchorPlacement("middle-left", PAD)).toEqual({ top: "50%", left: PAD, transforms: ["translateY(-50%)"] });
-    expect(osgAnchorPlacement("middle-right", PAD)).toEqual({ top: "50%", right: PAD, transforms: ["translateY(-50%)"] });
-    expect(osgAnchorPlacement("middle-center", PAD)).toEqual({
-      top: "50%",
-      left: "50%",
-      transforms: ["translateY(-50%)", "translateX(-50%)"],
-    });
-  });
-});
-
-describe("watermarkOsgScale", () => {
-  it("produces the same physical badge size on every orientation", () => {
-    for (const orientation of ["landscape", "portrait", "square"] as Orientation[]) {
-      const { width, height } = orientationDimensions(orientation);
-      const size = osgMaxSize(width, "medium", watermarkOsgScale(orientation));
-      expect(size).toBeCloseTo(Math.min(width, height) * WATERMARK_MIN_DIM_FRACTION, 0);
-    }
-  });
-
-  it("matches the derived per-orientation constants", () => {
-    expect(watermarkOsgScale("landscape")).toBeCloseTo(0.6429, 3);
-    expect(watermarkOsgScale("portrait")).toBeCloseTo(1.1429, 3);
-    expect(watermarkOsgScale("square")).toBeCloseTo(1.1429, 3);
-  });
-
-  it("clamps the user scale into the schema range", () => {
-    expect(watermarkOsgScale("portrait", 2)).toBe(2);
-    // landscape base 0.6429 × 0.1 = 0.0643 → clamped up to the 0.1 floor.
-    expect(watermarkOsgScale("landscape", 0.1)).toBe(0.1);
   });
 });
 

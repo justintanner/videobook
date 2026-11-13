@@ -1232,27 +1232,6 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(captured).toBe("blur");
     });
 
-    it("settings_osg dispatches (field, value)", () => {
-      let captured: [string, string] | undefined;
-      const map = { settings_osg: (f: string, v: string) => { captured = [f, v]; } };
-      const result = executeUiAction("settings_osg", map, {
-        raw: "position tl",
-        args: { field: "position", value: "tl" },
-      });
-      expect(result).toBe(true);
-      expect(captured).toEqual(["position", "tl"]);
-    });
-
-    it("settings_osg dispatches clear (value empty)", () => {
-      let captured: [string, string] | undefined;
-      const map = { settings_osg: (f: string, v: string) => { captured = [f, v]; } };
-      executeUiAction("settings_osg", map, {
-        raw: "clear",
-        args: { field: "clear" },
-      });
-      expect(captured).toEqual(["clear", ""]);
-    });
-
     it("returns false when action not in map", () => {
       const result = executeUiAction("settings_subs", {}, {
         raw: "on",

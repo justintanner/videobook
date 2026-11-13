@@ -20,7 +20,6 @@ type UiActionCallbacks = {
   settings_subs: (field: string, value: string) => void
   settings_audio: (field: string, value: string) => void
   settings_bg: (mode: string) => void
-  settings_osg: (field: string, value: string) => void
   open_cold_open: (assetId: string) => void
   open_watermark: (assetId: string) => void
   open_post_composer: (assetId: string, text: string) => void
@@ -92,9 +91,6 @@ export function executeUiAction(
       break
     case 'settings_bg':
       (callback as UiActionCallbacks['settings_bg'])(args.mode ?? '')
-      break
-    case 'settings_osg':
-      (callback as UiActionCallbacks['settings_osg'])(args.field ?? '', args.value ?? '')
       break
     case 'open_cold_open':
       (callback as UiActionCallbacks['open_cold_open'])(args.asset_ref ?? raw)

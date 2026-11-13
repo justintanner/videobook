@@ -391,7 +391,7 @@ describe('graphics editor in the composer', () => {
     await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
   })
 
-  it('opens from /graphics and /overlay, adds a named image once, and leaves set_video_overlay as a tool', async () => {
+  it('opens from /graphics and /overlay, adds a named image once', async () => {
     await command('/graphics @a1')
     await expect.poll(() => field('Headline').inputValue(), { timeout: 30_000 }).toBe(THAI_TITLE)
     await sheet().getByRole('button', { name: /^Close/ }).click()
@@ -405,8 +405,6 @@ describe('graphics editor in the composer', () => {
     await saved()
     expect((await read()).document.layers.filter((layer) => layer.kind === 'image')).toHaveLength(1)
     expect(await page.getByRole('dialog', { name: /overlay/i }).count()).toBe(0)
-    const overlay = await client!.callTool({ name: 'set_video_overlay', arguments: { book_id: bookId, asset_id: secondId, osg_asset_id: logoId, osg_position: 'top-right', osg_size: 'small' } })
-    expect(overlay.isError).not.toBe(true)
   })
 
   it('renders a new connected cell whose headline sits where the preview drew it', async () => {

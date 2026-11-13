@@ -21,30 +21,24 @@ import type {
   BurnWatermarkResult,
   WatermarkPlacementSource,
 } from "../jobs/burn-watermark.js";
-import type { OsgPlacementResult } from "../jobs/osg-placement.js";
 import {
   osgPlacementFingerprint,
   readOsgPlacementAnalysis,
 } from "../osg-placement-cache.js";
 import type { OsgPlacementAnalysis } from "../osg-placement-cache.js";
-import { writeOsgSettings } from "../osg-settings.js";
 import type { ArtifactManifestFile } from "videobook-engine";
 import { logger } from "../logger.js";
 import { queue } from "../queue.js";
 import {
   scoreWatermarkCornersForCanvas,
   WATERMARK_MIN_DIM_FRACTION,
-  WATERMARK_OSG_SIZE,
-  watermarkOsgScale,
 } from "../remotion/osg-spec.js";
-import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
+import type { OsgPosition } from "../remotion/subtitles/types.js";
 import {
-  createWatermarkAsset,
   DEFAULT_HANDLE_PADDING,
   DEFAULT_HANDLE_PADDING_Y,
   DEFAULT_HANDLE_ROUNDING,
   defaultUrl,
-  findWatermarkAsset,
   MAX_HANDLE_PADDING,
   MAX_HANDLE_ROUNDING,
   MIN_HANDLE_PADDING,
@@ -52,7 +46,6 @@ import {
   QR_ONLY_BADGE_ASPECT,
   watermarkBadgeAspect,
 } from "../watermark-badge.js";
-import type { WatermarkBadgeVariant } from "../watermark-badge.js";
 import { LIGHTNING_FADE_SECONDS, watermarkProfileToSave } from "../lightning-defaults.js";
 import { effectiveWatermarkProfile, normalizeHandle, readWatermarkConfig, recordHandle, saveWatermarkProfile } from "../watermark-config.js";
 import { effectiveWatermarkTiming, profileWatermarkTimes } from "../watermark-timing.js";
@@ -66,7 +59,6 @@ import type { ToolDef } from "./tool-def.js";
 import { requireArtifactKind } from "./_shared.js";
 import { waitForAssetReadyDef } from "./wait-for-asset-ready.js";
 
-const PLACEMENT_TIMEOUT_MS = 300_000;
 const BURN_TIMEOUT_MS = 600_000;
 const MAX_PLACEMENT_FRAMES = 8;
 const WATERMARK_POSITIONS = [
@@ -81,29 +73,11 @@ const DEFAULT_POSITION: OsgPosition = "bottom-right";
 
 type WatermarkPositionOption = "auto" | OsgPosition;
 type PlacementScaling = { aspect: number; userScale: number };
-type OverlayPlacement = {
-  positions: Record<Orientation, OsgPosition>;
-  placementSource: WatermarkPlacementSource;
-  jobId?: string;
-};
 type BurnPlacement = {
   corner: OsgPosition;
   placementSource: WatermarkPlacementSource;
   visionRequest: BurnWatermarkPlacementRequest | null;
 };
-type WatermarkAssetAppearance = {
-  platform: WatermarkPlatform;
-  includePlatformIcon: boolean;
-  includeHandleBorder: boolean;
-  handlePadding: number;
-  handlePaddingY: number;
-  handleRounding: number;
-};
-
-type WatermarkAssetResolution =
-  | { ok: true; assetId: string }
-  | { ok: false; error: string };
-
 type ApplyWatermarkArgs = {
   book_id: string;
   asset_id: string;
@@ -131,15 +105,11 @@ type ApplyWatermarkArgs = {
   scale?: number;
   card_asset_id?: string;
   source_asset_id?: string;
-  mode?: "burn" | "overlay";
+  mode?: "burn";
   wait?: boolean;
 };
 
 type ToolError = { isError: true; content: Array<{ type: "text"; text: string }> };
-
-function uniformPositions(position: OsgPosition): Record<Orientation, OsgPosition> {
-  return { landscape: position, portrait: position, square: position };
-}
 
 function watermarkTimingError(
   fieldPrefix: "qr" | "handle",
@@ -152,30 +122,6 @@ function watermarkTimingError(
     : null;
 }
 
-function watermarkVariantForApply(
-  mode: "burn" | "overlay",
-  includeQr: boolean,
-  includeHandle: boolean,
-): WatermarkBadgeVariant {
-  if (includeQr && !includeHandle) return "qr";
-  if (!includeQr) return "handle";
-  return mode === "burn" ? "qr" : "combined";
-}
-
-async function resolveWatermarkAsset(
-  engine: Engine,
-  handle: string,
-  url: string,
-  variant: WatermarkBadgeVariant,
-  appearance: WatermarkAssetAppearance,
-): Promise<WatermarkAssetResolution> {
-  const options = { variant, ...appearance };
-  const existing = await findWatermarkAsset(engine, handle, url, options);
-  if (existing) return { ok: true, assetId: existing };
-  return createWatermarkAsset(engine, handle, url, options);
-}
-
-/** Coarse fallback: the corner analyze-video recommended for this clip. */
 async function readRecommendedOsgPosition(engine: Engine, assetId: string): Promise<OsgPosition | null> {
   const result = await engine.files.read(assetId, ".original.analysis.json");
   if (!result.ok) return null;
@@ -212,53 +158,6 @@ function placementFingerprint(
     minDimFraction: WATERMARK_MIN_DIM_FRACTION,
     userScale: scaling.userScale,
   });
-}
-
-/**
- * Overlay placement: per-orientation corners. Never fails on placement
- * problems — degrade: cache → vision job → analyze-video recommendation →
- * bottom-right.
- */
-async function resolveOverlayPlacement(
-  engine: Engine,
-  bookId: string,
-  assetId: string,
-  assetDir: string,
-  videoFile: ArtifactManifestFile,
-  position: WatermarkPositionOption,
-  scaling: PlacementScaling,
-): Promise<OverlayPlacement> {
-  if (position !== "auto") {
-    return { positions: uniformPositions(position), placementSource: "explicit" };
-  }
-  const frameNames = await listPlacementFrames(engine, assetId);
-  const fingerprint = placementFingerprint(videoFile, frameNames, scaling);
-  const cached = await readOsgPlacementAnalysis(engine, assetId);
-  if (cached && cached.fingerprint === fingerprint) {
-    return { positions: cached.positions, placementSource: "cached" };
-  }
-  if (getApiKey("OPENAI_API_KEY") && frameNames.length > 0) {
-    const jobId = `osg-placement-${assetId}-${Date.now()}`;
-    try {
-      await engine.jobs.failures.clear(assetId);
-      const result = await queue.enqueueAndWait<OsgPlacementResult>(jobId, {
-        type: "osg_placement",
-        assetId,
-        assetDir,
-        bookId,
-        fingerprint,
-        userScale: scaling.userScale,
-        badgeAspect: scaling.aspect,
-      }, PLACEMENT_TIMEOUT_MS);
-      return { positions: result.analysis.positions, placementSource: "vision", jobId };
-    } catch (err) {
-      logger.warn("watermark-placement-fallback", { assetId, error: err });
-    }
-  }
-  const recommended = await readRecommendedOsgPosition(engine, assetId);
-  return recommended
-    ? { positions: uniformPositions(recommended), placementSource: "analysis" }
-    : { positions: uniformPositions(DEFAULT_POSITION), placementSource: "default" };
 }
 
 async function scoreCachedCorner(
@@ -367,7 +266,7 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false 
   return {
     name: "apply_watermark",
     description:
-      "Burn the X or TikTok handle and an optional positioned QR code (off by default), or the platform's saved watermark template, onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued. mode=overlay stores a legacy render-time overlay instead.",
+      "Burn the X or TikTok handle and an optional positioned QR code (off by default), or the platform's saved watermark template, onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Video asset id to watermark"),
@@ -482,15 +381,16 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false 
         .optional()
         .describe("Video whose download source fills the credit line of a saved watermark template (default asset_id)"),
       mode: z
-        .enum(["burn", "overlay"])
+        .enum(["burn"])
         .optional()
-        .describe("burn (default): composite into the video file and reprocess; overlay: store render-time OSG settings only"),
+        .describe("burn (default): composite into the video file and reprocess"),
       wait: z
         .boolean()
         .optional()
         .describe("Burn mode: wait for the burn and reprocess to finish (default true). false returns status=accepted with the queue job_id as soon as the burn is queued"),
     },
     handler: async (args) => {
+      if (args.mode !== undefined && args.mode !== "burn") return toolError("Invalid mode: only burn is supported; use the graphics editor for a watermark draft");
       const input = args as ApplyWatermarkArgs;
       const {
         book_id,
@@ -525,7 +425,7 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false 
       const config = await readWatermarkConfig(engine, platform);
       const profile = effectiveWatermarkProfile(config, platform);
       const mode = modeArg ?? profile.mode;
-      const template = mode === "burn" ? watermarkGraphicsTemplate(engine, platform) : null;
+      const template = watermarkGraphicsTemplate(engine, platform);
       const draws = template ? watermarkTemplateDraws(template.document) : null;
       const include_qr = input.include_qr ?? draws?.qr ?? false;
       const include_handle = input.include_handle ?? draws?.handle ?? true;
@@ -587,14 +487,6 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false 
         }
         if (include_qr) effectiveWatermarkTiming("QR watermark", video.videoDuration, resolvedQrStartSeconds, resolvedQrEndSeconds);
         if (include_handle) effectiveWatermarkTiming("Handle watermark", video.videoDuration, resolvedHandleStartSeconds, resolvedHandleEndSeconds);
-        if (mode === "overlay" && include_qr && include_handle && (
-          (resolvedQrStartSeconds ?? 0) !== (resolvedHandleStartSeconds ?? 0)
-          || Math.min(resolvedQrEndSeconds ?? video.videoDuration, video.videoDuration)
-            !== Math.min(resolvedHandleEndSeconds ?? video.videoDuration, video.videoDuration)
-          || resolvedQrOpacity !== resolvedHandleOpacity
-        )) {
-          throw new Error("Independent QR and handle timing or opacity requires mode=burn");
-        }
       } catch (error) {
         return toolError(error instanceof Error ? error.message : String(error));
       }
@@ -609,14 +501,6 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false 
       const resolvedHandlePosition: WatermarkHandlePlacement = include_qr
         ? handle_position
         : "center";
-      const appearance: WatermarkAssetAppearance = {
-        platform,
-        includePlatformIcon,
-        includeHandleBorder: include_handle_border,
-        handlePadding: handle_padding,
-        handlePaddingY: handle_padding_y,
-        handleRounding: handle_rounding,
-      };
       const savedProfile = watermarkProfileToSave(profile, {
         handle: resolvedHandle,
         profileUrl: resolvedUrl,
@@ -640,7 +524,7 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false 
         handleEndSeconds: resolvedHandleEndSeconds,
       });
 
-      const variant = watermarkVariantForApply(mode, include_qr, include_handle);
+      const variant = include_qr ? "qr" : "handle";
       if (card_asset_id) {
         const cardGate = await requireArtifactKind(engine, card_asset_id, ["image"], "card_asset_id");
         if (cardGate) return cardGate;
@@ -675,50 +559,6 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false 
         handle_start_seconds: include_handle ? resolvedHandleStartSeconds ?? null : null,
         handle_end_seconds: include_handle ? resolvedHandleEndSeconds ?? null : null,
       };
-
-      if (mode === "overlay") {
-        const cardAsset = card_asset_id
-          ? { ok: true as const, assetId: card_asset_id }
-          : await resolveWatermarkAsset(engine, resolvedHandle, resolvedUrl, variant, appearance);
-        if (!cardAsset.ok) return toolError(cardAsset.error);
-        const cardAssetId = cardAsset.assetId;
-        const overlayOpacity = include_qr ? resolvedQrOpacity : resolvedHandleOpacity;
-        const overlayStartSeconds = include_qr ? resolvedQrStartSeconds : resolvedHandleStartSeconds;
-        const overlayEndSeconds = include_qr ? resolvedQrEndSeconds : resolvedHandleEndSeconds;
-        const placement = await resolveOverlayPlacement(
-          engine, book_id, asset_id, assetDir, videoFile, position, scaling,
-        );
-        const written = await writeOsgSettings(engine, asset_id, (orientation) => ({
-          osgImagePath: null,
-          osgAssetId: cardAssetId,
-          osgPosition: placement.positions[orientation],
-          osgSize: WATERMARK_OSG_SIZE,
-          osgScale: watermarkOsgScale(orientation, scale),
-          osgOpacity: overlayOpacity,
-          osgStartSeconds: overlayStartSeconds ?? null,
-          osgEndSeconds: overlayEndSeconds ?? null,
-          osgTailSeconds: null,
-        }));
-        if (!written.ok) return toolError(written.error);
-        await recordHandle(resolvedHandle, { saveDefault: save_default, platform }, engine).catch(() => undefined);
-        if (save_default && resolvedHandle) {
-          await saveWatermarkProfile(savedProfile, platform, engine).catch(() => undefined);
-        }
-        return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              ...summary,
-              card_asset_id: cardAssetId,
-              ...(placement.jobId !== undefined ? { job_id: placement.jobId } : {}),
-              mode: "overlay",
-              opacity: overlayOpacity,
-              positions: placement.positions,
-              placement_source: placement.placementSource,
-            }),
-          }],
-        };
-      }
 
       const placement = await burnPlacementFor(engine, asset_id, videoFile, videoPath, {
         includeQr: include_qr,

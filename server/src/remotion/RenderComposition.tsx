@@ -3,7 +3,6 @@ import { AbsoluteFill } from "remotion";
 import type { RenderInputProps } from "./subtitles/types.js";
 import { BlurFillVideo } from "./BlurFillVideo.js";
 import { SubtitleOverlay } from "./subtitles/SubtitleOverlay.js";
-import { OsgOverlay } from "./OsgOverlay.js";
 import { KeywordGraphicsOverlay } from "./KeywordGraphicsOverlay.js";
 import { CaptionOverlay } from "./captions/CaptionOverlay.js";
 
@@ -21,14 +20,6 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
   audioFadeIn,
   audioFadeOut,
   audioVolume,
-  osgSrc,
-  osgPosition,
-  osgSize,
-  osgScale,
-  osgOpacity,
-  osgStartSeconds,
-  osgEndSeconds,
-  osgTailSeconds,
   keywordGraphics,
   backgroundMode,
   strokeWidth,
@@ -65,18 +56,6 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
           strokeColor={strokeColor}
           shadowBlur={shadowBlur}
           shadowOpacity={shadowOpacity}
-        />
-      )}
-      {osgSrc && (
-        <OsgOverlay
-          src={osgSrc}
-          position={osgPosition}
-          size={osgSize}
-          scale={osgScale}
-          opacity={osgOpacity}
-          startSeconds={osgStartSeconds}
-          endSeconds={osgEndSeconds}
-          tailSeconds={osgTailSeconds}
         />
       )}
       {keywordGraphics.length > 0 && (

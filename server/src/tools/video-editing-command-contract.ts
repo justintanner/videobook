@@ -174,7 +174,6 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "pad_video", exposure: "direct", command: "/pad", purpose: "Append black frames and silence" },
   { tool: "crop_asset", exposure: "ui", command: "/crop", purpose: "Interactive image or video crop" },
   { tool: "invert_image", exposure: "direct", command: "/invert", purpose: "Invert image colors" },
-  { tool: "set_video_overlay", exposure: "internal", purpose: "Configure the render-time on-screen graphic for render_video" },
   { tool: "animate_keywords", exposure: "direct", command: "/keywords", purpose: "Configure transcript-timed keyword graphics" },
   { tool: "caption_video", exposure: "ui", command: "/subs", purpose: "Prepare, edit and render TikTok-style subtitles in the composer" },
   { tool: "video_graphics", exposure: "ui", command: "/overlay", purpose: "Read, save, render and suggest text for a video's on-screen graphics layers" },

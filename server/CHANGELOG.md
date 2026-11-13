@@ -6,6 +6,15 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+
+- Removed `set_video_overlay`, the render-time image overlay, `render_video`'s
+  `osg_*` arguments, and `apply_watermark` mode `overlay`. External callers get
+  unknown-tool or invalid-argument errors. Use the graphics editor or watermark
+  burn instead. Stored overlay render settings are ignored; saved watermark
+  profiles with mode `overlay` use `burn`. `render_video` keeps subtitles and
+  keyword graphics and does not draw graphics documents.
+
 ### Changed
 
 - `/goal` shorts have no main character. Every image a brief mentions is a

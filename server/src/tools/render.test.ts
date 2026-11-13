@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { queue } from "../queue.js";
+import { queue, pauseBookQueueForTests } from "../queue.js";
 import { type Engine } from "videobook-engine";
 import type { Client } from "@modelcontextprotocol/client";
 
@@ -121,152 +121,37 @@ describe("render tool", () => {
     expect(payload.audioFadeOut).toBe(300);
   });
 
-  async function createWatermarkImageAsset(): Promise<string> {
-    const created = await fs.artifacts.create("img", "badge");
-    if (!created.ok) throw new Error(created.error.message);
-    const assetId = created.value.artifactId;
-    // Alphabetically the cover-crop preview sorts before the transparent
-    // source; the resolver must still pick original.png.
-    for (const name of ["landscape.jpg", "original.png", "portrait.jpg", "square.jpg"]) {
-      const write = await fs.files.write(assetId, name, Buffer.from(`fake-${name}`));
-      if (!write.ok) throw new Error(write.error.message);
-    }
-    return assetId;
-  }
-
-  it("resolves the OSG image to the original file, not a preview variant", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
-      id: 1,
-      operationId: "test-job",
-      type: "render_project",
-      artifactId: null,
-      externalTaskId: null,
-      state: "queued",
-      payload: {},
-      result: null,
-      attempts: 0,
-      maxAttempts: 1,
-      error: null,
-      enqueuedAt: 0,
-      startedAt: null,
-      finishedAt: null,
-      leaseExpiresAt: null,
-      fence: 0,
-    });
+  it.each([
+    ["osg_asset_id", "retired-image"],
+    ["osg_position", "top-right"],
+    ["osg_size", "medium"],
+    ["osg_scale", 1],
+    ["osg_opacity", 0.5],
+    ["osg_start_seconds", 0],
+    ["osg_end_seconds", 1],
+  ])("rejects retired %s arguments", async (key, value) => {
     const assetId = await createVideoAsset();
-    const osgAssetId = await createWatermarkImageAsset();
-
-    const result = await client.callTool({
-      name: "render_video",
-      arguments: {
-        asset_id: assetId,
-        book_id: bookId,
-        orientation: "landscape",
-        osg_asset_id: osgAssetId,
-        osg_opacity: 0.5,
-      },
-    });
-
-    expect(result.isError).toBeFalsy();
-    const payload = enqueue.mock.calls[0][1];
-    expect(String(payload.osgImagePath)).toMatch(/original\.png$/);
-    expect(payload.osgAssetId).toBe(osgAssetId);
-    expect(payload.osgOpacity).toBe(0.5);
+    const result = await client.callTool({ name: "render_video", arguments: { book_id: bookId, asset_id: assetId, [key]: value } });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain(key);
   });
 
-  it("falls back to stored per-orientation OSG settings when args omit them", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
-      id: 1,
-      operationId: "test-job",
-      type: "render_project",
-      artifactId: null,
-      externalTaskId: null,
-      state: "queued",
-      payload: {},
-      result: null,
-      attempts: 0,
-      maxAttempts: 1,
-      error: null,
-      enqueuedAt: 0,
-      startedAt: null,
-      finishedAt: null,
-      leaseExpiresAt: null,
-      fence: 0,
-    });
+  it("ignores stored overlays when enqueuing all orientations", async () => {
+    await pauseBookQueueForTests(fs.book.get().bookId);
     const assetId = await createVideoAsset();
-    const osgAssetId = await createWatermarkImageAsset();
-
-    const overlay = await client.callTool({
-      name: "set_video_overlay",
-      arguments: {
-        asset_id: assetId,
-        book_id: bookId,
-        osg_asset_id: osgAssetId,
-        osg_position: "top-right",
-        osg_positions: { landscape: "bottom-left", portrait: "top-left" },
-        osg_size: "medium",
-        osg_scale: 0.8,
-        osg_opacity: 0.5,
-      },
-    });
-    expect(overlay.isError).toBeFalsy();
-
-    const result = await client.callTool({
-      name: "render_video",
-      arguments: { asset_id: assetId, book_id: bookId },
-    });
-
-    expect(result.isError).toBeFalsy();
-    expect(enqueue).toHaveBeenCalledTimes(3);
-    const byOrientation = new Map(enqueue.mock.calls.map((call) => [call[1].orientation, call[1]]));
-    for (const [orientation, expected] of [
-      ["landscape", "bottom-left"],
-      ["portrait", "top-left"],
-      ["square", "top-right"],
-    ] as const) {
-      const payload = byOrientation.get(orientation);
-      expect(payload).toBeDefined();
-      if (!payload) return;
-      expect(payload.osgAssetId).toBe(osgAssetId);
-      expect(String(payload.osgImagePath)).toMatch(/original\.png$/);
-      expect(payload.osgPosition).toBe(expected);
-      expect(payload.osgScale).toBe(0.8);
-      expect(payload.osgOpacity).toBe(0.5);
+    for (const orientation of ["landscape", "portrait", "square"]) {
+      expect((await fs.metadata.artifacts.write(assetId, `${orientation}.render`, { osgAssetId: "missing-image", osgImagePath: "/missing.png", osgPosition: "bottom-left", osgOpacity: 0.5, keywordGraphicsEnabled: true })).ok).toBe(true);
     }
-  });
-
-  it("renders without an OSG when nothing is stored", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
-      id: 1,
-      operationId: "test-job",
-      type: "render_project",
-      artifactId: null,
-      externalTaskId: null,
-      state: "queued",
-      payload: {},
-      result: null,
-      attempts: 0,
-      maxAttempts: 1,
-      error: null,
-      enqueuedAt: 0,
-      startedAt: null,
-      finishedAt: null,
-      leaseExpiresAt: null,
-      fence: 0,
-    });
-    const assetId = await createVideoAsset();
-
-    const result = await client.callTool({
-      name: "render_video",
-      arguments: { asset_id: assetId, book_id: bookId, orientation: "landscape" },
-    });
-
+    const result = await client.callTool({ name: "render_video", arguments: { book_id: bookId, asset_id: assetId } });
     expect(result.isError).toBeFalsy();
-    const payload = enqueue.mock.calls[0][1];
-    expect(payload.osgAssetId).toBeNull();
-    expect(payload.osgImagePath).toBeNull();
-    expect(payload.osgPosition).toBe("top-right");
-    expect(payload.osgOpacity).toBe(1);
+    const jobs = fs.jobs.queue.list();
+    expect(jobs).toHaveLength(3);
+    for (const job of jobs) {
+      expect(Object.keys(job.payload).some((key) => key.startsWith("osg"))).toBe(false);
+      expect(job.payload).toMatchObject({ keywordGraphicsEnabled: true, subtitlesEnabled: false });
+    }
+    const settings = await client.callTool({ name: "get_render_settings", arguments: { book_id: bookId, asset_id: assetId } });
+    expect((settings.content as TextContent)[0].text).not.toContain("osg");
   });
 
   it("clears a stale error row so a re-render can claim the asset", async () => {

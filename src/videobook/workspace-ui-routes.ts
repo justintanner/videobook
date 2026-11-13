@@ -30,7 +30,6 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   open_rename_all: { kind: 'form', tool: 'rename_all' },
   open_crop: { kind: 'form', tool: 'crop_asset' },
   open_osg: { kind: 'graphics' },
-  settings_osg: { kind: 'form', tool: 'set_video_overlay' },
   settings_audio: { kind: 'form', tool: 'render_video' },
   settings_subs: { kind: 'form', tool: 'render_video' },
   settings_bg: { kind: 'form', tool: 'render_video' },

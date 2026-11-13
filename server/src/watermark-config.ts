@@ -144,7 +144,7 @@ export async function saveWatermarkProfile(
       savedHandle: handle ?? current.savedHandle,
       recent: current.recent,
       authenticatedHandle: current.authenticatedHandle,
-      profile: { ...current.profile, ...profile, ...(handle ? { handle } : {}) },
+      profile: { ...current.profile, ...profile, mode: "burn", ...(handle ? { handle } : {}) },
     };
     writeWatermarkConfig(engine, next, platform);
     return next;

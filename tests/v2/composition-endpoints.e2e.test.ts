@@ -200,40 +200,6 @@ describe('composition endpoints over HTTP MCP', () => {
     expect((await sharp(await frame(id, 2.9)).stats()).channels[0].mean).toBeGreaterThan(2)
   })
 
-  it.each(['qr', 'handle'])('preserves %s-specific timing and opacity in render overlay settings', async (element) => {
-    const id = await video()
-    await call('apply_watermark', { asset_id: id, handle: '  @cat_test  ', include_handle: element === 'handle', include_qr: element === 'qr', position: 'top-right', mode: 'overlay', [`${element}_start_seconds`]: 1, [`${element}_end_seconds`]: 2, [`${element}_opacity`]: 0.8 })
-    const stored = Object.values((await settings(id)).settings)
-    expect(stored).toHaveLength(3)
-    for (const value of stored) expect(value).toMatchObject({ osgOpacity: 0.8, osgStartSeconds: 1, osgEndSeconds: 2 })
-  })
-
-  it('rejects independent windows on a combined render overlay before creating badges', async () => {
-    const id = await video()
-    await rejectWithoutChanges('apply_watermark', id, { mode: 'overlay', include_qr: true, position: 'top-right', qr_start_seconds: 1, qr_end_seconds: 2 })
-  })
-
-  it('preserves and accurately reports overlay settings across partial updates and clearing', async () => {
-    const id = await video()
-    const badge = await picture('white')
-    const args = { asset_id: id, osg_asset_id: badge, osg_position: 'top-right', osg_size: 'small' }
-    await call('set_video_overlay', { ...args, osg_opacity: 0.35, osg_scale: 0.4, osg_start_seconds: 1, osg_end_seconds: 2 })
-    const updated = await call<{ osg: { scale: number; opacity: number } }>('set_video_overlay', { ...args, osg_position: 'bottom-left' })
-    expect(updated.osg).toMatchObject({ scale: 0.4, opacity: 0.35 })
-    for (const value of Object.values((await settings(id)).settings)) expect(value).toMatchObject({ osgOpacity: 0.35, osgScale: 0.4, osgStartSeconds: 1, osgEndSeconds: 2 })
-    await call('set_video_overlay', { ...args, osg_asset_id: null })
-    for (const value of Object.values((await settings(id)).settings)) expect(value).toMatchObject({ osgAssetId: null, osgStartSeconds: null, osgEndSeconds: null })
-  })
-
-  it('rejects non-image overlays and reversed merged timing without altering render settings', async () => {
-    const id = await video()
-    const badge = await picture('white')
-    const args = { osg_asset_id: badge, osg_position: 'top-right', osg_size: 'small' }
-    await call('set_video_overlay', { asset_id: id, ...args, osg_start_seconds: 1, osg_end_seconds: 2 })
-    await rejectWithoutChanges('set_video_overlay', id, { ...args, osg_asset_id: id })
-    await rejectWithoutChanges('set_video_overlay', id, { ...args, osg_end_seconds: 0.5 })
-  })
-
   it('crossfades differently sized scenes with a silent source and preserves original files', async () => {
     const first = await video('red', 2, 0)
     const second = await video('blue', 3, 3, '96x160', 30)

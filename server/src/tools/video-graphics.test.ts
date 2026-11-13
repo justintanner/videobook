@@ -357,7 +357,6 @@ describe("video_graphics", () => {
       command: "/overlay",
       purpose: "Read, save, render and suggest text for a video's on-screen graphics layers",
     });
-    expect(VIDEO_EDITING_TOOL_CONTRACTS.find((contract) => contract.tool === "set_video_overlay")).toMatchObject({ exposure: "internal" });
   });
   it("persists frame-only edits with revision checks and keeps templates aspect-free", async () => {
     const assetId = await video({ width: 640, height: 360 });

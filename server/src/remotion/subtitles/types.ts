@@ -26,7 +26,6 @@ export type OsgPosition =
   | "top-left" | "top-center" | "top-right"
   | "middle-left" | "middle-center" | "middle-right"
   | "bottom-left" | "bottom-center" | "bottom-right";
-export type OsgSize = "small" | "medium" | "large";
 export type BackgroundMode = "blur" | "black";
 export type KeywordGraphicAnchor =
   | "upper-left"
@@ -67,14 +66,6 @@ export interface RenderInputProps extends Record<string, unknown> {
   audioFadeIn: number;
   audioFadeOut: number;
   audioVolume: number;
-  osgSrc: string | null;
-  osgPosition: OsgPosition;
-  osgSize: OsgSize;
-  osgScale: number;
-  osgOpacity: number;
-  osgStartSeconds: number | null;
-  osgEndSeconds: number | null;
-  osgTailSeconds: number | null;
   keywordGraphics: KeywordGraphic[];
   backgroundMode: BackgroundMode;
   strokeWidth: number;
