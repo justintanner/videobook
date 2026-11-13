@@ -94,6 +94,7 @@ export type GoalShortContent = {
   draft: GoalShortDraft | null;
   plan: GoalShortPlan | null;
   estimate: GoalEstimates;
+  notes: string[];
 };
 
 const KEY = "application.goals.v2";
@@ -169,6 +170,10 @@ export function readGoalCell(engine: Engine, goal: GoalRecord): NotebookCell | n
   return findGoalCell(notebook.value, goal);
 }
 
+function notesFrom(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
 export function goalShortContent(cell: NotebookCell): GoalShortContent {
   const inputs = cell.inputs ?? {};
   const draft = goalShortDraftSchema.safeParse(inputs.draft);
@@ -179,6 +184,7 @@ export function goalShortContent(cell: NotebookCell): GoalShortContent {
     draft: draft.success ? draft.data : null,
     plan: plan.success ? plan.data : null,
     estimate: estimatesFrom(inputs.estimate),
+    notes: notesFrom(inputs.notes),
   };
 }
 
@@ -215,7 +221,7 @@ function shortTileText(content: GoalShortContent): { label: string; prompt: stri
 }
 
 function shortTileInputs(goalId: string, content: GoalShortContent): Record<string, unknown> {
-  return { goalId, revision: content.revision, plan: content.plan, draft: content.draft, estimate: content.estimate };
+  return { goalId, revision: content.revision, plan: content.plan, draft: content.draft, estimate: content.estimate, notes: content.notes };
 }
 
 function shortTileSources(content: GoalShortContent): GoalTileSource[] {

@@ -98,6 +98,7 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
   const shownError = duration == null ? null : coldOpenRangeError(shownStart, shownEnd, duration)
   const canFinish = Boolean(sourceId) && duration != null && !shownError && !dirty && !disabled && !running && !finishing && (goal.status === 'review' || goal.status === 'completed' || finishFailed)
   const totalSeconds = goalPlanSeconds(plan)
+  const notes = goal.notes ?? []
   const beatLimit = Math.min(15, 60 - totalSeconds)
   const canAddBeat = plan.segments.length < 4 && beatLimit >= 2
   const saved = async () => dirty ? shortSnapshot(await onAction({ action: 'update', revision: goal.revision, plan: draft })) : goal
@@ -156,6 +157,7 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
       {TABS.map(([id, label]) => <button key={id} type="button" className="goal-panel-button" aria-pressed={view === id} onClick={() => openTab(id)}>{label}</button>)}
     </nav>
     <p className="goal-panel-muted">{plan.segments.length === 1 ? '1 clip' : `${plan.segments.length} clips`} · {totalSeconds}s · {plan.aspectRatio} · GPT Image 2.6 frame · H3 Max video</p>
+    {notes.length > 0 && <ul className="goal-short-notes" aria-label="Notes">{notes.map((note, index) => <li key={`${index}:${note}`}>{note}</li>)}</ul>}
     {running && <p role="status">{goal.stage === 'videos' ? 'Generating a clip.' : 'Generating the frame.'}</p>}
     {revising && <p role="status">Writing your feedback into {revising}, then generating…</p>}
     {view === 'character' && <>

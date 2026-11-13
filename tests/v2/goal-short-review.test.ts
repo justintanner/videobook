@@ -30,6 +30,16 @@ function button(html: string, label: string): string {
 const withFrame = { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', versions: 2 }]) }
 
 describe('GoalShortReview', () => {
+  it('lists adaptation notes above the plan', () => {
+    const note = '@a1 is a video, so its frame at 1.5 s (@c5) is the reference.'
+    const html = render(shortGoalFixture({ notes: [note, '@h8 is empty and was skipped.'] }))
+    expect(html.indexOf('aria-label="Notes"')).toBeGreaterThan(-1)
+    expect(html.indexOf('aria-label="Notes"')).toBeLessThan(html.indexOf('aria-label="Short title"'))
+    expect(html).toContain(note)
+    expect(html).toContain('@h8 is empty and was skipped.')
+    expect(render(shortGoalFixture())).not.toContain('aria-label="Notes"')
+  })
+
   it('opens on the frame with the four tabs, its estimate and the read-only rule lines', () => {
     const html = render(shortGoalFixture())
     for (const tab of ['Character', 'Frame', 'Video', 'Finish']) expect(html).toContain(`>${tab}</button>`)

@@ -5,9 +5,11 @@ import sharp from "sharp";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { v7 as uuidv7 } from "uuid";
 import type { Client } from "@modelcontextprotocol/client";
-import type { Engine } from "videobook-engine";
+import type { Engine, NotebookCell } from "videobook-engine";
+import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { waitForChainRun } from "../chain-executor.js";
 import { createEngineForTest } from "../engine.js";
+import { probeVideo } from "../ffmpeg.js";
 import { saveMainCharacter } from "../goal-short-character.js";
 import { SHORT_RULES } from "../goal-short-rules.js";
 import { createShortGoal, shortFingerprint } from "../goal-short-runtime.js";
@@ -168,15 +170,124 @@ describe("video_goal shorts", () => {
     expect(approved.shortPlan!.character.references).toEqual([expect.objectContaining({ artifactId: imageIds[0], slot: "@image1" })]);
   });
 
-  it("refuses a mentioned video by name and takes mentioned images as extra frame references", async () => {
-    const video = await engine.artifacts.create("video", "Street clip");
+  async function writeNotebook(cells: NotebookCell[]): Promise<void> {
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const written = await engine.notebooks.write({ ...notebook.value, cells });
+    if (!written.ok) throw new Error(written.error.message);
+  }
+
+  async function pinStairsVideo(): Promise<string> {
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const video = await engine.artifacts.create("video", "Stairs");
     if (!video.ok) throw new Error(video.error.message);
-    const inserted = await engine.notebooks.insertCell(notebookId, engine.notebooks.createCell({ type: "video", slot: { row: 0, column: 2 }, outputArtifactId: video.value.artifactId }));
-    if (!inserted.ok) throw new Error(inserted.error.message);
-    await expect(createShortGoal(engine, bookId, notebookId, { brief: `he waits by @a3, ${AUTHORED}`, requestId: uuidv7() }))
-      .rejects.toThrow("@a3 is a video. Use Extract frame on it and mention the frame image instead.");
-    const goal = await short(`he waits under @a2, ${AUTHORED}`);
-    expect(goal.shortPlan?.frame.references).toEqual([expect.objectContaining({ artifactId: imageIds[1], slot: "@image2" })]);
+    const file = await engine.files.writeFromPath(video.value.artifactId, "original.mp4", join(fixtures, "clip.mp4"));
+    if (!file.ok) throw new Error(file.error.message);
+    const videoCell = engine.notebooks.createCell({ type: "video", label: "Stairs", slot: { row: 0, column: 0 }, outputArtifactId: video.value.artifactId });
+    await writeNotebook([
+      ...notebook.value.cells.map((cell) => cell.outputArtifactId === imageIds[0] ? { ...cell, slot: { row: 1, column: 0 } } : cell),
+      videoCell,
+    ]);
+    return video.value.artifactId;
+  }
+
+  async function addArtifactCell(kind: "image" | "video" | "audio", slot: { row: number; column: number }, file?: { name: string; bytes: Buffer }): Promise<string> {
+    const created = await engine.artifacts.create(kind, `${kind} ${notebookGridTag(slot)}`);
+    if (!created.ok) throw new Error(created.error.message);
+    if (file) {
+      const written = await engine.files.write(created.value.artifactId, file.name, file.bytes);
+      if (!written.ok) throw new Error(written.error.message);
+    }
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const cell = engine.notebooks.createCell({ type: kind, label: created.value.label ?? kind, slot, outputArtifactId: created.value.artifactId });
+    await writeNotebook([...notebook.value.cells, cell]);
+    return created.value.artifactId;
+  }
+
+  it("extracts a frame from a mentioned video and reuses that frame cell", async () => {
+    const videoId = await pinStairsVideo();
+    const goal = await short(`12 seconds, use @a1 at 2s and @a2, ${AUTHORED}`);
+    const frame = goal.shortPlan!.frame.references[0]!;
+    expect(goal.shortPlan!.frame.references.map((reference) => reference.artifactId)).toEqual([frame.artifactId, imageIds[1]]);
+    expect(frame.label).toBe("Frame of @a1");
+    expect(goal.notes).toEqual([`@a1 is a video, so its frame at 2.0 s (${frame.address}) is the reference.`]);
+    const placed = engine.notebooks.read(notebookId);
+    if (!placed.ok) throw new Error(placed.error.message);
+    const videoCell = placed.value.cells.find((cell) => cell.outputArtifactId === videoId);
+    if (!videoCell) throw new Error("missing stairs video");
+    const videoAddress = notebookGridTag(videoCell.slot);
+    const again = await short(`12 seconds, use ${videoAddress} at 2s, ${AUTHORED}`);
+    expect(again.shortPlan!.frame.references.map((reference) => reference.artifactId)).toEqual([frame.artifactId]);
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    expect(notebook.value.cells.filter((cell) => cell.inputs?.mediaRole === "extract-frame-output")).toHaveLength(1);
+    expect(again.notes).toEqual([`${videoAddress} is a video, so its frame at 2.0 s (${again.shortPlan!.frame.references[0]!.address}) is the reference.`]);
+  });
+
+  it("makes a goal from a video mention and an image mention, including the operator's brief", async () => {
+    await pinStairsVideo();
+    const probed = await probeVideo(join(fixtures, "clip.mp4"));
+    const duration = probed.videoDuration || probed.duration;
+    stub.plannerAnswers = [{ title: "Slippery stairs", frame: "He stands at a rainy bus stop at dusk.", beats: ["He checks the road, then steps back from a splash."] }];
+    const planning = await invoke({ action: "create", brief: "use @a1 and @a2 to make a funny stairs are slippery video" });
+    expect(planning.status).toBe("planning");
+    expect(planning.shortPlan).toBeUndefined();
+    expect(planning.notes).toEqual([expect.stringMatching(/^@a1 is a video, so its frame at \d+\.\d s \(@[a-z]+\d+\) is the reference\.$/u)]);
+    await expect.poll(() => readGoal(engine, planning.goalId).status, { timeout: testBudget(30_000) }).toBe("review");
+    const goal = await status(planning.goalId);
+    const frame = goal.shortPlan!.frame.references[0]!;
+    const atSeconds = Number(goal.notes[0]!.match(/frame at (\d+\.\d) s/u)?.[1]);
+    expect(goal.notes).toEqual(planning.notes);
+    expect(goal.notes).toEqual([`@a1 is a video, so its frame at ${atSeconds.toFixed(1)} s (${frame.address}) is the reference.`]);
+    expect(atSeconds).toBeCloseTo(duration / 2, 1);
+    expect(goal.shortPlan!.frame.references.map((reference) => [reference.artifactId, reference.label])).toEqual([
+      [frame.artifactId, "Frame of @a1"],
+      [imageIds[1], "Character 2"],
+    ]);
+  });
+
+  it("skips unusable mentions with a note and keeps the first 12 images", async () => {
+    const png = await sharp({ create: { width: 32, height: 32, channels: 3, background: "#228844" } }).png().toBuffer();
+    const empty = notebookGridTag({ row: 7, column: 7 });
+    const audio = notebookGridTag({ row: 2, column: 0 });
+    const pending = notebookGridTag({ row: 2, column: 1 });
+    const unreadableVideo = notebookGridTag({ row: 2, column: 2 });
+    const unreadableImage = notebookGridTag({ row: 2, column: 3 });
+    await addArtifactCell("audio", { row: 2, column: 0 });
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    await writeNotebook([...notebook.value.cells, engine.notebooks.createCell({ type: "generate_image", label: "Pending", slot: { row: 2, column: 1 } })]);
+    await addArtifactCell("video", { row: 2, column: 2 });
+    await addArtifactCell("image", { row: 2, column: 3 });
+    const slots = Array.from({ length: 13 }, (_, index) => ({ row: 3 + Math.floor(index / 8), column: index % 8 }));
+    const images: string[] = [];
+    for (const slot of slots) images.push(await addArtifactCell("image", slot, { name: "original.png", bytes: png }));
+    const tags = slots.map((slot) => notebookGridTag(slot));
+    const goal = await short(`${empty} ${audio} ${pending} ${unreadableVideo} ${unreadableImage} ${tags.join(" ")}, ${AUTHORED}`);
+    expect(goal.notes).toEqual([
+      `${empty} is empty and was skipped.`,
+      `${audio} is audio and was skipped.`,
+      `${pending} has no output yet and was skipped.`,
+      `${unreadableVideo} is a video, but its frame could not be read, so it was skipped.`,
+      `${unreadableImage} has no readable image and was skipped.`,
+      `${tags[12]} was skipped because a short takes at most 12 mentioned images.`,
+    ]);
+    expect(goal.shortPlan!.frame.references.map((reference) => reference.artifactId)).toEqual(images.slice(0, 12));
+  });
+
+  it("loads a short saved before notes existed", async () => {
+    const goal = await short();
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    await writeNotebook(notebook.value.cells.map((cell) => {
+      if (cell.id !== goal.cellId) return cell;
+      const inputs = { ...cell.inputs };
+      delete inputs.notes;
+      return { ...cell, inputs };
+    }));
+    expect((await status(goal.goalId)).notes).toEqual([]);
   });
 
   it("fingerprints the frame and each segment by what they are made from", async () => {

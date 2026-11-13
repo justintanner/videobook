@@ -118,7 +118,7 @@ describe("plan_goal for a short", () => {
       extraReferences: [await reference(1)],
     };
     const goalId = uuidv7();
-    const cell = await createGoalShortCell(engine, notebookId, goalId, { brief, revision: 1, draft, plan: null, estimate: emptyGoalEstimates() });
+    const cell = await createGoalShortCell(engine, notebookId, goalId, { brief, revision: 1, draft, plan: null, estimate: emptyGoalEstimates(), notes: [] });
     const timestamp = new Date().toISOString();
     const goal = saveGoal(engine, {
       goalId, bookId: engine.book.get().bookId, notebookId, cellId: cell.id, requestId: goalId, status: "planning", planVersion: 4,

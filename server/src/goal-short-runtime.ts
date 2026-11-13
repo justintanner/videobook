@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { findPrimaryMediaFile, resolveNotebookCellArtifactId } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
-import { scanNotebookMentions } from "videobook-engine/notebook-mentions";
+import { scanNotebookMentions, type NotebookMention } from "videobook-engine/notebook-mentions";
 import { getApiKey } from "./api-key.js";
 import { getChainRun, preflightAndAccept, retryChainRun } from "./chain-executor.js";
 import type { ChainStep } from "./chain-plan.js";
@@ -15,6 +15,7 @@ import {
   shortTiming, withShortCharacterReferences, type GoalShortDraft, type GoalShortImageRef, type GoalShortPlan,
 } from "./goal-short-plan.js";
 import { shortAuthoredCopy, shortPlannerNeeded, shortTitle } from "./goal-short-planner.js";
+import { renderReferenceNotes, usableImageReference, type ReferenceNote } from "./goal-short-references.js";
 import { goalReferenceHashes } from "./goal-reference-images.js";
 import { goalStageAttempts } from "./goal-stills.js";
 import {
@@ -24,7 +25,6 @@ import {
 import { assessToolCallEstimate } from "./jobs/cost-estimate-assessment.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 import { mutateNotebook } from "./notebook-mutations.js";
-import { resolveNotebookPromptReferences } from "./notebook-reference-resolver.js";
 import { queue } from "./queue.js";
 
 type GoalArgs = Record<string, unknown>;
@@ -87,22 +87,39 @@ async function characterReferences(engine: Engine, notebookId: string, artifactI
   return Promise.all(artifactIds.map((artifactId) => imageReference(engine, artifactId, cellHolding(document, artifactId)!)));
 }
 
-async function briefReferences(engine: Engine, document: NotebookDocument, brief: string, characterIds: ReadonlySet<string>): Promise<ShortReference[]> {
-  if (scanNotebookMentions(brief).length === 0) return [];
-  const resolved = resolveNotebookPromptReferences({ engine, document, prompt: brief, requireMedia: true });
-  if (resolved.unresolved.length > 0) throw new Error(resolved.unresolved[0]!.message);
+function mentionTimestamp(brief: string, mention: NotebookMention): number | null {
+  const match = /^\s+at\s+(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/iu.exec(brief.slice(mention.end));
+  if (!match) return null;
+  const seconds = Number(match[1]);
+  return Number.isFinite(seconds) ? seconds : null;
+}
+
+async function briefReferences(engine: Engine, notebookId: string, brief: string, characterIds: ReadonlySet<string>): Promise<{ references: ShortReference[]; notes: ReferenceNote[] }> {
   const references: ShortReference[] = [];
-  for (const reference of resolved.resolved) {
-    if (characterIds.has(reference.artifactId) || references.some((item) => item.artifactId === reference.artifactId)) continue;
-    const artifact = engine.artifacts.get(reference.artifactId);
-    const cell = document.cells.find((candidate) => candidate.id === reference.cellId);
-    const kind = artifact.ok ? artifact.value.kind : null;
-    if (kind === "video") throw new Error(`${reference.mention} is a video. Use Extract frame on it and mention the frame image instead.`);
-    if (kind !== "image" || !cell) throw new Error(`${reference.mention} is not an image`);
-    references.push(await imageReference(engine, reference.artifactId, cell));
+  const notes: ReferenceNote[] = [];
+  const ignored = new Set(characterIds);
+  const seen = new Set<string>();
+  for (const mention of scanNotebookMentions(brief)) {
+    if (seen.has(mention.reference)) continue;
+    seen.add(mention.reference);
+    const result = await usableImageReference(engine, notebookId, mention.reference, {
+      accept: references.length < EXTRA_REFERENCE_LIMIT,
+      atSeconds: mentionTimestamp(brief, mention),
+      ignoreArtifactIds: ignored,
+      mention: mention.raw,
+    });
+    if (result.ignored) continue;
+    if (result.sourceArtifactId && (result.image || result.countable)) ignored.add(result.sourceArtifactId);
+    if (result.image) ignored.add(result.image.artifactId);
+    if (!result.image) {
+      if (result.countable) notes.push({ kind: "text", text: `${mention.raw} was skipped because a short takes at most ${EXTRA_REFERENCE_LIMIT} mentioned images.` });
+      else if (result.note) notes.push({ kind: "text", text: result.note });
+      continue;
+    }
+    references.push(result.image);
+    if (result.frame) notes.push({ kind: "frame", mention: mention.raw, cellId: result.frame.cellId, atSeconds: result.frame.atSeconds });
   }
-  if (references.length > EXTRA_REFERENCE_LIMIT) throw new Error(`A short takes at most ${EXTRA_REFERENCE_LIMIT} mentioned images, not ${references.length}.`);
-  return references;
+  return { references, notes };
 }
 
 async function priced(engine: Engine, step: ChainStep, refs: Record<string, string[]>): Promise<GoalEstimate> {
@@ -212,39 +229,46 @@ async function queueShortPlanning(engine: Engine, goal: GoalRecord): Promise<Goa
 export async function createShortGoal(engine: Engine, bookId: string, notebookId: string, input: { brief: string; requestId: string; plan?: GoalShortPlan }): Promise<GoalRecord> {
   const brief = input.brief;
   let content: GoalShortContent;
+  let referenceNotes: ReferenceNote[] = [];
   if (input.plan) {
     const plan = goalShortPlanSchema.parse(input.plan);
-    content = { brief, revision: 1, draft: null, plan, estimate: await estimateShort(engine, plan) };
+    content = { brief, revision: 1, draft: null, plan, estimate: await estimateShort(engine, plan), notes: [] };
   } else {
     const timing = shortTiming(brief);
     const planning = shortPlannerNeeded(brief, timing.segmentSeconds.length);
     const character = await reconcileMainCharacter(engine);
     const references = await characterReferences(engine, notebookId, character.referenceArtifactIds);
-    const extraReferences = await briefReferences(engine, readNotebook(engine, notebookId), brief, new Set(character.referenceArtifactIds));
+    const mentioned = await briefReferences(engine, notebookId, brief, new Set(character.referenceArtifactIds));
+    referenceNotes = mentioned.notes;
     const draft: GoalShortDraft = {
       aspectRatio: timing.aspectRatio,
       segmentSeconds: timing.segmentSeconds,
       character: { name: character.name, description: character.description, references },
-      extraReferences,
+      extraReferences: mentioned.references,
     };
     if (planning) {
-      content = { brief, revision: 1, draft, plan: null, estimate: emptyGoalEstimates() };
+      content = { brief, revision: 1, draft, plan: null, estimate: emptyGoalEstimates(), notes: [] };
     } else {
       const authored = shortAuthoredCopy(brief, timing.segmentSeconds.length);
       const framePrompt = authored.frame ?? "";
       const plan = buildGoalShortPlan({ ...draft, title: shortTitle(brief, framePrompt), framePrompt, beats: authored.beats.map((beat) => beat ?? "") });
-      content = { brief, revision: 1, draft, plan, estimate: await estimateShort(engine, plan) };
+      content = { brief, revision: 1, draft, plan, estimate: await estimateShort(engine, plan), notes: [] };
     }
   }
   const goalId = uuidv7();
   const cell = await createGoalShortCell(engine, notebookId, goalId, content);
   const timestamp = new Date().toISOString();
-  const goal = saveGoal(engine, {
+  const goal: GoalRecord = {
     goalId, bookId, notebookId, cellId: cell.id, requestId: input.requestId, status: content.plan ? "review" : "planning", planVersion: 4,
     stage: "frame", stages: {}, chainId: null, planningJobId: null, clipIds: [], trackId: null, assembly: null, error: null,
     dismissedAt: null, createdAt: timestamp, updatedAt: timestamp,
-  });
-  return content.plan ? goal : queueShortPlanning(engine, goal);
+  };
+  if (referenceNotes.length > 0) {
+    content = { ...content, notes: renderReferenceNotes(readNotebook(engine, notebookId), referenceNotes) };
+    await writeGoalShortContent(engine, goal, content);
+  }
+  const saved = saveGoal(engine, goal);
+  return content.plan ? saved : queueShortPlanning(engine, saved);
 }
 
 async function adoptCharacterReferences(engine: Engine, goal: GoalRecord, content: GoalShortContent & { plan: GoalShortPlan }) {

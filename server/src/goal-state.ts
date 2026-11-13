@@ -204,8 +204,8 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
   const cell = findGoalCell(document, goal);
   const short = cell ? goalShortContent(cell) : null;
   const content = short
-    ? { brief: short.brief, revision: short.revision, estimate: short.estimate }
-    : { brief: "", revision: 0, estimate: emptyGoalEstimates() };
+    ? { brief: short.brief, revision: short.revision, estimate: short.estimate, notes: short.notes }
+    : { brief: "", revision: 0, estimate: emptyGoalEstimates(), notes: [] };
   const stages = Object.fromEntries(Object.entries(goal.stages).map(([stage, run]) => [stage, {
     ...run,
     ...(stage === "videos" ? { attempts: goalStageAttempts(goal, "videos") } : {}),
