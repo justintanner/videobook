@@ -92,7 +92,7 @@ describe("check_goal_realism", () => {
     if (!notebook.ok) throw new Error(notebook.error.message);
     notebookId = notebook.value.id;
     const imageIds = await goalTestCharacters(engine, notebookId);
-    saveMainCharacter(engine, { referenceArtifactIds: [imageIds[0]!] });
+    await saveMainCharacter(engine, { referenceArtifactIds: [imageIds[0]!] }, notebookId);
   });
 
   afterEach(async () => {

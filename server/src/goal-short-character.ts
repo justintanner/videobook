@@ -2,11 +2,11 @@ import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { Engine, NotebookDocument } from "videobook-engine";
 import { resolveNotebookCellArtifactId } from "videobook-engine";
-import { notebookGridTag } from "videobook-engine/notebook-grid";
+import { notebookGridTag, parseNotebookGridAddress } from "videobook-engine/notebook-grid";
 import { getChainRun, preflightAndAccept } from "./chain-executor.js";
 import { goalShortPlanSchema, shortSheetStep } from "./goal-short-plan.js";
+import { renderReferenceNotes, usableImageReference, type ReferenceNote } from "./goal-short-references.js";
 import { assessToolCallEstimate } from "./jobs/cost-estimate-assessment.js";
-import { resolveNotebookArtifactReference } from "./notebook-reference-resolver.js";
 
 const MAIN_CHARACTER_KEY = "application.goal.main-character.v1";
 const REFERENCE_LIMIT = 4;
@@ -39,6 +39,7 @@ export type MainCharacterPatch = {
 export type MainCharacterView = {
   character: { name: string; description: string; silent: true };
   references: { artifactId: string; address: string | null; label: string | null }[];
+  notes: string[];
   sheet: {
     estimate: { usd: number | null; warnings: string[] };
     pending: MainCharacter["pending"];
@@ -80,21 +81,70 @@ function field(schema: z.ZodType<string>, value: string, message: string): strin
   return parsed.data;
 }
 
-function imageReferences(engine: Engine, ids: readonly string[]): string[] {
-  const unique = [...new Set(ids)];
-  if (unique.length > REFERENCE_LIMIT) {
-    throw new Error(`The main character takes at most ${REFERENCE_LIMIT} reference images, not ${unique.length}.`);
-  }
-  for (const id of unique) {
-    const artifact = engine.artifacts.get(id);
-    if (!artifact.ok) throw new Error(`Reference ${id} is not an image in this book.`);
-    if (artifact.value.kind !== "image") throw new Error(`Reference ${artifact.value.label || id} is a ${artifact.value.kind}, not an image.`);
-  }
-  return unique;
+function readNotebook(engine: Engine, notebookId: string): NotebookDocument {
+  const notebook = engine.notebooks.read(notebookId);
+  if (!notebook.ok) throw new Error(notebook.error.message);
+  return notebook.value;
 }
 
-export function saveMainCharacter(engine: Engine, patch: MainCharacterPatch): MainCharacter {
+function referenceMention(id: string): string {
+  const trimmed = id.trim();
+  return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
+}
+
+function characterReferenceTarget(document: NotebookDocument, id: string): { target: string; mention: string } {
+  const trimmed = id.trim();
+  const mention = referenceMention(trimmed);
+  const bare = trimmed.replace(/^@/u, "");
+  const slot = parseNotebookGridAddress(bare);
+  const cell = slot
+    ? document.cells.find((candidate) => candidate.slot.row === slot.row && candidate.slot.column === slot.column)
+    : document.cells.find((candidate) => candidate.id === bare || candidate.outputArtifactId === bare);
+  return { target: cell?.id ?? (slot ? mention : bare), mention };
+}
+
+async function imageReferences(engine: Engine, notebookId: string, ids: readonly string[]): Promise<{ artifactIds: string[]; notes: string[] }> {
+  const document = readNotebook(engine, notebookId);
+  const artifactIds: string[] = [];
+  const pending: ReferenceNote[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const { target, mention } = characterReferenceTarget(document, id);
+    if (seen.has(target)) continue;
+    seen.add(target);
+    const result = await usableImageReference(engine, notebookId, target, {
+      accept: artifactIds.length < REFERENCE_LIMIT,
+      mention,
+    });
+    if (result.ignored) continue;
+    if (result.image) {
+      if (artifactIds.includes(result.image.artifactId)) continue;
+      artifactIds.push(result.image.artifactId);
+      if (result.frame) pending.push({ kind: "frame", mention, cellId: result.frame.cellId, atSeconds: result.frame.atSeconds });
+      continue;
+    }
+    if (result.countable) pending.push({ kind: "text", text: `${mention} was skipped because the main character takes at most ${REFERENCE_LIMIT} reference images.` });
+    else if (result.note) pending.push({ kind: "text", text: result.note });
+  }
+  const notes = renderReferenceNotes(readNotebook(engine, notebookId), pending);
+  if (ids.length > 0 && artifactIds.length === 0) throw new Error(notes.join(" ") || "None of the character references could be used.");
+  return { artifactIds, notes };
+}
+
+export async function resolveCharacterReferences(engine: Engine, notebookId: string, ids: readonly string[]): Promise<{ artifactIds: string[]; notes: string[] }> {
+  return imageReferences(engine, notebookId, ids);
+}
+
+export async function saveMainCharacter(engine: Engine, patch: MainCharacterPatch, notebookId?: string): Promise<MainCharacter> {
   const current = readMainCharacter(engine);
+  let referenceArtifactIds: string[] | undefined;
+  if (patch.referenceArtifactIds !== undefined) {
+    if (patch.referenceArtifactIds.length === 0) referenceArtifactIds = [];
+    else {
+      if (!notebookId) throw new Error("Choose a notebook before saving character references.");
+      referenceArtifactIds = (await imageReferences(engine, notebookId, patch.referenceArtifactIds)).artifactIds;
+    }
+  }
   return writeMainCharacter(engine, {
     ...current,
     ...(patch.name === undefined ? {} : {
@@ -103,26 +153,13 @@ export function saveMainCharacter(engine: Engine, patch: MainCharacterPatch): Ma
     ...(patch.description === undefined ? {} : {
       description: field(characterFields.description, patch.description, "The main character's description must be 1 to 400 characters."),
     }),
-    ...(patch.referenceArtifactIds === undefined ? {} : { referenceArtifactIds: imageReferences(engine, patch.referenceArtifactIds) }),
+    ...(referenceArtifactIds === undefined ? {} : { referenceArtifactIds }),
   });
 }
 
 function cellAddress(document: NotebookDocument, artifactId: string): string | null {
   const cell = document.cells.find((candidate) => resolveNotebookCellArtifactId(document, candidate) === artifactId);
   return cell ? notebookGridTag(cell.slot) : null;
-}
-
-export function resolveCharacterReferences(engine: Engine, document: NotebookDocument, ids: readonly string[]): string[] {
-  return ids.map((id) => {
-    const resolved = resolveNotebookArtifactReference({ engine, documents: [document], reference: id });
-    if ("code" in resolved) throw new Error(resolved.message);
-    const artifact = engine.artifacts.get(resolved.artifactId);
-    const kind = artifact.ok ? artifact.value.kind : null;
-    if (kind === "video") throw new Error(`${resolved.mention} is a video. Choose an image cell, or use Extract frame on the video first.`);
-    if (kind !== "image") throw new Error(`${resolved.mention} is not an image.`);
-    if (cellAddress(document, resolved.artifactId) === null) throw new Error(`${resolved.mention} is not an image cell in this notebook.`);
-    return resolved.artifactId;
-  });
 }
 
 function sheetOutput(outputs: Record<string, unknown> | null): string | null {
@@ -209,6 +246,7 @@ export async function describeMainCharacter(engine: Engine, document: NotebookDo
       const artifact = engine.artifacts.get(artifactId);
       return { artifactId, address: cellAddress(document, artifactId), label: artifact.ok ? artifact.value.label ?? null : null };
     }),
+    notes: [],
     sheet: {
       estimate: { usd: estimate.available ? estimate.usd : null, warnings: estimate.warnings },
       pending: character.pending,

@@ -7,7 +7,7 @@ import { v7 as uuidv7 } from "uuid";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine, NotebookCell } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
-import { waitForChainRun } from "../chain-executor.js";
+import { getChainRun, waitForChainRun } from "../chain-executor.js";
 import { createEngineForTest } from "../engine.js";
 import { probeVideo } from "../ffmpeg.js";
 import { saveMainCharacter } from "../goal-short-character.js";
@@ -27,7 +27,7 @@ import type { ShortGoalSnapshot } from "./goal.js";
 
 const words = (count: number) => Array.from({ length: count }, (_, index) => `word${index}`).join(" ");
 const AUTHORED = 'he waits for a bus in the rain, frame: "He stands under a bus shelter at dusk." beat 1: "He checks the road for the bus."';
-const NO_CHARACTER_REFERENCE = "Give the main character a reference image first: generate a character sheet or choose image cells.";
+const NO_REFERENCE_NOTE = "No reference image for Main character, so the frame is generated from the description. Pick image cells or generate a character sheet to keep him the same across shorts.";
 const NO_FAL_KEY = "Set FAL_API_KEY in Settings before generating this stage";
 const NO_OPENAI_KEY = "Set OPENAI_API_KEY in Settings to revise with feedback, or edit the prompt and regenerate.";
 const PHONE_SENTENCE = /[^.\n]*\bphones?\b[^.\n]*/giu;
@@ -79,7 +79,7 @@ describe("video_goal shorts", () => {
     if (!notebook.ok) throw new Error(notebook.error.message);
     notebookId = notebook.value.id;
     imageIds = await goalTestCharacters(engine, notebookId);
-    saveMainCharacter(engine, { referenceArtifactIds: [imageIds[0]!] });
+    await saveMainCharacter(engine, { referenceArtifactIds: [imageIds[0]!] }, notebookId);
   });
 
   afterEach(async () => {
@@ -160,7 +160,7 @@ describe("video_goal shorts", () => {
   });
 
   it("prices the frame of a waiting short once the main character has an image, leaving its plan alone", async () => {
-    saveMainCharacter(engine, { referenceArtifactIds: [] });
+    await saveMainCharacter(engine, { referenceArtifactIds: [] });
     const goal = await short();
     expect(goal).toMatchObject({ mainCharacterReferences: 0, estimate: { frame: { usd: null } }, shortPlan: { character: { references: [] } } });
     await invoke({ action: "character", reference_ids: ["@a1"] });
@@ -383,18 +383,21 @@ describe("video_goal shorts", () => {
     expect(goal.estimate.total.usd).toBeCloseTo(0.21 + goal.estimate.videos.usd!);
   });
 
-  it("refuses the frame without a character reference, and copies the book's references at the first approval", async () => {
-    saveMainCharacter(engine, { referenceArtifactIds: [] });
+  it("approves a frame with no character reference from the saved description", async () => {
+    await saveMainCharacter(engine, { referenceArtifactIds: [] });
     const goal = await short();
     expect(goal.shortPlan?.character.references).toEqual([]);
-    expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: goal.revision })).toBe(NO_CHARACTER_REFERENCE);
-    expect(chainRuns()).toBe(0);
-    saveMainCharacter(engine, { referenceArtifactIds: [imageIds[1]!] });
     const started = await invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
-    expect(started.shortPlan?.character.references.map((reference) => [reference.artifactId, reference.slot])).toEqual([[imageIds[1], "@image1"]]);
-    await expect.poll(() => mediaJobs("fal:openai/gpt-image-2.6/sunburst/edit").length, { timeout: testBudget(15_000) }).toBe(1);
-    expect(mediaJobs("fal:openai/gpt-image-2.6/sunburst/edit")[0]!.payload).toMatchObject({ refs: { image: [imageIds[1]] } });
-    await settled(started);
+    expect(started.notes).toContain(NO_REFERENCE_NOTE);
+    expect(started.shortPlan?.character.references).toEqual([]);
+    expect(started.estimate.frame.usd).toBe(goal.estimate.frame.usd);
+    const step = getChainRun(engine, started.chainId!)?.steps.find((item) => item.id === "frame");
+    expect(step?.params).toMatchObject({
+      model: "fal:openai/gpt-image-2.6/sunburst/edit",
+      prompt: expect.stringContaining("Main character (a man in a green shirt): keep the face, hair, build and clothes exactly."),
+    });
+    expect(step?.params).not.toHaveProperty("refs");
+    expect(chainRuns()).toBe(1);
   });
 
   it("generates the frame and the base clip through fal, then opens the finish review on that clip", async () => {
@@ -500,6 +503,25 @@ describe("video_goal shorts", () => {
     const revised = await settled(await invoke({ action: "revise", goal_id: goal.goalId, revision: clip.revision, stage: "videos", index: 0, feedback: "No phone in his hand." }));
     expect(revised.shortPlan!.segments[0]!.prompt).toBe("He waits at the stop as a bus passes.");
     expect(String(stub.submissions.at(-1)!.body.prompt).match(PHONE_SENTENCE)).toEqual([SHORT_RULES.video.split(".")[0]]);
+  });
+
+  it("rewrites an @ mention in revise feedback and accepts 1000 characters", async () => {
+    const frame = await approved(await short());
+    stub.plannerAnswers = [{ prompt: "He stands under a bus shelter at dusk beside the painted figure." }];
+    const revised = await settled(await invoke({
+      action: "revise", goal_id: frame.goalId, revision: frame.revision, stage: "frame", feedback: "Stand closer to @a1, not @h8.",
+    }));
+    const rewritten = "Stand closer to Character 1, not h8.";
+    expect(revised.stages.frame!.outputs[0]!.versions[0]).toMatchObject({ feedback: rewritten });
+    const request = stub.plannerRequests.at(-1) as RewriteRequest;
+    expect(JSON.parse(request.input[0]!.content)).toMatchObject({ feedback: rewritten });
+    const long = "D".repeat(1000);
+    stub.plannerAnswers = [{ prompt: "He stands under a bus shelter at dusk beneath a darker sky." }];
+    const again = await settled(await invoke({
+      action: "revise", goal_id: frame.goalId, revision: revised.revision, stage: "frame", feedback: long,
+    }));
+    expect(again.stages.frame!.outputs[0]!.versions[0]).toMatchObject({ feedback: long });
+    expect(JSON.parse((stub.plannerRequests.at(-1) as RewriteRequest).input[0]!.content)).toMatchObject({ feedback: long });
   });
 
   it("revises the frame by rewriting its prompt, then makes the clip from the new frame", async () => {

@@ -76,7 +76,7 @@ describe("continuing a short with H3 Max Extend", () => {
     if (!notebook.ok) throw new Error(notebook.error.message);
     notebookId = notebook.value.id;
     const [character] = await goalTestCharacters(engine, notebookId);
-    saveMainCharacter(engine, { referenceArtifactIds: [character!] });
+    await saveMainCharacter(engine, { referenceArtifactIds: [character!] }, notebookId);
   });
 
   afterEach(async () => {

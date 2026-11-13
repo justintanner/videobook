@@ -13,6 +13,7 @@ import { createEngineForTest } from "../engine.js";
 import { forgetAsset } from "../forget-asset.js";
 import { readMainCharacter, saveMainCharacter, type MainCharacterView } from "../goal-short-character.js";
 import { createShortGoal } from "../goal-short-runtime.js";
+import { copyVideoFixture } from "../test-media-fixtures.js";
 import type { ShortGoalSnapshot } from "./goal.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
@@ -181,6 +182,7 @@ describe("video_goal character", () => {
     expect(await character()).toEqual({
       character: { name: "Main character", description: "a man in a green shirt", silent: true },
       references: [],
+      notes: [],
       sheet: { estimate: { usd: null, warnings: [expect.any(String)] }, pending: null, lastError: null },
     });
     expect(storedSetting()).toBeNull();
@@ -213,24 +215,65 @@ describe("video_goal character", () => {
     expect((JSON.parse(textOf(elsewhere)) as MainCharacterView).references.map((reference) => reference.address)).toEqual([null, null]);
   });
 
-  it("refuses a video cell, a missing cell, a cell from another notebook and a fifth reference without saving", async () => {
+  it("skips a character reference it cannot use, and saves nothing when none remain", async () => {
     const video = await engine.artifacts.create("video", "Street clip");
     if (!video.ok) throw new Error(video.error.message);
-    const inserted = await engine.notebooks.insertCell(notebookId, engine.notebooks.createCell({ type: "video", slot: { row: 0, column: 2 }, outputArtifactId: video.value.artifactId }));
+    const inserted = await engine.notebooks.insertCell(notebookId, engine.notebooks.createCell({ type: "video", label: "Street clip", slot: { row: 0, column: 2 }, outputArtifactId: video.value.artifactId }));
     if (!inserted.ok) throw new Error(inserted.error.message);
     const loose = await engine.artifacts.create("image", "Loose image");
     if (!loose.ok) throw new Error(loose.error.message);
-    expect(await refusal({ reference_ids: ["@a1", "@a3"] })).toBe("@a3 is a video. Choose an image cell, or use Extract frame on the video first.");
-    expect(await refusal({ reference_ids: ["@h8"] })).toBe("Notebook reference @h8 was not found");
-    expect(await refusal({ reference_ids: [loose.value.artifactId] })).toBe(`@${loose.value.artifactId} is not an image cell in this notebook.`);
-    expect(await refusal({ reference_ids: ["@a1", "@a2", "@a1", "@a2", "@a1"] })).toMatch(/Input validation error/u);
+    expect(await refusal({ reference_ids: ["@h8"] })).toBe("@h8 is empty and was skipped.");
+    expect(await refusal({ reference_ids: [loose.value.artifactId] })).toBe(`@${loose.value.artifactId} is not an image cell and was skipped.`);
+    expect(await refusal({ reference_ids: ["@a3"] })).toBe("@a3 is a video, but its frame could not be read, so it was skipped.");
+    await expect(saveMainCharacter(engine, { description: " " })).rejects.toThrow("The main character's description must be 1 to 400 characters.");
     expect(storedSetting()).toBeNull();
-    const extra = await Promise.all([1, 2, 3].map((index) => engine.artifacts.create("image", `Extra ${index}`)));
-    const ids = [...imageIds, ...extra.map((created) => created.ok ? created.value.artifactId : "")];
-    expect(() => saveMainCharacter(engine, { referenceArtifactIds: ids })).toThrow("The main character takes at most 4 reference images, not 5.");
-    expect(() => saveMainCharacter(engine, { referenceArtifactIds: [video.value.artifactId] })).toThrow("Reference Street clip is a video, not an image.");
-    expect(() => saveMainCharacter(engine, { description: " " })).toThrow("The main character's description must be 1 to 400 characters.");
-    expect(storedSetting()).toBeNull();
+    const mixed = await character({ reference_ids: ["@a1", "@h8", "@a3"] });
+    expect(mixed.references.map((reference) => reference.artifactId)).toEqual([imageIds[0]]);
+    expect(mixed.notes).toEqual([
+      "@h8 is empty and was skipped.",
+      "@a3 is a video, but its frame could not be read, so it was skipped.",
+    ]);
+  });
+
+  it("uses a video cell as a character reference by its extracted frame", async () => {
+    const clip = join(root, "street.mp4");
+    await copyVideoFixture({ width: 160, height: 90, durationSec: 2, fps: 12, source: "color", color: "green", audio: { frequency: 330 } }, clip);
+    const video = await engine.artifacts.create("video", "Street clip");
+    if (!video.ok) throw new Error(video.error.message);
+    const written = await engine.files.writeFromPath(video.value.artifactId, "original.mp4", clip);
+    if (!written.ok) throw new Error(written.error.message);
+    const inserted = await engine.notebooks.insertCell(notebookId, engine.notebooks.createCell({ type: "video", label: "Street clip", slot: { row: 0, column: 2 }, outputArtifactId: video.value.artifactId }));
+    if (!inserted.ok) throw new Error(inserted.error.message);
+    const saved = await character({ reference_ids: ["@a3"] });
+    expect(saved.references).toEqual([{
+      artifactId: expect.any(String),
+      address: expect.stringMatching(/^@[a-z]+\d$/u),
+      label: "Frame of @a3",
+    }]);
+    expect(saved.references[0]!.artifactId).not.toBe(video.value.artifactId);
+    expect(saved.notes).toEqual([`@a3 is a video, so its frame at 1.0 s (${saved.references[0]!.address}) is the reference.`]);
+    expect(readMainCharacter(engine).referenceArtifactIds).toEqual([saved.references[0]!.artifactId]);
+    expect(submissions).toEqual([]);
+  });
+
+  async function placedImage(column: number, label: string): Promise<string> {
+    const created = await engine.artifacts.create("image", label);
+    if (!created.ok) throw new Error(created.error.message);
+    const written = await engine.files.write(created.value.artifactId, "original.png", await sharp({ create: { width: 96, height: 128, channels: 3, background: "#888888" } }).png().toBuffer());
+    if (!written.ok) throw new Error(written.error.message);
+    const inserted = await engine.notebooks.insertCell(notebookId, engine.notebooks.createCell({ type: "image", label, slot: { row: 0, column }, outputArtifactId: created.value.artifactId }));
+    if (!inserted.ok) throw new Error(inserted.error.message);
+    return created.value.artifactId;
+  }
+
+  it("keeps the first four character references and notes the rest", async () => {
+    const extra = await Promise.all([2, 3, 4].map((column) => placedImage(column, `Extra ${column}`)));
+    const saved = await character({ reference_ids: ["@a1", "@a2", "@a3", "@a4", "@a5"] });
+    expect(saved.references.map((reference) => reference.artifactId)).toEqual([imageIds[0], imageIds[1], extra[0], extra[1]]);
+    expect(saved.notes).toEqual(["@a5 was skipped because the main character takes at most 4 reference images."]);
+    const repeated = await character({ reference_ids: ["@a1", "@a2", "@a1", "@a2", "@a1"] });
+    expect(repeated.references.map((reference) => reference.artifactId)).toEqual(imageIds);
+    expect(repeated.notes).toEqual([]);
   });
 
   it("refuses a character sheet without FAL_API_KEY before saving or creating a chain", async () => {

@@ -64,7 +64,7 @@ describe("goal finishing burns the saved watermark through the graphics renderer
     process.env.FAL_API_KEY = "test-goal-key";
     try {
       const character = notebook().cells.find((cell) => cell.type === "image" && cell.outputArtifactId)!.outputArtifactId!;
-      saveMainCharacter(engine, { referenceArtifactIds: [character] });
+      await saveMainCharacter(engine, { referenceArtifactIds: [character] }, notebookId);
       await pauseBookQueueForTests(bookId);
       const created = await createShortGoal(engine, bookId, notebookId, { brief: 'he waits, frame: "A bus stop at dusk." beat 1: "He checks the road."', requestId: uuidv7() });
       const frame = await approve(await status(created.goalId));

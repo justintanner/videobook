@@ -331,6 +331,15 @@ describe("compiled short steps", () => {
     expect((step.params as StepParams).prompt.endsWith(SHORT_RULES.frame)).toBe(true);
   });
 
+  it("describes the character from the saved name when the frame has no reference image", () => {
+    const step = compileShortFrameStep(shortPlan({ character: { ...CHARACTER, references: [] }, extraReferences: [] }));
+    expect(step.params).toEqual({
+      model: "fal:openai/gpt-image-2.6/sunburst/edit",
+      prompt: [FRAME_PROMPT, "Main character (a man in a green shirt): keep the face, hair, build and clothes exactly.", SHORT_RULES.frame].join("\n\n"),
+      options: { image_size: "portrait_16_9", quality: "high", output_format: "jpeg" },
+    });
+  });
+
   it("names one character reference as @image1 and three by all their slots, and leaves out the place line without extras", () => {
     const one = compileShortFrameStep(shortPlan({ character: { ...CHARACTER, references: [sheet] }, extraReferences: [] }));
     expect(one.params).toMatchObject({

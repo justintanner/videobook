@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { findPrimaryMediaFile, resolveNotebookCellArtifactId } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
-import { scanNotebookMentions, type NotebookMention } from "videobook-engine/notebook-mentions";
+import { replaceNotebookMentions, scanNotebookMentions, type NotebookMention } from "videobook-engine/notebook-mentions";
 import { getApiKey } from "./api-key.js";
 import { getChainRun, preflightAndAccept, retryChainRun } from "./chain-executor.js";
 import type { ChainStep } from "./chain-plan.js";
@@ -25,6 +25,7 @@ import {
 import { assessToolCallEstimate } from "./jobs/cost-estimate-assessment.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 import { mutateNotebook } from "./notebook-mutations.js";
+import { resolveNotebookArtifactReference } from "./notebook-reference-resolver.js";
 import { queue } from "./queue.js";
 
 type GoalArgs = Record<string, unknown>;
@@ -32,7 +33,6 @@ type ShortStage = "frame" | "videos";
 type ShortReference = Omit<GoalShortImageRef, "slot">;
 
 const EXTRA_REFERENCE_LIMIT = 12;
-const NO_CHARACTER_REFERENCE = "Give the main character a reference image first: generate a character sheet or choose image cells.";
 const NO_FAL_KEY = "Set FAL_API_KEY in Settings before generating this stage";
 const NO_OPENAI_KEY = "Set OPENAI_API_KEY in Settings to revise with feedback, or edit the prompt and regenerate.";
 const REVISE_TIMEOUT_MS = 240_000;
@@ -44,7 +44,30 @@ const EXTEND_SOURCE_SECONDS = { minimum: 1.625, maximum: 60 };
 const PLACEHOLDER_FRAME = "https://videobook.invalid/short-frame.jpg";
 const PLACEHOLDER_CLIP = "https://videobook.invalid/short-clip.mp4";
 const stageSchema = z.enum(["frame", "videos"]);
-const feedbackSchema = z.string().trim().min(1).max(300).regex(/^[^@]*$/u, "Use plain text without @ references in revision feedback");
+export const shortFeedbackSchema = z.string().trim().min(1).max(2000);
+
+function noReferenceNote(name: string): string {
+  return `No reference image for ${name}, so the frame is generated from the description. Pick image cells or generate a character sheet to keep him the same across shorts.`;
+}
+
+function feedbackLabel(engine: Engine, document: NotebookDocument, mention: NotebookMention): string {
+  const resolved = resolveNotebookArtifactReference({ engine, documents: [document], reference: mention.reference });
+  if ("code" in resolved || !resolved.cellId) return mention.reference;
+  const label = document.cells.find((candidate) => candidate.id === resolved.cellId)?.label?.trim();
+  return label || mention.reference;
+}
+
+function plainFeedback(engine: Engine, notebookId: string, feedback: string): string {
+  const document = readNotebook(engine, notebookId);
+  const seen = new Set<string>();
+  const replacements: { reference: string; replacement: string }[] = [];
+  for (const mention of scanNotebookMentions(feedback)) {
+    if (seen.has(mention.reference)) continue;
+    seen.add(mention.reference);
+    replacements.push({ reference: mention.reference, replacement: feedbackLabel(engine, document, mention) });
+  }
+  return replaceNotebookMentions(feedback, replacements);
+}
 
 function readNotebook(engine: Engine, notebookId: string): NotebookDocument {
   const notebook = engine.notebooks.read(notebookId);
@@ -275,7 +298,13 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
 
 async function adoptCharacterReferences(engine: Engine, goal: GoalRecord, content: GoalShortContent & { plan: GoalShortPlan }) {
   const character = await reconcileMainCharacter(engine);
-  if (character.referenceArtifactIds.length === 0) throw new Error(NO_CHARACTER_REFERENCE);
+  if (character.referenceArtifactIds.length === 0) {
+    const note = noReferenceNote(content.plan.character.name);
+    if (content.notes.includes(note)) return content;
+    const next = { ...content, notes: [...content.notes, note] };
+    await writeGoalShortContent(engine, goal, next);
+    return next;
+  }
   const plan = withShortCharacterReferences(content.plan, await characterReferences(engine, goal.notebookId, character.referenceArtifactIds));
   const next = { ...content, plan, estimate: await estimateShort(engine, plan), revision: content.revision + 1 };
   await writeGoalShortContent(engine, goal, next);
@@ -370,7 +399,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   }
   let content = assertShortRevision(engine, goal, args.revision);
   const { stage, index } = shortTarget(goal, content.plan, args, regenerate);
-  const feedback = args.action === "revise" ? feedbackSchema.parse(args.feedback) : null;
+  const feedback = args.action === "revise" ? plainFeedback(engine, goal.notebookId, shortFeedbackSchema.parse(args.feedback)) : null;
   if (!process.env.FAL_API_KEY) throw new Error(NO_FAL_KEY);
   if (feedback && !getApiKey("OPENAI_API_KEY")) throw new Error(NO_OPENAI_KEY);
   if (stage === "frame" && content.plan.character.references.length === 0) content = await adoptCharacterReferences(engine, goal, content);

@@ -221,8 +221,8 @@ describe('goal mode in the browser', () => {
       expect(await tabs.getByRole('button').allTextContents()).toEqual(['Character', 'Frame', 'Video', 'Finish'])
       await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review frame · estimate unavailable')
       expect(short.mainCharacterReferences).toBe(0)
-      expect(await primary(/^Generate frame/).isDisabled()).toBe(true)
-      expect(await panel().getByText('Give the main character a reference image first').isVisible()).toBe(true)
+      expect(await primary(/^Generate frame/).isDisabled()).toBe(false)
+      expect(await panel().getByText('No reference image for Main character, so the frame is generated from the description.').isVisible()).toBe(true)
 
       await openTab('Character')
       await panel().getByLabel('Character description', { exact: true }).fill('a man in his thirties in a green shirt')

@@ -14,7 +14,7 @@ import { SHORT_RULES } from '../../server/src/goal-short-rules'
 import { legacyGoalFixture, shortGoalFixture, shortPlanFixture, shortStage } from './goal-short-fixtures'
 
 const noop = async () => shortGoalFixture()
-const mainCharacter: MainCharacterView = { character: { name: 'Main character', description: 'a man in a green shirt', silent: true }, references: [], sheet: { estimate: { usd: 0.12, warnings: [] }, pending: null, lastError: null } }
+const mainCharacter: MainCharacterView = { character: { name: 'Main character', description: 'a man in a green shirt', silent: true }, references: [], notes: [], sheet: { estimate: { usd: 0.12, warnings: [] }, pending: null, lastError: null } }
 const noCharacter = async (): Promise<MainCharacterView> => mainCharacter
 const uploaded = async () => 'uploaded-photo'
 
@@ -105,13 +105,13 @@ describe('GoalShortReview', () => {
     expect(html).toContain('/ 40 words')
   })
 
-  it('disables the frame with a reason while the character has no reference image', () => {
+  it('approves a frame from the description while the character has no reference image', () => {
     const html = render(shortGoalFixture({}, shortPlanFixture([12], [])), 'frame')
-    expect(button(html, 'Generate frame')).toContain('disabled=""')
-    expect(html).toContain('Give the main character a reference image first')
+    expect(button(html, 'Generate frame')).not.toContain('disabled')
+    expect(html).toContain('No reference image for Main character, so the frame is generated from the description.')
     const ready = render(shortGoalFixture({ mainCharacterReferences: 1 }, shortPlanFixture([12], [])), 'frame')
     expect(button(ready, 'Generate frame')).not.toContain('disabled')
-    expect(ready).not.toContain('Give the main character a reference image first')
+    expect(ready).not.toContain('No reference image for')
   })
 
   it('shows each clip with its state and estimate, continues the next one and offers another beat', () => {
@@ -133,6 +133,7 @@ describe('GoalShortReview', () => {
       expect(button(html, `Revise clip ${index}`)).toContain('at least $0.60')
       expect(button(html, `Revise clip ${index}`)).toContain('disabled=""')
     }
+    expect(html).toContain('maxLength="2000"')
     expect(html).not.toContain('Clip 3 feedback')
     expect(button(html, 'Revise clip 3')).toBe('')
     const running = render({ ...goal, status: 'running' })

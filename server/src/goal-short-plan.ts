@@ -306,9 +306,9 @@ function slotNames(count: number): string {
   return slots.length > 1 ? `${slots.slice(0, -1).join(", ")} and ${slots.at(-1)}` : slots.join("");
 }
 
-function characterLine(plan: GoalShortPlan, who: string, instruction: string): string | null {
+function characterLine(plan: GoalShortPlan, who: string, instruction: string): string {
   const count = plan.character.references.length;
-  if (count === 0) return null;
+  if (count === 0) return `${who}: ${instruction}`;
   return `${slotNames(count)} ${count > 1 ? "are" : "is"} ${who}: ${instruction}`;
 }
 

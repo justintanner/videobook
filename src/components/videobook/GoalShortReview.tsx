@@ -30,9 +30,9 @@ type ShortReviewProps = {
 }
 
 const TABS = [['character', 'Character'], ['frame', 'Frame'], ['video', 'Video'], ['finish', 'Finish']] as const
-const NO_REFERENCE = 'Give the main character a reference image first: pick or upload a picture of them, or generate a character sheet, in the Character tab.'
 const CHARACTER_NOTE = 'The main character belongs to this book. Pictures picked here star in this short from its frame on; the name and description apply to new goals.'
 const CHARACTER_IMAGE_LIMIT = 4
+const noReferenceNote = (name: string) => `No reference image for ${name}, so the frame is generated from the description. Pick image cells or generate a character sheet to keep him the same across shorts.`
 
 type RealismView = NonNullable<NonNullable<ShortGoalSnapshot['stages']['frame']>['outputs'][number]['realism']>
 const REALISM_NOTE = 'The check for AI tells is billed like planning and never blocks a step.'
@@ -147,6 +147,7 @@ export function GoalShortReview({ goal, plan, view, disabled, character, charact
       {!character && !characterError && <p role="status">Loading the main character…</p>}
       {character && <>
         <div className="goal-reference-grid" aria-label="Character references">{character.references.map(reference => <GoalMedia key={reference.artifactId} artifactId={reference.artifactId} cellId={null} label={reference.address ?? reference.label ?? 'Reference'} resolveAsset={resolveAsset} onOpen={onPreviewCell} />)}</div>
+        {character.notes.length > 0 && <ul className="goal-short-notes" aria-label="Character notes">{character.notes.map((note, index) => <li key={`${index}:${note}`}>{note}</li>)}</ul>}
         {character.references.length === 0 && <p className="goal-panel-muted">No reference image yet.</p>}
         <GoalCharacterPicker choices={choices} selected={picked} limit={CHARACTER_IMAGE_LIMIT} disabled={disabled} resolveAsset={resolveAsset} onToggle={togglePicked} onUpload={uploadPicked} />
         <label><span>Name</span><input aria-label="Character name" value={characterName} maxLength={80} disabled={disabled} onChange={event => setCharacterDraft({ ...characterDraft, name: event.target.value })} /></label>
@@ -164,8 +165,8 @@ export function GoalShortReview({ goal, plan, view, disabled, character, charact
       <label><span>Title</span><input aria-label="Short title" value={title} maxLength={120} disabled={disabled || finishing} onChange={event => setTitle(event.target.value)} /></label>
       <GoalPromptInput label="Frame prompt" value={framePrompt} wordLimit={SHORT_WORD_CEILINGS.frame} disabled={disabled || finishing} onChange={setFramePrompt} />
       <AlwaysAdded lines={[plan.rules.frame]} />
-      {frameOutput && <label><span>Revise the frame</span><textarea aria-label="Frame feedback" value={feedback} maxLength={300} rows={2} disabled={disabled || !canGenerate} onChange={event => setFeedback(event.target.value)} /></label>}
-      {!hasReference && <p role="status" className="goal-panel-warning">{NO_REFERENCE}</p>}
+      {frameOutput && <label><span>Revise the frame</span><textarea aria-label="Frame feedback" value={feedback} maxLength={2000} rows={2} disabled={disabled || !canGenerate} onChange={event => setFeedback(event.target.value)} /></label>}
+      {!hasReference && <p role="status" className="goal-panel-warning">{noReferenceNote(plan.character.name)}</p>}
     </>}
     {view === 'video' && <>
       {currentClip && clipAsset?.mediaUrl
@@ -181,7 +182,7 @@ export function GoalShortReview({ goal, plan, view, disabled, character, charact
           {stale && <p role="status" className="goal-panel-warning">{stale}</p>}
           {output && <div className="goal-versions" aria-label={`Clip ${index + 1} versions`}>{versions('videos', index, `Clip ${index + 1}`)}</div>}
           {output && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'videos', index)}>Regenerate clip {index + 1}</button>}
-          {output && <label><span>Revise clip {index + 1}</span><textarea aria-label={`Clip ${index + 1} feedback`} value={clipFeedback[index] ?? ''} maxLength={300} rows={2} disabled={!canGenerate} onChange={event => setClipFeedback(current => ({ ...current, [index]: event.target.value }))} /></label>}
+          {output && <label><span>Revise clip {index + 1}</span><textarea aria-label={`Clip ${index + 1} feedback`} value={clipFeedback[index] ?? ''} maxLength={2000} rows={2} disabled={!canGenerate} onChange={event => setClipFeedback(current => ({ ...current, [index]: event.target.value }))} /></label>}
           {output && <button type="button" className="goal-panel-button" disabled={!canGenerate || !clipFeedback[index]?.trim()} onClick={() => generate('revise', 'videos', index, clipFeedback[index]?.trim())}>Revise clip {index + 1} · {shortEstimateText(goal.estimate.segments?.[index])}</button>}
           {output && <RealismCheck name={`clip ${index + 1}`} check={output.realism} disabled={disabled} onCheck={() => onRun(() => onAction({ action: 'check', stage: 'videos', index }))} />}
         </li>
@@ -219,7 +220,7 @@ export function GoalShortReview({ goal, plan, view, disabled, character, charact
         <button type="button" className="goal-panel-primary" disabled={disabled || !characterReady || Boolean(character.sheet.pending)} onClick={() => characterAction({ ...characterFields, ...(picked.length > 0 ? { reference_ids: picked } : {}), generate: true })}>{sheetLabel(picked.length)} · {shortEstimateText(character.sheet.estimate)}</button>
       </>}
       {view === 'frame' && goal.status === 'review' && frameOutput && feedback.trim() && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('revise', 'frame', 0, feedback.trim())}>Revise frame</button>}
-      {view === 'frame' && goal.status === 'review' && <button type="button" className="goal-panel-primary" disabled={!canGenerate || !hasReference} title={hasReference ? undefined : NO_REFERENCE} onClick={() => generate(frameOutput ? 'regenerate' : 'approve', 'frame')}>{frameOutput ? 'Regenerate frame' : 'Generate frame'} · {shortEstimateText(goal.estimate.frame)}</button>}
+      {view === 'frame' && goal.status === 'review' && <button type="button" className="goal-panel-primary" disabled={!canGenerate} onClick={() => generate(frameOutput ? 'regenerate' : 'approve', 'frame')}>{frameOutput ? 'Regenerate frame' : 'Generate frame'} · {shortEstimateText(goal.estimate.frame)}</button>}
       {view === 'video' && goal.status === 'review' && next !== null && <button type="button" className="goal-panel-primary" disabled={!canGenerate || !frameOutput} onClick={() => generate('approve', 'videos', next)}>{next === 0 ? 'Generate clip' : `Continue · clip ${next + 1}`} · {shortEstimateText(goal.estimate.segments?.[next])}</button>}
       {view === 'finish' && !finishing && (goal.status === 'review' || goal.status === 'completed' || finishFailed) && <button type="button" className="goal-panel-primary" disabled={!canFinish} onClick={() => onRun(() => onAction({ action: 'finish' }))}>Finish</button>}
       {goalCanRetry(goal) && <button type="button" className="goal-panel-primary" disabled={disabled} onClick={() => onRun(() => onAction({ action: 'retry' }))}>Retry</button>}
