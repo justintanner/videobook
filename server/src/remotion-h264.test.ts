@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 import { renderH264WithEncoderFallback } from "./remotion-h264.js";
 import { testBudget } from "./test-budget.js";
 
-it("selects an H264 encoder that can encode a real frame, including hosts without working CUDA", async () => {
+it.each(["first", "cached"])("selects a working H264 encoder before the %s render on this host", async () => {
   const input = await sharp({ create: { width: 64, height: 64, channels: 3, background: "#FF0000" } }).jpeg().toBuffer();
   let calls = 0;
   await renderH264WithEncoderFallback(async (mode) => {

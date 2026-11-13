@@ -198,6 +198,7 @@ describe("create_qr_outro e2e", () => {
 
   it("renders a processed 16:9 video with audio", async () => {
     const probe = await probeVideo(outputPath);
+    expect(probe.videoCodec).toBe("h264");
     expect(probe.width).toBe(1920);
     expect(probe.height).toBe(1080);
     expect(probe.fps).toBeCloseTo(30, 1);

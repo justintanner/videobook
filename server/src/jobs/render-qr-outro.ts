@@ -21,7 +21,7 @@ import { DEFAULT_QR_OUTRO_SOUND_FILENAME } from "../remotion/qr-outro-audio.js";
 import { renderBrowserExecutable } from "../remotion/browser.js";
 import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
 import { withRemotionCancellation } from "../remotion-cancellation.js";
-import { renderWithEncoderFallback } from "../remotion-encoding.js";
+import { renderH264WithEncoderFallback } from "../remotion-h264.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { processVideoFiles } from "./process-video.js";
 
@@ -148,7 +148,7 @@ export function registerRenderQrOutroJob(engine: Engine): void {
           ctx.signal.throwIfAborted();
           const tempOutputPath = join(tempDir, "original.mp4");
           await withRemotionCancellation(ctx.signal, (cancelSignal) =>
-            renderWithEncoderFallback((hardwareAcceleration) => renderMedia({
+            renderH264WithEncoderFallback((hardwareAcceleration) => renderMedia({
               composition,
               serveUrl: bundleDir,
               codec: "h264",

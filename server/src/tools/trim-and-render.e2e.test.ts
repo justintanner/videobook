@@ -170,6 +170,7 @@ describe("trim video in place and re-render e2e", () => {
 
   it("rendered video has correct duration (~2s matching trimmed source)", async () => {
     const probe = await probeVideo(join(assetDir, "landscape.mp4"));
+    expect(probe.videoCodec).toBe("h264");
     expect(probe.duration).toBeGreaterThanOrEqual(1.5);
     expect(probe.duration).toBeLessThanOrEqual(2.5);
   });

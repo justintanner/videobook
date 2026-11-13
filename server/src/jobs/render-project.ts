@@ -6,7 +6,7 @@ import { logger } from "../logger.js";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { withRemotionCancellation } from "../remotion-cancellation.js";
-import { renderWithEncoderFallback } from "../remotion-encoding.js";
+import { renderH264WithEncoderFallback } from "../remotion-h264.js";
 import { renderBrowserExecutable } from "../remotion/browser.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
@@ -471,7 +471,7 @@ export function registerRenderProjectJob(engine: Engine): void {
               ctx.signal.throwIfAborted();
 
               await withRemotionCancellation(ctx.signal, (cancelSignal) =>
-                renderWithEncoderFallback((hardwareAcceleration) => renderMedia({
+                renderH264WithEncoderFallback((hardwareAcceleration) => renderMedia({
                   composition,
                   serveUrl: bundleDir,
                   codec: "h264",
