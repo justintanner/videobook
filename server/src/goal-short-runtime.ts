@@ -14,7 +14,7 @@ import {
   buildGoalShortPlan, compileShortClipStep, compileShortContinuationStep, compileShortFrameStep, goalShortPlanSchema, refreshGoalShortPlan,
   shortTiming, withShortCharacterReferences, type GoalShortDraft, type GoalShortImageRef, type GoalShortPlan,
 } from "./goal-short-plan.js";
-import { shortAuthoredCopy, shortPlannerNeeded, shortTitle } from "./goal-short-planner.js";
+import { shortAuthoredCopy, shortBriefPlan, shortPlannerNeeded, shortTitle } from "./goal-short-planner.js";
 import { renderReferenceNotes, usableImageReference, type ReferenceNote } from "./goal-short-references.js";
 import { goalReferenceHashes } from "./goal-reference-images.js";
 import { goalStageAttempts } from "./goal-stills.js";
@@ -235,24 +235,26 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
     content = { brief, revision: 1, draft: null, plan, estimate: await estimateShort(engine, plan), notes: [] };
   } else {
     const timing = shortTiming(brief);
-    const planning = shortPlannerNeeded(brief, timing.segmentSeconds.length);
+    const authored = shortAuthoredCopy(brief, timing.segmentSeconds);
+    const planning = shortPlannerNeeded(brief, authored.segmentSeconds);
     const character = await reconcileMainCharacter(engine);
     const references = await characterReferences(engine, notebookId, character.referenceArtifactIds);
     const mentioned = await briefReferences(engine, notebookId, brief, new Set(character.referenceArtifactIds));
     referenceNotes = mentioned.notes;
     const draft: GoalShortDraft = {
       aspectRatio: timing.aspectRatio,
-      segmentSeconds: timing.segmentSeconds,
+      segmentSeconds: authored.segmentSeconds,
       character: { name: character.name, description: character.description, references },
       extraReferences: mentioned.references,
     };
+    const notes = [timing.note, authored.note].filter((note): note is string => note !== null);
     if (planning) {
-      content = { brief, revision: 1, draft, plan: null, estimate: emptyGoalEstimates(), notes: [] };
+      content = { brief, revision: 1, draft, plan: null, estimate: emptyGoalEstimates(), notes };
     } else {
-      const authored = shortAuthoredCopy(brief, timing.segmentSeconds.length);
-      const framePrompt = authored.frame ?? "";
-      const plan = buildGoalShortPlan({ ...draft, title: shortTitle(brief, framePrompt), framePrompt, beats: authored.beats.map((beat) => beat ?? "") });
-      content = { brief, revision: 1, draft, plan, estimate: await estimateShort(engine, plan), notes: [] };
+      const written = shortBriefPlan(brief, authored);
+      if (written.note) notes.push(written.note);
+      const plan = buildGoalShortPlan({ ...draft, title: shortTitle(brief, written.frame), framePrompt: written.frame, beats: written.beats });
+      content = { brief, revision: 1, draft, plan, estimate: await estimateShort(engine, plan), notes };
     }
   }
   const goalId = uuidv7();
@@ -264,7 +266,7 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
     dismissedAt: null, createdAt: timestamp, updatedAt: timestamp,
   };
   if (referenceNotes.length > 0) {
-    content = { ...content, notes: renderReferenceNotes(readNotebook(engine, notebookId), referenceNotes) };
+    content = { ...content, notes: [...content.notes, ...renderReferenceNotes(readNotebook(engine, notebookId), referenceNotes)] };
     await writeGoalShortContent(engine, goal, content);
   }
   const saved = saveGoal(engine, goal);

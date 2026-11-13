@@ -254,10 +254,17 @@ describe("plan_goal for a short", () => {
     });
   });
 
-  it("fails without OPENAI_API_KEY when parts are left to fill", async () => {
+  it("plans from the brief when OPENAI_API_KEY is unset and a part is left to fill", async () => {
     delete process.env.OPENAI_API_KEY;
     const goal = await plan(await plannedShort('he waits for a bus. frame: "A bus shelter at dusk."'));
     expect(requests).toEqual([]);
-    expect(goal).toMatchObject({ status: "failed", error: "Set OPENAI_API_KEY in Settings, or quote the frame and beat prompts." });
+    expect(goal).toMatchObject({ status: "review", error: null });
+    const saved = requireGoalShortContent(engine, goal);
+    expect(saved.plan).toMatchObject({
+      title: "he waits for a bus.",
+      frame: { prompt: "A bus shelter at dusk." },
+      segments: [{ prompt: "he waits for a bus.", seconds: 12 }],
+    });
+    expect(saved.notes).toEqual(["Planned from the brief as written. Add OPENAI_API_KEY in Settings for a written plan."]);
   });
 });

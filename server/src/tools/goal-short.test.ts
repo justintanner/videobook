@@ -248,6 +248,52 @@ describe("video_goal shorts", () => {
     ]);
   });
 
+  it("clamps a 90 second brief to 60 seconds and notes the length", async () => {
+    const goal = await short('a 90 second short, frame: "He stands in the rain." beat 1: "He looks down the road." beat 2: "He steps under the shelter." beat 3: "He checks the time." beat 4: "He boards the bus."');
+    expect(goal.status).toBe("review");
+    expect(stub.plannerRequests).toEqual([]);
+    expect(goal.notes).toEqual(["A short runs 5 to 60 seconds, so this one is 60."]);
+    expect(goal.shortPlan!.segments).toEqual([
+      { prompt: "He looks down the road.", seconds: 15 },
+      { prompt: "He steps under the shelter.", seconds: 15 },
+      { prompt: "He checks the time.", seconds: 15 },
+      { prompt: "He boards the bus.", seconds: 15 },
+    ]);
+  });
+
+  it("clamps a 2 second brief to 5 seconds and notes the length", async () => {
+    const goal = await short('a 2 second short, frame: "He stands in the rain." beat 1: "He looks down the road."');
+    expect(goal.status).toBe("review");
+    expect(stub.plannerRequests).toEqual([]);
+    expect(goal.notes).toEqual(["A short runs 5 to 60 seconds, so this one is 5."]);
+    expect(goal.shortPlan!.segments).toEqual([{ prompt: "He looks down the road.", seconds: 5 }]);
+  });
+
+  it("grows a 15 second short so a quoted beat 3 has its own segment", async () => {
+    const goal = await short('15 seconds, frame: "Dusk at the shelter." beat 1: "He waits." beat 2: "He looks up." beat 3: "He leaves."');
+    expect(goal.status).toBe("review");
+    expect(stub.plannerRequests).toEqual([]);
+    expect(goal.notes).toEqual(["The brief quotes beat 3, so this short has 3 segments."]);
+    expect(goal.shortPlan!.segments).toEqual([
+      { prompt: "He waits.", seconds: 5 },
+      { prompt: "He looks up.", seconds: 5 },
+      { prompt: "He leaves.", seconds: 5 },
+    ]);
+  });
+
+  it("plans an unquoted brief from its own words when OPENAI_API_KEY is unset", async () => {
+    delete process.env.OPENAI_API_KEY;
+    const goal = await short("he waits for a bus in the rain");
+    expect(goal.status).toBe("review");
+    expect(stub.plannerRequests).toEqual([]);
+    expect(goal.notes).toEqual(["Planned from the brief as written. Add OPENAI_API_KEY in Settings for a written plan."]);
+    expect(goal.shortPlan).toMatchObject({
+      title: "he waits for a bus in",
+      frame: { prompt: "he waits for a bus in the rain" },
+      segments: [{ prompt: "he waits for a bus in the rain", seconds: 12 }],
+    });
+  });
+
   it("skips unusable mentions with a note and keeps the first 12 images", async () => {
     const png = await sharp({ create: { width: 32, height: 32, channels: 3, background: "#228844" } }).png().toBuffer();
     const empty = notebookGridTag({ row: 7, column: 7 });

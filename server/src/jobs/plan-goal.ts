@@ -9,7 +9,7 @@ import { buildGoalShortPlan, type GoalShortDraft } from "../goal-short-plan.js";
 import { shortWantsPhone, stripShortBannedWords, withoutShortPhoneSentences } from "../goal-short-rules.js";
 import { estimateShort } from "../goal-short-runtime.js";
 import {
-  shortAuthoredCopy, shortPlannerBrief, shortPlannerInstructions, shortPlannerIssues, shortPlannerNeeded, shortPlannerResponseSchema, shortTitle,
+  shortAuthoredCopy, shortBriefPlan, shortPlannerBrief, shortPlannerInstructions, shortPlannerIssues, shortPlannerNeeded, shortPlannerResponseSchema, shortTitle,
   type ShortAuthoredCopy, type ShortPlannerIssue, type ShortPlannerResponse,
 } from "../goal-short-planner.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
@@ -89,23 +89,30 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
     const content = requireGoalShortContent(engine, goal);
     const { draft } = content;
     if (!draft) throw new Error("This short has nothing to plan. Start a new /goal.");
-    const authored = shortAuthoredCopy(content.brief, draft.segmentSeconds.length);
-    const written = shortPlannerNeeded(content.brief, draft.segmentSeconds.length)
-      ? await askShortPlanner(engine, goal, content.brief, draft, authored, signal)
+    const authored = shortAuthoredCopy(content.brief, draft.segmentSeconds);
+    const plannedDraft = { ...draft, segmentSeconds: authored.segmentSeconds };
+    const written = shortPlannerNeeded(content.brief, plannedDraft.segmentSeconds)
+      ? await askShortPlanner(engine, goal, content.brief, plannedDraft, authored, signal)
       : null;
-    const framePrompt = authored.frame ?? written?.frame ?? "";
+    const offline = written ? null : shortBriefPlan(content.brief, authored);
+    const framePrompt = authored.frame ?? written?.frame ?? offline?.frame ?? "";
     const plan = buildGoalShortPlan({
-      ...draft,
+      ...plannedDraft,
       title: written?.title || shortTitle(content.brief, framePrompt),
       framePrompt,
-      beats: authored.beats.map((beat, index) => beat ?? written?.beats[index] ?? ""),
+      beats: authored.beats.map((beat, index) => beat ?? written?.beats[index] ?? offline?.beats[index] ?? ""),
     });
     const estimate = await estimateShort(engine, plan);
+    const added = [authored.note, offline?.note ?? null].filter((note): note is string => note !== null);
     await withNotebookMutation(`goal:${goalId}`, async () => {
       const current = readGoal(engine, goalId);
       if (current.status !== "planning") return;
       const latest = requireGoalShortContent(engine, current);
-      await writeGoalShortContent(engine, current, { ...latest, plan, estimate, revision: latest.revision + 1 });
+      const notes = [...latest.notes];
+      for (const note of added) {
+        if (!notes.includes(note)) notes.push(note);
+      }
+      await writeGoalShortContent(engine, current, { ...latest, draft: plannedDraft, plan, estimate, notes, revision: latest.revision + 1 });
       saveGoal(engine, { ...current, stage: "frame", status: "review", error: null });
     });
     return { goalId };

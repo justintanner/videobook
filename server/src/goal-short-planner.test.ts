@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { NotebookDocument } from "videobook-engine";
 import { buildGoalShortPlan } from "./goal-short-plan.js";
 import {
-  shortAuthoredCopy, shortPlannerBrief, shortPlannerInstructions, shortPlannerIssues, shortPlannerNeeded, shortPlannerResponseSchema, shortRevisionInstructions,
+  shortAuthoredCopy, shortBriefPlan, shortPlannerBrief, shortPlannerInstructions, shortPlannerIssues, shortPlannerNeeded, shortPlannerResponseSchema, shortRevisionInstructions,
   shortRevisionIssues, shortRevisionPart, shortRevisionResponseSchema, shortTitle,
 } from "./goal-short-planner.js";
 import { SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES } from "./goal-short-rules.js";
@@ -11,25 +11,45 @@ import { loadGuide } from "./tools/rewrite-prompt.js";
 
 const words = (count: number) => Array.from({ length: count }, (_, index) => `word${index}`).join(" ");
 
+const kept = (segmentSeconds: number[]) => ({ segmentSeconds, note: null });
+
 describe("shortAuthoredCopy", () => {
   it("reads a quoted frame and beats by their labels", () => {
-    expect(shortAuthoredCopy('he waits for a bus, frame: "He stands under a bus shelter." beat 2: "He boards the bus."', 2))
-      .toEqual({ frame: "He stands under a bus shelter.", beats: [null, "He boards the bus."] });
-    expect(shortAuthoredCopy("Frame: “Dusk at the shelter.” Beat1: “He checks the road.”", 1))
-      .toEqual({ frame: "Dusk at the shelter.", beats: ["He checks the road."] });
+    expect(shortAuthoredCopy('he waits for a bus, frame: "He stands under a bus shelter." beat 2: "He boards the bus."', [10, 10]))
+      .toEqual({ frame: "He stands under a bus shelter.", beats: [null, "He boards the bus."], ...kept([10, 10]) });
+    expect(shortAuthoredCopy("Frame: “Dusk at the shelter.” Beat1: “He checks the road.”", [12]))
+      .toEqual({ frame: "Dusk at the shelter.", beats: ["He checks the road."], ...kept([12]) });
   });
 
   it("takes beat 1 from beat 1, then video, then the only unlabelled quote", () => {
-    expect(shortAuthoredCopy('video: "He waves." beat 1: "He checks the road."', 2).beats).toEqual(["He checks the road.", null]);
-    expect(shortAuthoredCopy('video: "He waves." frame: "Dusk."', 2).beats).toEqual(["He waves.", null]);
-    expect(shortAuthoredCopy('he waits, "He checks the road." frame: "Dusk."', 2)).toEqual({ frame: "Dusk.", beats: ["He checks the road.", null] });
-    expect(shortAuthoredCopy('he says "hi" then "bye"', 1)).toEqual({ frame: null, beats: [null] });
-    expect(shortAuthoredCopy('frame: "  " he waits', 1)).toEqual({ frame: null, beats: [null] });
+    expect(shortAuthoredCopy('video: "He waves." beat 1: "He checks the road."', [10, 10]).beats).toEqual(["He checks the road.", null]);
+    expect(shortAuthoredCopy('video: "He waves." frame: "Dusk."', [10, 10]).beats).toEqual(["He waves.", null]);
+    expect(shortAuthoredCopy('he waits, "He checks the road." frame: "Dusk."', [10, 10])).toEqual({ frame: "Dusk.", beats: ["He checks the road.", null], ...kept([10, 10]) });
+    expect(shortAuthoredCopy('he says "hi" then "bye"', [12])).toEqual({ frame: null, beats: [null], ...kept([12]) });
+    expect(shortAuthoredCopy('frame: "  " he waits', [12])).toEqual({ frame: null, beats: [null], ...kept([12]) });
   });
 
-  it("refuses a quoted beat the short has no segment for", () => {
-    expect(() => shortAuthoredCopy('beat 3: "He leaves."', 2)).toThrow("The brief quotes beat 3, but this short has 2 segments.");
-    expect(() => shortAuthoredCopy('beat 2: "He leaves."', 1)).toThrow("The brief quotes beat 2, but this short has 1 segment.");
+  it("grows the short when a later quoted beat still fits", () => {
+    expect(shortAuthoredCopy('beat 3: "He leaves."', [15])).toEqual({
+      frame: null, beats: [null, null, "He leaves."], segmentSeconds: [5, 5, 5],
+      note: "The brief quotes beat 3, so this short has 3 segments.",
+    });
+    expect(shortAuthoredCopy('beat 3: "He leaves."', [10, 10])).toEqual({
+      frame: null, beats: [null, null, "He leaves."], segmentSeconds: [7, 7, 6],
+      note: "The brief quotes beat 3, so this short has 3 segments.",
+    });
+  });
+
+  it("folds a quoted beat that does not fit into the last beat", () => {
+    expect(shortAuthoredCopy('beat 2: "He leaves."', [5])).toEqual({
+      frame: null, beats: ["He leaves."], segmentSeconds: [5],
+      note: "The brief quotes beat 2, so that line is part of the last beat.",
+    });
+    expect(shortAuthoredCopy('beat 1: "He waits." beat 5: "He waves." beat 6: "He sits."', [15])).toEqual({
+      frame: null, beats: ["He waits. He waves. He sits."], segmentSeconds: [15],
+      note: "The brief quotes beat 5 and beat 6, so those lines are part of the last beat.",
+    });
+    expect(shortAuthoredCopy('video: "He waves." beat 2: "He leaves."', [5])).toMatchObject({ beats: ["He waves. He leaves."] });
   });
 });
 
@@ -41,13 +61,32 @@ describe("shortPlannerNeeded", () => {
     else process.env.OPENAI_API_KEY = key;
   });
 
-  it("needs the planner for any part left to fill, and refuses that without OPENAI_API_KEY", () => {
+  it("needs the planner only when a part is open and OPENAI_API_KEY is set", () => {
     delete process.env.OPENAI_API_KEY;
-    expect(shortPlannerNeeded('frame: "Dusk." beat 1: "He waits."', 1)).toBe(false);
-    expect(() => shortPlannerNeeded('frame: "Dusk."', 1)).toThrow("Set OPENAI_API_KEY in Settings, or quote the frame and beat prompts.");
+    expect(shortPlannerNeeded('frame: "Dusk." beat 1: "He waits."', [12])).toBe(false);
+    expect(shortPlannerNeeded('frame: "Dusk."', [12])).toBe(false);
     process.env.OPENAI_API_KEY = "offline-openai-key";
-    expect(shortPlannerNeeded('frame: "Dusk."', 1)).toBe(true);
-    expect(shortPlannerNeeded("he waits for a bus", 2)).toBe(true);
+    expect(shortPlannerNeeded('frame: "Dusk."', [12])).toBe(true);
+    expect(shortPlannerNeeded("he waits for a bus", [10, 10])).toBe(true);
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    expect(shortPlannerNeeded("he waits for a bus", [12])).toBe(false);
+  });
+});
+
+describe("shortBriefPlan", () => {
+  it("keeps quoted parts and fills the rest from the brief prose", () => {
+    const brief = 'he waits for a bus in the rain frame: "Dusk."';
+    const authored = shortAuthoredCopy(brief, [12]);
+    expect(shortBriefPlan(brief, authored)).toEqual({
+      frame: "Dusk.",
+      beats: ["he waits for a bus in the rain"],
+      note: "Planned from the brief as written. Add OPENAI_API_KEY in Settings for a written plan.",
+    });
+  });
+
+  it("adds no note when the brief already quotes every part", () => {
+    const brief = 'frame: "Dusk." beat 1: "He waits."';
+    expect(shortBriefPlan(brief, shortAuthoredCopy(brief, [12]))).toEqual({ frame: "Dusk.", beats: ["He waits."], note: null });
   });
 });
 
@@ -113,11 +152,11 @@ describe("shortPlannerIssues", () => {
       { kind: "phone", message: "Leave the phone out of the beat 1: call it the camera, which someone off screen holds." },
     ]);
     expect(shortPlannerIssues(phoned, 2)).toEqual([]);
-    expect(shortPlannerIssues(phoned, 2, { frame: phoned.frame, beats: [phoned.beats[0]!, null] }, false)).toEqual([]);
+    expect(shortPlannerIssues(phoned, 2, { frame: phoned.frame, beats: [phoned.beats[0]!, null], segmentSeconds: [10, 10], note: null }, false)).toEqual([]);
   });
 
   it("leaves authored parts unchecked", () => {
-    const authored = { frame: "A cinematic bus stop.", beats: [words(60), null] };
+    const authored = { frame: "A cinematic bus stop.", beats: [words(60), null], segmentSeconds: [10, 10], note: null };
     expect(shortPlannerIssues({ ...clean, frame: authored.frame, beats: [authored.beats[0]!, "He boards the bus."] }, 2, authored)).toEqual([]);
     expect(shortPlannerIssues({ ...clean, beats: [authored.beats[0]!, words(50)] }, 2, authored)).toEqual([
       { kind: "ceiling", message: "Shorten the beat 2 to at most 45 words; it has 50." },

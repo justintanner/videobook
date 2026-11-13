@@ -132,11 +132,11 @@ function compiledSteps(plan: GoalShortPlan): Record<"frame" | "clip" | "continua
 
 describe("shortTiming", () => {
   it("makes 12 vertical seconds in one segment from a brief that names no length", () => {
-    expect(shortTiming("he waits for a bus in the rain")).toEqual({ aspectRatio: "9:16", totalSeconds: 12, segmentSeconds: [12] });
+    expect(shortTiming("he waits for a bus in the rain")).toEqual({ aspectRatio: "9:16", totalSeconds: 12, segmentSeconds: [12], note: null });
   });
 
   it("splits the seconds a brief names into segments of at most 15, as even as whole seconds allow, longest first", () => {
-    expect(shortTiming("he waits for a bus, 20 seconds")).toEqual({ aspectRatio: "9:16", totalSeconds: 20, segmentSeconds: [10, 10] });
+    expect(shortTiming("he waits for a bus, 20 seconds")).toEqual({ aspectRatio: "9:16", totalSeconds: 20, segmentSeconds: [10, 10], note: null });
     expect(shortTiming("a 31-second short of him waiting").segmentSeconds).toEqual([11, 10, 10]);
     expect(shortTiming("5s of rain").segmentSeconds).toEqual([5]);
     expect(shortTiming("15 secs").segmentSeconds).toEqual([15]);
@@ -155,9 +155,11 @@ describe("shortTiming", () => {
     for (const brief of ["a vertical short", "portrait", "9:16"]) expect(shortTiming(brief).aspectRatio, brief).toBe("9:16");
   });
 
-  it("refuses a length outside 5 to 60 seconds and names the range", () => {
-    expect(() => shortTiming("4 seconds of rain")).toThrow("A short runs 5 to 60 seconds; the brief asks for 4.");
-    expect(() => shortTiming("a 61 second short")).toThrow("A short runs 5 to 60 seconds; the brief asks for 61.");
+  it("clamps a length outside 5 to 60 seconds and notes the length it used", () => {
+    expect(shortTiming("4 seconds of rain")).toEqual({ aspectRatio: "9:16", totalSeconds: 5, segmentSeconds: [5], note: "A short runs 5 to 60 seconds, so this one is 5." });
+    expect(shortTiming("2 seconds of rain")).toMatchObject({ totalSeconds: 5, segmentSeconds: [5], note: "A short runs 5 to 60 seconds, so this one is 5." });
+    expect(shortTiming("a 61 second short")).toMatchObject({ totalSeconds: 60, segmentSeconds: [15, 15, 15, 15], note: "A short runs 5 to 60 seconds, so this one is 60." });
+    expect(shortTiming("a 90 second short")).toMatchObject({ totalSeconds: 60, segmentSeconds: [15, 15, 15, 15], note: "A short runs 5 to 60 seconds, so this one is 60." });
   });
 });
 

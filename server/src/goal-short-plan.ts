@@ -169,6 +169,7 @@ export type ShortTiming = {
   aspectRatio: ShortAspectRatio;
   totalSeconds: number;
   segmentSeconds: number[];
+  note: string | null;
 };
 
 function briefAspectRatio(brief: string): ShortAspectRatio {
@@ -183,19 +184,32 @@ function briefSeconds(brief: string): number | null {
   return match ? Math.round(Number(match[1])) : null;
 }
 
-function evenSegments(totalSeconds: number): number[] {
-  const count = Math.ceil(totalSeconds / SEGMENT_MAX_SECONDS);
-  const base = Math.floor(totalSeconds / count);
-  const longer = totalSeconds % count;
-  return Array.from({ length: count }, (_, index) => base + (index < longer ? 1 : 0));
+const EXTEND_SOURCE_MIN_SECONDS = 1.625;
+
+function evenSegments(totalSeconds: number, count = Math.ceil(totalSeconds / SEGMENT_MAX_SECONDS)): number[] {
+  const size = Math.max(1, count);
+  const base = Math.floor(totalSeconds / size);
+  const longer = totalSeconds % size;
+  return Array.from({ length: size }, (_, index) => base + (index < longer ? 1 : 0));
+}
+
+export function grownShortSegments(segmentSeconds: readonly number[], beatCount: number): number[] | null {
+  if (beatCount <= segmentSeconds.length || beatCount > SEGMENT_LIMIT) return null;
+  const total = segmentSeconds.reduce((sum, seconds) => sum + seconds, 0);
+  const split = evenSegments(total, beatCount);
+  const first = split[0] ?? 0;
+  if (first < SHORT_MIN_SECONDS || split.some((seconds) => seconds < EXTEND_SOURCE_MIN_SECONDS || seconds > SEGMENT_MAX_SECONDS)) return null;
+  return split;
 }
 
 export function shortTiming(brief: string): ShortTiming {
-  const totalSeconds = briefSeconds(brief) ?? GOAL_SHORT_DEFAULTS.totalSeconds;
-  if (totalSeconds < SHORT_MIN_SECONDS || totalSeconds > SHORT_MAX_SECONDS) {
-    throw new Error(`A short runs ${SHORT_MIN_SECONDS} to ${SHORT_MAX_SECONDS} seconds; the brief asks for ${totalSeconds}.`);
-  }
-  return { aspectRatio: briefAspectRatio(brief), totalSeconds, segmentSeconds: evenSegments(totalSeconds) };
+  const requested = briefSeconds(brief);
+  const unclamped = requested ?? GOAL_SHORT_DEFAULTS.totalSeconds;
+  const totalSeconds = Math.min(SHORT_MAX_SECONDS, Math.max(SHORT_MIN_SECONDS, unclamped));
+  const note = requested !== null && requested !== totalSeconds
+    ? `A short runs ${SHORT_MIN_SECONDS} to ${SHORT_MAX_SECONDS} seconds, so this one is ${totalSeconds}.`
+    : null;
+  return { aspectRatio: briefAspectRatio(brief), totalSeconds, segmentSeconds: evenSegments(totalSeconds), note };
 }
 
 function slotted(references: readonly ShortReferenceInput[], offset: number): GoalShortImageRef[] {

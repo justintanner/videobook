@@ -3,7 +3,8 @@ import type { NotebookDocument } from "videobook-engine";
 import { resolveNotebookCellArtifactId } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { replaceNotebookMentions } from "videobook-engine/notebook-mentions";
-import { SHORT_WORD_CEILINGS, type GoalShortPlan, type ShortAspectRatio } from "./goal-short-plan.js";
+import { getApiKey } from "./api-key.js";
+import { grownShortSegments, SHORT_WORD_CEILINGS, type GoalShortPlan, type ShortAspectRatio } from "./goal-short-plan.js";
 import { SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES, shortBannedWords, shortMentionsPhone } from "./goal-short-rules.js";
 import { loadGuide } from "./tools/rewrite-prompt.js";
 
@@ -11,8 +12,17 @@ const LABELLED = /(?<![\p{L}\p{N}])(frame|video|beat\s*(\d+))\s*:\s*["“]([^"�
 const CAMERA_LINE = "Call it the camera, never the phone: someone off screen holds it.";
 const POSITIVE_LINE = 'Say what is there rather than what is not, such as "both hands hang empty at the sides" rather than "no phone in hand": the models tend to show any object a prompt names, even after "no" or "not".';
 const QUOTED = /["“]([^"”]*)["”]/gu;
+const PROMPT_LIMIT = 2000;
+const PLANNED_FROM_BRIEF = "Planned from the brief as written. Add OPENAI_API_KEY in Settings for a written plan.";
 
-export type ShortAuthoredCopy = { frame: string | null; beats: (string | null)[] };
+export type ShortAuthoredCopy = {
+  frame: string | null;
+  beats: (string | null)[];
+  segmentSeconds: number[];
+  note: string | null;
+};
+
+type ShortBriefPlan = { frame: string; beats: string[]; note: string | null };
 
 export type ShortPlannerResponse = { title: string; frame: string; beats: string[] };
 
@@ -20,14 +30,21 @@ export type ShortPlannerIssue = { kind: "count" | "empty" | "ceiling" | "banned"
 
 export type ShortRevisionPart = { name: string; ceiling: number };
 
-function segments(count: number): string {
-  return `${count} ${count === 1 ? "segment" : "segments"}`;
+function briefProse(brief: string): string {
+  return brief.replace(LABELLED, " ").replace(QUOTED, " ").replace(/@[\p{L}\p{N}-]+/gu, " ").replace(/\s+/gu, " ").trim();
 }
 
-export function shortAuthoredCopy(brief: string, segmentCount: number): ShortAuthoredCopy {
+function foldedBeatsNote(numbers: readonly number[]): string {
+  const labels = numbers.map((number) => `beat ${number}`);
+  if (labels.length === 1) return `The brief quotes ${labels[0]}, so that line is part of the last beat.`;
+  const last = labels[labels.length - 1];
+  return `The brief quotes ${labels.slice(0, -1).join(", ")} and ${last}, so those lines are part of the last beat.`;
+}
+
+export function shortAuthoredCopy(brief: string, segmentSeconds: readonly number[]): ShortAuthoredCopy {
   let frame: string | null = null;
   let video: string | null = null;
-  const beats: (string | null)[] = Array.from({ length: segmentCount }, () => null);
+  const quoted = new Map<number, string>();
   for (const match of brief.matchAll(LABELLED)) {
     const text = match[3]!.trim();
     if (!text) continue;
@@ -35,28 +52,57 @@ export function shortAuthoredCopy(brief: string, segmentCount: number): ShortAut
     if (label === "frame") frame ??= text;
     else if (label === "video") video ??= text;
     else {
-      const index = Number(match[2]) - 1;
-      if (index < 0 || index >= segmentCount) {
-        throw new Error(`The brief quotes beat ${index + 1}, but this short has ${segments(segmentCount)}.`);
-      }
-      beats[index] ??= text;
+      const number = Number(match[2]);
+      if (number >= 1 && !quoted.has(number)) quoted.set(number, text);
     }
+  }
+  let highest = 0;
+  for (const number of quoted.keys()) {
+    if (number > highest) highest = number;
+  }
+  const grown = highest > segmentSeconds.length ? grownShortSegments(segmentSeconds, highest) : null;
+  const seconds = grown ?? [...segmentSeconds];
+  const beats: (string | null)[] = Array.from({ length: seconds.length }, () => null);
+  const folded: Array<{ number: number; text: string }> = [];
+  for (const [number, text] of quoted) {
+    const index = number - 1;
+    if (index < beats.length) beats[index] ??= text;
+    else folded.push({ number, text });
   }
   const unlabelled = [...brief.replace(LABELLED, " ").matchAll(QUOTED)].map((match) => match[1]!.trim()).filter(Boolean);
   beats[0] ??= video ?? (unlabelled.length === 1 ? unlabelled[0]! : null);
-  return { frame, beats };
+  let note: string | null = null;
+  if (grown) note = `The brief quotes beat ${highest}, so this short has ${highest} segments.`;
+  if (folded.length > 0) {
+    folded.sort((left, right) => left.number - right.number);
+    const last = beats.length - 1;
+    const parts = [beats[last], ...folded.map((entry) => entry.text)].filter((part): part is string => part !== null && part !== "");
+    beats[last] = parts.join(" ");
+    note = foldedBeatsNote(folded.map((entry) => entry.number));
+  }
+  return { frame, beats, segmentSeconds: seconds, note };
 }
 
-export function shortPlannerNeeded(brief: string, segmentCount: number): boolean {
-  const authored = shortAuthoredCopy(brief, segmentCount);
+export function shortPlannerNeeded(brief: string, segmentSeconds: readonly number[]): boolean {
+  const authored = shortAuthoredCopy(brief, segmentSeconds);
   const needed = authored.frame === null || authored.beats.some((beat) => beat === null);
-  if (needed && !process.env.OPENAI_API_KEY) throw new Error("Set OPENAI_API_KEY in Settings, or quote the frame and beat prompts.");
-  return needed;
+  return needed && getApiKey("OPENAI_API_KEY") !== null;
+}
+
+export function shortBriefPlan(brief: string, authored: ShortAuthoredCopy): ShortBriefPlan {
+  const gaps = authored.frame === null || authored.beats.some((beat) => beat === null);
+  const prose = briefProse(brief).slice(0, PROMPT_LIMIT).trim();
+  const quoted = authored.frame ?? authored.beats.find((beat): beat is string => beat !== null);
+  const filler = prose || quoted || "Short";
+  return {
+    frame: authored.frame ?? filler,
+    beats: authored.beats.map((beat) => beat ?? filler),
+    note: gaps ? PLANNED_FROM_BRIEF : null,
+  };
 }
 
 export function shortTitle(brief: string, framePrompt: string): string {
-  const prose = brief.replace(LABELLED, " ").replace(QUOTED, " ").replace(/@[\p{L}\p{N}-]+/gu, " ").replace(/\s+/gu, " ").trim();
-  const title = (prose || framePrompt).split(/\s+/u).filter(Boolean).slice(0, SHORT_WORD_CEILINGS.title).join(" ").slice(0, 120).trim();
+  const title = (briefProse(brief) || framePrompt).split(/\s+/u).filter(Boolean).slice(0, SHORT_WORD_CEILINGS.title).join(" ").slice(0, 120).trim();
   return title || "Short";
 }
 
