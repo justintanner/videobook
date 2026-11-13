@@ -50,6 +50,7 @@ const defaultProps: RenderInputProps = {
 };
 
 const defaultCaptionProps: CaptionCompositionProps = {
+  graphics: null,
   videoSrc: "",
   sourceWidth: 1080,
   sourceHeight: 1920,

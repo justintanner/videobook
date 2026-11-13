@@ -1,3 +1,9 @@
+import { readGraphicsDraft } from "../graphics/drafts.js";
+import type { GraphicsDocument } from "../graphics/model.js";
+import { parseGraphicsDocument } from "../graphics/model.js";
+import { drawnImageLayers, requireGraphicsImages } from "../graphics/render.js";
+import { reviewedGraphics, type GraphicsLook } from "../graphics/service.js";
+import { graphicsStillGroups } from "../graphics/stills.js";
 import { randomUUID } from "node:crypto";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { withNotebookMutation } from "../notebook-mutations.js";
@@ -36,6 +42,7 @@ export interface CaptionRenderRequest {
   sourceHash: string;
   document: CaptionDocument;
   regions: CaptionRegionFrame[];
+  graphics?: { revision: string; document: GraphicsDocument } | null;
   jobId: number | null;
   createdAt: string;
 }
@@ -53,7 +60,14 @@ export function readCaptionRenderRequest(engine: Engine, requestId: string): Cap
   if (!value || typeof value.outputArtifactId !== "string") return null;
   const document = captionDocumentSchema.safeParse(value.document);
   if (!document.success) return null;
-  return { ...value, output: renderOutput(value.output), document: document.data };
+  const graphics = value.graphics ? parseGraphicsDocument(value.graphics.document) : null;
+  if (graphics && (!graphics.ok || typeof value.graphics?.revision !== "string")) return null;
+  return {
+    ...value,
+    output: renderOutput(value.output),
+    document: document.data,
+    graphics: graphics?.ok && value.graphics ? { ...value.graphics, document: graphics.document } : null,
+  };
 }
 
 function requestIndexKey(artifactId: string): string {
@@ -63,14 +77,17 @@ function requestIndexKey(artifactId: string): string {
 export function forgetCaptionRenders(engine: Engine, artifactId: string): void {
   for (const requestId of indexedRenderRequests(engine, requestIndexKey(artifactId))) {
     const request = readCaptionRenderRequest(engine, requestId);
-    if (request) engine.settings.delete(latestKey(request.sourceArtifactId, request.language));
+    if (request) {
+      engine.settings.delete(latestKey(request.sourceArtifactId, request.language));
+      if (engine.settings.get<string>(`captions.graphics-render.${request.sourceArtifactId}`) === requestId) engine.settings.delete(`captions.graphics-render.${request.sourceArtifactId}`);
+    }
     engine.settings.delete(requestKey(requestId));
   }
   engine.settings.delete(requestIndexKey(artifactId));
 }
 
-function fingerprint(sourceArtifactId: string, notebookId: string | null, sourceHash: string, language: string, revision: string, output: RenderOutput): string {
-  return renderRequestFingerprint([sourceArtifactId, notebookId, sourceHash, language, revision, ...(output === "replace" ? [output] : [])]);
+function fingerprint(sourceArtifactId: string, notebookId: string | null, sourceHash: string, language: string, revision: string, output: RenderOutput, graphics: CaptionRenderRequest["graphics"]): string {
+  return renderRequestFingerprint([sourceArtifactId, notebookId, sourceHash, language, revision, ...(output === "replace" ? [output] : []), ...(graphics ? [graphics.revision, JSON.stringify(graphics.document)] : [])]);
 }
 
 export function latestCaptionRender(engine: Engine, artifactId: string, language: string): RenderRequestStatus | null {
@@ -123,6 +140,9 @@ function reusable(engine: Engine, existing: CaptionRenderRequest, expected: stri
 }
 
 export interface CaptionRenderInput {
+  withGraphics?: boolean;
+  graphicsRevision?: string;
+  graphicsLook?: GraphicsLook;
   requestId: string;
   expectedRevision: string;
   sourceHash: string;
@@ -132,8 +152,12 @@ export interface CaptionRenderInput {
 
 export async function requestCaptionRender(engine: Engine, bookId: string, artifactId: string, language: string, input: CaptionRenderInput): Promise<RenderRequestStatus> {
   return withNotebookMutation(`captions-render:${bookId}:${input.requestId}`, async () => {
-    const expected = fingerprint(artifactId, input.notebookId, input.sourceHash, language, input.expectedRevision, input.output);
     const existing = readCaptionRenderRequest(engine, input.requestId);
+    const completedReplace = existing?.output === "replace" && renderRequestStatus(engine, existing).status === "completed";
+    const graphics = completedReplace && input.withGraphics && existing.graphics && (!input.graphicsRevision || input.graphicsRevision === existing.graphics.revision)
+      ? existing.graphics
+      : await graphicsSnapshot(engine, artifactId, input);
+    const expected = fingerprint(artifactId, input.notebookId, input.sourceHash, language, input.expectedRevision, input.output, graphics);
     const reused = existing ? reusable(engine, existing, expected) : null;
     if (reused) return reused;
     const draft = await savedCaptionDraft(engine, bookId, artifactId, language, input.expectedRevision);
@@ -162,6 +186,7 @@ export async function requestCaptionRender(engine: Engine, bookId: string, artif
       sourceHash: source.mediaHash,
       document: draft.document,
       regions: regionsSnapshot(engine, source),
+      graphics,
       jobId: null,
       createdAt: new Date().toISOString(),
     };
@@ -169,6 +194,7 @@ export async function requestCaptionRender(engine: Engine, bookId: string, artif
     indexRenderRequest(engine, requestIndexKey(artifactId), input.requestId);
     indexRenderRequest(engine, requestIndexKey(request.outputArtifactId), input.requestId);
     writeRenderSetting(engine, latestKey(artifactId, language), input.requestId);
+    if (graphics) writeRenderSetting(engine, `captions.graphics-render.${artifactId}`, input.requestId);
     const job = await queue.enqueue(`caption-render-${input.requestId}-${randomUUID()}`, {
       type: CAPTION_RENDER_JOB,
       bookId,
@@ -179,4 +205,26 @@ export async function requestCaptionRender(engine: Engine, bookId: string, artif
     writeRenderSetting(engine, requestKey(queued.requestId), queued);
     return renderRequestStatus(engine, queued);
   });
+}
+
+export function latestStackedCaptionRender(engine: Engine, artifactId: string): RenderRequestStatus | null {
+  const id = engine.settings.get<string>(`captions.graphics-render.${artifactId}`);
+  const request = typeof id === "string" ? readCaptionRenderRequest(engine, id) : null;
+  return request ? renderRequestStatus(engine, request) : null;
+}
+
+async function graphicsSnapshot(engine: Engine, artifactId: string, input: CaptionRenderInput): Promise<CaptionRenderRequest["graphics"]> {
+  if (!input.withGraphics) return null;
+  const draft = readGraphicsDraft(engine, artifactId);
+  if (!draft && !input.graphicsLook) throw new CaptionServiceError("not_ready", "Save a graphics draft before rendering subtitles with graphics.");
+  if (draft && input.graphicsRevision && draft.revision !== input.graphicsRevision) {
+    throw new CaptionServiceError("invalid", "The graphics changed after review. Reload the editor, then render.");
+  }
+  const reviewed = await reviewedGraphics(engine, artifactId, input.graphicsLook ?? { platform: "tiktok", watermark: false }, input.graphicsRevision ?? draft?.revision ?? "");
+  if (reviewed.source.mediaHash !== input.sourceHash) throw new CaptionServiceError("stale_source", "The video changed after review. Reload the editor, then render.");
+  if (!graphicsStillGroups(reviewed.document, reviewed.source.durationSeconds).length) {
+    throw new CaptionServiceError("invalid", "These graphics have nothing to draw.");
+  }
+  await requireGraphicsImages(engine, drawnImageLayers(reviewed.document, reviewed.source.durationSeconds));
+  return { revision: reviewed.revision, document: reviewed.document };
 }

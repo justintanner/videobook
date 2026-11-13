@@ -1,3 +1,7 @@
+import sharp from "sharp";
+import { readGraphicsDraft, writeGraphicsDraft } from "../graphics/drafts.js";
+import { graphicsDocumentFromLayers } from "../graphics/model.js";
+import { graphicsBurned } from "../graphics/render.js";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -8,7 +12,7 @@ import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createEngineForTest } from "../engine.js";
-import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import { FFMPEG, FFPROBE, probeVideo } from "../ffmpeg.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import { queue, waitForBookQueuesIdleForTests } from "../queue.js";
 import { createTestClient } from "../test-client.js";
@@ -19,6 +23,8 @@ import type { CaptionReadModel } from "./service.js";
 const execFileAsync = promisify(execFile);
 const WIDTH = 1080;
 const HEIGHT = 1920;
+const BENCHMARK = process.env.VIDEOBOOK_STACKED_RENDER_BENCHMARK === "1";
+const SOURCE_DURATION = BENCHMARK ? 60 : 2;
 const TRANSCRIPT = {
   language_code: "eng",
   words: [
@@ -106,8 +112,8 @@ describe("caption render", () => {
     await client.callTool({ name: "create_project", arguments: { book_id: bookId } });
     const source = join(tempDir, "source.mp4");
     await execFileAsync(FFMPEG, [
-      "-y", "-f", "lavfi", "-i", "color=c=0x2060a0:s=640x360:r=30:d=2",
-      "-f", "lavfi", "-i", "sine=frequency=330:sample_rate=44100:duration=2",
+      "-y", "-f", "lavfi", "-i", `color=c=0x2060a0:s=${BENCHMARK ? "1080x1920" : "640x360"}:r=30:d=${SOURCE_DURATION}`,
+      "-f", "lavfi", "-i", `sine=frequency=330:sample_rate=44100:duration=${SOURCE_DURATION}`,
       "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", source,
     ]);
     const created = await engine.artifacts.create("video", "skyline");
@@ -116,7 +122,7 @@ describe("caption render", () => {
     const written = await engine.files.write(assetId, "original.mp4", await readFile(source));
     if (!written.ok) throw new Error(written.error.message);
     await registerMediaProbe(engine, assetId, "original.mp4", await probeVideo(await outputPath(assetId)));
-    const transcript = await engine.files.write(assetId, "elevenlabs.json", JSON.stringify(TRANSCRIPT));
+    const transcript = await engine.files.write(assetId, "elevenlabs.json", JSON.stringify(BENCHMARK ? { ...TRANSCRIPT, words: Array.from({ length: 30 }, (_, index) => TRANSCRIPT.words.map((word) => ({ ...word, start: word.start + index * 2, end: word.end + index * 2 }))).flat() } : TRANSCRIPT));
     if (!transcript.ok) throw new Error(transcript.error.message);
     const notebook = await engine.notebooks.create("Main");
     if (!notebook.ok) throw new Error(notebook.error.message);
@@ -232,6 +238,66 @@ describe("caption render", () => {
     expect(Math.max(...blurred)).toBeGreaterThan(20);
   });
 
+  it("renders graphics motion and subtitles together from either tool and versions the same cell", async () => {
+    const image = await engine.artifacts.create("image", "Red mark");
+    if (!image.ok) throw new Error(image.error.message);
+    const imageBytes = await sharp({ create: { width: 160, height: 80, channels: 4, background: "#FF0000" } }).png().toBuffer();
+    const written = await engine.files.write(image.value.artifactId, "original.png", imageBytes);
+    if (!written.ok) throw new Error(written.error.message);
+    const document = graphicsDocumentFromLayers([{
+      kind: "image", artifactId: image.value.artifactId, size: 0.2,
+      position: { space: "frame", anchor: "top-left", x: 0.2, y: 0.1 },
+      timing: { start: 0.2, end: SOURCE_DURATION - 0.2, fade: 0.4, enter: "pop", exit: "fade" },
+    }]);
+    const graphics = writeGraphicsDraft(engine, assetId, document);
+    const current = await call<Read>({ detail: "full" });
+    const id = randomUUID();
+    const started = performance.now();
+    await call({ op: "render", notebook_id: notebookId, expected_revision: current.draft!.revision, source_hash: sourceHash, request_id: id, with_graphics: true, graphics_revision: graphics.revision });
+    await expect.poll(async () => (await call<Read>({})).render?.status, { timeout: testBudget(BENCHMARK ? 1_800_000 : 300_000), interval: 1000 }).toMatch(/^(completed|failed)$/u);
+    const first = (await call<Read>({})).render!;
+    expect(first).toMatchObject({ status: "completed", error: null });
+    if (BENCHMARK) console.info(`Stacked 60s 1080x1920 render: ${((performance.now() - started) / 1000).toFixed(2)} seconds`);
+    const path = await outputPath(first.output_asset_id);
+    const early = colorBox(await frame(path, 0.4), [255, 0, 0], 120);
+    const settled = colorBox(await frame(path, 0.7), [255, 0, 0], 60);
+    expect(settled.count).toBeGreaterThan(1000);
+    expect(early.count).toBeGreaterThan(100);
+    expect(early.maxX - early.minX).toBeLessThan(settled.maxX - settled.minX);
+    expect(colorBox(await frame(path, 0.1), [255, 0, 0], 60).count).toBe(0);
+    expect(colorBox(await frame(path, SOURCE_DURATION - 0.1), [255, 0, 0], 60).count).toBe(0);
+    expect(colorBox(await frame(path, 0.5), HIGHLIGHT, 60).count).toBeGreaterThan(200);
+    expect(await probeVideo(path)).toMatchObject({ width: WIDTH, height: HEIGHT, hasAudio: true });
+    const probe = await probeVideo(path);
+    expect(Math.abs(probe.duration - SOURCE_DURATION)).toBeLessThan(0.15);
+    const streams = await execFileAsync(FFPROBE, ["-v", "error", "-select_streams", "v", "-show_entries", "stream=index", "-of", "json", path]);
+    expect((JSON.parse(streams.stdout) as { streams: unknown[] }).streams).toHaveLength(1);
+    const captions = await engine.metadata.artifacts.read(first.output_asset_id, "captions");
+    expect(captions.ok).toBe(true);
+    expect(await graphicsBurned(engine, first.output_asset_id)).toMatchObject({ request_id: id, source_asset_id: assetId, layers: [{ kind: "image" }] });
+    expect((await engine.files.read(first.output_asset_id, "graphics.json")).ok).toBe(true);
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(120_000) });
+    if (BENCHMARK) return;
+    const result = await client.callTool({ name: "video_graphics", arguments: {
+      book_id: bookId, asset_id: assetId, notebook_id: notebookId, op: "render",
+      with_subtitles: "original", subtitles_revision: (await call<Read>({})).draft!.revision,
+      expected_revision: graphics.revision, source_hash: sourceHash, request_id: randomUUID(),
+    } });
+    expect(result.isError).not.toBe(true);
+    await expect.poll(async () => (await call<Read>({})).render?.status, { timeout: testBudget(300_000), interval: 1000 }).toBe("completed");
+    const second = (await call<Read>({})).render!;
+    expect(second.cell_id).toBe(first.cell_id);
+    expect(second.output_asset_id).not.toBe(first.output_asset_id);
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const cell = notebook.value.cells.find((candidate) => candidate.id === second.cell_id);
+    expect(cell?.inputs?.sourceOperation).toBe("caption_video");
+    expect(cell?.inputs?.outputVersionArtifactIds).toEqual(expect.arrayContaining([first.output_asset_id, second.output_asset_id]));
+    expect(engine.jobs.queue.list({ type: "render_graphics", limit: 50 })).toHaveLength(0);
+    expect(await graphicsBurned(engine, second.output_asset_id)).not.toBeNull();
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(120_000) });
+  }, testBudget(BENCHMARK ? 1_800_000 : 600_000));
+
   async function scriptRender(words: Array<{ text: string; start: number; end: number }>, language: string): Promise<{ path: string; box: Box }> {
     const created = await engine.artifacts.create("video", `script ${language}`);
     if (!created.ok) throw new Error(created.error.message);
@@ -297,9 +363,10 @@ describe("caption render", () => {
     const saved = await call<{ revision: string }>({ ...own, op: "update", expected_revision: read.draft!.revision, edits: [{ op: "set_style", style: { snapToOnsets: false } }] });
     const historyOf = async () => JSON.parse(((await client.callTool({ name: "asset_history", arguments: { book_id: bookId, asset_id: sourceId } })).content as TextContent)[0].text) as Array<{ hash: string }>;
     const before = await historyOf();
+    const graphics = writeGraphicsDraft(engine, sourceId, graphicsDocumentFromLayers([{ kind: "text", items: [{ text: "In place", color: "#FF0000" }] }]));
     const requestId = randomUUID();
     const queued = await call<{ job_id: number; status: string; output_artifact_id: string }>({
-      ...own, op: "render", output: "replace", notebook_id: notebookId, expected_revision: saved.revision, source_hash: read.source.media_hash, request_id: requestId,
+      ...own, op: "render", output: "replace", with_graphics: true, graphics_revision: graphics.revision, notebook_id: notebookId, expected_revision: saved.revision, source_hash: read.source.media_hash, request_id: requestId,
     });
     expect(queued).toMatchObject({ output_artifact_id: sourceId, status: "queued" });
     await expect.poll(async () => (await call<Read>(own)).render?.status, { timeout: testBudget(300_000), interval: 1000 }).toBe("completed");
@@ -314,6 +381,14 @@ describe("caption render", () => {
     expect(manifest.value.files.find((file) => file.name === "original.mp4")?.objectHash).not.toBe(read.source.media_hash);
     expect(manifest.value.files.map((file) => file.name)).toContain("proxy.mp4");
     expect(manifest.value.files.map((file) => file.name)).not.toContain("captions.json");
+    expect(manifest.value.files.map((file) => file.name)).toContain("graphics.json");
+    expect(readGraphicsDraft(engine, sourceId)).toBeNull();
+    const retry = await call<{ render: { status: string; job_id: number } }>({
+      ...own, op: "render", output: "replace", with_graphics: true, graphics_revision: graphics.revision,
+      notebook_id: notebookId, expected_revision: saved.revision, source_hash: read.source.media_hash, request_id: requestId,
+    });
+    expect(retry.render).toMatchObject({ status: "completed", job_id: render.job_id });
+    expect(await graphicsBurned(engine, sourceId)).toMatchObject({ output: "replace" });
     const path = await outputPath(sourceId);
     expect(await probeVideo(path)).toMatchObject({ width: WIDTH, height: HEIGHT, hasAudio: true });
     expect(colorBox(await frame(path, 0.5), HIGHLIGHT, 60).count).toBeGreaterThan(200);

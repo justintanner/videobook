@@ -17,7 +17,7 @@ function draftIndexKey(artifactId: string): string {
   return `captions.drafts.${artifactId}`;
 }
 
-function draftLanguages(engine: Engine, artifactId: string): string[] {
+export function draftLanguages(engine: Engine, artifactId: string): string[] {
   const value = engine.settings.get<unknown>(draftIndexKey(artifactId));
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }

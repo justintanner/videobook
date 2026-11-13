@@ -46,6 +46,7 @@ export interface SubtitleEditorState {
   renderQueued: boolean
   rendering: boolean
   output: SubtitleRenderOutput
+  withGraphics?: boolean
 }
 
 export interface SubtitleRenderOutcome {
@@ -108,7 +109,7 @@ export function useSubtitleEditor(options: { bookId: string | null; ready: boole
   const epoch = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saving = useRef<Promise<boolean> | null>(null)
-  const renderRequest = useRef<{ revision: string; output: SubtitleRenderOutput; id: string } | null>(null)
+  const renderRequest = useRef<{ revision: string; output: SubtitleRenderOutput; id: string; graphics: string | null } | null>(null)
 
   const commit = useCallback((update: (current: SubtitleEditorState) => SubtitleEditorState) => {
     const next = update(stateRef.current)
@@ -353,14 +354,18 @@ export function useSubtitleEditor(options: { bookId: string | null; ready: boole
     const current = stateRef.current
     if (!current.target || !current.revision || !current.read) return { ok: false, message: 'The subtitles are not ready to render.' }
     const output = current.output
+    const withGraphics = current.withGraphics ?? Boolean(current.read.graphics_revision)
+    const graphics = withGraphics ? current.read.graphics_revision ?? "missing" : null
     const previous = renderRequest.current
-    const requestId = previous?.revision === current.revision && previous.output === output ? previous.id : crypto.randomUUID()
-    renderRequest.current = { revision: current.revision, output, id: requestId }
+    const requestId = previous?.revision === current.revision && previous.output === output && previous.graphics === graphics ? previous.id : crypto.randomUUID()
+    renderRequest.current = { revision: current.revision, output, id: requestId, graphics }
     commit((value) => ({ ...value, rendering: true, error: null }))
     try {
       parseSubtitlesRender(await call('caption_video', {
         ...baseArgs(),
         op: 'render',
+        with_graphics: withGraphics,
+        ...(graphics ? { graphics_revision: graphics } : {}),
         output,
         notebook_id: current.target.notebookId ?? undefined,
         expected_revision: current.revision,
@@ -391,6 +396,7 @@ export function useSubtitleEditor(options: { bookId: string | null; ready: boole
     resolve,
     cancelPreparation,
     setOutput,
+    setWithGraphics: useCallback((withGraphics: boolean) => { commit((value) => ({ ...value, withGraphics })) }, [commit]),
     render,
     flush,
   }

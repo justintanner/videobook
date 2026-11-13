@@ -67,6 +67,7 @@ export function SubtitlesSheet({ editor, applyFormId, onClose }: { editor: Subti
       secondaryActions={(
         <div className="subtitles-footer">
           <OutputChoice editor={editor} />
+          {state.read?.graphics_revision && <label><input type="checkbox" role="switch" checked={state.withGraphics ?? true} disabled={state.rendering || state.renderQueued} onChange={(event) => editor.setWithGraphics(event.target.checked)} /> With graphics</label>}
           <button type="button" aria-label="Undo" title="Undo (⌘Z)" disabled={state.past.length === 0 || state.rendering} onClick={editor.undo}><Undo2 size={14} aria-hidden="true" /></button>
           <button type="button" aria-label="Redo" title="Redo (⇧⌘Z)" disabled={state.future.length === 0 || state.rendering} onClick={editor.redo}><Redo2 size={14} aria-hidden="true" /></button>
           <span className="subtitles-save-state" data-state={state.save}>{SAVE_LABELS[state.save]}</span>

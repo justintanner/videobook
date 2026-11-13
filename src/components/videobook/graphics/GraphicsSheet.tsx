@@ -73,8 +73,24 @@ export function GraphicsSheet({ editor, assets, mentions, books, applyFormId, on
       applyFormId={applyFormId}
       onCancel={onClose}
       headerActions={<HeaderActions editor={editor} />}
+      secondaryActions={state.read?.subtitles?.length ? <SubtitleChoice editor={editor} /> : null}
     >
       <GraphicsBody key={state.target?.artifactId ?? 'none'} editor={editor} assets={assets} mentions={mentions} books={books} onOpenSource={onOpenSource} />
     </ConfirmSheet>
+  )
+}
+
+function SubtitleChoice({ editor }: { editor: GraphicsEditor }) {
+  const { state } = editor
+  const drafts = state.read?.subtitles ?? []
+  if (!drafts.length) return null
+  const preferred = (drafts.find((draft) => draft.language === 'original') ?? drafts[0]).language
+  const language = state.subtitleLanguage === undefined ? preferred : state.subtitleLanguage
+  return (
+    <div>
+      <label><input type="checkbox" role="switch" checked={language !== null} disabled={state.rendering} onChange={(event) => editor.setSubtitleLanguage(event.target.checked ? preferred : null)} /> With subtitles</label>
+      {language && drafts.length > 1 && <select aria-label="Subtitle language" value={language} disabled={state.rendering} onChange={(event) => editor.setSubtitleLanguage(event.target.value)}>{drafts.map((draft) => <option key={draft.language} value={draft.language}>{draft.language === 'original' ? 'Original language' : draft.language}</option>)}</select>}
+      {language && <span> Uses the subtitle draft’s frame and background.</span>}
+    </div>
   )
 }

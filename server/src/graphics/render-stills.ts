@@ -33,7 +33,7 @@ function drawnImageIds(document: GraphicsDocument, groups: readonly GraphicsStil
   return [...new Set(document.layers.flatMap((layer) => (layer.kind === "image" && drawn.has(layer.id) ? [layer.artifactId] : [])))];
 }
 
-async function stageImages(
+export async function stageImages(
   bundleDir: string,
   ids: readonly string[],
   images: Readonly<Record<string, GraphicsStillImage>>,

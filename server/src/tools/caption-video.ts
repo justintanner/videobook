@@ -1,3 +1,5 @@
+import { readGraphicsDraft } from "../graphics/drafts.js";
+import { GraphicsServiceError } from "../graphics/errors.js";
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { CAPTION_COMPONENTS } from "../captions/analysis.js";
@@ -61,6 +63,8 @@ const schema = {
   expected_revision: z.string().optional().describe("update and render: the draft revision from get that these edits apply to or that was reviewed"),
   source_hash: z.string().optional().describe("render: source.media_hash from the get that was reviewed"),
   request_id: z.string().uuid().optional().describe("render: stable request UUID; reuse it when retrying the same render"),
+  with_graphics: z.boolean().optional().describe("render: include the saved graphics draft in the same encode, below subtitles"),
+  graphics_revision: z.string().optional().describe("render with_graphics: reviewed graphics revision from get"),
   output: z.enum(RENDER_OUTPUTS).optional()
     .describe("render: new (default) writes a subtitled copy into a new video cell below the source, a version of the earlier copy when one exists; replace burns the subtitles into the source video itself, keeping its earlier version in history"),
   edits: z.array(editSchema).max(500).optional()
@@ -81,6 +85,8 @@ type CaptionVideoArgs = {
   source_hash?: string;
   request_id?: string;
   output?: RenderOutput;
+  with_graphics?: boolean;
+  graphics_revision?: string;
   language?: string;
   detail?: "summary" | "full";
   regions?: boolean;
@@ -96,6 +102,7 @@ function json(value: unknown): ToolResult {
 }
 
 function failure(error: unknown): ToolResult {
+  if (error instanceof GraphicsServiceError) return { isError: true, content: [{ type: "text", text: JSON.stringify({ status: error.code === "conflict" ? "invalid" : error.code, message: error.message }) }] };
   if (error instanceof CaptionServiceError) {
     return { isError: true, content: [{ type: "text", text: JSON.stringify({ status: error.code, message: error.message, revision: error.revision }) }] };
   }
@@ -134,6 +141,8 @@ async function render(engine: Engine, args: CaptionVideoArgs, artifactId: string
     sourceHash: args.source_hash,
     notebookId: args.notebook_id ?? null,
     output: args.output ?? "new",
+    withGraphics: args.with_graphics,
+    graphicsRevision: args.graphics_revision,
   });
   return {
     asset_id: artifactId,
@@ -146,7 +155,7 @@ async function render(engine: Engine, args: CaptionVideoArgs, artifactId: string
 }
 
 function withRender(engine: Engine, model: CaptionReadModel) {
-  return { ...model, render: latestCaptionRender(engine, model.asset_id, model.language) };
+  return { ...model, graphics_revision: readGraphicsDraft(engine, model.asset_id)?.revision ?? null, render: latestCaptionRender(engine, model.asset_id, model.language) };
 }
 
 export function captionVideoDef(engine: Engine): ToolDef {

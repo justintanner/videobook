@@ -26,6 +26,7 @@ describe('where a confirm sheet keeps its shortcut hints', () => {
 
   it('keeps the footer for a sheet that offers another action', () => {
     expect(confirmSheetHintsInHeader(chrome({ hasSecondaryActions: true }))).toBe(false)
+    expect(confirmSheetFooterVisible(chrome({ hasSecondaryActions: true, hasHeaderActions: true }))).toBe(true)
   })
 
   it('drops the ready footer and the hints for a sheet that keeps its actions in the header', () => {

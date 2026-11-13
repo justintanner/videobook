@@ -59,6 +59,7 @@ export const subtitlesReadSchema = z.object({
   regions: z.array(z.object({ time: z.number(), regions: z.array(regionSchema) })).optional(),
   envelope: z.object({ hz: z.number(), values: z.array(z.number()) }).nullable().optional(),
   render: renderSchema.nullable().optional(),
+  graphics_revision: z.string().nullable().optional(),
 })
 
 export type SubtitlesRead = z.infer<typeof subtitlesReadSchema>

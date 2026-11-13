@@ -48,6 +48,7 @@ export interface GraphicsEditorState {
   coalesceKey: string | null
   rendering: boolean
   output: GraphicsRenderOutput
+  subtitleLanguage?: string | null
   suggestions: GraphicsSuggestionLists
 }
 
@@ -149,7 +150,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
   const epoch = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saving = useRef<Promise<boolean> | null>(null)
-  const renderRequest = useRef<{ revision: string; output: GraphicsRenderOutput; id: string } | null>(null)
+  const renderRequest = useRef<{ revision: string; output: GraphicsRenderOutput; id: string; subtitles: string | null } | null>(null)
 
   const commit = useCallback((update: (current: GraphicsEditorState) => GraphicsEditorState) => {
     const next = update(stateRef.current)
@@ -327,14 +328,19 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     const current = stateRef.current
     if (!ready || !current.target || !current.revision || !current.read) return { ok: false, message: 'The graphics are not ready to render.' }
     const output = current.output
+    const available = current.read.subtitles ?? []
+    const language = current.subtitleLanguage === undefined ? (available.find((draft) => draft.language === 'original') ?? available[0])?.language : current.subtitleLanguage
+    const subtitle = available.find((draft) => draft.language === language)
+    const subtitles = language ? `${language}:${subtitle?.revision ?? "missing"}` : null
     const previous = renderRequest.current
-    const requestId = previous?.revision === current.revision && previous.output === output ? previous.id : crypto.randomUUID()
-    renderRequest.current = { revision: current.revision, output, id: requestId }
+    const requestId = previous?.revision === current.revision && previous.output === output && previous.subtitles === subtitles ? previous.id : crypto.randomUUID()
+    renderRequest.current = { revision: current.revision, output, id: requestId, subtitles }
     commit((value) => ({ ...value, rendering: true, error: null }))
     try {
       const queued = parseGraphicsRender(await call('video_graphics', {
         ...baseArgs(),
         op: 'render',
+        ...(language ? { with_subtitles: language, subtitles_revision: subtitle?.revision } : {}),
         output,
         expected_revision: current.revision,
         source_hash: current.read.source.source_hash,
@@ -461,6 +467,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     reload,
     keepMine,
     setOutput,
+    setSubtitleLanguage: useCallback((subtitleLanguage: string | null) => { commit((value) => ({ ...value, subtitleLanguage })) }, [commit]),
     render,
     flush,
     saveTemplate,

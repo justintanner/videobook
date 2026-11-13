@@ -21,6 +21,9 @@ function clientManualChunk(id: string): string | undefined {
   if (id.includes('/src/components/videobook/MusicVideoEditor')) {
     return 'music-video'
   }
+  if (id.includes('/server/src/remotion/graphics/GraphicsOverlay.tsx') || id.includes('/server/src/remotion/captions/caption-fonts.ts')) {
+    return 'shared'
+  }
   if (id.includes('/src/components/videobook/subtitles/SubtitlesBody') || id.includes('/src/components/videobook/subtitles/SubtitlesPreview') || id.includes('/server/src/remotion/captions/')) {
     return 'subtitles-editor'
   }

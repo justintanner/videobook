@@ -111,6 +111,7 @@ const readSchema = z.object({
   images: z.record(z.string(), imageSchema),
   render: renderSchema.nullable(),
   burned: burnedSchema.nullable(),
+  subtitles: z.array(z.object({ language: z.string(), revision: z.string() })).optional(),
   watermark: watermarkSchema.nullable().default(null),
   regions: z.array(regionFrameSchema).default([]),
 })

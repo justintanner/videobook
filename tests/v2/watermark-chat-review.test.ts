@@ -90,6 +90,7 @@ function editorFor(target: GraphicsTarget, read: GraphicsRead, output: GraphicsR
     reload: async () => undefined,
     keepMine: async () => undefined,
     setOutput: () => undefined,
+    setSubtitleLanguage: () => undefined,
     render: done,
     flush: async () => true,
     saveTemplate: done,
@@ -139,6 +140,21 @@ describe('watermark in the graphics editor', () => {
     expect(html).toContain('aria-pressed="false">New video</button>')
     expect(html).not.toContain('confirm-sheet-foot-blocking')
     expect(html).not.toContain('Rebuilds playable proxy')
+  })
+
+  it('includes saved subtitles by default, prefers the original language and lets the operator opt out', () => {
+    const read = { ...watermarkRead('tiktok'), subtitles: [{ language: 'th', revision: 'thai' }, { language: 'original', revision: 'spoken' }] }
+    const editor = editorFor(watermarkTarget(), read)
+    const html = renderSheet(editor)
+    expect(html).toContain('role="switch" checked=""')
+    expect(html).toContain('With subtitles')
+    expect(html).toContain('value="original" selected=""')
+    expect(html).toContain('Uses the subtitle draft’s frame and background.')
+    editor.state.subtitleLanguage = null
+    expect(renderSheet(editor)).not.toContain('role="switch" checked=""')
+    expect(renderSheet(editor)).not.toContain('aria-label="Subtitle language"')
+    editor.state.read = watermarkRead('tiktok')
+    expect(renderSheet(editor)).not.toContain('With subtitles')
   })
 
   it('offers the platform switch and saving the look as the default watermark', () => {

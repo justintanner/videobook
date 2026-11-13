@@ -1,3 +1,7 @@
+import { readCaptionRenderRequest } from "../captions/render.js";
+import { readCaptionDraft, writeCaptionDraft } from "../captions/drafts.js";
+import { writeGraphicsDraft } from "../graphics/drafts.js";
+import { graphicsDocumentFromLayers } from "../graphics/model.js";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -359,6 +363,48 @@ describe("caption_video", () => {
     const crowded = await notebookWith(full2.asset_id, true);
     const noRoom = await call({ asset_id: full2.asset_id, op: "render", notebook_id: crowded, source_hash: full2.source.media_hash, expected_revision: full2.draft.revision, request_id: randomUUID() });
     expect(noRoom).toMatchObject({ error: true, body: { status: "invalid", message: expect.stringMatching(/empty cell/) } });
+  });
+
+  it("snapshots both drafts, refuses missing or stale drafts and routes either tool to one caption job", async () => {
+    const assetId = await video();
+    const full = await ready(assetId);
+    const base = { asset_id: assetId, op: "render", source_hash: full.source.media_hash, expected_revision: full.draft.revision, with_graphics: true };
+    expect(await call({ ...base, request_id: randomUUID() })).toMatchObject({ error: true, body: { status: "not_ready" } });
+    const document = graphicsDocumentFromLayers([{ kind: "text", items: [{ text: "Headline" }] }]);
+    const graphics = writeGraphicsDraft(engine, assetId, document);
+    expect(await call({ ...base, graphics_revision: "old", request_id: randomUUID() })).toMatchObject({ error: true, body: { status: "invalid" } });
+    const realBookId = engine.book.get().bookId;
+    await pauseBookQueueForTests(realBookId);
+    try {
+      const requestId = randomUUID();
+      const first = await ok<{ job_id: number }>({ ...base, graphics_revision: graphics.revision, request_id: requestId });
+      const request = readCaptionRenderRequest(engine, requestId)!;
+      expect(request.graphics).toEqual({ revision: graphics.revision, document });
+      expect(await ok({ ...base, graphics_revision: graphics.revision, request_id: requestId })).toMatchObject({ job_id: first.job_id });
+      expect(engine.jobs.queue.get(first.job_id)?.payload.type).toBe("render_captions");
+      const changed = writeGraphicsDraft(engine, assetId, document);
+      expect(await call({ ...base, request_id: requestId })).toMatchObject({ error: true, body: { status: "invalid" } });
+      const secondId = randomUUID();
+      const saved = readCaptionDraft(engine, assetId, "original")!;
+      const graphicsArgs = { book_id: bookId, asset_id: assetId, op: "render", expected_revision: changed.revision, source_hash: full.source.media_hash };
+      const fromGraphics = async (extra: Record<string, unknown>) => {
+        const result = await client.callTool({ name: "video_graphics", arguments: { ...graphicsArgs, request_id: randomUUID(), ...extra } });
+        return { error: Boolean(result.isError), body: JSON.parse((result.content as TextContent)[0].text) as Record<string, unknown> };
+      };
+      expect(await fromGraphics({ with_subtitles: "th" })).toMatchObject({ error: true, body: { status: "not_ready" } });
+      expect(await fromGraphics({ with_subtitles: "original", subtitles_revision: "old" })).toMatchObject({ error: true, body: { status: "invalid" } });
+      expect(await fromGraphics({ with_subtitles: "original", subtitles_revision: saved.revision, request_id: secondId })).toMatchObject({ error: false, body: { status: "queued" } });
+      expect(readCaptionRenderRequest(engine, secondId)?.graphics?.revision).toBe(changed.revision);
+      expect(await fromGraphics({ op: "get" })).toMatchObject({ error: false, body: { render: { request_id: secondId, status: "queued" } } });
+      expect(readCaptionRenderRequest(engine, secondId)?.fingerprint).not.toBe(request.fingerprint);
+      writeCaptionDraft(engine, assetId, "original", { ...saved.document, source: { ...saved.document.source, mediaHash: "stale" } });
+      expect(await fromGraphics({ with_subtitles: "original" })).toMatchObject({ error: true, body: { status: "stale_source" } });
+    } finally {
+      for (const job of engine.jobs.queue.list({ type: "render_captions", limit: 50 }).filter((candidate) => candidate.state === "queued")) {
+        await engine.jobs.queue.abort(job.id, "stacked render validation test");
+      }
+      await resumeBookQueueForTests(realBookId);
+    }
   });
 
   it("queues an in-place render into the source without an empty cell and keeps a request to one output", async () => {

@@ -25,6 +25,6 @@ export function confirmSheetHintsInHeader(input: ConfirmSheetChromeInput): boole
 }
 
 export function confirmSheetFooterVisible(input: ConfirmSheetChromeInput): boolean {
-  if (input.hasHeaderActions) return input.state !== 'ready'
+  if (input.hasHeaderActions) return input.hasSecondaryActions || input.state !== 'ready'
   return !confirmSheetHintsInHeader(input)
 }

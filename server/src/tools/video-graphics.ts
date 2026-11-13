@@ -1,3 +1,6 @@
+import { draftLanguages, readCaptionDraft } from "../captions/drafts.js";
+import { latestStackedCaptionRender, requestCaptionRender } from "../captions/render.js";
+import { CaptionServiceError } from "../captions/service.js";
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { BookManager } from "../book-manager.js";
@@ -165,6 +168,8 @@ const schema = {
   expected_revision: z.string().optional().describe("update and render: the revision from get that these changes apply to or that was reviewed"),
   source_hash: z.string().optional().describe("render: source.source_hash from the get that was reviewed"),
   request_id: z.string().uuid().optional().describe("render: stable request UUID; reuse it when retrying the same render"),
+  with_subtitles: z.string().regex(/^(original|[a-z]{2})$/u).optional().describe("render: include the saved subtitle draft in this language in one encode, using its aspect and background"),
+  subtitles_revision: z.string().optional().describe("render with_subtitles: reviewed revision from subtitles in get"),
   output: z.enum(RENDER_OUTPUTS).optional()
     .describe("render: new (default) writes a copy with the graphics into a new video cell below the source, a version of the earlier copy when one exists; replace burns the graphics into the source video itself, keeping its earlier version in history, and clears the saved graphics"),
   edits: z.array(editSchema).max(200).optional()
@@ -198,6 +203,8 @@ type VideoGraphicsArgs = {
   source_hash?: string;
   request_id?: string;
   output?: RenderOutput;
+  with_subtitles?: string;
+  subtitles_revision?: string;
   edits?: GraphicsEdit[];
   document?: unknown;
   template_id?: string | null;
@@ -211,6 +218,7 @@ function json(value: unknown): ToolResult {
 }
 
 function failure(error: unknown): ToolResult {
+  if (error instanceof CaptionServiceError) return { isError: true, content: [{ type: "text", text: JSON.stringify({ status: error.code === "conflict" ? "invalid" : error.code, message: error.message }) }] };
   const body = error instanceof GraphicsServiceError
     ? { status: error.code, message: error.message, ...error.details }
     : { status: "error", message: error instanceof Error ? error.message : String(error) };
@@ -234,14 +242,27 @@ async function render(engine: Engine, args: VideoGraphicsArgs, artifactId: strin
   if (!args.expected_revision || !args.source_hash || !args.request_id) {
     throw new GraphicsServiceError("invalid", "render needs expected_revision, source_hash and request_id from the reviewed get.");
   }
-  const status = await requestGraphicsRender(engine, args.book_id, artifactId, {
-    requestId: args.request_id,
-    expectedRevision: args.expected_revision,
-    sourceHash: args.source_hash,
-    notebookId: args.notebook_id ?? null,
-    output: args.output ?? "new",
-    look,
-  });
+  const subtitle = args.with_subtitles ? readCaptionDraft(engine, artifactId, args.with_subtitles) : null;
+  if (args.with_subtitles && !subtitle) throw new GraphicsServiceError("not_ready", "Save a subtitle draft in this language before rendering with subtitles.");
+  const status = args.with_subtitles && subtitle
+    ? await requestCaptionRender(engine, args.book_id, artifactId, args.with_subtitles, {
+      requestId: args.request_id,
+      expectedRevision: args.subtitles_revision ?? subtitle.revision,
+      sourceHash: args.source_hash,
+      notebookId: args.notebook_id ?? null,
+      output: args.output ?? "new",
+      withGraphics: true,
+      graphicsRevision: args.expected_revision,
+      graphicsLook: look,
+    })
+    : await requestGraphicsRender(engine, args.book_id, artifactId, {
+        requestId: args.request_id,
+        expectedRevision: args.expected_revision,
+        sourceHash: args.source_hash,
+        notebookId: args.notebook_id ?? null,
+        output: args.output ?? "new",
+        look,
+      });
   return { asset_id: artifactId, job_id: status.job_id, status: status.status, output_artifact_id: status.output_asset_id, render: status };
 }
 
@@ -265,7 +286,14 @@ function placementInput(args: VideoGraphicsArgs, op: "check_placement" | "detect
 
 async function read(engine: Engine, args: VideoGraphicsArgs, artifactId: string, look: GraphicsLook) {
   const model = await readGraphics(engine, artifactId, { notebookId: args.notebook_id ?? null, look });
-  return { ...model, render: latestGraphicsRender(engine, artifactId), burned: await graphicsBurned(engine, artifactId) };
+  const subtitles = draftLanguages(engine, artifactId).flatMap((language) => {
+    const draft = readCaptionDraft(engine, artifactId, language);
+    return draft ? [{ language, revision: draft.revision }] : [];
+  });
+  const graphicsRender = latestGraphicsRender(engine, artifactId);
+  const stackedRender = latestStackedCaptionRender(engine, artifactId);
+  const render = stackedRender && (!graphicsRender || (stackedRender.job_id ?? 0) > (graphicsRender.job_id ?? 0)) ? stackedRender : graphicsRender;
+  return { ...model, subtitles, render, burned: await graphicsBurned(engine, artifactId) };
 }
 
 function videoArtifactId(engine: Engine, args: VideoGraphicsArgs, op: VideoOp | "save_template" | "save_watermark"): string {

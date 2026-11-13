@@ -7,6 +7,9 @@ import type { CaptionRenderRequest } from "../captions/render.js";
 import { CAPTION_RENDER_JOB, CAPTION_SOURCE_OPERATION, captionRenderDestination, readCaptionRenderRequest } from "../captions/render.js";
 import type { CaptionMediaSource } from "../captions/source.js";
 import { captionMediaSource } from "../captions/source.js";
+import { deleteGraphicsDraft } from "../graphics/drafts.js";
+import { burnedLayers, drawnImageLayers, graphicsImagePath, graphicsImageSize } from "../graphics/render.js";
+import { stageImages, type GraphicsStillImage } from "../graphics/render-stills.js";
 import { logger } from "../logger.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { withRemotionCancellation } from "../remotion-cancellation.js";
@@ -14,7 +17,7 @@ import { renderBrowserExecutable } from "../remotion/browser.js";
 import type { CaptionCompositionProps } from "../remotion/captions/CaptionComposition.js";
 import { captionDurationInFrames } from "../remotion/captions/composition-meta.js";
 import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
-import { renderWithEncoderFallback } from "../remotion-encoding.js";
+import { renderH264WithEncoderFallback } from "../remotion-h264.js";
 import type { JobHandlerContext } from "../queue.js";
 import { withLocalLease, withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
@@ -55,7 +58,7 @@ async function pinnedSnapshot(engine: Engine, request: CaptionRenderRequest, sou
   return { name, path: join(manifest.value.path, name) };
 }
 
-async function renderComposition(input: {
+async function renderComposition(engine: Engine, input: {
   request: CaptionRenderRequest;
   source: CaptionMediaSource;
   snapshotPath: string;
@@ -67,7 +70,11 @@ async function renderComposition(input: {
   const videoName = `captions-source-${input.request.requestId}${extname(input.snapshotPath) || ".mp4"}`;
   const videoPath = join(bundleDir, videoName);
   await copyFile(input.snapshotPath, videoPath);
+  const staged: string[] = [];
   try {
+    const graphics = input.request.graphics;
+    const images = graphics ? await compositionImages(engine, graphics.document, input.source.durationSeconds) : {};
+    const stagedImages = await stageImages(bundleDir, Object.keys(images), images, staged);
     const fps = input.request.document.source.fps;
     const inputProps: CaptionCompositionProps = {
       videoSrc: videoName,
@@ -78,6 +85,7 @@ async function renderComposition(input: {
       document: input.request.document,
       regions: input.request.regions,
       fontUrls: null,
+      graphics: graphics ? { document: graphics.document, durationSeconds: input.source.durationSeconds, images: stagedImages } : null,
     };
     const browserExecutable = await renderBrowserExecutable();
     const composition = await selectComposition({
@@ -88,20 +96,20 @@ async function renderComposition(input: {
       ...(browserExecutable ? { browserExecutable } : {}),
     });
     input.signal.throwIfAborted();
-    await withRemotionCancellation(input.signal, (cancelSignal) => renderWithEncoderFallback((hardwareAcceleration) => renderMedia({
+    await withRemotionCancellation(input.signal, (cancelSignal) => renderH264WithEncoderFallback((hardwareAcceleration) => renderMedia({
       composition,
       serveUrl: bundleDir,
       codec: "h264",
       outputLocation: input.outputPath,
       inputProps,
       videoBitrate: "8M",
-      concurrency: 1,
+      concurrency: input.request.graphics ? 2 : 1,
       hardwareAcceleration,
       cancelSignal,
       ...(browserExecutable ? { browserExecutable } : {}),
     })));
   } finally {
-    await rm(videoPath, { force: true });
+    await Promise.all([videoPath, ...staged].map((path) => rm(path, { force: true })));
   }
 }
 
@@ -137,6 +145,19 @@ async function writeProvenance(engine: Engine, request: CaptionRenderRequest): P
     output: request.output,
   });
   if (!provenance.ok) throw new Error(provenance.error.message);
+  if (request.graphics) {
+    const written = await engine.metadata.artifacts.write(request.outputArtifactId, "graphics", {
+      requestId: request.requestId,
+      sourceArtifactId: request.sourceArtifactId,
+      sourceHash: request.sourceHash,
+      output: request.output,
+      renderedAt: new Date().toISOString(),
+      layers: burnedLayers(request.graphics.document, request.document.source.durationSeconds),
+    });
+    if (!written.ok) throw new Error(written.error.message);
+    const snapshot = await engine.files.write(request.outputArtifactId, "graphics.json", JSON.stringify(request.graphics.document, null, 2));
+    if (!snapshot.ok) throw new Error(snapshot.error.message);
+  }
 }
 
 async function publishCorrections(engine: Engine, bookId: string, request: CaptionRenderRequest): Promise<void> {
@@ -155,7 +176,7 @@ async function renderCaptions(engine: Engine, payload: RenderCaptionsPayload, ct
   if (!manifest.ok) throw new Error(manifest.error.message);
   const outputPath = join(manifest.value.path, RENDER_NAME);
   try {
-    await renderComposition({ request, source, snapshotPath: snapshot.path, outputPath, signal: ctx.signal });
+    await renderComposition(engine, { request, source, snapshotPath: snapshot.path, outputPath, signal: ctx.signal });
     ctx.signal.throwIfAborted();
     await reviewedSource(engine, request);
     const duration = await writeOutput(engine, request, outputPath, ctx.signal);
@@ -178,12 +199,13 @@ async function burnIntoSource(engine: Engine, bookId: string, request: CaptionRe
   await reviewedSource(engine, request);
   const outputPath = join(source.directory, RENDER_NAME);
   try {
-    await renderComposition({ request, source, snapshotPath: source.path, outputPath, signal });
+    await renderComposition(engine, { request, source, snapshotPath: source.path, outputPath, signal });
     signal.throwIfAborted();
     await reviewedSource(engine, request);
     await publishCorrections(engine, bookId, request);
     await replaceArtifactFileFromPath(engine, source.artifactId, source.file.name, outputPath);
     await writeProvenance(engine, request);
+    if (request.graphics) await engine.files.delete(source.artifactId, ".original.analysis.json");
     return join(source.directory, source.file.name);
   } finally {
     await rm(outputPath, { force: true });
@@ -213,6 +235,7 @@ async function renderCaptionsInPlace(engine: Engine, bookId: string, request: Ca
     skipDownstreamJobs: true,
     preserveAudioArtifacts: true,
   });
+  if (request.graphics) deleteGraphicsDraft(engine, source.artifactId);
   const placement = sourceCellPlacement(engine, request.notebookId, request.sourceArtifactId);
   return { output_asset_id: source.artifactId, cell_id: placement.cellId, address: placement.address };
 }
@@ -226,4 +249,15 @@ export function registerRenderCaptionsJob(engine: Engine): void {
     }
     return renderCaptionsNew(engine, payload, ctx);
   });
+}
+
+async function compositionImages(engine: Engine, document: NonNullable<CaptionRenderRequest["graphics"]>["document"], duration: number): Promise<Record<string, GraphicsStillImage>> {
+  const images: Record<string, GraphicsStillImage> = {};
+  for (const layer of drawnImageLayers(document, duration)) {
+    const path = await graphicsImagePath(engine, layer.artifactId);
+    const size = path ? await graphicsImageSize(path) : null;
+    if (!path || !size) throw new Error(`Layer ${layer.id} has an unavailable image. Review the graphics, then render again.`);
+    images[layer.artifactId] = { path, ...size };
+  }
+  return images;
 }

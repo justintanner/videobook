@@ -185,7 +185,7 @@ async function requireSettledVideo(engine: Engine, artifactId: string): Promise<
   }
 }
 
-async function requireImages(engine: Engine, layers: readonly GraphicsImageLayer[]): Promise<void> {
+export async function requireGraphicsImages(engine: Engine, layers: readonly GraphicsImageLayer[]): Promise<void> {
   const paths = await Promise.all(layers.map((layer) => graphicsImagePath(engine, layer.artifactId)));
   const missing = layers.find((_layer, index) => paths[index] === null);
   if (missing) {
@@ -237,7 +237,7 @@ async function reviewedRender(engine: Engine, artifactId: string, input: Graphic
   if (graphicsStillGroups(reviewed.document, reviewed.source.durationSeconds).length === 0) {
     throw new GraphicsServiceError("invalid", "These graphics have nothing to draw. Add text, an image, a QR code or a shade, then render.");
   }
-  await requireImages(engine, drawnImageLayers(reviewed.document, reviewed.source.durationSeconds));
+  await requireGraphicsImages(engine, drawnImageLayers(reviewed.document, reviewed.source.durationSeconds));
   if (input.output === "replace" && reviewed.source.kind !== "video") {
     throw new GraphicsServiceError("invalid", "Only a video cell can take its graphics in place. Render a new copy of an exported timeline.");
   }
