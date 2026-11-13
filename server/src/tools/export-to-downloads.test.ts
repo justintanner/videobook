@@ -57,6 +57,14 @@ describe("original media file actions", () => {
     const manifest = await engine.files.manifest(artifactId);
     if (!manifest.ok) throw new Error(manifest.error.message);
     expect(findOriginalMediaFile(manifest.value.files, kind)?.name).toBe(`original.${ext}`);
+    const browser = await exportAssetFileDef(engine).handler({ asset_id: artifactId, to: "browser" });
+    expect(browser.isError).toBeFalsy();
+    expect(JSON.parse((browser.content as Array<{ text: string }>)[0]!.text)).toEqual({
+      status: "download",
+      filename: `wood.${ext}`,
+      url: `/files/${engine.book.get().bookId}/${artifactId}/original.${ext}?download=wood.${ext}`,
+    });
+    expect(await readdir(downloads)).toEqual([]);
     for (const suffix of ["", " (2)"]) {
       const result = await exportAssetFileDef(engine).handler({ asset_id: artifactId, to: "downloads" });
       expect(result.isError).toBeFalsy();
@@ -81,7 +89,7 @@ describe("original media file actions", () => {
 
   it.each(["video", "audio", "image"] as const)("rejects missing %s originals for download and copy", async (kind) => {
     const artifactId = await asset(kind, { "thumbnail.jpg": "thumbnail", "proxy.mp4": "proxy" });
-    for (const to of ["downloads", "clipboard"]) {
+    for (const to of ["downloads", "browser", "clipboard"]) {
       const result = await exportAssetFileDef(engine).handler({ asset_id: artifactId, to });
       expect(result).toMatchObject({ isError: true, content: [{ text: "No original media file found for asset" }] });
     }

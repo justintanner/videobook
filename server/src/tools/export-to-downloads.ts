@@ -5,7 +5,7 @@ import { findOriginalMediaFile } from "../original-media-file.js";
 import { copyToDownloads } from "../downloads-dest.js";
 import type { ToolDef } from "./tool-def.js";
 
-export function exportToDownloadsDef(engine: Engine): ToolDef {
+export function exportToDownloadsDef(engine: Engine, destination: "downloads" | "browser" = "downloads"): ToolDef {
   return {
     name: "export_to_downloads",
     description: "Copy an asset's original media file to the user's Downloads folder",
@@ -39,8 +39,15 @@ export function exportToDownloadsDef(engine: Engine): ToolDef {
         };
       }
 
-      const source = join(manifest.path, file.name);
       const ext = extname(file.name);
+      if (destination === "browser") {
+        const filename = `${engine.book.get().name}${ext}`;
+        const url = `/files/${encodeURIComponent(engine.book.get().bookId)}/${encodeURIComponent(asset_id)}/${encodeURIComponent(file.name)}?download=${encodeURIComponent(filename)}`;
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ status: "download", url, filename }) }],
+        };
+      }
+      const source = join(manifest.path, file.name);
       let dest: string;
       try {
         dest = await copyToDownloads(source, engine.book.get().name, ext);

@@ -381,7 +381,7 @@ import {
   mediaAssetWatchStep,
   downloadVideoCellInput,
 } from '@/videobook/notebook-download'
-import { performMediaFileAction } from '@/videobook/use-media-file-actions'
+import { performBrowserFileAction, performMediaFileAction } from '@/videobook/use-media-file-actions'
 import { routedMediaCellInputs } from '@/videobook/notebook-routed-action'
 import {
   inputFocusBackTarget,
@@ -8613,6 +8613,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (!direct.ok) return { ok: false, message: direct.message, nextInput: input, selectInput: false }
         Object.assign(args, direct.args)
       }
+      const downloadMessage = await performBrowserFileAction((tool, values, options) => call(tool, values, { ...options, chat }), command.mcpTool.tool, args)
+      if (downloadMessage) return { ok: true, message: downloadMessage }
       const result = await call(command.mcpTool.tool, args, { chat })
       return await completeWorkspaceToolResult(command.mcpTool.tool, result, args, command.command, chat)
     } catch (error) {
@@ -8658,6 +8660,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!result.ok) throw new Error(result.error)
       return { message: `${action.title} complete` }
     }
+    const downloadMessage = await performBrowserFileAction((name, args, options) => call(name, args, { ...options, chat }), tool, values)
+    if (downloadMessage) return { message: downloadMessage, close: true }
     const value = await call(tool, values, { chat })
     if (recordValue(value)?.kind === 'chat-action-plan') {
       const result = await previewRoutedChatAction(asChatActionPlan(value), String(values.prompt ?? ''), undefined, chat)

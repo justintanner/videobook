@@ -73,7 +73,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
 - `ensure_notebook_workflow_scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists
 - `estimate_cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Rewrite, chat and analysis use text-call forecasts that exclude media, tools and history. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. MiniMax H3 Max models whose duration and resolution are known quote those seconds at the published per-second rate instead, as a lower bound with a warning, with or without the key. A MachGen Topaz upscale of a MachGen output uses MachGen's free quote when MACHGEN_API_KEY is set; a video MachGen must upload is quoted when its job submits. Without those keys, or without a published rate, the estimate is $0 with a warning.
-- `export_asset_file` — Hand an asset's original media file to macOS: copy it to Downloads, put it on the pasteboard as a file, or reveal its folder in Finder.
+- `export_asset_file` — Export an asset's original media file: downloads copies it to the server's Downloads folder and returns its path; browser returns an attachment URL and filename without copying. Clipboard and Finder use macOS. The browser UI chooses browser for non-loopback pages; direct tool calls to downloads keep copying.
 - `export_asset_to_project` — Export an asset from one project to a different project
 - `export_transcript_srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.
 - `extend_audio_asset` — Extend an audio asset to a total duration with a matching ElevenLabs continuation that keeps the source at the start, as a new audio asset.
@@ -286,7 +286,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/diagnostics` (aliases: `/storage`) — Open MCP, catalog, CAS, and publication diagnostics; UI: `open_diagnostics`
 - `/disconnect-notebook-cells` — Delete a notebook edge; MCP: `disconnect_notebook_cells`
 - `/doctor` (aliases: `/recover`, `/clear-failed`) — Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore it to its last usable state, or 'clean' to clear failed generations.; MCP: `doctor`
-- `/download` — Save an asset to the Downloads folder; MCP: `export_asset_file`
+- `/download` — Download an asset in the browser on a hosted page, or copy it to Downloads locally; MCP: `export_asset_file`
 - `/duck` — Lower background audio beneath a narration clip; preview or workspace operation
 - `/duplicate` (aliases: `/export-to`) — Duplicate an asset into an optional notebook destination, or into another project with --project; MCP: `duplicate_asset`
 - `/edit-asset-tag` — Add, remove or restore one tag on an asset. add makes a manual tag that survives re-analysis; removing an automatic tag records a dismissal so re-analysis cannot bring it back; restore clears that dismissal.; MCP: `edit_asset_tag`

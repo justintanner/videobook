@@ -36,6 +36,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Download actions and `/download` in a non-loopback browser now save the original file through the browser. Local pages and direct MCP Downloads exports keep copying to the server Downloads folder.
+
 - Every @apicity package moves to 0.28.0. Apicity drops KIE's withdrawn
   Midjourney calls, which Videobook never used.
 - `@hono/node-server` resolves 2.1.8, and the dependency override now requires

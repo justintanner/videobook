@@ -586,7 +586,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/download",
-    description: "Save an asset to the Downloads folder",
+    description: "Download an asset in the browser on a hosted page, or copy it to Downloads locally",
     example: "/download @a1",
     category: "context_menu",
     icon: "Download",
