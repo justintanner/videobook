@@ -5,19 +5,17 @@ import { z } from "zod";
 import { probeVideo } from "../ffmpeg.js";
 import type { CutVideoRangesResult } from "../jobs/cut-video-ranges.js";
 import { addClipCells } from "../notebook-clip-cells.js";
-import { queue, waitForBookJob } from "../queue.js";
-import type { SceneCutOptions, SceneData } from "../scene-cuts.js";
+import { queue } from "../queue.js";
+import type { SceneCutOptions } from "../scene-cuts.js";
 import { DEFAULT_MIN_SCENE_SECONDS, DEFAULT_SCENE_MIN_SCORE, selectSceneCuts } from "../scene-cuts.js";
 import type { VideoRange } from "../video-cut-ranges.js";
 import { cutPointPieces, durationCutPoints } from "../video-cut-ranges.js";
-import { requestScenes } from "./detect-scenes.js";
+import { awaitScenes } from "./detect-scenes.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { toolError } from "./_shared.js";
 import type { VideoCutSource } from "./video-source-reference.js";
 import { resolveVideoCutSource } from "./video-source-reference.js";
 import { parseVideoTimestamp, videoTimestampSchema } from "./video-time-input.js";
-
-const SCENE_WAIT_MS = 600_000;
 
 type SplitArgs = {
   asset_id: string;
@@ -41,17 +39,6 @@ async function probedDuration(engine: Engine, artifactId: string): Promise<numbe
   return probe.videoDuration || probe.duration;
 }
 
-async function detectedScenes(engine: Engine, artifactId: string, bookId: string): Promise<SceneData> {
-  const first = await requestScenes(engine, { reference: artifactId, bookId, force: false });
-  if (!first.ok) throw new Error(first.error);
-  if (first.scenes) return first.scenes;
-  if (first.jobId !== null) await waitForBookJob(bookId, first.jobId, SCENE_WAIT_MS);
-  const second = await requestScenes(engine, { reference: artifactId, bookId, force: false });
-  if (!second.ok) throw new Error(second.error);
-  if (!second.scenes) throw new Error(`Scene detection for ${artifactId} did not finish`);
-  return second.scenes;
-}
-
 function requestedModes(args: SplitArgs): number {
   return [(args.cut_points?.length ?? 0) > 0, (args.durations?.length ?? 0) > 0, args.scenes === true]
     .filter(Boolean).length;
@@ -60,7 +47,7 @@ function requestedModes(args: SplitArgs): number {
 async function splitPieces(engine: Engine, args: SplitArgs, artifactId: string): Promise<VideoRange[]> {
   if (requestedModes(args) !== 1) throw new Error("Pass exactly one of cut_points, durations, or scenes: true");
   if (args.scenes) {
-    const scenes = await detectedScenes(engine, artifactId, args.book_id);
+    const scenes = await awaitScenes(engine, artifactId, args.book_id);
     const options: SceneCutOptions = {
       minScore: args.min_score,
       includeSettles: args.include_settles,

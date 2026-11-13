@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import { findVideoFile } from "videobook-engine";
 import { z } from "zod";
 import { readArtifactJson, requestSidecarAnalysis } from "../analysis-sidecars.js";
+import { waitForBookJob } from "../queue.js";
 import type { SceneData } from "../scene-cuts.js";
 import { parseSceneDocument } from "../scene-cuts.js";
 import { SCENE_DETECTION, sceneDetectionRecord } from "../vision-components.js";
@@ -11,6 +12,8 @@ import { resolveVideoAssetReference } from "./video-source-reference.js";
 type SceneRequestResult =
   | { ok: true; assetId: string; jobId: number | null; status: string; scenes: SceneData | null; counts: Record<string, unknown> }
   | { ok: false; error: string };
+
+const SCENE_WAIT_MS = 600_000;
 
 function summary(document: unknown): Record<string, unknown> {
   if (typeof document !== "object" || document === null) return {};
@@ -32,7 +35,7 @@ function resolveAssetId(engine: Engine, reference: string, notebookId?: string):
   return resolveVideoAssetReference(engine, trimmed, notebookId);
 }
 
-export async function requestScenes(
+async function requestScenes(
   engine: Engine,
   input: { reference: string; bookId: string; notebookId?: string; force: boolean },
 ): Promise<SceneRequestResult> {
@@ -64,6 +67,17 @@ export async function requestScenes(
     scenes: parseSceneDocument(document, sceneFileUrl(input.bookId, assetId)),
     counts: summary(document),
   };
+}
+
+export async function awaitScenes(engine: Engine, artifactId: string, bookId: string): Promise<SceneData> {
+  const first = await requestScenes(engine, { reference: artifactId, bookId, force: false });
+  if (!first.ok) throw new Error(first.error);
+  if (first.scenes) return first.scenes;
+  if (first.jobId !== null) await waitForBookJob(bookId, first.jobId, SCENE_WAIT_MS);
+  const second = await requestScenes(engine, { reference: artifactId, bookId, force: false });
+  if (!second.ok) throw new Error(second.error);
+  if (!second.scenes) throw new Error(`Scene detection for ${artifactId} did not finish`);
+  return second.scenes;
 }
 
 export function detectScenesDef(engine: Engine): ToolDef {

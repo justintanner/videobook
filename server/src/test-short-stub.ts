@@ -21,8 +21,8 @@ export const SHORT_STUB_REFUSAL = "Request blocked by the content policy";
 
 const FAL_STORAGE_HOST = "rest.fal.ai";
 const FREE_HOSTS = new Set(["litterbox.catbox.moe", "uguu.se", "tmpfile.link"]);
-const SUBMIT = /^\/(openai\/gpt-image-2\.6\/(?:sunburst|flare)\/(?:edit|text-to-image)|minimax\/h3-max\/(?:reference-to-video|extend-video))$/u;
-const POLL = /^\/(?:openai\/gpt-image-2\.6|minimax\/h3-max)\/requests\/([^/]+)(\/status)?$/u;
+const SUBMIT = /^\/(openai\/gpt-image-2\.6\/(?:sunburst|flare)\/(?:edit|text-to-image)|google\/nano-banana-2\.1\/edit|minimax\/h3-max\/(?:reference-to-video|extend-video))$/u;
+const POLL = /^\/(?:openai\/gpt-image-2\.6|google\/nano-banana-2\.1|minimax\/h3-max)\/requests\/([^/]+)(\/status)?$/u;
 
 function sendJson(response: ServerResponse, value: unknown): void {
   response.writeHead(200, { "content-type": "application/json" });
