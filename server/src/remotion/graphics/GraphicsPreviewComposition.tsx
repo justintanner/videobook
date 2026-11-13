@@ -1,3 +1,4 @@
+import { graphicsVideoTransform, ORIGINAL_GRAPHICS_FRAME, type GraphicsFraming } from "../../graphics/frame.js";
 import React, { useMemo } from "react";
 import { AbsoluteFill, OffthreadVideo, useCurrentFrame, useVideoConfig } from "remotion";
 import type { GraphicsLayerLayout } from "../../graphics/layout.js";
@@ -11,19 +12,27 @@ export interface GraphicsPreviewProps extends Record<string, unknown> {
   width: number;
   height: number;
   durationSeconds: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  framing?: GraphicsFraming;
+  background?: "blur" | "black";
   document: GraphicsDocument;
   images: Readonly<Record<string, GraphicsOverlayImage>>;
   fontUrls: CaptionFontUrls;
   onLayout?: (layout: GraphicsLayerLayout[]) => void;
 }
 
-export const GraphicsPreviewComposition: React.FC<GraphicsPreviewProps> = ({ videoSrc, width, height, durationSeconds, document, images, fontUrls, onLayout }) => {
+export const GraphicsPreviewComposition: React.FC<GraphicsPreviewProps> = ({ videoSrc, width, height, durationSeconds, document, images, fontUrls, onLayout, sourceWidth = width, sourceHeight = height, framing = ORIGINAL_GRAPHICS_FRAME, background = "blur" }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const size = useMemo(() => ({ width, height }), [width, height]);
+  const source = { width: sourceWidth, height: sourceHeight };
+  const foreground = graphicsVideoTransform(source, size, framing.fit, framing.focus);
+  const backdrop = graphicsVideoTransform(source, size, "crop", ORIGINAL_GRAPHICS_FRAME.focus, 1.1);
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
-      <OffthreadVideo src={videoSrc} style={{ width: "100%", height: "100%", objectFit: "fill" }} />
+      {framing.aspect !== "original" && framing.fit === "blur" && background === "blur" && <OffthreadVideo src={videoSrc} volume={0} style={{ position: "absolute", maxWidth: "none", maxHeight: "none", ...backdrop, filter: "blur(20px) brightness(0.6)" }} />}
+      <OffthreadVideo src={videoSrc} style={{ position: "absolute", maxWidth: "none", maxHeight: "none", ...foreground }} />
       <GraphicsOverlay
         document={document}
         frame={size}

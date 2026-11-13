@@ -1,3 +1,4 @@
+import { graphicsCanvas, graphicsFrameRegions, type GraphicsFraming } from "./frame.js";
 import { randomUUID } from "node:crypto";
 import type { Engine } from "videobook-engine";
 import { getApiKey } from "../api-key.js";
@@ -26,6 +27,7 @@ export type GraphicsPlacementInput = {
 type PlacementTarget = {
   source: CaptionMediaSource;
   frame: GraphicsFrame;
+  framing: GraphicsFraming;
   layer: GraphicsPlacedLayer;
   window: GraphicsWindow;
   times: number[];
@@ -45,6 +47,7 @@ type GraphicsDetection = GraphicsPlacement & { detected: number; regions: Graphi
 
 async function placementTarget(engine: Engine, artifactId: string, look: GraphicsLook, layerId: string): Promise<PlacementTarget> {
   const current = await currentGraphics(engine, artifactId, look);
+  if (current.frame.aspect !== "original" && current.frame.fit === "blur") throw new GraphicsServiceError("invalid", "Face and text placement checks are unavailable on blurred fill.");
   const layer = current.document.layers.find((entry) => entry.id === layerId);
   if (!layer) throw new GraphicsServiceError("invalid", `Layer ${layerId} is not in these graphics. Save them first.`, { layer_id: layerId });
   if (layer.kind === "scrim") throw new GraphicsServiceError("invalid", "A shade spans the frame, so it has no spot to move to.", { layer_id: layerId });
@@ -52,7 +55,8 @@ async function placementTarget(engine: Engine, artifactId: string, look: Graphic
   if (!window) throw new GraphicsServiceError("invalid", `Layer ${layerId} is never shown, so it covers nothing.`, { layer_id: layerId });
   return {
     source: current.source,
-    frame: { width: current.source.width, height: current.source.height },
+    frame: graphicsCanvas(current.source, current.frame),
+    framing: current.frame,
     layer,
     window,
     times: graphicsPlacementTimes(window),
@@ -60,7 +64,7 @@ async function placementTarget(engine: Engine, artifactId: string, look: Graphic
 }
 
 function placementAnswer(engine: Engine, artifactId: string, target: PlacementTarget, input: GraphicsPlacementInput): GraphicsPlacement {
-  const frames = cachedFrameRegions(engine, target.source.mediaHash);
+  const frames = graphicsFrameRegions(cachedFrameRegions(engine, target.source.mediaHash), target.source, target.framing);
   const unchecked = graphicsUncheckedTimes(target.times, frames);
   const box = input.box;
   const clearSpot = box && unchecked.length === 0

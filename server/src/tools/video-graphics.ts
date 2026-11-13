@@ -1,3 +1,4 @@
+import { graphicsFrameSchema, type GraphicsFraming } from "../graphics/frame.js";
 import { draftLanguages, readCaptionDraft } from "../captions/drafts.js";
 import { latestStackedCaptionRender, requestCaptionRender } from "../captions/render.js";
 import { CaptionServiceError } from "../captions/service.js";
@@ -174,6 +175,7 @@ const schema = {
     .describe("render: new (default) writes a copy with the graphics into a new video cell below the source, a version of the earlier copy when one exists; replace burns the graphics into the source video itself, keeping its earlier version in history, and clears the saved graphics"),
   edits: z.array(editSchema).max(200).optional()
     .describe("update: edits applied in order. Sizes, gaps and paddings are fractions of the frame's short side, text width a fraction of the positioning space, positions 0..1 inside the space, times in seconds"),
+  frame: graphicsFrameSchema.optional().describe("update: saved canvas aspect, crop or blur fit and normalized focus; templates never store this setting"),
   document: advertisedAs(z.unknown(), {
     type: "object",
     description: "update: a full replacement document (version, layers, nextId) in the shape get returns",
@@ -207,6 +209,7 @@ type VideoGraphicsArgs = {
   subtitles_revision?: string;
   edits?: GraphicsEdit[];
   document?: unknown;
+  frame?: GraphicsFraming;
   template_id?: string | null;
   name?: string;
   from_book?: string;
@@ -227,15 +230,16 @@ function failure(error: unknown): ToolResult {
 
 async function update(engine: Engine, args: VideoGraphicsArgs, artifactId: string, look: GraphicsLook) {
   if (!args.expected_revision) throw new GraphicsServiceError("invalid", "update needs expected_revision from get.");
-  if ((args.edits === undefined) === (args.document === undefined)) {
-    throw new GraphicsServiceError("invalid", "update takes exactly one of edits or document.");
+  if ((args.edits !== undefined && args.document !== undefined) || (args.edits === undefined && args.document === undefined && args.frame === undefined)) {
+    throw new GraphicsServiceError("invalid", "update takes edits, document or frame; edits and document cannot be combined.");
   }
   const draft = await updateGraphics(engine, artifactId, {
     expectedRevision: args.expected_revision,
+    frame: args.frame,
     look,
     ...(args.edits ? { edits: args.edits } : { document: args.document }),
   });
-  return { asset_id: artifactId, status: "saved", saved: true, revision: draft.revision, updated_at: draft.updatedAt, document: draft.document };
+  return { asset_id: artifactId, status: "saved", saved: true, revision: draft.revision, updated_at: draft.updatedAt, document: draft.document, frame: draft.frame };
 }
 
 async function render(engine: Engine, args: VideoGraphicsArgs, artifactId: string, look: GraphicsLook) {
@@ -288,7 +292,7 @@ async function read(engine: Engine, args: VideoGraphicsArgs, artifactId: string,
   const model = await readGraphics(engine, artifactId, { notebookId: args.notebook_id ?? null, look });
   const subtitles = draftLanguages(engine, artifactId).flatMap((language) => {
     const draft = readCaptionDraft(engine, artifactId, language);
-    return draft ? [{ language, revision: draft.revision }] : [];
+    return draft ? [{ language, revision: draft.revision, aspect: draft.document.aspect, background: draft.document.style.background }] : [];
   });
   const graphicsRender = latestGraphicsRender(engine, artifactId);
   const stackedRender = latestStackedCaptionRender(engine, artifactId);

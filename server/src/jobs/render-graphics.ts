@@ -1,3 +1,4 @@
+import { graphicsCanvas, ORIGINAL_GRAPHICS_FRAME } from "../graphics/frame.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -80,14 +81,14 @@ async function withRenderedGraphics<T>(
     const { groups } = await renderGraphicsStills({
       fps: probe.fps,
       document: request.document,
-      frame: { width: source.width, height: source.height },
+      frame: graphicsCanvas(source, request.frame ?? ORIGINAL_GRAPHICS_FRAME),
       durationSeconds,
       images,
       outputDir: scratch,
       signal,
     });
     const outputPath = join(scratch, OUTPUT_NAME);
-    await burnGraphics({ videoPath: source.path, outputPath, stills: groups, probe, signal });
+    await burnGraphics({ videoPath: source.path, outputPath, stills: groups, probe, signal, framing: request.frame });
     signal.throwIfAborted();
     await reviewedSource(engine, request);
     return await persist({ outputPath, durationSeconds });
@@ -104,6 +105,7 @@ async function writeProvenance(engine: Engine, artifactId: string, request: Grap
     output: request.output,
     renderedAt,
     layers: burnedLayers(request.document, durationSeconds),
+    frame: request.frame,
   };
   const written = await engine.metadata.artifacts.write(artifactId, "graphics", provenance);
   if (!written.ok) throw new Error(written.error.message);

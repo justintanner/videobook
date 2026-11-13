@@ -249,7 +249,7 @@ describe("caption render", () => {
       position: { space: "frame", anchor: "top-left", x: 0.2, y: 0.1 },
       timing: { start: 0.2, end: SOURCE_DURATION - 0.2, fade: 0.4, enter: "pop", exit: "fade" },
     }]);
-    const graphics = writeGraphicsDraft(engine, assetId, document);
+    const graphics = writeGraphicsDraft(engine, assetId, document, { aspect: "1:1", fit: "crop", focus: { x: 1, y: 0 } });
     const current = await call<Read>({ detail: "full" });
     const id = randomUUID();
     const started = performance.now();
@@ -364,6 +364,12 @@ describe("caption render", () => {
     const historyOf = async () => JSON.parse(((await client.callTool({ name: "asset_history", arguments: { book_id: bookId, asset_id: sourceId } })).content as TextContent)[0].text) as Array<{ hash: string }>;
     const before = await historyOf();
     const graphics = writeGraphicsDraft(engine, sourceId, graphicsDocumentFromLayers([{ kind: "text", items: [{ text: "In place", color: "#FF0000" }] }]));
+    const refused = await client.callTool({ name: "video_graphics", arguments: {
+      book_id: bookId, asset_id: sourceId, op: "render", output: "replace", with_subtitles: "original",
+      expected_revision: graphics.revision, subtitles_revision: saved.revision, source_hash: read.source.media_hash, request_id: randomUUID(),
+    } });
+    expect(refused.isError).toBe(true);
+    expect(JSON.parse((refused.content as TextContent)[0].text)).toMatchObject({ status: "invalid", message: expect.stringContaining("new video cell") });
     const requestId = randomUUID();
     const queued = await call<{ job_id: number; status: string; output_artifact_id: string }>({
       ...own, op: "render", output: "replace", with_graphics: true, graphics_revision: graphics.revision, notebook_id: notebookId, expected_revision: saved.revision, source_hash: read.source.media_hash, request_id: requestId,

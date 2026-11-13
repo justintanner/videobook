@@ -1,3 +1,4 @@
+import { graphicsFrameSchema, ORIGINAL_GRAPHICS_FRAME, type GraphicsFraming } from "./frame.js";
 import { createHash } from "node:crypto";
 import type { Engine, NotebookDocument } from "videobook-engine";
 import { findPrimaryMediaFile, resolveNotebookCellArtifactId } from "videobook-engine";
@@ -57,6 +58,7 @@ export type GraphicsReadModel = {
   revision: string;
   updated_at: string | null;
   document: GraphicsDocument;
+  frame: GraphicsFraming;
   fill: { handle: string | null; profile_url: string | null; credit: string | null };
   starters: GraphicsStarterDocument[];
   templates: GraphicsSavedTemplate[];
@@ -77,13 +79,14 @@ type GraphicsContext = {
   watermark: GraphicsWatermarkLook | null;
 };
 
-type ReviewedGraphics = { source: CaptionMediaSource; revision: string; document: GraphicsDocument };
+type ReviewedGraphics = { source: CaptionMediaSource; revision: string; document: GraphicsDocument; frame: GraphicsFraming };
 
 type GraphicsUpdateInput = {
   expectedRevision: string;
   look: GraphicsLook;
   edits?: readonly GraphicsEdit[];
   document?: unknown;
+  frame?: unknown;
 };
 
 const VIDEO_KINDS: ReadonlySet<string> = new Set(["video", "final"]);
@@ -279,6 +282,7 @@ export async function readGraphics(
     revision: current.revision,
     updated_at: context.saved?.updatedAt ?? null,
     document: current.document,
+    frame: options.look.watermark ? ORIGINAL_GRAPHICS_FRAME : context.saved?.frame ?? ORIGINAL_GRAPHICS_FRAME,
     fill: {
       handle: context.values.handle ?? null,
       profile_url: context.values.profile ?? null,
@@ -329,14 +333,17 @@ export async function updateGraphics(engine: Engine, artifactId: string, input: 
     }
     const next = nextDocument(current.document, input);
     requireBookImages(engine, current.document, next, context.templates);
-    return writeGraphicsDraft(engine, artifactId, next);
+    const frame = graphicsFrameSchema.safeParse(input.frame ?? context.saved?.frame ?? ORIGINAL_GRAPHICS_FRAME);
+    if (!frame.success) throw new GraphicsServiceError("invalid", "Choose a valid frame, fit and focus point.");
+    if (input.look.watermark && input.frame !== undefined && frame.data.aspect !== "original") throw new GraphicsServiceError("invalid", "Watermarks use the source frame.");
+    return writeGraphicsDraft(engine, artifactId, next, frame.data);
   });
 }
 
 export async function currentGraphics(engine: Engine, artifactId: string, look: GraphicsLook): Promise<ReviewedGraphics> {
   const context = await graphicsContext(engine, artifactId, look);
   const current = context.saved ?? context.fallback;
-  return { source: context.source, revision: current.revision, document: current.document };
+  return { source: context.source, revision: current.revision, document: current.document, frame: look.watermark ? ORIGINAL_GRAPHICS_FRAME : context.saved?.frame ?? ORIGINAL_GRAPHICS_FRAME };
 }
 
 export async function graphicsForTemplate(
@@ -364,7 +371,7 @@ export async function reviewedGraphics(
     throw new GraphicsServiceError("conflict", "These graphics changed after review. Review the latest version, then render.", { revision: current.revision });
   }
   const document = look.watermark ? watermarkDrawnDocument(current.document) : current.document;
-  return { source: context.source, revision: current.revision, document };
+  return { source: context.source, revision: current.revision, document, frame: look.watermark ? ORIGINAL_GRAPHICS_FRAME : context.saved?.frame ?? ORIGINAL_GRAPHICS_FRAME };
 }
 
 export async function rememberWatermarkSlots(engine: Engine, platform: WatermarkPlatform, document: GraphicsDocument): Promise<void> {

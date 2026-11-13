@@ -38,6 +38,7 @@ type InspectorProps = {
   document: GraphicsDocument
   layer: GraphicsLayer
   read: GraphicsRead
+  frame?: GraphicsFrame
   imageChoices: readonly GraphicsImageChoice[]
   box: GraphicsRect | null
   placement: GraphicsLayerPlacement | null
@@ -216,7 +217,7 @@ function TabFields({ tab, props }: { tab: GraphicsInspectorTab; props: Inspector
     return <GraphicsTimingSection layer={layer} durationSeconds={props.read.source.duration_seconds} playhead={props.playhead} disabled={disabled} onEdit={onEdit} />
   }
   if (tab === 'place' && layer.kind !== 'scrim') {
-    return <Place layer={layer} frame={props.read.source} box={props.box} placement={props.placement} disabled={disabled} onEdit={onEdit} onFindClearSpot={props.onFindClearSpot} />
+    return <Place layer={layer} frame={props.frame ?? props.read.source} box={props.box} placement={props.placement} disabled={disabled} onEdit={onEdit} onFindClearSpot={props.onFindClearSpot} />
   }
   if (layer.kind === 'text') {
     return tab === 'block'

@@ -1,3 +1,4 @@
+import { graphicsAspectChanged, graphicsFrameSchema, ORIGINAL_GRAPHICS_FRAME, type GraphicsFraming } from "./frame.js";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import sharp from "sharp";
@@ -41,6 +42,7 @@ export interface GraphicsRenderRequest {
   revision: string;
   sourceHash: string;
   document: GraphicsDocument;
+  frame?: GraphicsFraming;
   jobId: number | null;
   createdAt: string;
 }
@@ -63,6 +65,7 @@ export type GraphicsProvenance = {
   output: RenderOutput;
   renderedAt: string;
   layers: BurnedLayer[];
+  frame?: GraphicsFraming;
 };
 
 type GraphicsBurned = {
@@ -90,7 +93,7 @@ export function readGraphicsRenderRequest(engine: Engine, requestId: string): Gr
   const value = engine.settings.get<GraphicsRenderRequest>(requestKey(requestId));
   if (!value || typeof value.outputArtifactId !== "string") return null;
   const document = parseGraphicsDocument(value.document);
-  return document.ok ? { ...value, output: renderOutput(value.output), document: document.document } : null;
+  return document.ok ? { ...value, output: renderOutput(value.output), document: document.document, frame: graphicsFrameSchema.parse(value.frame ?? ORIGINAL_GRAPHICS_FRAME) } : null;
 }
 
 export function latestGraphicsRender(engine: Engine, artifactId: string): RenderRequestStatus | null {
@@ -234,12 +237,15 @@ async function reviewedRender(engine: Engine, artifactId: string, input: Graphic
   if (reviewed.source.mediaHash !== input.sourceHash) {
     throw new GraphicsServiceError("stale_source", "The video changed after these graphics were reviewed. Review them again, then render.");
   }
-  if (graphicsStillGroups(reviewed.document, reviewed.source.durationSeconds).length === 0) {
+  if (reviewed.frame.aspect === "original" && graphicsStillGroups(reviewed.document, reviewed.source.durationSeconds).length === 0) {
     throw new GraphicsServiceError("invalid", "These graphics have nothing to draw. Add text, an image, a QR code or a shade, then render.");
   }
   await requireGraphicsImages(engine, drawnImageLayers(reviewed.document, reviewed.source.durationSeconds));
   if (input.output === "replace" && reviewed.source.kind !== "video") {
     throw new GraphicsServiceError("invalid", "Only a video cell can take its graphics in place. Render a new copy of an exported timeline.");
+  }
+  if (input.output === "replace" && graphicsAspectChanged(reviewed.source, reviewed.frame)) {
+    throw new GraphicsServiceError("invalid", "A changed aspect must render into a new video cell.");
   }
   if (input.output === "new") checkDestination(engine, input.notebookId, artifactId);
   return reviewed;
@@ -278,6 +284,7 @@ export async function requestGraphicsRender(engine: Engine, bookId: string, arti
       revision: reviewed.revision,
       sourceHash: reviewed.source.mediaHash,
       document: reviewed.document,
+      frame: reviewed.frame,
       jobId: null,
       createdAt: new Date().toISOString(),
     });

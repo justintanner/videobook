@@ -239,3 +239,7 @@ export function graphicsResizeEdits(input: GraphicsResizeInput): GraphicsEdit[] 
   if (layer.kind === 'text' && (handle === 'width-start' || handle === 'width-end')) return textWidthEdit(frame, layer, box, handle, delta)
   return []
 }
+
+export function graphicsFocusPoint(point: GraphicsPoint, bounds: { left: number; top: number; width: number; height: number }): GraphicsPoint {
+  return { x: clamp((point.x - bounds.left) / Math.max(1, bounds.width), 0, 1), y: clamp((point.y - bounds.top) / Math.max(1, bounds.height), 0, 1) }
+}

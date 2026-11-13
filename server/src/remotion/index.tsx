@@ -1,3 +1,4 @@
+import { GraphicsPreviewComposition, type GraphicsPreviewProps } from "./graphics/GraphicsPreviewComposition.js";
 import React from "react";
 import { Composition, registerRoot } from "remotion";
 import { RenderComposition } from "./RenderComposition.js";
@@ -135,6 +136,19 @@ const RemotionRoot: React.FC = () => {
         calculateMetadata={({ props }) => {
           const input = props as GraphicsStillProps;
           return { durationInFrames: 1, fps: 30, width: input.frame.width, height: input.frame.height };
+        }}
+      />
+      <Composition
+        id="graphics-preview"
+        component={GraphicsPreviewComposition as React.FC<Record<string, unknown>>}
+        durationInFrames={30}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{ videoSrc: "", width: 1080, height: 1920, durationSeconds: 1, document: emptyGraphicsDocument(), images: {}, fontUrls: null }}
+        calculateMetadata={({ props }) => {
+          const input = props as GraphicsPreviewProps;
+          return { durationInFrames: Math.max(1, Math.round(input.durationSeconds * 30)), fps: 30, width: input.width, height: input.height };
         }}
       />
       <Composition

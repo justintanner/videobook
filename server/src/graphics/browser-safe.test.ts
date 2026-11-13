@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER_SRC = resolve(HERE, "..");
 const BROWSER_SAFE_FILES = [
+  "frame.ts",
   "model.ts",
   "edits.ts",
   "slots.ts",

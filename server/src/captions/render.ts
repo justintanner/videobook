@@ -1,3 +1,4 @@
+import { graphicsAspectChanged, ORIGINAL_GRAPHICS_FRAME } from "../graphics/frame.js";
 import { readGraphicsDraft } from "../graphics/drafts.js";
 import type { GraphicsDocument } from "../graphics/model.js";
 import { parseGraphicsDocument } from "../graphics/model.js";
@@ -170,6 +171,9 @@ export async function requestCaptionRender(engine: Engine, bookId: string, artif
     }
     if (input.output === "replace" && source.kind !== "video") {
       throw new CaptionServiceError("invalid", "Only a video cell can take its subtitles in place. Render a new copy of an exported timeline.");
+    }
+    if (input.output === "replace" && input.graphicsLook && graphicsAspectChanged(source, { ...ORIGINAL_GRAPHICS_FRAME, aspect: draft.document.aspect })) {
+      throw new CaptionServiceError("invalid", "A changed aspect must render into a new video cell.");
     }
     if (input.output === "new") checkDestination(engine, input.notebookId, artifactId, language);
     const request: CaptionRenderRequest = {

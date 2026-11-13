@@ -1,3 +1,4 @@
+import { graphicsCanvas, graphicsFrameRegions, graphicsFrameSchema, ORIGINAL_GRAPHICS_FRAME, type GraphicsFraming } from '../../server/src/graphics/frame'
 import { z } from 'zod'
 import { applyGraphicsEdits, type GraphicsEdit } from '../../server/src/graphics/edits'
 import type { GraphicsLayerLayout, GraphicsRect } from '../../server/src/graphics/layout'
@@ -104,6 +105,7 @@ const readSchema = z.object({
   revision: z.string(),
   updated_at: z.string().nullable(),
   document: z.unknown(),
+  frame: graphicsFrameSchema.default(ORIGINAL_GRAPHICS_FRAME),
   fill: z.object({ handle: z.string().nullable(), profile_url: z.string().nullable(), credit: z.string().nullable() }),
   starters: z.array(z.object({ id: z.string(), name: z.string(), document: z.unknown() })),
   templates: z.array(templateSchema).default([]),
@@ -111,7 +113,7 @@ const readSchema = z.object({
   images: z.record(z.string(), imageSchema),
   render: renderSchema.nullable(),
   burned: burnedSchema.nullable(),
-  subtitles: z.array(z.object({ language: z.string(), revision: z.string() })).optional(),
+  subtitles: z.array(z.object({ language: z.string(), revision: z.string(), aspect: z.enum(['9:16', '1:1', '4:5', '16:9']).optional(), background: z.enum(['blur', 'black']).optional() })).optional(),
   watermark: watermarkSchema.nullable().default(null),
   regions: z.array(regionFrameSchema).default([]),
 })
@@ -443,9 +445,10 @@ export interface GraphicsLayerPlacement {
   block: GraphicsRect
 }
 
-export function graphicsLayerPlacements(document: GraphicsDocument, layout: readonly GraphicsLayerLayout[] | null, read: GraphicsRead): Record<string, GraphicsLayerPlacement> {
-  if (!layout) return {}
-  const frame = { width: read.source.width, height: read.source.height }
+export function graphicsLayerPlacements(document: GraphicsDocument, layout: readonly GraphicsLayerLayout[] | null, read: GraphicsRead, framing: GraphicsFraming = read.frame): Record<string, GraphicsLayerPlacement> {
+  if (!layout || (framing.aspect !== 'original' && framing.fit === 'blur')) return {}
+  const frame = graphicsCanvas(read.source, framing)
+  const regions = graphicsFrameRegions(read.regions, read.source, framing)
   const entries = new Map(layout.map((entry) => [entry.layerId, entry]))
   return Object.fromEntries(document.layers.flatMap((layer) => {
     const entry = entries.get(layer.id)
@@ -453,8 +456,8 @@ export function graphicsLayerPlacements(document: GraphicsDocument, layout: read
     if (layer.kind === 'scrim' || !layer.visible || !entry || !window) return []
     const drawn = graphicsDrawnBox(entry)
     const placement: GraphicsLayerPlacement = {
-      covers: drawn ? graphicsLayerCovers(drawn, frame, window, read.regions) : [],
-      unchecked: graphicsUncheckedTimes(graphicsPlacementTimes(window), read.regions).length,
+      covers: drawn ? graphicsLayerCovers(drawn, frame, window, regions) : [],
+      unchecked: graphicsUncheckedTimes(graphicsPlacementTimes(window), regions).length,
       drawn,
       block: entry.box,
     }
@@ -589,12 +592,14 @@ function clipped(value: string): string {
   return single.length > 32 ? `${single.slice(0, 31).trimEnd()}…` : single
 }
 
-export function graphicsLayoutWarnings(document: GraphicsDocument, layout: readonly GraphicsLayerLayout[] | null): string[] {
+export function graphicsLayoutWarnings(document: GraphicsDocument, layout: readonly GraphicsLayerLayout[] | null, frame?: { width: number; height: number }): string[] {
   if (!layout) return []
   const layers = new Map(document.layers.map((layer) => [layer.id, layer]))
   return layout.flatMap((entry) => {
     const layer = layers.get(entry.layerId)
     if (!layer) return []
+    const box = entry.box
+    if (frame && (box.x < -1 || box.y < -1 || box.x + box.width > frame.width + 1 || box.y + box.height > frame.height + 1)) return [`${layer.name}: part of this layer is outside the frame.`]
     if (entry.kind === 'image' && entry.missing) return [`${layer.name}: the image is missing, so nothing is drawn.`]
     if (entry.kind !== 'text' || layer.kind !== 'text') return []
     const items = new Map(layer.items.map((item) => [item.id, item]))
@@ -602,9 +607,10 @@ export function graphicsLayoutWarnings(document: GraphicsDocument, layout: reado
   })
 }
 
-export function graphicsRenderBlocker(document: GraphicsDocument | null, durationSeconds: number | null, conflict: boolean, watermark = false): string | null {
+export function graphicsRenderBlocker(document: GraphicsDocument | null, durationSeconds: number | null, conflict: boolean, watermark = false, framing: GraphicsFraming = ORIGINAL_GRAPHICS_FRAME): string | null {
   if (conflict) return 'Reload the graphics or keep your version before rendering.'
   if (!document || durationSeconds === null) return 'The graphics are still loading.'
+  if (framing.aspect !== 'original') return null
   if (graphicsStillGroups(graphicsDrawnDocument(document, watermark), durationSeconds).length > 0) return null
   return watermark ? 'Add the handle, a title, an image or a QR code to render.' : 'Add text, an image, a QR code or a shade to render.'
 }
@@ -617,10 +623,14 @@ export function graphicsBurnedNotice(burned: GraphicsBurned | null, artifactId: 
   return { message: 'Graphics are already burned into this video. Rendering again draws the new ones on top.', sourceId: null }
 }
 
-export interface GraphicsHistory {
+export interface GraphicsSnapshot {
   document: GraphicsDocument
-  past: GraphicsDocument[]
-  future: GraphicsDocument[]
+  frame?: GraphicsFraming
+}
+
+export interface GraphicsHistory extends GraphicsSnapshot {
+  past: GraphicsSnapshot[]
+  future: GraphicsSnapshot[]
   coalesceKey: string | null
 }
 
@@ -635,7 +645,8 @@ export function editGraphicsHistory(history: GraphicsHistory, edits: readonly Gr
     ok: true,
     history: {
       document: result.document,
-      past: coalesce ? history.past : [...history.past, history.document].slice(-HISTORY_LIMIT),
+      frame: history.frame,
+      past: coalesce ? history.past : [...history.past, { document: history.document, frame: history.frame }].slice(-HISTORY_LIMIT),
       future: [],
       coalesceKey,
     },
@@ -646,9 +657,10 @@ export function stepGraphicsHistory(history: GraphicsHistory, direction: 'undo' 
   const target = (direction === 'undo' ? history.past : history.future).at(-1)
   if (!target) return null
   return {
-    document: target,
-    past: direction === 'undo' ? history.past.slice(0, -1) : [...history.past, history.document],
-    future: direction === 'undo' ? [...history.future, history.document] : history.future.slice(0, -1),
+    document: target.document,
+    frame: target.frame,
+    past: direction === 'undo' ? history.past.slice(0, -1) : [...history.past, { document: history.document, frame: history.frame }],
+    future: direction === 'undo' ? [...history.future, { document: history.document, frame: history.frame }] : history.future.slice(0, -1),
     coalesceKey: null,
   }
 }
@@ -662,4 +674,25 @@ export function graphicsOverlayImages(read: GraphicsRead | null): GraphicsOverla
 
 export function graphicsPercent(value: number): string {
   return `${Math.round(value * 1000) / 10}%`
+}
+
+export function editGraphicsFrame(history: GraphicsHistory, frame: GraphicsFraming, coalesceKey: string | null = null): GraphicsHistory {
+  if (JSON.stringify(history.frame ?? ORIGINAL_GRAPHICS_FRAME) === JSON.stringify(frame)) return history
+  return {
+    document: history.document,
+    frame,
+    past: coalesceKey !== null && coalesceKey === history.coalesceKey ? history.past : [...history.past, { document: history.document, frame: history.frame }].slice(-HISTORY_LIMIT),
+    future: [],
+    coalesceKey,
+  }
+}
+
+export function graphicsSubtitle(read: GraphicsRead | null, language: string | null | undefined) {
+  const drafts = read?.subtitles ?? []
+  return language === undefined ? drafts.find((draft) => draft.language === 'original') ?? drafts[0] : drafts.find((draft) => draft.language === language)
+}
+
+export function graphicsEffectiveFrame(frame: GraphicsFraming, read: GraphicsRead | null, language: string | null | undefined): GraphicsFraming {
+  const subtitle = graphicsSubtitle(read, language)
+  return subtitle?.aspect ? { aspect: subtitle.aspect, fit: 'blur', focus: ORIGINAL_GRAPHICS_FRAME.focus } : frame
 }

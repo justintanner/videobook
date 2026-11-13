@@ -1,10 +1,11 @@
+import { graphicsAspectChanged, ORIGINAL_GRAPHICS_FRAME } from '../../../../server/src/graphics/frame'
 import { lazy } from 'react'
 import { Redo2, Undo2 } from 'lucide-react'
 import { ConfirmSheet } from '../confirm/ConfirmSheet'
 import type { ConfirmSheetEffect } from '../confirm/ConfirmSheetHints'
 import type { BookProjectSummary } from '@/videobook/book-project-catalog'
 import type { GraphicsEditor, GraphicsSaveState } from '@/videobook/useGraphicsEditor'
-import { graphicsRenderBlocker, type GraphicsEditorAsset, type GraphicsEditorMention, type GraphicsRenderOutput } from '@/videobook/graphics-model'
+import { graphicsEffectiveFrame, graphicsRenderBlocker, type GraphicsEditorAsset, type GraphicsEditorMention, type GraphicsRenderOutput } from '@/videobook/graphics-model'
 
 const GraphicsBody = lazy(async () => ({ default: (await import('./GraphicsBody')).GraphicsBody }))
 
@@ -23,12 +24,14 @@ const OUTPUT_EFFECTS: Record<GraphicsRenderOutput, ConfirmSheetEffect> = {
 
 function OutputChoice({ editor }: { editor: GraphicsEditor }) {
   const { state } = editor
-  const replaceable = state.target?.kind === 'video'
+  const frame = graphicsEffectiveFrame(state.frame ?? ORIGINAL_GRAPHICS_FRAME, state.read, state.subtitleLanguage)
+  const changedAspect = state.read ? graphicsAspectChanged(state.read.source, frame) : false
+  const replaceable = state.target?.kind === 'video' && !changedAspect
   return (
     <div className="graphics-segmented" role="group" aria-label="Render output">
       <button type="button" aria-pressed={state.output === 'new'} disabled={state.rendering} onClick={() => editor.setOutput('new')}>New video</button>
       <button type="button" aria-pressed={state.output === 'replace'} disabled={state.rendering || !replaceable}
-        title={replaceable ? undefined : 'An exported timeline can only render a new copy.'} onClick={() => editor.setOutput('replace')}>Replace video</button>
+        title={replaceable ? undefined : 'A changed aspect or exported timeline must render into a new video cell.'} onClick={() => editor.setOutput('replace')}>Replace video</button>
     </div>
   )
 }
@@ -56,7 +59,7 @@ export function GraphicsSheet({ editor, assets, mentions, books, applyFormId, on
 }) {
   const { state } = editor
   const watermark = Boolean(state.target?.watermark)
-  const blocking = graphicsRenderBlocker(state.document, state.read?.source.duration_seconds ?? null, state.save === 'conflict', watermark)
+  const blocking = graphicsRenderBlocker(state.document, state.read?.source.duration_seconds ?? null, state.save === 'conflict', watermark, state.frame)
   return (
     <ConfirmSheet
       kind="graphics"

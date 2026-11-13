@@ -1,6 +1,11 @@
+import sharp from "sharp";
+import { renderStill, selectComposition } from "@remotion/renderer";
+import { renderBrowserExecutable } from "../remotion/browser.js";
+import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
+import { graphicsCanvas, ORIGINAL_GRAPHICS_FRAME } from "./frame.js";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -117,13 +122,14 @@ describe("graphics render", () => {
     return stdout;
   }
 
-  async function sourceVideo(label: string, slot: NotebookGridSlot): Promise<string> {
+  async function sourceVideo(label: string, slot: NotebookGridSlot, width = WIDTH, height = HEIGHT): Promise<string> {
     clips += 1;
     const path = join(tempDir, `source-${clips}.mp4`);
     await execFileAsync(FFMPEG, [
       "-y", "-v", "error",
-      "-f", "lavfi", "-i", `color=c=0x2060a0:s=${WIDTH}x${HEIGHT}:r=30:d=${DURATION}`,
+      "-f", "lavfi", "-i", `color=c=0x2060a0:s=${width}x${height}:r=30:d=${DURATION}`,
       "-f", "lavfi", "-i", `sine=frequency=330:sample_rate=44100:duration=${DURATION}`,
+      ...(width !== WIDTH ? ["-vf", `drawbox=x=0:y=0:w=${Math.floor(width / 3)}:h=ih:color=red:t=fill,drawbox=x=${Math.floor(width * 2 / 3)}:y=0:w=iw:h=ih:color=lime:t=fill`] : []),
       "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", path,
     ]);
     const created = await engine.artifacts.create("video", label);
@@ -148,7 +154,11 @@ describe("graphics render", () => {
 
   async function renderAndWait(assetId: string, args: Record<string, unknown>): Promise<{ queued: Queued; render: RenderStatus }> {
     const queued = await call<Queued>({ asset_id: assetId, op: "render", notebook_id: notebookId, ...args });
-    await expect.poll(async () => (await read(assetId)).render?.status, { timeout: testBudget(300_000), interval: 1000 }).toBe("completed");
+    await expect.poll(async () => {
+      const render = (await read(assetId)).render;
+      if (render?.status === "failed") throw new Error(render.error ?? "Render failed");
+      return render?.status;
+    }, { timeout: testBudget(300_000), interval: 1000 }).toBe("completed");
     return { queued, render: (await read(assetId)).render! };
   }
 
@@ -282,4 +292,46 @@ describe("graphics render", () => {
     expect(decodeQr(late)).toBe(PROFILE_URL);
     expect(colorCount(await frame(path, 0.5), GREEN, 120)).toBe(0);
   });
+  it.each([{ aspect: "9:16", fit: "crop" }, { aspect: "1:1", fit: "blur" }] as const)("reframes landscape to $aspect $fit with graphics matching the preview", async ({ aspect, fit }) => {
+    const assetId = await sourceVideo(`reframe-${fit}`, { row: 2, column: fit === "crop" ? 0 : 2 }, 640, 360);
+    const before = await read(assetId);
+    const framing = { ...ORIGINAL_GRAPHICS_FRAME, aspect, fit, focus: { x: 0.8, y: 0.5 } };
+    const document = graphicsDocumentFromLayers([{ kind: "text", items: [{ text: "REFRAME", size: 0.08 }], plate: { color: "#FF00FF", opacity: 1, radius: 0 }, timing: { start: 0, end: DURATION, fade: 0.5, enter: "slide", exit: "pop" } }]);
+    const saved = await call<{ revision: string }>({ asset_id: assetId, op: "update", expected_revision: before.revision, document, frame: framing });
+    const { render } = await renderAndWait(assetId, { expected_revision: saved.revision, source_hash: before.source.source_hash, request_id: randomUUID() });
+    const output = await videoPath(render.output_asset_id);
+    const probe = await probeVideo(output);
+    const canvas = graphicsCanvas({ width: 640, height: 360 }, framing);
+    expect([probe.width, probe.height]).toEqual([canvas.width, canvas.height]);
+    expect(probe.duration).toBeCloseTo(DURATION, 1);
+    expect(probe.hasAudio).toBe(true);
+    expect(await sourceHash(assetId)).toBe(before.source.source_hash);
+    expect(render.output_asset_id).not.toBe(assetId);
+    expect(render.cell_id).not.toBeNull();
+    const bundle = await getSharedBundleLocation();
+    const videoName = `preview-${randomUUID()}.mp4`;
+    const staged = join(bundle, videoName);
+    await copyFile(await videoPath(assetId), staged);
+    try {
+      const inputProps = { videoSrc: videoName, ...canvas, sourceWidth: 640, sourceHeight: 360, framing, durationSeconds: DURATION, document, images: {}, fontUrls: null };
+      const browserExecutable = await renderBrowserExecutable();
+      const browser = browserExecutable ? { browserExecutable } : {};
+      const composition = await selectComposition({ serveUrl: bundle, id: "graphics-preview", inputProps, ...browser });
+      for (const seconds of [0.2, 1]) {
+        const png = join(tempDir, `preview-${fit}-${seconds}.png`);
+        await renderStill({ composition, serveUrl: bundle, inputProps, output: png, frame: Math.round(seconds * 30), ...browser });
+        const expected = await sharp(png).removeAlpha().raw().toBuffer();
+        const { stdout: actual } = await execFileAsync(FFMPEG, ["-v", "error", "-ss", String(seconds), "-i", output, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], { encoding: "buffer", maxBuffer: canvas.width * canvas.height * 4, timeout: testBudget(30_000) });
+        expect(actual.length).toBe(expected.length);
+        let difference = 0;
+        for (let index = 0; index < actual.length; index += 1) difference += Math.abs(actual[index] - expected[index]);
+        expect(difference / actual.length).toBeLessThan(5);
+        expect(colorCount(actual, MAGENTA, 60)).toBeGreaterThan(1000);
+      }
+    } finally {
+      await rm(staged, { force: true });
+    }
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(120_000) });
+  }, testBudget(300_000));
+
 });

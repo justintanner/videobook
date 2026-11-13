@@ -1,3 +1,4 @@
+import { graphicsCanvas, graphicsVideoTransform, ORIGINAL_GRAPHICS_FRAME, type GraphicsFraming } from "./frame.js";
 import { rm } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import sharp from "sharp";
@@ -10,7 +11,7 @@ import type { ResolvedGraphicsTiming } from "./timing.js";
 export type BurnFades = { fadeIn: number; fadeOut: number };
 
 type GraphicsBurnStill = { path: string; timing: ResolvedGraphicsTiming; transitions?: GraphicsTransitionFrames[] };
-type GraphicsBurnInput = { videoPath: string; outputPath: string; stills: readonly GraphicsBurnStill[]; probe: ProbeResult; signal: AbortSignal };
+type GraphicsBurnInput = { framing?: GraphicsFraming; videoPath: string; outputPath: string; stills: readonly GraphicsBurnStill[]; probe: ProbeResult; signal: AbortSignal };
 type Frame = { width: number; height: number };
 type Box = { left: number; top: number; width: number; height: number };
 type PlacedStill = { path: string; left: number; top: number; start?: number; end?: number; fades: BurnFades; sequenceFps?: number; exclusiveEnd?: boolean };
@@ -155,13 +156,32 @@ function stillInputArgs(still: PlacedStill, probe: ProbeResult): string[] {
   return burnWatermarkInputArgs(still.path, loopSeconds, burnWatermarkFrameRate(probe));
 }
 
-function baseFilter(probe: ProbeResult, frame: Frame): { filters: string[]; label: string } {
-  if (squarePixels(probe)) return { filters: [], label: "0:v" };
-  return { filters: [`[0:v]scale=${frame.width}:${frame.height},setsar=1[base]`], label: "base" };
+function baseFilter(probe: ProbeResult, frame: Frame, framing: GraphicsFraming): { filters: string[]; label: string } {
+  const source = graphicsBurnFrame(probe);
+  if (framing.aspect === "original") {
+    if (squarePixels(probe)) return { filters: [], label: "0:v" };
+    return { filters: [`[0:v]scale=${frame.width}:${frame.height},setsar=1[base]`], label: "base" };
+  }
+  const crop = graphicsVideoTransform(source, frame, "crop", framing.focus);
+  if (framing.fit === "crop") return {
+    filters: [`[0:v]scale=${crop.width}:${crop.height},setsar=1,crop=${frame.width}:${frame.height}:${-crop.left}:${-crop.top}[base]`], label: "base",
+  };
+  const back = graphicsVideoTransform(source, frame, "crop", ORIGINAL_GRAPHICS_FRAME.focus, 1.1);
+  const front = graphicsVideoTransform(source, frame, "blur");
+  return {
+    filters: [
+      "[0:v]split=2[bg][fg]",
+      `[bg]scale=${back.width}:${back.height},setsar=1,gblur=sigma=20,lutrgb=r='val*0.6':g='val*0.6':b='val*0.6',crop=${frame.width}:${frame.height}:${-back.left}:${-back.top}[back]`,
+      `[fg]scale=${front.width}:${front.height},setsar=1[front]`,
+      `[back][front]overlay=${front.left}:${front.top}:format=auto[base]`,
+    ],
+    label: "base",
+  };
 }
 
-export function burnFilter(stills: readonly PlacedStill[], probe: ProbeResult, frame: Frame): string {
-  const base = baseFilter(probe, frame);
+export function burnFilter(stills: readonly PlacedStill[], probe: ProbeResult, frame: Frame, framing: GraphicsFraming = ORIGINAL_GRAPHICS_FRAME): string {
+  const base = baseFilter(probe, frame, framing);
+  if (!stills.length) return [...base.filters, `[${base.label}]null[vout]`].join(";");
   const chains = stills.map((still, index) => `[${index + 1}:v]format=rgba${still.sequenceFps ? `,setpts=PTS-STARTPTS+${still.start}/TB` : burnWatermarkFadeFilters(still.fades, still.start, still.end)}[g${index + 1}]`);
   const overlays = stills.map((still, index) => {
     const input = index === 0 ? base.label : `v${index}`;
@@ -184,16 +204,17 @@ async function checkOutput(outputPath: string, probe: ProbeResult, frame: Frame,
 }
 
 export async function burnGraphics(input: GraphicsBurnInput): Promise<void> {
-  const frame = graphicsBurnFrame(input.probe);
+  const framing = input.framing ?? ORIGINAL_GRAPHICS_FRAME;
+  const frame = graphicsCanvas(graphicsBurnFrame(input.probe), framing);
   const placed = (await Promise.all(input.stills.map((still) => placeGroup(still, frame, input.probe.videoDuration)))).flat();
-  if (placed.length === 0) throw new Error("These graphics have nothing to draw.");
+  if (placed.length === 0 && framing.aspect === "original") throw new Error("These graphics have nothing to draw.");
   input.signal.throwIfAborted();
   try {
     await runFfmpeg([
       "-y",
       "-i", input.videoPath,
       ...placed.flatMap((still) => stillInputArgs(still, input.probe)),
-      "-filter_complex", burnFilter(placed, input.probe, frame),
+      "-filter_complex", burnFilter(placed, input.probe, frame, framing),
       "-map", "[vout]",
       "-map", "0:a?",
       ...H264_MEDIUM,

@@ -1,3 +1,4 @@
+import { graphicsCanvas, type GraphicsFraming } from '../../../../server/src/graphics/frame'
 import { useMemo, useRef, type KeyboardEvent, type RefObject } from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
@@ -17,6 +18,8 @@ type GraphicsPreviewStageProps = {
   document: GraphicsDocument
   mediaUrl: string
   source: GraphicsPreviewSource
+  framing: GraphicsFraming
+  background?: 'blur' | 'black'
   images: GraphicsOverlayImages
   layout: GraphicsLayerLayout[] | null
   playerRef: RefObject<PlayerRef | null>
@@ -33,25 +36,30 @@ type GraphicsPreviewStageProps = {
 const NO_FRAME_CHANGE = () => undefined
 
 export function GraphicsPreview(props: GraphicsPreviewStageProps) {
-  const { document, mediaUrl, source, images, layout, playerRef, guides } = props
+  const { document, mediaUrl, source, framing, background, images, layout, playerRef, guides } = props
   const durationInFrames = Math.max(1, Math.round(source.durationSeconds * source.fps))
   const { frame, playing, muted } = usePlayerFrame(playerRef, NO_FRAME_CHANGE)
   const time = frame / source.fps
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const aspect = useMemo(() => ({ width: source.width, height: source.height }), [source.height, source.width])
+  const aspect = useMemo(() => graphicsCanvas(source, framing), [source, framing])
+  const canvasSource = useMemo(() => ({ ...source, ...aspect }), [source, aspect])
   const stage = useStageSize(containerRef, aspect, '.confirm-graphics')
   const { onLayout } = props
 
   const inputProps = useMemo<GraphicsPreviewProps>(() => ({
     videoSrc: mediaUrl,
-    width: source.width,
-    height: source.height,
+    width: aspect.width,
+    height: aspect.height,
+    sourceWidth: source.width,
+    sourceHeight: source.height,
+    framing,
+    background,
     durationSeconds: source.durationSeconds,
     document,
     images,
     fontUrls: CAPTION_FONT_URLS,
     onLayout,
-  }), [document, images, mediaUrl, onLayout, source.durationSeconds, source.height, source.width])
+  }), [document, images, mediaUrl, onLayout, source.durationSeconds, source.height, source.width, aspect, framing, background])
 
   const seekFrame = (target: number) => playerRef.current?.seekTo(Math.max(0, Math.min(durationInFrames - 1, Math.round(target))))
 
@@ -71,7 +79,7 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
     <div className="graphics-preview" ref={containerRef} style={stage.stacked || stage.width === 0 ? undefined : { width: stage.width }}>
       <div
         className="graphics-stage"
-        style={{ width: stage.width || undefined, height: stage.height || undefined, aspectRatio: `${source.width} / ${source.height}` }}
+        style={{ width: stage.width || undefined, height: stage.height || undefined, aspectRatio: `${aspect.width} / ${aspect.height}` }}
         tabIndex={0}
         role="group"
         aria-label="Graphics preview. Space plays or pauses; arrow keys step frames."
@@ -83,19 +91,19 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
           inputProps={inputProps}
           durationInFrames={durationInFrames}
           fps={source.fps}
-          compositionWidth={source.width}
-          compositionHeight={source.height}
+          compositionWidth={aspect.width}
+          compositionHeight={aspect.height}
           style={{ width: '100%', height: '100%' }}
           clickToPlay={false}
           spaceKeyToPlayOrPause={false}
           doubleClickToFullscreen={false}
         />
-        <div className="graphics-overlay" data-frame={`${source.width}x${source.height}`}>
+        <div className="graphics-overlay" data-frame={`${aspect.width}x${aspect.height}`}>
           {layout && (
             <GraphicsStageLayers
               document={document}
               layout={layout}
-              source={source}
+              source={canvasSource}
               seconds={time}
               selectedLayerId={props.selectedLayerId}
               activeSlot={props.activeSlot}

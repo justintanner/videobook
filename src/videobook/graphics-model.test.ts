@@ -1,3 +1,5 @@
+import { ORIGINAL_GRAPHICS_FRAME } from '../../server/src/graphics/frame'
+import { editGraphicsFrame, graphicsEffectiveFrame } from './graphics-model'
 import { describe, expect, it } from 'vitest'
 import type { GraphicsLayerLayout } from '../../server/src/graphics/layout'
 import { graphicsDocumentFromLayers, type GraphicsDocument, type GraphicsQrLayerInput } from '../../server/src/graphics/model'
@@ -613,3 +615,21 @@ describe('quick text fields', () => {
     expect(graphicsSuggestionLabel('secondary')).toBe('Second line')
   })
 })
+
+ it('undoes and redoes frame edits together with layer edits', () => {
+  const initial = history(graphicsDocumentFromLayers([{ kind: 'text', items: [{ text: 'Title', slot: 'headline' }] }]))
+  const framing = { ...ORIGINAL_GRAPHICS_FRAME, aspect: '9:16' as const }
+  const reframed = editGraphicsFrame(initial, framing)
+  const moved = editGraphicsFrame(reframed, { ...framing, focus: { x: 1, y: 0.5 } }, 'focus:1')
+  const movedAgain = editGraphicsFrame(moved, { ...framing, focus: { x: 0.9, y: 0.5 } }, 'focus:1')
+  expect(movedAgain.past).toHaveLength(2)
+  const titled = edited(movedAgain, [{ op: 'set_slot_text', slot: 'headline', text: 'New title' }], null)
+  const titleUndone = stepGraphicsHistory(titled, 'undo')!
+  expect(graphicsSlotText(titleUndone.document, 'headline')).toBe('Title')
+  expect(titleUndone.frame).toEqual(movedAgain.frame)
+  const undone = stepGraphicsHistory(movedAgain, 'undo')!
+  expect(undone.frame).toEqual(framing)
+  expect(stepGraphicsHistory(undone, 'redo')!.frame?.focus.x).toBe(0.9)
+  expect(stepGraphicsHistory(undone, 'undo')!.frame).toBeUndefined()
+  expect(graphicsEffectiveFrame(framing, null, null)).toEqual(framing)
+ })

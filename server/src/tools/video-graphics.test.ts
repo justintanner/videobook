@@ -1,3 +1,5 @@
+import { readGraphicsDraft } from "../graphics/drafts.js";
+import { readGraphicsTemplates } from "../graphics/templates.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -238,7 +240,7 @@ describe("video_graphics", () => {
     const fresh = await read(assetId);
     const base = { asset_id: assetId, op: "update" };
     expect(await fails({ ...base, edits: [] })).toMatchObject({ status: "invalid", message: expect.stringMatching(/expected_revision/u) });
-    expect(await fails({ ...base, expected_revision: fresh.revision })).toMatchObject({ status: "invalid", message: expect.stringMatching(/exactly one/u) });
+    expect(await fails({ ...base, expected_revision: fresh.revision })).toMatchObject({ status: "invalid", message: expect.stringMatching(/edits.*document.*frame/u) });
     expect(await fails({ ...base, expected_revision: fresh.revision, edits: [], document: fresh.document })).toMatchObject({ status: "invalid" });
     expect(await fails({ ...base, expected_revision: fresh.revision, edits: [{ op: "remove_layer", layer_id: "l99" }] })).toMatchObject({
       status: "invalid",
@@ -357,4 +359,28 @@ describe("video_graphics", () => {
     });
     expect(VIDEO_EDITING_TOOL_CONTRACTS.find((contract) => contract.tool === "set_video_overlay")).toMatchObject({ exposure: "internal" });
   });
+  it("persists frame-only edits with revision checks and keeps templates aspect-free", async () => {
+    const assetId = await video({ width: 640, height: 360 });
+    const initial = (await call({ asset_id: assetId })).body as Read;
+    const frame = { aspect: "9:16", fit: "crop", focus: { x: 0.8, y: 0.5 } };
+    const saved = await call({ asset_id: assetId, op: "update", expected_revision: initial.revision, frame });
+    expect(saved.error).toBe(false);
+    expect(saved.body).toMatchObject({ frame });
+    const draft = readGraphicsDraft(engine, assetId)!;
+    expect(draft.frame).toEqual(frame);
+    expect((await call({ asset_id: assetId })).body).toMatchObject({ frame });
+    const stale = await call({ asset_id: assetId, op: "update", expected_revision: initial.revision, frame: { ...frame, fit: "blur" } });
+    expect(stale.body).toMatchObject({ status: "conflict" });
+    const template = await call({ asset_id: assetId, op: "save_template", expected_revision: draft.revision, name: "Framed look" });
+    expect(template.error).toBe(false);
+    const stored = readGraphicsTemplates(engine).templates.find((entry) => entry.name === "Framed look");
+    expect(stored).toBeDefined();
+    expect(stored).not.toHaveProperty("frame");
+    expect(stored?.document).not.toHaveProperty("frame");
+    const replace = await call({ asset_id: assetId, op: "render", expected_revision: draft.revision, source_hash: initial.source.source_hash, request_id: randomUUID(), output: "replace" });
+    expect(replace.body).toMatchObject({ status: "invalid", message: expect.stringContaining("new video cell") });
+    const edited = await call({ asset_id: assetId, op: "update", expected_revision: draft.revision, edits: [] });
+    expect(edited.body).toMatchObject({ frame });
+  });
+
 });

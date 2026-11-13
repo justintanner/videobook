@@ -1430,3 +1430,31 @@ label.graphics-field > span:first-child {
   flex-basis: var(--confirm-review-height, 82%);
   grid-template-rows: minmax(40px, auto) minmax(0, 1fr) auto 8px;
 }
+
+.graphics-frame-control {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.graphics-frame-control > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 12px 4px 0;
+}
+
+.graphics-frame-control select {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  color: inherit;
+  background: var(--surface);
+  font: inherit;
+}
+
+.graphics-focus-map {
+  margin: 6px 0;
+  cursor: crosshair;
+}

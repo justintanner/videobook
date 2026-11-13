@@ -1,3 +1,4 @@
+import { graphicsCanvas, ORIGINAL_GRAPHICS_FRAME } from '../../../../server/src/graphics/frame'
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { PlayerRef } from '@remotion/player'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
@@ -11,6 +12,8 @@ import {
   graphicsBurnedNotice,
   graphicsCoverWarning,
   graphicsDrawnDocument,
+  graphicsEffectiveFrame,
+  graphicsSubtitle,
   graphicsImageChoices,
   graphicsLayerPlacements,
   graphicsLayoutWarnings,
@@ -29,6 +32,7 @@ import { GraphicsPreview } from './GraphicsPreview'
 import { GraphicsQuickFields, GraphicsWarnings } from './GraphicsQuickFields'
 import { GraphicsSuggestionTray } from './GraphicsSuggestions'
 import { GraphicsTemplates } from './GraphicsTemplates'
+import { GraphicsFrameControl } from './GraphicsFrameControl'
 import { GraphicsWatermark } from './GraphicsWatermark'
 import './Graphics.css'
 
@@ -93,6 +97,8 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   const [snapping, setSnapping] = useState(true)
   const read = state.read
   const document = state.document
+  const framing = graphicsEffectiveFrame(state.frame ?? ORIGINAL_GRAPHICS_FRAME, read, state.subtitleLanguage)
+  const subtitle = graphicsSubtitle(read, state.subtitleLanguage)
   const watermark = state.target?.watermark ?? null
   const watermarkMode = watermark !== null
   const drawn = useMemo(() => (document ? graphicsDrawnDocument(document, watermarkMode) : null), [document, watermarkMode])
@@ -100,13 +106,14 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   const imageChoices = useMemo(() => graphicsImageChoices(assets, mentions), [assets, mentions])
   const selectedLayer = document?.layers.find((layer) => layer.id === selectedLayerId) ?? null
   const selectedBox = layout?.find((entry) => entry.layerId === selectedLayer?.id)?.box ?? null
-  const warnings = useMemo(() => (document ? graphicsLayoutWarnings(document, layout) : []), [document, layout])
-  const placements = useMemo(() => (drawn && read ? graphicsLayerPlacements(drawn, layout, read) : {}), [drawn, layout, read])
+  const warnings = useMemo(() => (document ? graphicsLayoutWarnings(document, layout, read ? graphicsCanvas(read.source, framing) : undefined) : []), [document, layout, read, framing])
+  const placements = useMemo(() => (drawn && read ? graphicsLayerPlacements(drawn, layout, read, framing) : {}), [drawn, layout, read, framing])
   const coverWarnings = useMemo(() => Object.fromEntries(Object.entries(placements).flatMap(([layerId, placement]) => {
     const warning = graphicsCoverWarning(placement.covers)
     return warning ? [[layerId, warning]] : []
   })), [placements])
   const source = useMemo(() => (read ? { width: read.source.width, height: read.source.height, durationSeconds: read.source.duration_seconds, fps: read.source.fps } : null), [read])
+  const canvas = useMemo(() => (source ? graphicsCanvas(source, framing) : null), [source, framing])
   const editable = document !== null && state.save !== 'conflict' && !state.rendering
   const onLayout = useCallback((next: GraphicsLayerLayout[]) => setLayout(next), [])
   const edit = useCallback((edits: GraphicsEdit[], coalesce: string | null = null) => editor.edit(edits, coalesce), [editor])
@@ -141,7 +148,7 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   const nudge = (delta: GraphicsPoint, repeat: boolean) => {
     if (!source || !selectedLayer || selectedLayer.kind === 'scrim' || !selectedBox) return
     if (!repeat) nudges.current += 1
-    const position = graphicsNudgePosition(source, selectedLayer.position, selectedBox, delta)
+    const position = graphicsNudgePosition(canvas ?? source, selectedLayer.position, selectedBox, delta)
     edit([{ op: 'set_position', layer_id: selectedLayer.id, position }], `nudge:${selectedLayer.id}:${nudges.current}`)
   }
 
@@ -159,7 +166,7 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.defaultPrevented || !source || isTextEntry(event.target)) return
-    const shortcut = graphicsShortcut(event, source)
+    const shortcut = graphicsShortcut(event, canvas ?? source)
     if (!shortcut) return
     if (shortcut.kind === 'undo' || shortcut.kind === 'redo') {
       event.preventDefault()
@@ -182,6 +189,8 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
           document={drawn}
           mediaUrl={state.target.mediaUrl}
           source={source}
+          framing={framing}
+          background={subtitle?.background}
           images={images}
           layout={layout}
           playerRef={playerRef}
@@ -211,6 +220,7 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
               </label>
             </div>
           </div>
+          {!watermark && <GraphicsFrameControl frame={framing} source={read.source} mediaUrl={state.target?.mediaUrl ?? ''} disabled={!editable || Boolean(subtitle)} subtitleAspect={subtitle?.aspect} onChange={editor.setFrame} />}
           <GraphicsWarnings warnings={warnings} />
           <div className="graphics-columns">
             <GraphicsQuickFields
@@ -237,6 +247,7 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
                     document={document}
                     layer={selectedLayer}
                     read={read}
+                    frame={canvas ?? undefined}
                     imageChoices={imageChoices}
                     box={selectedBox}
                     placement={selectedPlacement}

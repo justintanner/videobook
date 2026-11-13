@@ -1,3 +1,4 @@
+import { graphicsAspectChanged, ORIGINAL_GRAPHICS_FRAME, type GraphicsFraming } from '../../server/src/graphics/frame'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GraphicsEdit } from '../../server/src/graphics/edits'
 import type { GraphicsRect } from '../../server/src/graphics/layout'
@@ -7,6 +8,8 @@ import type { WatermarkPlatform } from '../../server/src/watermark-platform'
 import type { ChatExecution } from './chat-turns'
 import {
   editGraphicsHistory,
+  editGraphicsFrame,
+  graphicsEffectiveFrame,
   graphicsClearSpotMessage,
   graphicsOpenEdits,
   graphicsRenderQueuedMessage,
@@ -20,6 +23,7 @@ import {
   parseGraphicsSuggestions,
   stepGraphicsHistory,
   type GraphicsHistory,
+  type GraphicsSnapshot,
   type GraphicsRead,
   type GraphicsRenderOutput,
   type GraphicsSuggestionList,
@@ -43,8 +47,9 @@ export interface GraphicsEditorState {
   saveError: string | null
   conflictRevision: string | null
   error: string | null
-  past: GraphicsDocument[]
-  future: GraphicsDocument[]
+  frame: GraphicsFraming
+  past: GraphicsSnapshot[]
+  future: GraphicsSnapshot[]
   coalesceKey: string | null
   rendering: boolean
   output: GraphicsRenderOutput
@@ -72,6 +77,7 @@ const EMPTY: GraphicsEditorState = {
   loading: false,
   read: null,
   document: null,
+  frame: ORIGINAL_GRAPHICS_FRAME,
   revision: null,
   save: 'saved',
   saveError: null,
@@ -101,6 +107,7 @@ function withRead(current: GraphicsEditorState, read: GraphicsRead): GraphicsEdi
     read,
     loading: false,
     document: read.document,
+    frame: read.frame,
     revision: read.revision,
     past: sameRevision ? current.past : [],
     future: sameRevision ? current.future : [],
@@ -108,7 +115,7 @@ function withRead(current: GraphicsEditorState, read: GraphicsRead): GraphicsEdi
 }
 
 function historyOf(state: GraphicsEditorState): GraphicsHistory | null {
-  return state.document ? { document: state.document, past: state.past, future: state.future, coalesceKey: state.coalesceKey } : null
+  return state.document ? { document: state.document, frame: state.frame, past: state.past, future: state.future, coalesceKey: state.coalesceKey } : null
 }
 
 function defaultOutput(target: GraphicsTarget): GraphicsRenderOutput {
@@ -153,7 +160,9 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
   const renderRequest = useRef<{ revision: string; output: GraphicsRenderOutput; id: string; subtitles: string | null } | null>(null)
 
   const commit = useCallback((update: (current: GraphicsEditorState) => GraphicsEditorState) => {
-    const next = update(stateRef.current)
+    const updated = update(stateRef.current)
+    const changedAspect = updated.read && graphicsAspectChanged(updated.read.source, graphicsEffectiveFrame(updated.frame, updated.read, updated.subtitleLanguage))
+    const next = changedAspect && updated.output === 'replace' ? { ...updated, output: 'new' as const } : updated
     stateRef.current = next
     setState(next)
     return next
@@ -188,6 +197,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
   }, [commit, fetchRead])
 
   const save = useCallback(async (): Promise<boolean> => {
+    if (!ready) return false
     if (saving.current) {
       await saving.current
       return stateRef.current.save === 'saved' ? true : save()
@@ -195,14 +205,15 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     const current = stateRef.current
     if (!current.document || !current.revision || current.save === 'saved' || current.save === 'conflict') return current.save === 'saved'
     const snapshot = current.document
+    const frame = current.frame
     const ticket = epoch.current
     const run = (async () => {
       commit((value) => ({ ...value, save: 'saving' }))
       try {
-        const result = await call('video_graphics', { ...baseArgs(), op: 'update', expected_revision: current.revision, document: snapshot }, { background: true }) as { revision?: unknown }
+        const result = await call('video_graphics', { ...baseArgs(), op: 'update', expected_revision: current.revision, document: snapshot, frame }, { background: true }) as { revision?: unknown }
         if (ticket !== epoch.current) return false
         const revision = typeof result.revision === 'string' ? result.revision : current.revision
-        const latest = commit((value) => ({ ...value, revision, save: value.document === snapshot ? 'saved' : 'dirty', saveError: null }))
+        const latest = commit((value) => ({ ...value, revision, save: value.document === snapshot && value.frame === frame ? 'saved' : 'dirty', saveError: null }))
         if (missingImages(latest)) void refreshImages(ticket)
         return latest.save === 'saved'
       } catch (error) {
@@ -220,7 +231,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     } finally {
       saving.current = null
     }
-  }, [baseArgs, call, commit, refreshImages])
+  }, [baseArgs, call, commit, refreshImages, ready])
 
   const scheduleSave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -241,7 +252,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
   }, [save])
 
   const applyHistory = useCallback((history: GraphicsHistory) => {
-    commit((value) => ({ ...value, document: history.document, past: history.past, future: history.future, coalesceKey: history.coalesceKey, save: 'dirty', error: null }))
+    commit((value) => ({ ...value, document: history.document, frame: history.frame ?? ORIGINAL_GRAPHICS_FRAME, past: history.past, future: history.future, coalesceKey: history.coalesceKey, save: 'dirty', error: null }))
     scheduleSave()
   }, [commit, scheduleSave])
 
@@ -327,7 +338,8 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     if (!(await flush())) return { ok: false, message: stateRef.current.saveError ?? 'Save the graphics before rendering.' }
     const current = stateRef.current
     if (!ready || !current.target || !current.revision || !current.read) return { ok: false, message: 'The graphics are not ready to render.' }
-    const output = current.output
+    const effective = graphicsEffectiveFrame(current.frame, current.read, current.subtitleLanguage)
+    const output = graphicsAspectChanged(current.read.source, effective) ? 'new' : current.output
     const available = current.read.subtitles ?? []
     const language = current.subtitleLanguage === undefined ? (available.find((draft) => draft.language === 'original') ?? available[0])?.language : current.subtitleLanguage
     const subtitle = available.find((draft) => draft.language === language)
@@ -467,6 +479,14 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     reload,
     keepMine,
     setOutput,
+    setFrame: useCallback((frame: GraphicsFraming, coalesce: string | null = null) => {
+      const current = stateRef.current
+      const history = historyOf(current)
+      if (!history || current.save === 'conflict' || current.rendering) return
+      const next = editGraphicsFrame(history, frame, coalesce)
+      if (next !== history) applyHistory(next)
+      if (current.read && graphicsAspectChanged(current.read.source, frame)) commit((value) => ({ ...value, output: 'new' }))
+    }, [applyHistory, commit]),
     setSubtitleLanguage: useCallback((subtitleLanguage: string | null) => { commit((value) => ({ ...value, subtitleLanguage })) }, [commit]),
     render,
     flush,
