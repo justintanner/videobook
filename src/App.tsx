@@ -9210,6 +9210,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const contextMenuGenerationTypes = contextMenuGenerationTypesFor(contextMenuSourceCellIds)
   const contextMenuGenerationSources = notebook?.cells.filter((cell) =>
     contextMenuSourceCellIds.includes(cell.id)) ?? []
+  const contextMenuGraphicsAssets = contextMenuGenerationSources.flatMap((cell) => {
+    const asset = cell.outputArtifactId ? assets.find((entry) => entry.artifactId === cell.outputArtifactId) : null
+    return asset && (asset.type === 'video' || asset.type === 'final') ? [asset.artifactId] : []
+  })
   const contextMenuGenerationActions = contextMenuGenerationTypes.map((cellType): NotebookCellContextAction => ({
     id: cellType,
     label: contextMenuGenerationLabel(cellType, contextMenuGenerationSources),
@@ -9228,6 +9232,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     : []
   const contextMenuActions: NotebookCellContextAction[] = []
   if (contextMenuSelection) {
+    if (contextMenuGraphicsAssets.length === contextMenuGenerationSources.length) {
+      contextMenuActions.push({ id: 'apply-graphics-template', label: 'Apply graphics template', icon: 'graphics', disabled: busy || mcp.state !== 'ready' || contextMenuGraphicsAssets.length > 50 })
+    }
     contextMenuActions.push(...contextMenuGenerationActions)
   } else if (contextMenuCell && contextMenuNode) {
     if (contextMenuCell.type === 'post') {
@@ -9454,6 +9461,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (actionId === 'subtitles' && contextMenuVisualAsset) {
       const result = openSubtitles(contextMenuVisualAsset.artifactId)
       if (!result.ok) setNotice(result.message, 'error')
+      return
+    }
+    if (actionId === 'apply-graphics-template') {
+      void openWorkspaceActions('tool.video_graphics.apply_template', { asset_ids: contextMenuGraphicsAssets })
       return
     }
     if (actionId === 'graphics' && contextMenuVisualAsset) {

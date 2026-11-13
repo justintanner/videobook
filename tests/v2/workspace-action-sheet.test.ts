@@ -272,3 +272,24 @@ describe('timeline clip sheet', () => {
     expect(failed).toContain('class="confirm-sheet-apply">Add clip <kbd>↵</kbd>')
   })
 })
+
+it('reviews a selected graphics batch and lists each video result', () => {
+  const action = catalogAction('tool.video_graphics.apply_template')
+  expect(action.surfaces).toEqual(['launcher', 'cell-menu'])
+  const draft = seedWorkspaceActionDraft(action, { ...context, assetIds: ['video-1', 'video-2'] })
+  expect(draft).toMatchObject({ asset_ids: ['video-1', 'video-2'], op: 'apply_template', render: true, request_id: expect.any(String) })
+  expect(workspaceActionFields(action).map(([name]) => name)).toEqual(['asset_ids', 'template_id', 'render'])
+  const changed = patchWorkspaceActionDraft(action, context, draft, 'template_id', 'tiktok-title')
+  expect(changed.request_id).not.toBe(draft.request_id)
+  const markup = renderActionSheet(action, {
+    draft, review: workspaceActionReview(action, 'destructive'),
+    result: { message: 'Batch processed', value: { results: [
+      { asset_id: 'video-1', label: 'First clip', status: 'rendering', render: { status: 'queued', error: null } },
+      { asset_id: 'video-2', label: 'Second clip', status: 'error', error: { message: 'Video is busy' } },
+    ] } },
+  })
+  expect(markup).toContain('keeps typed text by slot and preserves framing')
+  expect(markup).toContain('First clip')
+  expect(markup).toContain('Render queued')
+  expect(markup).toContain('Video is busy')
+})

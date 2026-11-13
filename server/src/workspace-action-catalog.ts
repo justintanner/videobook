@@ -264,6 +264,31 @@ function toolAction(tool: ToolDef, command: Command | undefined, reserved: Set<s
   };
 }
 
+function batchGraphicsAction(tool: ToolDef): WorkspaceAction {
+  const schema = toolInputJsonSchema(tool.schema) as ActionInputSchema;
+  const fields = schema.properties!;
+  return {
+    id: "tool.video_graphics.apply_template", title: "Apply graphics template",
+    description: "Apply a saved or built-in look to selected videos. Replaces layers while keeping typed text by slot and each video's frame. Render creates a new video cell for each successful video.",
+    group: "Video", command: "/apply-graphics-template", aliases: [], keywords: ["graphics", "template", "batch"],
+    scope: "book", target: { kind: "asset", argument: "asset_ids", multiple: true, mediaKinds: ["video", "final"] },
+    handler: { kind: "tool", tool: "video_graphics" },
+    inputSchema: {
+      type: "object", required: ["book_id", "asset_ids", "template_id", "request_id"],
+      properties: {
+        book_id: fields.book_id, notebook_id: fields.notebook_id,
+        op: { type: "string", const: "apply_template" },
+        asset_ids: { ...fields.asset_ids, title: "Videos" },
+        template_id: { type: "string", minLength: 1, title: "Template" },
+        render: { type: "boolean", default: true, title: "Render into new cells" },
+        request_id: fields.request_id,
+      },
+    },
+    initialArgs: { op: "apply_template", render: true },
+    surfaces: ["launcher", "cell-menu"], focus: "dialog", confirmation: "destructive", interaction: "preview",
+  };
+}
+
 export function buildWorkspaceActionCatalog(
   tools: readonly ToolDef[],
   commands: readonly Command[],
@@ -311,6 +336,7 @@ export function buildWorkspaceActionCatalog(
     const linkedCommands = commands.filter((command) => command.mcpTool?.tool === tool.name);
     const action = toolAction(tool, linkedCommands[0], reserved);
     actions.push(action);
+    if (tool.name === "video_graphics") actions.push(batchGraphicsAction(tool));
     for (const command of linkedCommands.slice(1)) {
       actions.push({ ...toolAction(tool, command, reserved), id: `command.${command.command.slice(1)}` });
     }

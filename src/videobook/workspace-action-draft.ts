@@ -83,7 +83,7 @@ export function seedWorkspaceActionDraft(
     ...context,
     assetId: typeof initialValues.asset_id === 'string' ? initialValues.asset_id : context.assetId,
     cellId: typeof initialValues.cell_id === 'string' ? initialValues.cell_id : context.cellId,
-    assetIds: stringList(initialValues.artifact_ids) ?? context.assetIds,
+    assetIds: stringList(initialValues.asset_ids) ?? stringList(initialValues.artifact_ids) ?? context.assetIds,
     cellIds: stringList(initialValues.cell_ids) ?? context.cellIds,
   })
   const properties = action.inputSchema.properties ?? {}
@@ -115,6 +115,7 @@ export function workspaceActionConfirmation(action: WorkspaceAction, values: Wor
 }
 
 export function workspaceActionReview(action: WorkspaceAction, confirmation: ActionConfirmation, estimate?: unknown): WorkspaceActionReview | undefined {
+  if (action.id === 'tool.video_graphics.apply_template') return { message: 'Replaces graphics layers on each selected video, keeps typed text by slot and preserves framing. With Render on, each successful video gets a new cell; failures are listed individually.' }
   if (confirmation === 'none') return undefined
   if (confirmation === 'external') return { message: `${action.title} sends the selected content outside this workspace.` }
   if (confirmation === 'destructive') return { message: `${action.title} changes or removes the selected content.` }
@@ -150,11 +151,16 @@ export function patchWorkspaceActionDraft(
   const objectHash = name === action.target.argument && typeof value === 'string' && action.inputSchema.properties?.object_hash
     ? { object_hash: context.media?.[value]?.objectHash ?? '' }
     : {}
-  return { ...draft, [name]: value, ...cropPreset, ...objectHash }
+  return { ...draft, [name]: value, ...cropPreset, ...objectHash, ...(action.id === 'tool.video_graphics.apply_template' ? { request_id: crypto.randomUUID() } : {}) }
 }
 
 export function workspaceActionFields(action: WorkspaceAction): [string, ActionInputSchema][] {
   const hidden = new Set(action.generation ? [...HIDDEN_FIELDS, '_provider'] : HIDDEN_FIELDS)
+  if (action.id === 'tool.video_graphics.apply_template') {
+    hidden.add('op')
+    hidden.add('request_id')
+    hidden.add('notebook_id')
+  }
   const field = singleEntryArray(action)
   return Object.entries(action.inputSchema.properties ?? {})
     .filter(([name]) => !hidden.has(name))

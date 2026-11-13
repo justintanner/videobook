@@ -148,6 +148,7 @@ export function initialActionValues(action: WorkspaceAction, context: WorkspaceA
   const defaults = record(initialActionInput(action.inputSchema, true)) ?? {}
   const fields = action.inputSchema.properties ?? {}
   const values = { ...defaults, ...action.initialArgs }
+  if (action.id === 'tool.video_graphics.apply_template') values.request_id = crypto.randomUUID()
   if (fields._provider && action.generation) values._provider = action.generation.provider
   for (const [name, value] of [
     ['book_id', context.bookId], ['notebook_id', context.notebookId],
@@ -163,6 +164,7 @@ export function initialActionValues(action: WorkspaceAction, context: WorkspaceA
       values[action.target.argument] = action.target.multiple ? context.assetIds ?? [context.assetId] : context.assetId
     }
   }
+  if (action.target.kind === 'asset' && action.target.multiple && action.target.argument && context.assetIds?.length) values[action.target.argument] = context.assetIds
   if (action.target.kind === 'cell' && action.target.multiple && action.target.argument && context.cellIds?.length) values[action.target.argument] = context.cellIds
   if (action.target.kind === 'cell' && !action.target.multiple && action.target.argument && context.cellId) values[action.target.argument] = context.cellId
   if (fields.object_hash && context.assetId && context.media?.[context.assetId]?.objectHash) values.object_hash = context.media[context.assetId]!.objectHash

@@ -1,3 +1,4 @@
+import { applyGraphicsTemplateBatch } from "../graphics/batch.js";
 import { graphicsFrameSchema, type GraphicsFraming } from "../graphics/frame.js";
 import { draftLanguages, readCaptionDraft } from "../captions/drafts.js";
 import { latestStackedCaptionRender, requestCaptionRender } from "../captions/render.js";
@@ -150,8 +151,10 @@ const schema = {
   asset_id: z.string().min(1).optional()
     .describe("Video artifact UUID or notebook address such as @a1. Required for get, update, render, suggest, check_placement, detect_regions, save_template and save_watermark"),
   notebook_id: z.string().uuid().optional().describe("Notebook that resolves an @address and reports the video's cell address"),
-  op: z.enum([...VIDEO_OPS, ...TEMPLATE_OPS]).optional()
-    .describe("get (default) reads the saved graphics, or the book's default look for a video without any, with fill values, starters, the book's saved templates, the latest render and any graphics already burned in, and never writes; update saves edits or a replacement document against expected_revision; render queues the graphics of exactly that revision as a background job and returns at once; suggest calls a paid language model once and returns 3 to 5 options for the operator to pick from without saving anything: kind headline writes headlines from the video's existing analysis, transcript and download title and description (it never starts transcription or analysis, and answers no_context when the video has none of them), kind translate translates the headline for the second line under it; check_placement answers for free, from faces and on-screen text already found in the video, whether layer_id's drawn box covers one during the layer's time window and, when every frame of that window was already checked, the clearest of the nine anchor spots (it never calls a model and never moves the layer); detect_regions first finds faces and on-screen text in the window's unchecked frames with a paid vision model call (none when all were checked), then answers as check_placement does and returns the found regions; save_template saves the video's current graphics as a named template of this book (slot text such as the headline is left empty), or over template_id; rename_template and delete_template change a saved template; set_default_template makes template_id (a saved template or a starter) the look a video without graphics starts from, or restores the built-in default with null; copy_templates copies from_book's saved templates into this book together with the images their layers use, skipping names already taken here; save_watermark saves the video's current graphics, read in watermark mode, as the platform's watermark template that apply_watermark and goal finishing burn (over the current one, named after the platform unless name is given; slot text such as the title is left empty) and remembers the handle and QR link drawn there; set_watermark_template makes template_id (a saved template) the platform's watermark template, or null goes back to the watermark profile's look"),
+  asset_ids: z.array(z.string().min(1)).min(1).max(50).optional().describe("apply_template: 1 to 50 video artifact UUIDs or notebook addresses"),
+  render: z.boolean().optional().describe("apply_template: queue each video into a new cell (default true)"),
+  op: z.enum([...VIDEO_OPS, ...TEMPLATE_OPS, "apply_template"]).optional()
+    .describe("apply_template applies template_id to asset_ids, keeping typed slot text and framing; render defaults to true and queues a new copy per video; request_id is required for safe retries; failures are reported per video. get (default) reads the saved graphics, or the book's default look for a video without any, with fill values, starters, the book's saved templates, the latest render and any graphics already burned in, and never writes; update saves edits or a replacement document against expected_revision; render queues the graphics of exactly that revision as a background job and returns at once; suggest calls a paid language model once and returns 3 to 5 options for the operator to pick from without saving anything: kind headline writes headlines from the video's existing analysis, transcript and download title and description (it never starts transcription or analysis, and answers no_context when the video has none of them), kind translate translates the headline for the second line under it; check_placement answers for free, from faces and on-screen text already found in the video, whether layer_id's drawn box covers one during the layer's time window and, when every frame of that window was already checked, the clearest of the nine anchor spots (it never calls a model and never moves the layer); detect_regions first finds faces and on-screen text in the window's unchecked frames with a paid vision model call (none when all were checked), then answers as check_placement does and returns the found regions; save_template saves the video's current graphics as a named template of this book (slot text such as the headline is left empty), or over template_id; rename_template and delete_template change a saved template; set_default_template makes template_id (a saved template or a starter) the look a video without graphics starts from, or restores the built-in default with null; copy_templates copies from_book's saved templates into this book together with the images their layers use, skipping names already taken here; save_watermark saves the video's current graphics, read in watermark mode, as the platform's watermark template that apply_watermark and goal finishing burn (over the current one, named after the platform unless name is given; slot text such as the title is left empty) and remembers the handle and QR link drawn there; set_watermark_template makes template_id (a saved template) the platform's watermark template, or null goes back to the watermark profile's look"),
   platform: z.enum(WATERMARK_PLATFORMS).optional()
     .describe("Watermark profile whose handle and profile URL fill the handle and QR slots of the default look and starters, and the watermark that watermark mode works with (default tiktok)"),
   watermark: z.boolean().optional()
@@ -191,7 +194,9 @@ type VideoGraphicsArgs = {
   book_id: string;
   asset_id?: string;
   notebook_id?: string;
-  op?: VideoOp | TemplateOp;
+  op?: VideoOp | TemplateOp | "apply_template";
+  asset_ids?: string[];
+  render?: boolean;
   platform?: WatermarkPlatform;
   watermark?: boolean;
   kind?: GraphicsSuggestKind;
@@ -420,6 +425,16 @@ export function videoGraphicsDef(engine: Engine, books?: BookManager): ToolDef {
       try {
         const look: GraphicsLook = { platform: args.platform ?? "tiktok", watermark: args.watermark ?? false };
         const op = args.op ?? "get";
+        if (op === "apply_template") {
+          if (!args.asset_ids?.length || args.asset_ids.length > 50 || !args.template_id || !args.request_id) {
+            throw new GraphicsServiceError("invalid", "apply_template needs 1 to 50 asset_ids, template_id and a stable request_id.");
+          }
+          if (args.output === "replace" || args.watermark || args.with_subtitles) throw new GraphicsServiceError("invalid", "Batch templates render graphics into new cells only.");
+          return json(await applyGraphicsTemplateBatch(engine, args.book_id, {
+            assetIds: args.asset_ids, templateId: args.template_id, requestId: args.request_id,
+            render: args.render ?? true, notebookId: args.notebook_id ?? null, look,
+          }));
+        }
         if (isTemplateOp(op)) return json(await templateOperation(engine, books, args, op, look));
         return json(await videoOperation(engine, args, op, look));
       } catch (error) {

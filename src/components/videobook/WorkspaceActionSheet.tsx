@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { ArrowLeft } from 'lucide-react'
 import { useLayoutEffect, useRef } from 'react'
 import type { WorkspaceAction } from '../../../server/src/workspace-action-contract'
@@ -30,6 +31,12 @@ import { WorkspaceActionResultLinks } from './WorkspaceActionResultLinks'
 import { WorkspaceCropPreview } from './WorkspaceCropPreview'
 import './workspace-actions.css'
 
+const graphicsBatchResultSchema = z.object({ results: z.array(z.object({
+  asset_id: z.string(), address: z.string().nullable().optional(), label: z.string().nullable().optional(),
+  error: z.object({ message: z.string() }).optional(),
+  render: z.object({ status: z.string(), error: z.string().nullable() }).optional(),
+})) })
+
 const ENTITY_EDITOR_SCHEMA = {
   type: 'object',
   required: ['name'],
@@ -41,7 +48,7 @@ const ENTITY_EDITOR_SCHEMA = {
   },
 }
 
-const DEPENDENT_CHOICE_FIELDS = ['commit_hash', 'filename', 'subject_id', 'subject_ids']
+const DEPENDENT_CHOICE_FIELDS = ['commit_hash', 'filename', 'subject_id', 'subject_ids', 'template_id']
 
 type OpenAction = (actionId: string | undefined, values: WorkspaceActionDraft) => void
 
@@ -92,6 +99,19 @@ function ResultValue({ value, name = 'Result' }: { value: unknown; name?: string
   return <span>{typeof value === 'boolean' ? value ? 'Yes' : 'No' : String(value)}</span>
 }
 
+function GraphicsBatchResults({ value }: { value: unknown }) {
+  const parsed = graphicsBatchResultSchema.safeParse(value)
+  if (!parsed.success) return <ResultValue value={value} />
+  return <ul className="workspace-action-result-list" aria-label="Graphics template results">
+    {parsed.data.results.map((result, index) => <li key={`${result.asset_id}:${index}`}>
+      <strong>{[result.address, result.label].filter(Boolean).join(' · ') || result.asset_id}</strong>
+      <p>{result.error?.message ?? (result.render
+        ? `Render ${result.render.status}${result.render.error ? `: ${result.render.error}` : ''}`
+        : 'Template applied')}</p>
+    </li>)}
+  </ul>
+}
+
 function WorkspaceActionResultSection({ action, result, values, onOpenAction }: {
   action: WorkspaceAction
   result: WorkspaceActionResult
@@ -100,7 +120,9 @@ function WorkspaceActionResultSection({ action, result, values, onOpenAction }: 
 }) {
   return <section className="workspace-action-result" aria-label="Action result">
     <p role="status">{result.message}</p>
-    {hasWorkspaceActionResultLinks(action)
+    {action.id === 'tool.video_graphics.apply_template'
+      ? <GraphicsBatchResults value={result.value} />
+      : hasWorkspaceActionResultLinks(action)
       ? <WorkspaceActionResultLinks action={action} value={result.value} values={values} onOpen={onOpenAction} />
       : <ResultValue value={result.value} />}
   </section>

@@ -1,3 +1,7 @@
+import { pauseBookQueueForTests } from "../queue.js";
+import { readGraphicsDraft } from "../graphics/drafts.js";
+import { readGraphicsRenderRequest } from "../graphics/render.js";
+import { graphicsSlotValues } from "../graphics/slots.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -97,7 +101,7 @@ describe("video_graphics templates", () => {
   async function call(args: Record<string, unknown>): Promise<{ error: boolean; body: unknown; text: string }> {
     const result = await client.callTool({ name: "video_graphics", arguments: { book_id: bookId, ...args } });
     const text = (result.content as TextContent)[0].text;
-    return { error: result.isError === true, body: JSON.parse(text) as unknown, text };
+    return { error: result.isError === true, body: text.startsWith("{") ? JSON.parse(text) as unknown : null, text };
   }
 
   async function ok<T>(args: Record<string, unknown>): Promise<T> {
@@ -266,4 +270,72 @@ describe("video_graphics templates", () => {
       expect(toolSpendsMoney("video_graphics", { op })).toBe(false);
     }
   });
+  it("applies a batch with per-video fill, preserves text and framing, and reuses renders across retries", async () => {
+    await clearTemplates();
+    await pauseBookQueueForTests(engine.book.get().bookId);
+    const first = await video(TIKTOK_SOURCE);
+    const second = await video({ ...TIKTOK_SOURCE, uploader: "othercreator", source_url: "https://www.tiktok.com/@othercreator/video/7432100000000000000", webpage_url: "https://www.tiktok.com/@othercreator/video/7432100000000000000" });
+    const busyArtifact = await engine.artifacts.create("video", "Processing clip");
+    if (!busyArtifact.ok) throw new Error(busyArtifact.error.message);
+    const busy = busyArtifact.value.artifactId;
+    const logo = await image();
+    const original = await read(first);
+    const frame = { aspect: "1:1", fit: "blur", focus: { x: 0.25, y: 0.75 } };
+    await update(first, { expected_revision: original.revision, frame, edits: [
+      { op: "add_layer", layer: { kind: "image", artifactId: logo } },
+      { op: "add_layer", layer: { kind: "text", items: [{ slot: "credit", text: "" }] } },
+      { op: "set_slot_text", slot: "headline", text: THAI_TITLE },
+    ] });
+    const saved = await template({ op: "save_template", asset_id: first, name: "Batch image look" });
+    const args = { op: "apply_template", asset_ids: [first, busy, logo, second], template_id: saved.template.id, request_id: randomUUID() };
+    type Batch = { results: Array<{ asset_id: string; status: string; revision?: string; error?: { code: string }; render?: { request_id: string; job_id: number; output_asset_id: string } }> };
+    const before = engine.jobs.queue.list({ type: "render_graphics", limit: 200 }).length;
+    const batch = await ok<Batch>(args);
+    expect(batch.results.map((entry) => entry.status)).toEqual(["rendering", "error", "error", "rendering"]);
+    expect(batch.results[1].error?.code).toBe("not_ready");
+    expect(readGraphicsDraft(engine, busy)).toBeNull();
+    expect(readGraphicsDraft(engine, first)?.frame).toEqual(frame);
+    expect(slotText(readGraphicsDraft(engine, first)!.document, "headline")).toBe(THAI_TITLE);
+    expect(graphicsSlotValues(readGraphicsDraft(engine, second)!.document)).toMatchObject({ credit: expect.stringContaining("othercreator"), handle: "jtbkk" });
+    for (const entry of [batch.results[0], batch.results[3]]) {
+      const request = readGraphicsRenderRequest(engine, entry.render!.request_id)!;
+      expect(request.output).toBe("new");
+      expect(request.outputArtifactId).not.toBe(entry.asset_id);
+    }
+    const retry = await ok<Batch>(args);
+    for (const index of [0, 3]) {
+      expect(retry.results[index]).toMatchObject({ revision: batch.results[index].revision, render: {
+        request_id: batch.results[index].render!.request_id, job_id: batch.results[index].render!.job_id, output_asset_id: batch.results[index].render!.output_asset_id,
+      } });
+    }
+    expect(engine.jobs.queue.list({ type: "render_graphics", limit: 200 })).toHaveLength(before + 2);
+    expect((await fails({ ...args, render: false })).message).toMatch(/different template batch/u);
+    for (const index of [0, 3]) await engine.jobs.queue.abort(batch.results[index].render!.job_id, "Test cancellation");
+    const afterAbort = await ok<Batch>(args);
+    expect(afterAbort.results[0].render!.job_id).toBe(batch.results[0].render!.job_id);
+    expect(engine.jobs.queue.list({ type: "render_graphics", limit: 200 })).toHaveLength(before + 2);
+  });
+
+  it("applies without rendering, isolates missing images and rejects invalid batches", async () => {
+    const assetId = await video();
+    const args = { op: "apply_template", asset_ids: [assetId], template_id: "tiktok-title", render: false, request_id: randomUUID() };
+    const before = engine.jobs.queue.list({ type: "render_graphics", limit: 200 }).length;
+    expect(await ok(args)).toMatchObject({ results: [{ asset_id: assetId, status: "applied" }] });
+    const revision = readGraphicsDraft(engine, assetId)!.revision;
+    await ok(args);
+    expect(readGraphicsDraft(engine, assetId)!.revision).toBe(revision);
+    expect(engine.jobs.queue.list({ type: "render_graphics", limit: 200 })).toHaveLength(before);
+    const logo = await image();
+    await update(assetId, { expected_revision: revision, edits: [{ op: "add_layer", layer: { kind: "image", artifactId: logo } }] });
+    const saved = await template({ op: "save_template", asset_id: assetId, name: "Missing batch image" });
+    await engine.artifacts.delete(logo);
+    const current = readGraphicsDraft(engine, assetId)!.revision;
+    expect(await ok({ ...args, template_id: saved.template.id, request_id: randomUUID() })).toMatchObject({ results: [{ status: "error", error: { code: "invalid" } }] });
+    expect(readGraphicsDraft(engine, assetId)!.revision).toBe(current);
+    expect((await call({ ...args, asset_ids: [] })).error).toBe(true);
+    expect((await call({ ...args, asset_ids: Array.from({ length: 51 }, () => assetId) })).error).toBe(true);
+    expect((await call({ ...args, request_id: undefined })).error).toBe(true);
+    expect((await call({ ...args, output: "replace" })).error).toBe(true);
+  });
+
 });

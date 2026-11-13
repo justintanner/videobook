@@ -180,7 +180,7 @@ export async function graphicsBurned(engine: Engine, artifactId: string): Promis
   };
 }
 
-async function requireSettledVideo(engine: Engine, artifactId: string): Promise<void> {
+export async function requireSettledVideo(engine: Engine, artifactId: string): Promise<void> {
   const status = await engine.status.get(artifactId);
   if (!status.ok) throw new GraphicsServiceError("invalid", status.error.message);
   if (BUSY_STATES.has(status.value)) {

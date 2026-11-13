@@ -1,3 +1,4 @@
+import { graphicsTemplateChoices, parseGraphicsRead } from './graphics-model'
 import { parseFrontierRankings } from './generation-frontier'
 import type { WorkspaceAction } from '../../server/src/workspace-action-contract'
 import type { ActionChoice } from './workspace-actions'
@@ -52,8 +53,15 @@ export async function loadWorkspaceActionResources(
   if (fields.archive_ids) requests.push((async () => {
     result.choices.archive_ids = choices(rows(await call('search_archive', { limit: 100, presign_media: false }), 'results'), ['archive_id'], ['title', 'filename'])
   })())
-  const reference = values.asset_id ?? values.artifact_id
+  const reference = values.asset_id ?? values.artifact_id ?? (Array.isArray(values.asset_ids) ? values.asset_ids[0] : undefined)
   const assetId = typeof reference === 'string' ? reference : undefined
+  if (action.id === 'tool.video_graphics.apply_template' && assetId) requests.push((async () => {
+    const read = parseGraphicsRead(await call('video_graphics', { op: 'get', asset_id: assetId, notebook_id: values.notebook_id }))
+    result.choices.template_id = graphicsTemplateChoices(read).map((choice) => ({
+      value: choice.id, label: choice.name, group: choice.saved ? 'Saved templates' : 'Built-in templates',
+      ...(choice.missingImages ? { detail: 'Missing images', available: false } : {}),
+    }))
+  })())
   if (fields.commit_hash || fields.target_revision || fields.action_id || fields.target_action_id) requests.push((async () => {
     const history = assetId && fields.commit_hash
       ? rows(await call('asset_history', { asset_id: assetId, limit: 200 }), 'commits')
