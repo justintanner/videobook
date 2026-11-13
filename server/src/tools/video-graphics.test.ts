@@ -207,6 +207,23 @@ describe("video_graphics", () => {
     expect(engine.settings.get(`graphics.draft.${assetId}`)).toMatchObject({ revision: second.revision });
   });
 
+  it("persists motion edits through MCP and rejects Words for non-text layers", async () => {
+    const assetId = await video();
+    const fresh = await read(assetId);
+    const title = textLayers(fresh.document)[0];
+    const saved = await save(assetId, {
+      expected_revision: fresh.revision,
+      edits: [{ op: "set_timing", layer_id: title.id, timing: { enter: "words", exit: "pop", start: 0.5, end: 1.5, fade: 0.25 } }],
+    });
+    expect((await read(assetId)).document.layers.find((layer) => layer.id === title.id)?.timing)
+      .toMatchObject({ enter: "words", exit: "pop", start: 0.5, end: 1.5, fade: 0.25 });
+    const shade = saved.document.layers.find((layer) => layer.kind === "scrim");
+    if (!shade) throw new Error("expected a shade layer");
+    expect(await fails({ asset_id: assetId, op: "update", expected_revision: saved.revision, edits: [{ op: "set_timing", layer_id: shade.id, timing: { exit: "words" } }] }))
+      .toMatchObject({ status: "invalid", message: expect.stringContaining("only available for text") });
+    expect((await read(assetId)).revision).toBe(saved.revision);
+  });
+
   it("saves a replacement document as given", async () => {
     const assetId = await video();
     const fresh = await read(assetId);

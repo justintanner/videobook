@@ -61,7 +61,7 @@ describe("graphics placement", () => {
 
   it("measures text by its drawn lines, icon, accent or plate, and leaves out shades and missing images", () => {
     const line = (x: number, y: number, width: number) => ({ x, y, width, height: 40, text: "t", baseline: y + 30 });
-    const item = { itemId: "t1", font: { family: "Montserrat", weight: 800, size: 40 }, box: { x: 0, y: 0, width: 900, height: 200 }, icon: null, accent: null, overflow: false };
+    const item = { words: [], itemId: "t1", font: { family: "Montserrat", weight: 800, size: 40 }, box: { x: 0, y: 0, width: 900, height: 200 }, icon: null, accent: null, overflow: false };
     const text: GraphicsLayerLayout = {
       kind: "text",
       layerId: "l1",

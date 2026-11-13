@@ -83,7 +83,7 @@ describe("watermark burn documents", () => {
     expect(document.layers.filter((layer) => layer.kind === "text").map((layer) => layer.name)).toEqual(["Title", "Handle"]);
     expect(kinds(drawn(document))).toEqual(["text"]);
     expect(handleLayer(document).items[0]).toMatchObject({ text: "jtbkk", slot: "handle", icon: "tiktok" });
-    expect(handleLayer(document).timing).toEqual({ start: null, end: 3, tail: null, fade: LIGHTNING_WATERMARK_PROFILE.fadeSeconds });
+    expect(handleLayer(document).timing).toEqual({ start: null, end: 3, tail: null, fade: LIGHTNING_WATERMARK_PROFILE.fadeSeconds, enter: "fade", exit: "fade" });
   });
 
   it("adds the QR code when asked, at the resolved corner and inside its window", () => {

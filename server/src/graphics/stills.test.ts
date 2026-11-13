@@ -21,18 +21,26 @@ function document(layers: GraphicsLayerInput[]): GraphicsDocument {
 }
 
 describe("graphicsStillGroups", () => {
+  it("splits matching windows when either motion preset differs", () => {
+    const groups = graphicsStillGroups(document([
+      text("Fade"), text("Slide", { enter: "slide" }), text("Pop", { enter: "slide", exit: "pop" }),
+      text("Words", { enter: "words" }), text("More words", { enter: "words" }),
+    ]), 8);
+    expect(groups.map((group) => group.layerIds)).toEqual([["l1"], ["l3"], ["l5"], ["l7", "l9"]]);
+  });
+
   it("gives layers A (whole clip), B (last 3 seconds) and C (whole clip) three groups in order", () => {
     const groups = graphicsStillGroups(document([scrim(WHOLE), text("Breaking", LAST_THREE), text("Credit")]), 8);
     expect(groups).toEqual([
-      { layerIds: ["l1"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0 } },
-      { layerIds: ["l2"], timing: { start: 5, end: 8, fadeIn: 0.5, fadeOut: 0 } },
-      { layerIds: ["l4"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0 } },
+      { layerIds: ["l1"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0, enter: "fade", exit: "fade" } },
+      { layerIds: ["l2"], timing: { start: 5, end: 8, fadeIn: 0.5, fadeOut: 0, enter: "fade", exit: "fade" } },
+      { layerIds: ["l4"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0, enter: "fade", exit: "fade" } },
     ]);
   });
 
   it("joins equal neighbours into one group", () => {
     expect(graphicsStillGroups(document([scrim(WHOLE), text("Title"), text("Credit")]), 8)).toEqual([
-      { layerIds: ["l1", "l2", "l4"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0 } },
+      { layerIds: ["l1", "l2", "l4"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0, enter: "fade", exit: "fade" } },
     ]);
     const sameWindow = graphicsStillGroups(document([text("One", { start: 5, fade: 0.5 }), text("Two", LAST_THREE)]), 8);
     expect(sameWindow.map((group) => group.layerIds)).toEqual([["l1", "l3"]]);
@@ -66,13 +74,13 @@ describe("graphicsStillGroups", () => {
     const tiktok = GRAPHICS_STARTERS.find((starter) => starter.id === "tiktok-title");
     if (!tiktok) throw new Error("expected the tiktok-title starter");
     const groups = graphicsStillGroups(tiktok.build({ width: 1080, height: 1920 }), 8);
-    expect(groups).toEqual([{ layerIds: ["l1", "l2"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0 } }]);
+    expect(groups).toEqual([{ layerIds: ["l1", "l2"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0, enter: "fade", exit: "fade" } }]);
   });
 
   it("still draws the watermark starter's handle only for the profile's first seconds", () => {
     const watermark = GRAPHICS_STARTERS.find((starter) => starter.id === "watermark");
     if (!watermark) throw new Error("expected the watermark starter");
     const groups = graphicsStillGroups(watermark.build({ width: 1080, height: 1920 }), 8);
-    expect(groups).toContainEqual({ layerIds: ["l2"], timing: { start: 0, end: 3, fadeIn: 0, fadeOut: LIGHTNING_WATERMARK_PROFILE.fadeSeconds } });
+    expect(groups).toContainEqual({ layerIds: ["l2"], timing: { start: 0, end: 3, fadeIn: 0, fadeOut: LIGHTNING_WATERMARK_PROFILE.fadeSeconds, enter: "fade", exit: "fade" } });
   });
 });

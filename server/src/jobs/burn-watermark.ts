@@ -234,6 +234,7 @@ async function burnInto(
   const scratch = await mkdtemp(join(tmpdir(), SCRATCH_PREFIX));
   try {
     const { groups } = await renderGraphicsStills({
+      fps: probe.fps,
       document,
       frame,
       durationSeconds: probe.videoDuration,

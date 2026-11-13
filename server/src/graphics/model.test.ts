@@ -56,7 +56,7 @@ describe("graphics document model", () => {
     const [scrim, text, image, qr] = document.layers;
     expect(scrim).toEqual({
       id: "l1", kind: "scrim", name: "Shade", visible: true, opacity: 1,
-      timing: { start: null, end: null, tail: null, fade: 0 },
+      timing: { start: null, end: null, tail: null, fade: 0, enter: "fade", exit: "fade" },
       edge: "bottom", height: 0.4, color: "#000000", strength: 0.7,
     });
     if (text.kind !== "text") throw new Error("expected a text layer");
@@ -148,4 +148,14 @@ describe("graphics document model", () => {
     expect(() => graphicsFrame({ width: 1080.5, height: 1920 })).toThrow(/Frame sides/u);
     expect(MAX_GRAPHICS_FADE_SECONDS).toBe(MAX_WATERMARK_FADE_SECONDS);
   });
+});
+
+it("defaults legacy timing to fades and rejects words on non-text layers", () => {
+  const document = graphicsDocumentFromLayers([{ kind: "scrim" }, { kind: "text", items: [{ text: "Title" }] }]);
+  const legacy = { ...document, layers: document.layers.map((layer) => ({ ...layer, timing: { start: null, end: null, tail: null, fade: 0 } })) };
+  expect(parseGraphicsDocument(legacy)).toEqual({ ok: true, document });
+  for (const edge of ["enter", "exit"] as const) {
+    const invalid = { ...document, layers: document.layers.map((layer) => ({ ...layer, timing: { ...layer.timing, [edge]: "words" } })) };
+    expect(parseGraphicsDocument(invalid)).toMatchObject({ ok: false, error: expect.stringContaining("only available for text") });
+  }
 });

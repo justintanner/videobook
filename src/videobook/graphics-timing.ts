@@ -142,8 +142,8 @@ export function graphicsTimingSummary(timing: GraphicsTiming, duration: number):
   const window = resolveLayerTiming(timing, duration)
   if (!window) return 'Never shows: the window is empty.'
   const fades = [
-    window.fadeIn > 0 ? `fades in ${label(window.fadeIn)} s` : null,
-    window.fadeOut > 0 ? `fades out ${label(window.fadeOut)} s` : null,
+    window.fadeIn > 0 ? `${window.enter === 'fade' ? 'fades' : window.enter} in ${label(window.fadeIn)} s` : null,
+    window.fadeOut > 0 ? `${window.exit === 'fade' ? 'fades' : window.exit} out ${label(window.fadeOut)} s` : null,
   ].filter((part): part is string => part !== null)
   return [`Shows ${label(window.start)}–${label(window.end)} s of ${label(duration)} s`, ...fades].join(' · ')
 }

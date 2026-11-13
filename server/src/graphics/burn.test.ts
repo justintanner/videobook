@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
-import { burnGraphics, burnWatermarkEnable, burnWatermarkInputArgs, burnWatermarkLoopSeconds } from "./burn.js";
+import { burnFilter, burnGraphics, burnWatermarkEnable, burnWatermarkInputArgs, burnWatermarkLoopSeconds } from "./burn.js";
 import type { ResolvedGraphicsTiming } from "./timing.js";
 
 const execFileAsync = promisify(execFile);
@@ -17,9 +17,9 @@ const BACKGROUND = [32, 96, 160] as const;
 const RED = [255, 0, 0] as const;
 const GREEN = [0, 255, 0] as const;
 const YELLOW = [255, 255, 0] as const;
-const WHOLE: ResolvedGraphicsTiming = { start: 0, end: DURATION, fadeIn: 0, fadeOut: 0 };
-const MIDDLE: ResolvedGraphicsTiming = { start: 1, end: 3, fadeIn: 0.5, fadeOut: 0.5 };
-const TAIL: ResolvedGraphicsTiming = { start: 3, end: DURATION, fadeIn: 0.25, fadeOut: 0 };
+const WHOLE: ResolvedGraphicsTiming = { start: 0, end: DURATION, fadeIn: 0, fadeOut: 0, enter: "fade", exit: "fade" };
+const MIDDLE: ResolvedGraphicsTiming = { start: 1, end: 3, fadeIn: 0.5, fadeOut: 0.5, enter: "fade", exit: "fade" };
+const TAIL: ResolvedGraphicsTiming = { start: 3, end: DURATION, fadeIn: 0.25, fadeOut: 0, enter: "fade", exit: "fade" };
 const RED_POINT = [60, 40] as const;
 const GREEN_POINT = [190, 330] as const;
 const YELLOW_POINT = [270, 580] as const;
@@ -32,6 +32,16 @@ function distance(color: Rgb, target: Rgb): number {
 }
 
 describe("burn filter helpers", () => {
+  it("preserves the fade-only filter graph byte for byte", () => {
+    const probe = { width: WIDTH, height: HEIGHT } as Awaited<ReturnType<typeof probeVideo>>;
+    expect(burnFilter([
+      { path: "badge.png", left: 20, top: 40, start: 1, end: 3, fades: { fadeIn: 0.5, fadeOut: 0.5 } },
+    ], probe, { width: WIDTH, height: HEIGHT })).toBe("[1:v]format=rgba,fade=t=in:st=1:d=0.5:alpha=1,fade=t=out:st=2.5:d=0.5:alpha=1[g1];[0:v][g1]overlay=20:40:format=auto:enable='between(t,1,3)'[vout]");
+    expect(burnFilter([
+      { path: "motion-%06d.png", left: 0, top: 40, start: 1, end: 1.5, fades: { fadeIn: 0, fadeOut: 0 }, sequenceFps: 30, exclusiveEnd: true },
+    ], probe, { width: WIDTH, height: HEIGHT })).toBe("[1:v]format=rgba,setpts=PTS-STARTPTS+1/TB[g1];[0:v][g1]overlay=0:40:format=auto:enable='gte(t,1)*lt(t,1.5)'[vout]");
+  });
+
   it("supports open-ended and whole-clip timing", () => {
     expect(burnWatermarkEnable()).toBe("");
     expect(burnWatermarkEnable(1.5)).toBe(":enable='gte(t,1.5)'");

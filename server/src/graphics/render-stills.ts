@@ -12,12 +12,14 @@ import type { GraphicsStillGroup } from "./stills.js";
 import { graphicsStillGroups } from "./stills.js";
 
 export type GraphicsStillImage = { path: string; width: number; height: number };
-export type RenderedGraphicsStill = GraphicsStillGroup & { path: string };
+export type GraphicsTransitionFrames = { paths: string[]; start: number; end: number; fps: number };
+export type RenderedGraphicsStill = GraphicsStillGroup & { path: string; transitions?: GraphicsTransitionFrames[] };
 
 type GraphicsStillsInput = {
   document: GraphicsDocument;
   frame: GraphicsFrame;
   durationSeconds: number;
+  fps?: number;
   images: Readonly<Record<string, GraphicsStillImage>>;
   outputDir: string;
   signal: AbortSignal;
@@ -54,6 +56,58 @@ async function openStillBrowser(): Promise<HeadlessBrowser> {
   return openBrowser("chrome", { chromeMode: "headless-shell", ...(browserExecutable ? { browserExecutable } : {}) });
 }
 
+async function drawStill(
+  input: GraphicsStillsInput,
+  props: GraphicsStillProps,
+  composition: Awaited<ReturnType<typeof selectComposition>>,
+  bundleDir: string,
+  browser: HeadlessBrowser,
+  output: string,
+): Promise<void> {
+  input.signal.throwIfAborted();
+  await withRemotionCancellation(input.signal, (cancelSignal) => renderStill({
+    composition: { ...composition, props },
+    serveUrl: bundleDir,
+    output,
+    overwrite: true,
+    imageFormat: "png",
+    inputProps: props,
+    puppeteerInstance: browser,
+    cancelSignal,
+  }));
+}
+
+async function renderTransitions(
+  input: GraphicsStillsInput,
+  group: GraphicsStillGroup,
+  index: number,
+  props: GraphicsStillProps,
+  composition: Awaited<ReturnType<typeof selectComposition>>,
+  bundleDir: string,
+  browser: HeadlessBrowser,
+): Promise<GraphicsTransitionFrames[]> {
+  if (group.timing.enter === "fade" && group.timing.exit === "fade") return [];
+  const fps = input.fps && Number.isFinite(input.fps) && input.fps > 0 ? input.fps : 30;
+  const windows = [
+    { start: group.timing.start, end: Math.min(group.timing.start + group.timing.fadeIn, group.timing.end - group.timing.fadeOut) },
+    { start: group.timing.end - group.timing.fadeOut, end: group.timing.end },
+  ];
+  const transitions: GraphicsTransitionFrames[] = [];
+  for (const [edge, window] of windows.entries()) {
+    const first = Math.ceil(window.start * fps - 1e-7);
+    const last = Math.ceil(window.end * fps - 1e-7);
+    if (last <= first) continue;
+    const paths: string[] = [];
+    for (let frame = first; frame < last; frame += 1) {
+      const output = join(input.outputDir, `graphics-${index + 1}-${edge}-${String(frame - first).padStart(6, "0")}.png`);
+      await drawStill(input, { ...props, seconds: frame / fps }, composition, bundleDir, browser, output);
+      paths.push(output);
+    }
+    transitions.push({ paths, start: first / fps, end: last / fps, fps });
+  }
+  return transitions;
+}
+
 async function renderGroups(
   input: GraphicsStillsInput,
   groups: readonly GraphicsStillGroup[],
@@ -80,17 +134,9 @@ async function renderGroups(
   for (const [index, group] of groups.entries()) {
     const path = join(input.outputDir, `graphics-${index + 1}.png`);
     const inputProps = props(index);
-    await withRemotionCancellation(input.signal, (cancelSignal) => renderStill({
-      composition: { ...composition, props: inputProps },
-      serveUrl: bundleDir,
-      output: path,
-      overwrite: true,
-      imageFormat: "png",
-      inputProps,
-      puppeteerInstance: browser,
-      cancelSignal,
-    }));
-    rendered.push({ ...group, path });
+    await drawStill(input, inputProps, composition, bundleDir, browser, path);
+    const transitions = await renderTransitions(input, group, index, inputProps, composition, bundleDir, browser);
+    rendered.push({ ...group, path, ...(transitions.length > 0 ? { transitions } : {}) });
   }
   return rendered;
 }

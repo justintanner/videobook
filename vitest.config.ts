@@ -58,6 +58,7 @@ export default defineConfig({
       'src/videobook/asset-tag-editing.test.ts',
       'src/components/ui/autocomplete-dropdown.test.tsx',
       'src/components/videobook/UsageCost.test.tsx',
+      'src/components/videobook/graphics/GraphicsTiming.test.tsx',
       'src/videobook/workspace-responses.test.ts',
       'src/components/ui/autocomplete-position.test.ts',
       'src/videobook/mention-menu-rows.test.ts',

@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from 'react'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
-import { MAX_GRAPHICS_FADE_SECONDS, type GraphicsLayer, type GraphicsTiming } from '../../../../server/src/graphics/model'
+import { GRAPHICS_MOTIONS, MAX_GRAPHICS_FADE_SECONDS, type GraphicsLayer, type GraphicsTiming } from '../../../../server/src/graphics/model'
 import {
   GRAPHICS_TIMING_MODES,
   graphicsFadeSeconds,
@@ -15,6 +15,9 @@ import {
 import { Choice, Range, Section } from './GraphicsFields'
 
 type Edit = (edits: GraphicsEdit[], coalesceKey?: string | null) => boolean
+
+const MOTION_LABELS = { fade: 'Fade', slide: 'Slide', pop: 'Pop', words: 'Words' }
+const SHAPE_MOTIONS = GRAPHICS_MOTIONS.filter((motion) => motion !== 'words')
 
 const MODE_LABELS: Record<GraphicsTimingMode, string> = { whole: 'Whole clip', first: 'First', last: 'Last', custom: 'From playhead' }
 const SPAN_LABELS: Partial<Record<GraphicsTimingMode, string>> = { first: 'First seconds', last: 'Last seconds' }
@@ -107,7 +110,9 @@ export function GraphicsTimingSection({ layer, durationSeconds, playhead, disabl
           <button type="button" disabled={disabled} onClick={() => bound('end', playhead(), null)}>End at playhead</button>
         </div>
       )}
-      <Range label="Fade" value={timing.fade} min={0} max={MAX_GRAPHICS_FADE_SECONDS} step={0.1} format={(value) => `${value.toFixed(1)} s`} disabled={disabled}
+      <Choice label="Enter" value={timing.enter} options={layer.kind === 'text' ? GRAPHICS_MOTIONS : SHAPE_MOTIONS} labels={MOTION_LABELS} disabled={disabled} onChange={(enter) => set({ ...timing, enter })} />
+      <Choice label="Exit" value={timing.exit} options={layer.kind === 'text' ? GRAPHICS_MOTIONS : SHAPE_MOTIONS} labels={MOTION_LABELS} disabled={disabled} onChange={(exit) => set({ ...timing, exit })} />
+      <Range label="Transition" value={timing.fade} min={0} max={MAX_GRAPHICS_FADE_SECONDS} step={0.1} format={(value) => `${value.toFixed(1)} s`} disabled={disabled}
         onChange={(fade) => set({ ...timing, fade: graphicsFadeSeconds(fade) }, `${layer.id}:fade`)} />
       <p className="graphics-muted graphics-timing-summary">{graphicsTimingSummary(timing, durationSeconds)}</p>
     </Section>

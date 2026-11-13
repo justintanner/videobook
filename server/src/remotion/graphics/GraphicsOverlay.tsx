@@ -4,6 +4,7 @@ import { GRAPHICS_ICON_PATHS, GRAPHICS_ICON_VIEWBOX } from "../../graphics/icons
 import type {
   GraphicsImageLayout,
   GraphicsLayerLayout,
+  GraphicsRect,
   GraphicsQrLayout,
   GraphicsScrimLayout,
   GraphicsTextItemLayout,
@@ -22,7 +23,7 @@ import type {
 import { qrMatrix } from "../../graphics/qr.js";
 import type { GraphicsStillGroup } from "../../graphics/stills.js";
 import { graphicsStillGroups } from "../../graphics/stills.js";
-import { layerOpacityAt } from "../../graphics/timing.js";
+import { groupMotionAt } from "../../graphics/timing.js";
 import type { CaptionFontUrls } from "../captions/caption-fonts.js";
 import { measureCaptionText, useBundledFonts } from "../captions/caption-fonts.js";
 
@@ -37,7 +38,7 @@ type GraphicsOverlayInput = {
   onLayout?: (layout: GraphicsLayerLayout[]) => void;
 };
 
-export type GraphicsOverlayProps = GraphicsOverlayInput & ({ seconds: number; groupIndex?: undefined } | { groupIndex: number; seconds?: undefined });
+export type GraphicsOverlayProps = GraphicsOverlayInput & { seconds?: number; groupIndex?: number };
 
 export interface GraphicsStillProps extends Record<string, unknown> {
   document: GraphicsDocument;
@@ -46,9 +47,8 @@ export interface GraphicsStillProps extends Record<string, unknown> {
   images: Record<string, GraphicsOverlayImage>;
   fontUrls: CaptionFontUrls;
   groupIndex: number;
+  seconds?: number;
 }
-
-type ShownGroup = { group: GraphicsStillGroup; opacity: number };
 
 const OUTLINE_COLOR = "#000000";
 const OUTLINE_WIDTH = 0.08;
@@ -74,9 +74,9 @@ function textStyle(item: GraphicsTextItem, layout: GraphicsTextItemLayout): Reac
   };
 }
 
-const TextItemView: React.FC<{ item: GraphicsTextItem; layout: GraphicsTextItemLayout }> = ({ item, layout }) => (
+const TextItemView: React.FC<{ item: GraphicsTextItem; layout: GraphicsTextItemLayout; visibleWords: number }> = ({ item, layout, visibleWords }) => (
   <>
-    {item.icon && layout.icon ? (
+    {visibleWords > 0 && item.icon && layout.icon ? (
       <svg x={layout.icon.x} y={layout.icon.y} width={layout.icon.width} height={layout.icon.height} viewBox={`0 0 ${GRAPHICS_ICON_VIEWBOX} ${GRAPHICS_ICON_VIEWBOX}`}>
         <path d={GRAPHICS_ICON_PATHS[item.icon]} fill={item.color} />
       </svg>
@@ -93,13 +93,13 @@ const TextItemView: React.FC<{ item: GraphicsTextItem; layout: GraphicsTextItemL
         paintOrder="stroke"
         style={textStyle(item, layout)}
       >
-        {line.text}
+        {visibleWords >= layout.words.length ? line.text : line.text.slice(0, Math.max(0, ...layout.words.slice(0, visibleWords).filter((word) => word.lineIndex === index).map((word) => word.end)))}
       </text>
     ))}
-    {layout.accent && item.accent === "underline" ? (
+    {visibleWords >= layout.words.length && layout.accent && item.accent === "underline" ? (
       <rect x={layout.accent.x} y={layout.accent.y} width={layout.accent.width} height={layout.accent.height} rx={layout.accent.height / 2} fill={item.color} />
     ) : null}
-    {layout.accent && item.accent === "brush" ? (
+    {visibleWords >= layout.words.length && layout.accent && item.accent === "brush" ? (
       <svg x={layout.accent.x} y={layout.accent.y} width={layout.accent.width} height={layout.accent.height} viewBox={BRUSH_VIEWBOX} preserveAspectRatio="none">
         <path d={BRUSH_PATH} fill={item.color} />
       </svg>
@@ -107,7 +107,9 @@ const TextItemView: React.FC<{ item: GraphicsTextItem; layout: GraphicsTextItemL
   </>
 );
 
-const TextLayerView: React.FC<{ layer: GraphicsTextLayer; layout: GraphicsTextLayout; frame: GraphicsFrame }> = ({ layer, layout, frame }) => {
+const TextLayerView: React.FC<{ layer: GraphicsTextLayer; layout: GraphicsTextLayout; frame: GraphicsFrame; reveal: number }> = ({ layer, layout, frame, reveal }) => {
+  const wordCount = layout.items.reduce((sum, item) => sum + item.words.length, 0);
+  const visibleWords = Math.ceil(wordCount * reveal);
   const plate = layer.plate && layout.plate ? { style: layer.plate, box: layout.plate } : null;
   const border = plate?.style.border ? Math.max(1, plate.box.height * BORDER_WIDTH) : 0;
   return (
@@ -126,9 +128,9 @@ const TextLayerView: React.FC<{ layer: GraphicsTextLayer; layout: GraphicsTextLa
           strokeWidth={border > 0 ? border : undefined}
         />
       ) : null}
-      {layout.items.map((itemLayout) => {
+      {layout.items.map((itemLayout, index) => {
         const item = layer.items.find((candidate) => candidate.id === itemLayout.itemId);
-        return item ? <TextItemView key={item.id} item={item} layout={itemLayout} /> : null;
+        return item ? <TextItemView key={item.id} item={item} layout={itemLayout} visibleWords={Math.max(0, visibleWords - layout.items.slice(0, index).reduce((sum, entry) => sum + entry.words.length, 0))} /> : null;
       })}
     </svg>
   );
@@ -194,19 +196,20 @@ const LayerView: React.FC<{
   layout: GraphicsLayerLayout;
   frame: GraphicsFrame;
   images: Readonly<Record<string, GraphicsOverlayImage>>;
-}> = ({ layer, layout, frame, images }) => {
-  if (layer.kind === "text" && layout.kind === "text") return <TextLayerView layer={layer} layout={layout} frame={frame} />;
+  reveal: number;
+}> = ({ layer, layout, frame, images, reveal }) => {
+  if (layer.kind === "text" && layout.kind === "text") return <TextLayerView layer={layer} layout={layout} frame={frame} reveal={reveal} />;
   if (layer.kind === "qr" && layout.kind === "qr") return <QrLayerView layer={layer} layout={layout} frame={frame} />;
   if (layer.kind === "scrim" && layout.kind === "scrim") return <ScrimLayerView layer={layer} layout={layout} />;
   if (layer.kind === "image" && layout.kind === "image") return <ImageLayerView layer={layer} layout={layout} image={images[layer.artifactId]} />;
   return null;
 };
 
-function shownGroups(groups: readonly GraphicsStillGroup[], seconds: number | undefined, groupIndex: number | undefined): ShownGroup[] {
-  if (groupIndex !== undefined) return groups[groupIndex] ? [{ group: groups[groupIndex], opacity: 1 }] : [];
-  return groups
-    .map((group) => ({ group, opacity: layerOpacityAt(group.timing, seconds ?? 0) }))
-    .filter((shown) => shown.opacity > 0);
+function groupBox(group: GraphicsStillGroup, boxes: ReadonlyMap<string, GraphicsLayerLayout>): GraphicsRect {
+  const rects = group.layerIds.flatMap((id) => boxes.get(id)?.box ?? []);
+  const x = Math.min(...rects.map((box) => box.x));
+  const y = Math.min(...rects.map((box) => box.y));
+  return { x, y, width: Math.max(...rects.map((box) => box.x + box.width)) - x, height: Math.max(...rects.map((box) => box.y + box.height)) - y };
 }
 
 export const GraphicsOverlay: React.FC<GraphicsOverlayProps> = ({ document, frame, durationSeconds, images, fontUrls, onLayout, seconds, groupIndex }) => {
@@ -222,17 +225,20 @@ export const GraphicsOverlay: React.FC<GraphicsOverlayProps> = ({ document, fram
   if (!layout) return null;
   const layers = new Map(document.layers.map((layer) => [layer.id, layer]));
   const boxes = new Map(layout.map((entry) => [entry.layerId, entry]));
+  const shown = groupIndex === undefined ? groups : groups.slice(groupIndex, groupIndex + 1);
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
-      {shownGroups(groups, seconds, groupIndex).map(({ group, opacity }) => (
-        <AbsoluteFill key={group.layerIds.join(" ")} style={{ opacity }}>
+      {shown.map((group) => {
+        const box = groupBox(group, boxes);
+        const motion = groupMotionAt(seconds === undefined ? { ...group.timing, fadeIn: 0, fadeOut: 0 } : group.timing, seconds ?? group.timing.start, { ...box, frameWidth: frame.width, frameHeight: frame.height });
+        return <AbsoluteFill key={group.layerIds.join(" ")} style={{ opacity: motion.opacity, transform: motion.dx !== 0 || motion.dy !== 0 || motion.scale !== 1 ? `translate(${motion.dx}px, ${motion.dy}px) scale(${motion.scale})` : undefined, transformOrigin: motion.scale !== 1 ? `${box.x + box.width / 2}px ${box.y + box.height / 2}px` : undefined }}>
           {group.layerIds.map((layerId) => {
             const layer = layers.get(layerId);
             const box = boxes.get(layerId);
-            return layer && box ? <LayerView key={layerId} layer={layer} layout={box} frame={frame} images={images} /> : null;
+            return layer && box ? <LayerView key={layerId} layer={layer} layout={box} frame={frame} images={images} reveal={motion.reveal} /> : null;
           })}
-        </AbsoluteFill>
-      ))}
+        </AbsoluteFill>;
+      })}
     </AbsoluteFill>
   );
 };

@@ -232,11 +232,11 @@ describe("watermark documents from a saved profile", () => {
     expect(qr.position).toEqual({ anchor: "top-left", x: 0, y: 0, space: "inset" });
     expect(qr.size).toBeCloseTo(0.24, 10);
     expect(qr.url).toBe("https://x.com/someone");
-    expect(qr.timing).toEqual({ start: 1, end: 4, tail: null, fade: X_WATERMARK_PROFILE.fadeSeconds });
+    expect(qr.timing).toEqual({ start: 1, end: 4, tail: null, fade: X_WATERMARK_PROFILE.fadeSeconds, enter: "fade", exit: "fade" });
     const handle = handleOf(document);
     expect(handle.items[0]).toMatchObject({ text: "someone", icon: null });
     expect(handle.opacity).toBe(0.6);
-    expect(handle.timing).toEqual({ start: null, end: 2, tail: null, fade: X_WATERMARK_PROFILE.fadeSeconds });
+    expect(handle.timing).toEqual({ start: null, end: 2, tail: null, fade: X_WATERMARK_PROFILE.fadeSeconds, enter: "fade", exit: "fade" });
     const clamped = built(LIGHTNING_WATERMARK_PROFILE, { width: 720, height: 1280 }, {
       includeQr: true,
       handleOpacity: 0,

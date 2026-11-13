@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { GraphicsTiming } from "./model.js";
-import { layerOpacityAt, resolveLayerTiming } from "./timing.js";
+import { groupMotionAt, layerOpacityAt, resolveLayerTiming } from "./timing.js";
 
 const CLIPS = [3, 8, 30];
 
 function timing(fields: Partial<GraphicsTiming>): GraphicsTiming {
-  return { start: null, end: null, tail: null, fade: 0.5, ...fields };
+  return { start: null, end: null, tail: null, enter: "fade", exit: "fade", fade: 0.5, ...fields };
 }
 
 function burnFades(startSeconds: number | undefined, endSeconds: number | undefined, duration: number, fadeSeconds: number): { fadeIn: number; fadeOut: number } {
@@ -51,10 +51,10 @@ describe("resolveLayerTiming", () => {
   });
 
   it("resolves explicit, tail and whole-clip windows the way resolveOsgWindow does", () => {
-    expect(resolveLayerTiming(timing({ start: 2, tail: 1 }), 8)).toEqual({ start: 2, end: 8, fadeIn: 0.5, fadeOut: 0 });
-    expect(resolveLayerTiming(timing({ end: 3, tail: 1 }), 8)).toEqual({ start: 0, end: 3, fadeIn: 0, fadeOut: 0.5 });
-    expect(resolveLayerTiming(timing({ tail: 3 }), 8)).toEqual({ start: 5, end: 8, fadeIn: 0.5, fadeOut: 0 });
-    expect(resolveLayerTiming(timing({}), 8)).toEqual({ start: 0, end: 8, fadeIn: 0, fadeOut: 0 });
+    expect(resolveLayerTiming(timing({ start: 2, tail: 1 }), 8)).toEqual({ start: 2, end: 8, fadeIn: 0.5, fadeOut: 0, enter: "fade", exit: "fade" });
+    expect(resolveLayerTiming(timing({ end: 3, tail: 1 }), 8)).toEqual({ start: 0, end: 3, fadeIn: 0, fadeOut: 0.5, enter: "fade", exit: "fade" });
+    expect(resolveLayerTiming(timing({ tail: 3 }), 8)).toEqual({ start: 5, end: 8, fadeIn: 0.5, fadeOut: 0, enter: "fade", exit: "fade" });
+    expect(resolveLayerTiming(timing({}), 8)).toEqual({ start: 0, end: 8, fadeIn: 0, fadeOut: 0, enter: "fade", exit: "fade" });
   });
 
   it("returns null for an empty window", () => {
@@ -73,7 +73,7 @@ describe("layerOpacityAt", () => {
   const faded = resolveLayerTiming(timing({ start: 2, end: 6, fade: 1 }), 8);
 
   it("is 0 outside the window and 1 in the middle", () => {
-    expect(faded).toEqual({ start: 2, end: 6, fadeIn: 1, fadeOut: 1 });
+    expect(faded).toEqual({ start: 2, end: 6, fadeIn: 1, fadeOut: 1, enter: "fade", exit: "fade" });
     for (const seconds of [0, 1.999, 6.001, 8, -1, Number.NaN]) expect(layerOpacityAt(faded, seconds)).toBe(0);
     for (const seconds of [3, 4, 5]) expect(layerOpacityAt(faded, seconds)).toBe(1);
     expect(layerOpacityAt(null, 4)).toBe(0);
@@ -98,8 +98,42 @@ describe("layerOpacityAt", () => {
 
   it("reaches full opacity at the midpoint of a window shorter than its two fades", () => {
     const short = resolveLayerTiming(timing({ start: 1, end: 1.6, fade: 2 }), 8);
-    expect(short).toEqual({ start: 1, end: 1.6, fadeIn: 0.3, fadeOut: 0.3 });
+    expect(short).toEqual({ start: 1, end: 1.6, fadeIn: 0.3, fadeOut: 0.3, enter: "fade", exit: "fade" });
     expect(layerOpacityAt(short, 1.3)).toBeCloseTo(1, 10);
     expect(layerOpacityAt(short, 1.15)).toBeCloseTo(0.5, 10);
+  });
+});
+
+describe("groupMotionAt", () => {
+  const box = { x: 20, y: 100, width: 80, height: 40, frameWidth: 360, frameHeight: 640 };
+
+  it("keeps fade opacity identical to the existing linear ramp", () => {
+    const window = resolveLayerTiming(timing({ start: 1, end: 5, fade: 1 }), 8);
+    for (const seconds of [0, 1, 1.25, 1.5, 2, 4, 4.25, 4.5, 5, 6]) {
+      expect(groupMotionAt(window, seconds, box).opacity).toBe(layerOpacityAt(window, seconds));
+    }
+  });
+
+  it("slides from and to the nearest edge with cubic ease out", () => {
+    const window = resolveLayerTiming(timing({ start: 1, end: 5, fade: 1, enter: "slide", exit: "slide" }), 8);
+    expect(groupMotionAt(window, 1, box)).toMatchObject({ dx: -100, dy: 0, scale: 1 });
+    expect(groupMotionAt(window, 1.5, box).dx).toBe(-12.5);
+    expect(groupMotionAt(window, 2, box).dx).toBe(0);
+    expect(groupMotionAt(window, 4.5, box).dx).toBe(-87.5);
+    expect(groupMotionAt(window, 5, box).dx).toBe(-100);
+    expect(groupMotionAt(window, 5.01, box).opacity).toBe(0);
+  });
+
+  it("pops from 85 percent and reveals words without moving their layout", () => {
+    const pop = resolveLayerTiming(timing({ start: 1, end: 5, fade: 1, enter: "pop", exit: "pop" }), 8);
+    expect(groupMotionAt(pop, 1, box)).toMatchObject({ scale: 0.85, opacity: 0 });
+    expect(groupMotionAt(pop, 1.5, box)).toMatchObject({ scale: 0.98125, opacity: 0.875 });
+    expect(groupMotionAt(pop, 2, box)).toMatchObject({ scale: 1, opacity: 1 });
+    expect(groupMotionAt(pop, 5, box)).toMatchObject({ scale: 0.85, opacity: 0 });
+    const words = resolveLayerTiming(timing({ start: 1, end: 5, fade: 1, enter: "words", exit: "words" }), 8);
+    expect(groupMotionAt(words, 1, box).reveal).toBe(0);
+    expect(groupMotionAt(words, 1.5, box).reveal).toBe(0.875);
+    expect(groupMotionAt(words, 2, box).reveal).toBe(1);
+    expect(groupMotionAt(words, 5, box).reveal).toBe(0);
   });
 });

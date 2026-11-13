@@ -17,7 +17,7 @@ import {
   graphicsTimingWithSpan,
 } from './graphics-timing'
 
-const WHOLE: GraphicsTiming = { start: null, end: null, tail: null, fade: 0 }
+const WHOLE: GraphicsTiming = { start: null, end: null, tail: null, enter: 'fade', exit: 'fade', fade: 0 }
 
 function preset(mode: Parameters<typeof graphicsTimingPreset>[0], timing: GraphicsTiming = WHOLE, duration = 8, playhead = 2.5) {
   return graphicsTimingPreset(mode, { timing, duration, playhead })
@@ -57,14 +57,14 @@ describe('graphicsTimingPreset', () => {
   it('shows a layer limited to the last 3 seconds only then, in the preview and in the stills that render it', () => {
     const timing = preset('last', WHOLE, 6)
     const window = resolveLayerTiming(timing, 6)
-    expect(window).toEqual({ start: 3, end: 6, fadeIn: 0, fadeOut: 0 })
+    expect(window).toEqual({ start: 3, end: 6, fadeIn: 0, fadeOut: 0, enter: 'fade', exit: 'fade' })
     expect(layerOpacityAt(window, 1)).toBe(0)
     expect(layerOpacityAt(window, 2.9)).toBe(0)
     expect(layerOpacityAt(window, 3.5)).toBe(1)
     const base = graphicsDocumentFromLayers([{ kind: 'text', name: 'Title', items: [{ text: 'Late title' }] }])
     const edited = applyGraphicsEdits(base, [{ op: 'set_timing', layer_id: 'l1', timing }])
     if (!edited.ok) throw new Error(edited.error.message)
-    expect(graphicsStillGroups(edited.document, 6)).toEqual([{ layerIds: ['l1'], timing: { start: 3, end: 6, fadeIn: 0, fadeOut: 0 } }])
+    expect(graphicsStillGroups(edited.document, 6)).toEqual([{ layerIds: ['l1'], timing: { start: 3, end: 6, fadeIn: 0, fadeOut: 0, enter: 'fade', exit: 'fade' } }])
   })
 })
 
@@ -99,14 +99,14 @@ describe('timing strip', () => {
     ])
     expect(graphicsTimingRows(document, 8)).toEqual([
       { layerId: document.layers[2]!.id, name: 'Gone', kind: 'text', visible: false, window: null },
-      { layerId: document.layers[1]!.id, name: 'Title', kind: 'text', visible: true, window: { start: 5, end: 8, fadeIn: 0.5, fadeOut: 0 } },
-      { layerId: document.layers[0]!.id, name: 'Shade', kind: 'scrim', visible: true, window: { start: 0, end: 8, fadeIn: 0, fadeOut: 0 } },
+      { layerId: document.layers[1]!.id, name: 'Title', kind: 'text', visible: true, window: { start: 5, end: 8, fadeIn: 0.5, fadeOut: 0, enter: 'fade', exit: 'fade' } },
+      { layerId: document.layers[0]!.id, name: 'Shade', kind: 'scrim', visible: true, window: { start: 0, end: 8, fadeIn: 0, fadeOut: 0, enter: 'fade', exit: 'fade' } },
     ])
   })
 
   it('places each bar and its fades as fractions', () => {
-    expect(graphicsTimingBar({ start: 2, end: 6, fadeIn: 1, fadeOut: 0.5 }, 8)).toEqual({ left: 0.25, width: 0.5, fadeIn: 0.25, fadeOut: 0.125 })
-    expect(graphicsTimingBar({ start: 0, end: 0, fadeIn: 0, fadeOut: 0 }, 8)).toEqual({ left: 0, width: 0, fadeIn: 0, fadeOut: 0 })
+    expect(graphicsTimingBar({ start: 2, end: 6, fadeIn: 1, fadeOut: 0.5, enter: 'fade', exit: 'fade' }, 8)).toEqual({ left: 0.25, width: 0.5, fadeIn: 0.25, fadeOut: 0.125 })
+    expect(graphicsTimingBar({ start: 0, end: 0, fadeIn: 0, fadeOut: 0, enter: 'fade', exit: 'fade' }, 8)).toEqual({ left: 0, width: 0, fadeIn: 0, fadeOut: 0 })
   })
 
   it('summarises the window a layer shows in', () => {

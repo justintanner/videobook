@@ -4,15 +4,16 @@ import sharp from "sharp";
 import { displayDimensions } from "../captions/geometry.js";
 import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import type { ProbeResult } from "../ffmpeg.js";
+import type { GraphicsTransitionFrames } from "./render-stills.js";
 import type { ResolvedGraphicsTiming } from "./timing.js";
 
 export type BurnFades = { fadeIn: number; fadeOut: number };
 
-type GraphicsBurnStill = { path: string; timing: ResolvedGraphicsTiming };
+type GraphicsBurnStill = { path: string; timing: ResolvedGraphicsTiming; transitions?: GraphicsTransitionFrames[] };
 type GraphicsBurnInput = { videoPath: string; outputPath: string; stills: readonly GraphicsBurnStill[]; probe: ProbeResult; signal: AbortSignal };
 type Frame = { width: number; height: number };
 type Box = { left: number; top: number; width: number; height: number };
-type PlacedStill = { path: string; left: number; top: number; start?: number; end?: number; fades: BurnFades };
+type PlacedStill = { path: string; left: number; top: number; start?: number; end?: number; fades: BurnFades; sequenceFps?: number; exclusiveEnd?: boolean };
 
 const LOOP_MARGIN_SECONDS = 0.25;
 const CLIP_END_TOLERANCE_SECONDS = 0.001;
@@ -120,7 +121,36 @@ async function placeStill(still: GraphicsBurnStill, frame: Frame, durationSecond
   return { path, left: box.left, top: box.top, ...windowEdges(still.timing, durationSeconds), fades: { fadeIn: still.timing.fadeIn, fadeOut: still.timing.fadeOut } };
 }
 
+function unionBox(left: Box | null, right: Box | null): Box | null {
+  if (!left) return right;
+  if (!right) return left;
+  const x = Math.min(left.left, right.left);
+  const y = Math.min(left.top, right.top);
+  return { left: x, top: y, width: Math.max(left.left + left.width, right.left + right.width) - x, height: Math.max(left.top + left.height, right.top + right.height) - y };
+}
+
+async function placeSequence(sequence: GraphicsTransitionFrames, frame: Frame): Promise<PlacedStill | null> {
+  let box: Box | null = null;
+  for (const path of sequence.paths) box = unionBox(box, await opaqueBox(path, frame));
+  if (!box) return null;
+  for (const path of sequence.paths) await sharp(path).extract(box).png().toFile(croppedPath(path));
+  const path = croppedPath(sequence.paths[0]).replace(/000000-cropped\.png$/u, "%06d-cropped.png");
+  return { path, left: box.left, top: box.top, start: sequence.start, end: sequence.end, fades: { fadeIn: 0, fadeOut: 0 }, sequenceFps: sequence.fps, exclusiveEnd: true };
+}
+
+async function placeGroup(still: GraphicsBurnStill, frame: Frame, duration: number): Promise<PlacedStill[]> {
+  const placed = await placeStill(still, frame, duration);
+  if (!still.transitions?.length) return placed ? [placed] : [];
+  const fps = still.transitions[0].fps;
+  const start = Math.ceil((still.timing.start + still.timing.fadeIn) * fps - 1e-7) / fps;
+  const end = Math.ceil((still.timing.end - still.timing.fadeOut) * fps - 1e-7) / fps;
+  const settled = placed && end > start ? [{ ...placed, start, end, fades: { fadeIn: 0, fadeOut: 0 }, exclusiveEnd: true }] : [];
+  const transitions = await Promise.all(still.transitions.map((sequence) => placeSequence(sequence, frame)));
+  return [...settled, ...transitions.filter((sequence): sequence is PlacedStill => sequence !== null)];
+}
+
 function stillInputArgs(still: PlacedStill, probe: ProbeResult): string[] {
+  if (still.sequenceFps) return ["-f", "image2", "-framerate", String(still.sequenceFps), "-start_number", "0", "-i", still.path];
   const loopSeconds = burnWatermarkLoopSeconds(still.fades, still.start, still.end, probe.videoDuration);
   return burnWatermarkInputArgs(still.path, loopSeconds, burnWatermarkFrameRate(probe));
 }
@@ -130,13 +160,14 @@ function baseFilter(probe: ProbeResult, frame: Frame): { filters: string[]; labe
   return { filters: [`[0:v]scale=${frame.width}:${frame.height},setsar=1[base]`], label: "base" };
 }
 
-function burnFilter(stills: readonly PlacedStill[], probe: ProbeResult, frame: Frame): string {
+export function burnFilter(stills: readonly PlacedStill[], probe: ProbeResult, frame: Frame): string {
   const base = baseFilter(probe, frame);
-  const chains = stills.map((still, index) => `[${index + 1}:v]format=rgba${burnWatermarkFadeFilters(still.fades, still.start, still.end)}[g${index + 1}]`);
+  const chains = stills.map((still, index) => `[${index + 1}:v]format=rgba${still.sequenceFps ? `,setpts=PTS-STARTPTS+${still.start}/TB` : burnWatermarkFadeFilters(still.fades, still.start, still.end)}[g${index + 1}]`);
   const overlays = stills.map((still, index) => {
     const input = index === 0 ? base.label : `v${index}`;
     const output = index === stills.length - 1 ? "vout" : `v${index + 1}`;
-    return `[${input}][g${index + 1}]overlay=${still.left}:${still.top}:format=auto${burnWatermarkEnable(still.start, still.end)}[${output}]`;
+    const enable = still.exclusiveEnd ? `:enable='gte(t,${still.start})*lt(t,${still.end})'` : burnWatermarkEnable(still.start, still.end);
+    return `[${input}][g${index + 1}]overlay=${still.left}:${still.top}:format=auto${enable}[${output}]`;
   });
   return [...base.filters, ...chains, ...overlays].join(";");
 }
@@ -154,8 +185,7 @@ async function checkOutput(outputPath: string, probe: ProbeResult, frame: Frame,
 
 export async function burnGraphics(input: GraphicsBurnInput): Promise<void> {
   const frame = graphicsBurnFrame(input.probe);
-  const placed = (await Promise.all(input.stills.map((still) => placeStill(still, frame, input.probe.videoDuration))))
-    .filter((still): still is PlacedStill => still !== null);
+  const placed = (await Promise.all(input.stills.map((still) => placeGroup(still, frame, input.probe.videoDuration)))).flat();
   if (placed.length === 0) throw new Error("These graphics have nothing to draw.");
   input.signal.throwIfAborted();
   try {

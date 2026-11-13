@@ -111,7 +111,7 @@ describe("renderGraphicsStills", () => {
     const document = graphicsDocumentFromLayers(layers);
     const { groups } = await render(document, PORTRAIT, { logo: { path: logoPath, width: 80, height: 40 } });
     expect(groups.map((group) => group.layerIds)).toEqual([["l1"], ["l2"], ["l4"]]);
-    expect(groups[1].timing).toEqual({ start: 5, end: 8, fadeIn: 0.5, fadeOut: 0 });
+    expect(groups[1].timing).toEqual({ start: 5, end: 8, fadeIn: 0.5, fadeOut: 0, enter: "fade", exit: "fade" });
     expect(new Set(groups.map((group) => group.path)).size).toBe(3);
     const [logo, late, credit] = await Promise.all(groups.map((group) => raw(group.path)));
     const [red, green, blue, alpha] = pixel(logo, 54 + 100, 163 + 50);

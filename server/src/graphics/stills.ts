@@ -13,7 +13,7 @@ function drawsSomething(layer: GraphicsLayer): boolean {
 }
 
 function sameTiming(left: ResolvedGraphicsTiming, right: ResolvedGraphicsTiming): boolean {
-  return left.start === right.start && left.end === right.end && left.fadeIn === right.fadeIn && left.fadeOut === right.fadeOut;
+  return left.start === right.start && left.end === right.end && left.fadeIn === right.fadeIn && left.fadeOut === right.fadeOut && left.enter === right.enter && left.exit === right.exit;
 }
 
 export function graphicsStillGroups(document: GraphicsDocument, durationSeconds: number): GraphicsStillGroup[] {

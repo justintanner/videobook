@@ -141,17 +141,17 @@ function cornerPosition(corner: OsgPosition): GraphicsPosition {
 }
 
 function windowTiming(window: WatermarkWindow, fade: number): GraphicsTiming {
-  return { start: optionalSeconds(window.startSeconds), end: optionalSeconds(window.endSeconds), tail: null, fade };
+  return { start: optionalSeconds(window.startSeconds), end: optionalSeconds(window.endSeconds), tail: null, fade, enter: "fade", exit: "fade" };
 }
 
 function handleTiming(profile: LightningWatermarkProfile, fade: number): GraphicsTiming {
   const start = optionalSeconds(profile.handleStartSeconds) ?? 0;
   const end = optionalSeconds(profile.handleEndSeconds);
-  return { start: start > 0 ? start : null, end: end === null ? null : Math.max(start, end), tail: null, fade };
+  return { start: start > 0 ? start : null, end: end === null ? null : Math.max(start, end), tail: null, fade, enter: "fade", exit: "fade" };
 }
 
 function qrTiming(profile: LightningWatermarkProfile, fade: number): GraphicsTiming {
-  return { start: null, end: null, tail: optionalSeconds(profile.qrLeadSeconds), fade };
+  return { start: null, end: null, tail: optionalSeconds(profile.qrLeadSeconds), fade, enter: "fade", exit: "fade" };
 }
 
 function centeredHandlePosition(verticalPercent: number): GraphicsPosition {

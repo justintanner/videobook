@@ -78,6 +78,7 @@ async function withRenderedGraphics<T>(
     const durationSeconds = probe.videoDuration;
     const images = await stillImages(engine, request, durationSeconds);
     const { groups } = await renderGraphicsStills({
+      fps: probe.fps,
       document: request.document,
       frame: { width: source.width, height: source.height },
       durationSeconds,

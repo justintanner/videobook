@@ -12,6 +12,9 @@ const MAX_GRAPHICS_URL_LENGTH = 512;
 const MAX_GRAPHICS_LINES = 6;
 const MAX_FRAME_SIDE = 16_384;
 
+export const GRAPHICS_MOTIONS = ["fade", "slide", "pop", "words"] as const;
+export type GraphicsMotion = typeof GRAPHICS_MOTIONS[number];
+
 export const GRAPHICS_LAYER_KINDS = ["text", "image", "qr", "scrim"] as const;
 export const GRAPHICS_ANCHORS = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"] as const;
 export const GRAPHICS_SPACES = ["safe", "inset", "frame"] as const;
@@ -87,6 +90,8 @@ const positionSchema = z.object({
 }).strict();
 
 const timingSchema = z.object({
+  enter: oneOf(GRAPHICS_MOTIONS, "Enter motion").default("fade"),
+  exit: oneOf(GRAPHICS_MOTIONS, "Exit motion").default("fade"),
   start: seconds("Start"),
   end: seconds("End"),
   tail: seconds("Tail"),
@@ -193,6 +198,12 @@ const graphicsDocumentSchema = z.object({
   layers: z.array(layerSchema).max(MAX_GRAPHICS_LAYERS, `A document holds at most ${MAX_GRAPHICS_LAYERS} layers.`),
   nextId: z.number({ error: "nextId must be a whole number above 0." }).int("nextId must be a whole number above 0.").positive("nextId must be a whole number above 0."),
 }).strict().superRefine((document, context) => {
+  document.layers.forEach((layer, index) => {
+    if (layer.kind === "text") return;
+    for (const edge of ["enter", "exit"] as const) {
+      if (layer.timing[edge] === "words") context.addIssue({ code: "custom", path: ["layers", index, "timing", edge], message: "Words motion is only available for text layers." });
+    }
+  });
   const layerIds = document.layers.map((layer) => layer.id);
   const itemIds = document.layers.flatMap((layer) => (layer.kind === "text" ? layer.items.map((item) => item.id) : []));
   const duplicate = firstDuplicate(layerIds) ?? firstDuplicate(itemIds);
@@ -313,7 +324,7 @@ export type GraphicsScrimLayerInput = LayerInputFields & Partial<Pick<GraphicsSc
 
 export type GraphicsLayerInput = GraphicsTextLayerInput | GraphicsImageLayerInput | GraphicsQrLayerInput | GraphicsScrimLayerInput;
 
-const WHOLE_CLIP: GraphicsTiming = { start: null, end: null, tail: null, fade: 0 };
+const WHOLE_CLIP: GraphicsTiming = { start: null, end: null, tail: null, fade: 0, enter: "fade", exit: "fade" };
 
 export const DEFAULT_GRAPHICS_PLATE: GraphicsPlate = {
   color: "#000000",

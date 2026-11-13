@@ -11,6 +11,7 @@ import {
   GRAPHICS_CASES,
   GRAPHICS_FONT_PRESETS,
   GRAPHICS_ICONS,
+  GRAPHICS_MOTIONS,
   GRAPHICS_QR_LEVELS,
   GRAPHICS_QR_SLOTS,
   GRAPHICS_QR_STYLES,
@@ -57,7 +58,7 @@ const positionPatch = z.object({
   space: z.enum(GRAPHICS_SPACES),
 }).partial().strict();
 
-const timingPatch = z.object({ start: seconds, end: seconds, tail: seconds, fade: z.number() }).partial().strict();
+const timingPatch = z.object({ start: seconds, end: seconds, tail: seconds, fade: z.number(), enter: z.enum(GRAPHICS_MOTIONS), exit: z.enum(GRAPHICS_MOTIONS) }).partial().strict();
 
 const platePatch = z.object({
   color: z.string(),

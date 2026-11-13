@@ -56,6 +56,15 @@ function qrLayer(document: GraphicsDocument, id: string): GraphicsQrLayer {
 const ids = (document: GraphicsDocument) => document.layers.map((candidate) => candidate.id);
 
 describe("graphics edits", () => {
+  it("edits motion presets and refuses word reveals on non-text layers", () => {
+    const document = base();
+    expect(layer(applied(document, [{ op: "set_timing", layer_id: "l2", timing: { enter: "words", exit: "pop" } }]), "l2").timing)
+      .toMatchObject({ enter: "words", exit: "pop" });
+    for (const layer of document.layers.filter((entry) => entry.kind !== "text")) {
+      expect(failed(document, [{ op: "set_timing", layer_id: layer.id, timing: { enter: "words" } }]).message).toContain("only available for text");
+    }
+  });
+
   it("never mutates the input document", () => {
     const document = base();
     const before = JSON.stringify(document);
@@ -138,8 +147,8 @@ describe("graphics edits", () => {
       { op: "set_timing", layer_id: "l5", timing: { end: 3, fade: 0.3 } },
       { op: "set_timing", layer_id: "l6", timing: { tail: 2.3 } },
     ]);
-    expect(layer(document, "l5").timing).toEqual({ start: null, end: 3, tail: null, fade: 0.3 });
-    expect(layer(document, "l6").timing).toEqual({ start: null, end: null, tail: 2.3, fade: 0 });
+    expect(layer(document, "l5").timing).toEqual({ start: null, end: 3, tail: null, fade: 0.3, enter: "fade", exit: "fade" });
+    expect(layer(document, "l6").timing).toEqual({ start: null, end: null, tail: 2.3, fade: 0, enter: "fade", exit: "fade" });
     expect(failed(base(), [{ op: "set_timing", layer_id: "l5", timing: { fade: 3 } }])).toMatchObject({
       code: "invalid",
       message: "layers[2].timing.fade: Fade must be between 0 and 2 seconds.",

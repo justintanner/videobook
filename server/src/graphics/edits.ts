@@ -193,7 +193,7 @@ function setPosition(document: GraphicsDocument, layerId: string, patch: Partial
 
 function setTiming(document: GraphicsDocument, layerId: string, patch: Partial<GraphicsTiming>): GraphicsDocument {
   const layer = requireLayer(document, layerId);
-  const changes = definedFields({ start: patch.start, end: patch.end, tail: patch.tail, fade: patch.fade });
+  const changes = definedFields({ start: patch.start, end: patch.end, tail: patch.tail, fade: patch.fade, enter: patch.enter, exit: patch.exit });
   return replaceLayer(document, { ...layer, timing: { ...layer.timing, ...changes } });
 }
 

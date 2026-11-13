@@ -428,3 +428,23 @@ describe("layoutGraphics", () => {
     expect(block.box.x).toBe(safe.x);
   });
 });
+
+it("lays out ordered English and Thai word boxes without changing full text lines", () => {
+  const document = graphicsDocumentFromLayers([{
+    kind: "text", width: 0.9, align: "left", timing: { enter: "words" },
+    items: [{ text: "ONE TWO\nTHREE", shadow: false }, { text: THAI_LINE, shadow: false }],
+  }]);
+  const layout = layoutGraphics({ document, frame: PORTRAIT, measure: (text, font) => Array.from(text).length * font.size * 0.5 })[0];
+  if (layout.kind !== "text") throw new Error("expected text layout");
+  expect(layout.items[0].words.map((word) => word.text)).toEqual(["ONE", "TWO", "THREE"]);
+  expect(layout.items[0].words.map((word) => word.lineIndex)).toEqual([0, 0, 1]);
+  expect(layout.items[0].words[1].x).toBeGreaterThan(layout.items[0].words[0].x);
+  expect(layout.items[1].words.length).toBeGreaterThan(1);
+  expect(layout.items[1].words.map((word) => word.text).join("")).toBe(THAI_LINE);
+  for (const item of layout.items) {
+    for (const word of item.words) {
+      expect(word.baseline).toBe(item.lines[word.lineIndex].baseline);
+      expect(item.lines[word.lineIndex].text.slice(0, word.end)).toContain(word.text);
+    }
+  }
+});

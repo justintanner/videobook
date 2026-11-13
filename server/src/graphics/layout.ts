@@ -33,6 +33,7 @@ export type GraphicsTextItemLayout = {
   font: GraphicsFontSpec;
   box: GraphicsRect;
   lines: GraphicsTextLine[];
+  words: (GraphicsTextLine & { lineIndex: number; end: number })[];
   icon: GraphicsRect | null;
   accent: GraphicsRect | null;
   overflow: boolean;
@@ -286,7 +287,7 @@ function alignOffset(align: GraphicsTextLayer["align"], available: number, width
   return (available - width) * ALIGN_FRACTIONS[align];
 }
 
-function itemLayout(item: PlannedItem, content: GraphicsRect, top: number, align: GraphicsTextLayer["align"]): GraphicsTextItemLayout {
+function itemLayout(item: PlannedItem, content: GraphicsRect, top: number, align: GraphicsTextLayer["align"], measure: GraphicsMeasure): GraphicsTextItemLayout {
   const starts = item.lines.map((line, index) => {
     const lead = index === 0 ? item.iconSpace : 0;
     return content.x + alignOffset(align, content.width, lead + line.width) + lead;
@@ -301,6 +302,15 @@ function itemLayout(item: PlannedItem, content: GraphicsRect, top: number, align
     font: item.font,
     box: pixelRect({ x: content.x + alignOffset(align, content.width, item.width), y: top, width: item.width, height: item.height }),
     lines,
+    words: lines.flatMap((line, lineIndex) => {
+      let offset = 0;
+      return wrapUnits(line.text).map((unit) => {
+        offset += unit.space.length;
+        const x = line.x + measure(line.text.slice(0, offset), item.font);
+        offset += unit.text.length;
+        return { ...line, x, width: measure(unit.text, item.font), text: unit.text, lineIndex, end: offset };
+      });
+    }),
     icon: item.icon > 0
       ? pixelRect({ x: starts[0] - item.iconSpace, y: top + (item.lineHeight - item.icon) / 2, width: item.icon, height: item.icon })
       : null,
@@ -341,7 +351,7 @@ function textLayout(layer: GraphicsTextLayer, context: LayoutContext): GraphicsT
   const box = placeBox(space, layer.position, { width: contentWidth + 2 * padX, height: contentHeight + 2 * padY });
   const content = { x: box.x + padX, y: box.y + padY, width: contentWidth, height: contentHeight };
   const tops = itemTops(planned, content.y, gap);
-  const items = planned.map((item, index) => itemLayout(item, content, tops[index], layer.align));
+  const items = planned.map((item, index) => itemLayout(item, content, tops[index], layer.align, context.measure));
   return {
     kind: "text",
     layerId: layer.id,
