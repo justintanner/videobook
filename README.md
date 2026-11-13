@@ -64,12 +64,15 @@ over MCP. See [docs/asset-tags.md](docs/asset-tags.md).
 stars the book's **main character**, who never speaks.
 
 **Main character.** Each book saves one main character, by default "a man in
-a green shirt" with no reference images. In a goal's **Character** tab you can
-rename or describe him, choose image cells as his references (for example
-`@a1 @a2`), or generate a paid GPT Image 2.6 **character sheet** that becomes
-his only reference. He belongs to the book and applies to every new goal: a new
-short copies him, and a short made before he had images takes them when its
-frame is approved.
+a green shirt" with no reference images. A new short opens on its
+**Character** tab, where you can rename or describe him, pick up to four of the
+notebook's images as his references (the ones your brief mentioned come first)
+or upload a picture of him, and generate a paid GPT Image 2.6 **character
+sheet** that becomes his only reference. A sheet made from picked pictures keeps
+that person's face, hair, build and clothes. He belongs to the book and applies
+to every new goal: a new short copies him, and a short made before he had images
+takes them when its frame is approved. An image picked as the character stops
+being a place or prop reference for that frame.
 
 **Starting a short.** Enter an idea such as `/goal he waits for a bus in the
 rain`; no @mention is needed. Mention image cells to use them as place or prop

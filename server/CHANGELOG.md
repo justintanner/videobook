@@ -49,6 +49,17 @@ and the package uses [Semantic Versioning](https://semver.org/).
   connected in its References mode.
 - The GPT Image 2.6 prompting guide covers its Kie controls beside fal's.
 - `/goal` shorts no longer start with a cold open; Finish keeps the reviewed take and burns the saved watermark. Add a cold open separately with the cold-open tool.
+- A new `/goal` short opens on its Character tab, and the tab you choose stays
+  open while the short updates. The Character tab shows the notebook's images,
+  the ones the brief mentioned first, and takes an upload: pick up to four to
+  use as they are, or to make the character sheet from. A sheet made from
+  pictures keeps that person's face, hair, build and clothes.
+
+### Fixed
+
+- An image the brief mentioned that then becomes the main character is no
+  longer also sent as a place or prop reference when the short's frame is
+  approved.
 
 ## [0.7.0] - 2026-11-12
 

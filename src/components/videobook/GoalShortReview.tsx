@@ -1,28 +1,38 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { SHORT_WORD_CEILINGS, type GoalShortPlan } from '../../../server/src/goal-short-plan'
 import type { AssetRecord } from '@/videobook/workspace-responses'
-import { goalCanRetry, goalPlanSeconds, goalStillStale, goalStillVersions, shortEstimateText, type GoalSnapshot, type MainCharacterView, type ShortGoalSnapshot } from '@/videobook/goals'
+import {
+  goalCanRetry, goalCharacterChoices, goalNextSegment, goalPlanSeconds, goalStillStale, goalStillVersions, shortEstimateText,
+  type GoalCharacterImage, type GoalSnapshot, type MainCharacterView, type ShortGoalSnapshot, type ShortTab,
+} from '@/videobook/goals'
+import { GoalCharacterPicker } from './GoalCharacterPicker'
 import { GoalPromptInput } from './GoalPromptInput'
 import { GoalMedia } from './GoalStillCard'
 
 type GoalAction = Record<string, unknown>
-type ShortTab = 'character' | 'frame' | 'video' | 'finish'
 type AssetResolver = (artifactId: string) => AssetRecord | null
+type CharacterDraft = { name: string | null, description: string | null }
 type ShortReviewProps = {
   goal: ShortGoalSnapshot
   plan: GoalShortPlan
+  view: ShortTab
   disabled: boolean
+  character: MainCharacterView | null
+  characterError: string | null
+  images: readonly GoalCharacterImage[]
   resolveAsset: AssetResolver
+  onView: (tab: ShortTab) => void
   onPreviewCell: (cellId: string) => void
   onRun: (work: () => Promise<unknown>) => void
   onAction: (args: GoalAction) => Promise<GoalSnapshot>
   onCharacter: (args: GoalAction) => Promise<MainCharacterView>
+  onUploadImage: (file: File) => Promise<string>
 }
 
 const TABS = [['character', 'Character'], ['frame', 'Frame'], ['video', 'Video'], ['finish', 'Finish']] as const
-const NO_REFERENCE = 'Give the main character a reference image first: generate a character sheet or choose image cells in the Character tab.'
-const SHEET_POLL_MS = 2_000
-const SHEET_POLL_LIMIT = 150
+const NO_REFERENCE = 'Give the main character a reference image first: pick or upload a picture of them, or generate a character sheet, in the Character tab.'
+const CHARACTER_NOTE = 'The main character belongs to this book. Pictures picked here star in this short from its frame on; the name and description apply to new goals.'
+const CHARACTER_IMAGE_LIMIT = 4
 
 type RealismView = NonNullable<NonNullable<ShortGoalSnapshot['stages']['frame']>['outputs'][number]['realism']>
 const REALISM_NOTE = 'The check for AI tells is billed like planning and never blocks a step.'
@@ -52,13 +62,12 @@ function shortSnapshot(goal: GoalSnapshot): ShortGoalSnapshot {
   return goal
 }
 
-function nextSegment(goal: ShortGoalSnapshot, plan: GoalShortPlan): number | null {
-  const index = plan.segments.findIndex((_, position) => !goal.stages.videos?.outputs.some(output => output.index === position) || goalStillStale(goal, 'videos', position))
-  return index < 0 ? null : index
+function sheetLabel(count: number): string {
+  if (count === 0) return 'Generate character sheet'
+  return count === 1 ? 'Generate character sheet from this image' : `Generate character sheet from these ${count} images`
 }
 
-export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewCell, onRun, onAction, onCharacter }: ShortReviewProps) {
-  const [view, setView] = useState<ShortTab>(() => goal.finish && nextSegment(goal, plan) === null ? 'finish' : goal.stage === 'videos' ? 'video' : 'frame')
+export function GoalShortReview({ goal, plan, view, disabled, character, characterError, images, resolveAsset, onView, onPreviewCell, onRun, onAction, onCharacter, onUploadImage }: ShortReviewProps) {
   const [title, setTitle] = useState(plan.title)
   const [framePrompt, setFramePrompt] = useState(plan.frame.prompt)
   const [beats, setBeats] = useState(() => plan.segments.map(segment => segment.prompt))
@@ -66,17 +75,15 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
   const [clipFeedback, setClipFeedback] = useState<Record<number, string>>({})
   const [revising, setRevising] = useState<string | null>(null)
   const [beat, setBeat] = useState({ prompt: '', seconds: 5 })
-  const [character, setCharacter] = useState<MainCharacterView | null>(null)
-  const [characterDraft, setCharacterDraft] = useState({ name: '', description: '', cells: '' })
-  const polling = useRef<AbortController | null>(null)
-  useEffect(() => () => polling.current?.abort(), [])
+  const [characterDraft, setCharacterDraft] = useState<CharacterDraft>({ name: null, description: null })
+  const [picked, setPicked] = useState<string[]>([])
   const draft: GoalShortPlan = { ...plan, title: title.trim(), frame: { ...plan.frame, prompt: framePrompt.trim() }, segments: plan.segments.map((segment, index) => ({ ...segment, prompt: (beats[index] ?? '').trim() })) }
   const dirty = JSON.stringify(draft) !== JSON.stringify(plan)
   const promptsReady = Boolean(draft.title && draft.frame.prompt && draft.segments.every(segment => segment.prompt))
   const frameOutput = goal.stages.frame?.outputs[0]
   const clips = [...(goal.stages.videos?.outputs ?? [])].sort((left, right) => left.index - right.index)
   const currentClip = clips.at(-1) ?? null
-  const next = nextSegment(goal, plan)
+  const next = goalNextSegment(goal, plan)
   const running = goal.status === 'running'
   const finishing = goal.finish?.status === 'running'
   const finishFailed = goal.finish?.status === 'failed'
@@ -103,30 +110,22 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
     if (note && stage === 'frame') setFeedback('')
     if (note && stage === 'videos') setClipFeedback(current => ({ ...current, [index]: '' }))
   })
-  const remember = (next: MainCharacterView) => {
-    setCharacter(next)
-    setCharacterDraft(current => ({ name: current.name || next.character.name, description: current.description || next.character.description, cells: current.cells }))
-    return next
-  }
-  const followSheet = async (first: MainCharacterView) => {
-    polling.current?.abort()
-    const controller = new AbortController()
-    polling.current = controller
-    let latest = first
-    for (let round = 0; latest.sheet.pending && round < SHEET_POLL_LIMIT && !controller.signal.aborted; round += 1) {
-      await new Promise(resolve => setTimeout(resolve, SHEET_POLL_MS))
-      if (controller.signal.aborted) return
-      latest = remember(await onCharacter({}))
-    }
-  }
+  const characterName = characterDraft.name ?? character?.character.name ?? ''
+  const characterDescription = characterDraft.description ?? character?.character.description ?? ''
+  const characterFields = { name: characterName.trim(), description: characterDescription.trim() }
+  const characterReady = Boolean(character && characterFields.name && characterFields.description)
+  const choices = goalCharacterChoices(images, plan)
   const characterAction = (args: GoalAction) => onRun(async () => {
-    const result = remember(await onCharacter(args))
-    if (result.sheet.pending) void followSheet(result)
+    await onCharacter(args)
+    if (Array.isArray(args.reference_ids)) setPicked([])
   })
-  const openTab = (tab: ShortTab) => {
-    setView(tab)
-    if (tab === 'character' && !character) characterAction({})
-  }
+  const togglePicked = (artifactId: string) => setPicked(current => current.includes(artifactId)
+    ? current.filter(id => id !== artifactId)
+    : [...current, artifactId].slice(0, CHARACTER_IMAGE_LIMIT))
+  const uploadPicked = (file: File) => onRun(async () => {
+    const artifactId = await onUploadImage(file)
+    setPicked(current => current.includes(artifactId) ? current : [...current, artifactId].slice(-CHARACTER_IMAGE_LIMIT))
+  })
   const versions = (stage: 'frame' | 'videos', index: number, label: string) => goalStillVersions(goal, stage, index).map((version, position, all) => {
     const asset = version.artifactId ? resolveAsset(version.artifactId) : null
     const name = `v${all.length - position}`
@@ -136,21 +135,22 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
   })
   return <div className="goal-editor goal-simple goal-short" data-review={view}>
     <nav className="goal-stage-tabs" aria-label="Short stages">
-      {TABS.map(([id, label]) => <button key={id} type="button" className="goal-panel-button" aria-pressed={view === id} onClick={() => openTab(id)}>{label}</button>)}
+      {TABS.map(([id, label]) => <button key={id} type="button" className="goal-panel-button" aria-pressed={view === id} onClick={() => onView(id)}>{label}</button>)}
     </nav>
     <p className="goal-panel-muted">{plan.segments.length === 1 ? '1 clip' : `${plan.segments.length} clips`} · {totalSeconds}s · {plan.aspectRatio} · GPT Image 2.6 frame · H3 Max video</p>
     {notes.length > 0 && <ul className="goal-short-notes" aria-label="Notes">{notes.map((note, index) => <li key={`${index}:${note}`}>{note}</li>)}</ul>}
     {running && <p role="status">{goal.stage === 'videos' ? 'Generating a clip.' : 'Generating the frame.'}</p>}
     {revising && <p role="status">Writing your feedback into {revising}, then generating…</p>}
     {view === 'character' && <>
-      <p className="goal-panel-muted">The main character belongs to this book and applies to new goals.</p>
-      {!character && <p role="status">Loading the main character…</p>}
+      <p className="goal-panel-muted">{CHARACTER_NOTE}</p>
+      {characterError && <p role="alert" className="goal-panel-warning">{characterError}</p>}
+      {!character && !characterError && <p role="status">Loading the main character…</p>}
       {character && <>
         <div className="goal-reference-grid" aria-label="Character references">{character.references.map(reference => <GoalMedia key={reference.artifactId} artifactId={reference.artifactId} cellId={null} label={reference.address ?? reference.label ?? 'Reference'} resolveAsset={resolveAsset} onOpen={onPreviewCell} />)}</div>
         {character.references.length === 0 && <p className="goal-panel-muted">No reference image yet.</p>}
-        <label><span>Name</span><input aria-label="Character name" value={characterDraft.name} maxLength={80} disabled={disabled} onChange={event => setCharacterDraft({ ...characterDraft, name: event.target.value })} /></label>
-        <label><span>Description</span><textarea aria-label="Character description" value={characterDraft.description} maxLength={400} rows={2} disabled={disabled} onChange={event => setCharacterDraft({ ...characterDraft, description: event.target.value })} /></label>
-        <label><span>Image cells</span><input aria-label="Character image cells" placeholder="@a1 @a2" value={characterDraft.cells} disabled={disabled} onChange={event => setCharacterDraft({ ...characterDraft, cells: event.target.value })} /></label>
+        <GoalCharacterPicker choices={choices} selected={picked} limit={CHARACTER_IMAGE_LIMIT} disabled={disabled} resolveAsset={resolveAsset} onToggle={togglePicked} onUpload={uploadPicked} />
+        <label><span>Name</span><input aria-label="Character name" value={characterName} maxLength={80} disabled={disabled} onChange={event => setCharacterDraft({ ...characterDraft, name: event.target.value })} /></label>
+        <label><span>Description</span><textarea aria-label="Character description" value={characterDescription} maxLength={400} rows={2} disabled={disabled} onChange={event => setCharacterDraft({ ...characterDraft, description: event.target.value })} /></label>
         {character.sheet.pending && <p role="status">Making the character sheet…</p>}
         {character.sheet.lastError && <p role="alert">{character.sheet.lastError}</p>}
       </>}
@@ -212,10 +212,11 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
     <div className="goal-panel-bar">
       <div className="goal-panel-bar-copy"><span>{dirty ? 'Saving keeps the settings with this short.' : 'Each paid step needs its own approval.'}</span></div>
       {dirty && <button type="button" className="goal-panel-button" disabled={disabled || !promptsReady || finishing} onClick={() => onRun(() => onAction({ action: 'update', revision: goal.revision, plan: draft }))}>Save</button>}
+      {view === 'character' && !character && characterError && <button type="button" className="goal-panel-button" disabled={disabled} onClick={() => characterAction({})}>Try again</button>}
       {view === 'character' && character && <>
-        <button type="button" className="goal-panel-button" disabled={disabled || !characterDraft.name.trim() || !characterDraft.description.trim()} onClick={() => characterAction({ name: characterDraft.name.trim(), description: characterDraft.description.trim() })}>Save character</button>
-        <button type="button" className="goal-panel-button" disabled={disabled || !characterDraft.cells.trim()} onClick={() => characterAction({ reference_ids: characterDraft.cells.trim().split(/[\s,]+/u) })}>Use these images</button>
-        <button type="button" className="goal-panel-primary" disabled={disabled || Boolean(character.sheet.pending)} onClick={() => characterAction({ generate: true })}>Generate character sheet · {shortEstimateText(character.sheet.estimate)}</button>
+        <button type="button" className="goal-panel-button" disabled={disabled || !characterReady} onClick={() => characterAction(characterFields)}>Save character</button>
+        <button type="button" className="goal-panel-button" disabled={disabled || !characterReady || picked.length === 0} onClick={() => characterAction({ ...characterFields, reference_ids: picked })}>Use these images</button>
+        <button type="button" className="goal-panel-primary" disabled={disabled || !characterReady || Boolean(character.sheet.pending)} onClick={() => characterAction({ ...characterFields, ...(picked.length > 0 ? { reference_ids: picked } : {}), generate: true })}>{sheetLabel(picked.length)} · {shortEstimateText(character.sheet.estimate)}</button>
       </>}
       {view === 'frame' && goal.status === 'review' && frameOutput && feedback.trim() && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('revise', 'frame', 0, feedback.trim())}>Revise frame</button>}
       {view === 'frame' && goal.status === 'review' && <button type="button" className="goal-panel-primary" disabled={!canGenerate || !hasReference} title={hasReference ? undefined : NO_REFERENCE} onClick={() => generate(frameOutput ? 'regenerate' : 'approve', 'frame')}>{frameOutput ? 'Regenerate frame' : 'Generate frame'} · {shortEstimateText(goal.estimate.frame)}</button>}

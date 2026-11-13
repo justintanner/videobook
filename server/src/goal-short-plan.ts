@@ -276,10 +276,12 @@ export function buildGoalShortPlan(input: {
 }
 
 export function withShortCharacterReferences(plan: GoalShortPlan, references: readonly ShortReferenceInput[]): GoalShortPlan {
+  const characterIds = new Set(references.map((reference) => reference.artifactId));
+  const places = plan.frame.references.filter((reference) => !characterIds.has(reference.artifactId));
   return goalShortPlanSchema.parse({
     ...plan,
     character: { ...plan.character, references: slotted(references, 0) },
-    frame: { ...plan.frame, references: slotted(plan.frame.references, references.length) },
+    frame: { ...plan.frame, references: slotted(places, references.length) },
   });
 }
 
@@ -405,6 +407,14 @@ export type ShortSheetCharacter = {
   references: readonly string[];
 };
 
+function sheetPrompt(description: string, count: number): string {
+  const subject = count === 0 ? phrase(description) : `the person in ${slotNames(count)} (${phrase(description)})`;
+  return paragraphs(
+    `Character reference sheet of ${subject}: the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.`,
+    count === 0 ? null : `Keep the face, hair, build and clothes from ${slotNames(count)} exactly.`,
+  );
+}
+
 export function shortSheetStep(character: ShortSheetCharacter): ChainStep {
   const references = [...character.references];
   return {
@@ -412,7 +422,7 @@ export function shortSheetStep(character: ShortSheetCharacter): ChainStep {
     tool: "generate_image",
     params: {
       model: references.length > 0 ? SHEET_EDIT_MODEL : SHEET_TEXT_MODEL,
-      prompt: `Character reference sheet of ${phrase(character.description)}: the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.`,
+      prompt: sheetPrompt(character.description, references.length),
       ...(references.length > 0 ? { refs: { image: references } } : {}),
       options: { image_size: "landscape_16_9", quality: "high" },
     },

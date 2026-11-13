@@ -22,7 +22,9 @@ import { createTestClient } from "../test-client.js";
 import { goalTestCharacters } from "../test-goals.js";
 
 const SETTING_KEY = "application.goal.main-character.v1";
-const SHEET_PROMPT = "Character reference sheet of a man in a green shirt: the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.";
+const SHEET_VIEWS = "the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.";
+const SHEET_PROMPT = `Character reference sheet of a man in a green shirt: ${SHEET_VIEWS}`;
+const EDIT_SHEET_PROMPT = `Character reference sheet of the person in reference image 1 and reference image 2 (a man in a green shirt): ${SHEET_VIEWS}\n\nKeep the face, hair, build and clothes from reference image 1 and reference image 2 exactly.`;
 const FAL_STORAGE_HOST = "rest.fal.ai";
 const FREE_HOSTS = new Set(["litterbox.catbox.moe", "uguu.se", "tmpfile.link"]);
 const BLOCKED_SHEET = "Request blocked by the content policy";
@@ -287,7 +289,7 @@ describe("video_goal character", () => {
     await expect.poll(() => submissions.length, { timeout: testBudget(30_000) }).toBe(1);
     expect(submissions[0]).toEqual({
       path: "/openai/gpt-image-2.6/sunburst/edit",
-      body: expect.objectContaining({ prompt: SHEET_PROMPT, image_size: "landscape_16_9", quality: "high" }),
+      body: expect.objectContaining({ prompt: EDIT_SHEET_PROMPT, image_size: "landscape_16_9", quality: "high" }),
     });
     expect(uploads).toHaveLength(2);
     expect(submissions[0]!.body.image_urls).toEqual(uploads.map((name) => `${baseURL}/files/${name}`));
@@ -309,6 +311,25 @@ describe("video_goal character", () => {
     expect(outcome.status).toBe("forgotten");
     expect(readMainCharacter(engine).referenceArtifactIds).toEqual([imageIds[1]]);
     expect((await character()).references.map((reference) => reference.artifactId)).toEqual([imageIds[1]]);
+  });
+
+  it("sends an image the brief mentioned only as the character once it becomes the character before the frame", async () => {
+    const goal = await createShortGoal(engine, bookId, notebookId, {
+      brief: 'he slips on the steps in @a1 like @a2, frame: "He stands at the top of wet steps." beat 1: "He slips on the top step."',
+      requestId: "mentioned-character-short",
+    });
+    const review = JSON.parse(textOf(await raw({ action: "status", goal_id: goal.goalId }))) as ShortGoalSnapshot;
+    expect(review.shortPlan!.frame.references.map((reference) => reference.artifactId)).toEqual(imageIds);
+    await character({ reference_ids: ["@a2"] });
+    const approved = await raw({ action: "approve", goal_id: goal.goalId, revision: review.revision });
+    expect(approved.isError, textOf(approved)).toBeFalsy();
+    const plan = (JSON.parse(textOf(approved)) as ShortGoalSnapshot).shortPlan!;
+    expect(plan.character.references.map((reference) => [reference.slot, reference.artifactId])).toEqual([["@image1", imageIds[1]]]);
+    expect(plan.frame.references.map((reference) => [reference.slot, reference.artifactId])).toEqual([["@image2", imageIds[0]]]);
+    await expect.poll(() => submissions.length, { timeout: testBudget(30_000) }).toBe(1);
+    expect(submissions[0]!.path).toBe("/openai/gpt-image-2.6/sunburst/edit");
+    expect(submissions[0]!.body.image_urls).toHaveLength(2);
+    expect(unexpected).toEqual([]);
   });
 
   it("prices the sheet from fal's per-call average when fal has one", async () => {

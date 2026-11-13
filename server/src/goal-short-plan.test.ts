@@ -27,6 +27,7 @@ import {
   refreshGoalShortPlan,
   shortSheetStep,
   shortTiming,
+  withShortCharacterReferences,
   type GoalShortPlan,
 } from "./goal-short-plan.js";
 import { SHORT_RULES } from "./goal-short-rules.js";
@@ -183,6 +184,14 @@ describe("buildGoalShortPlan", () => {
     const plan = shortPlan();
     expect(plan.character.references).toEqual([{ ...sheet, slot: "@image1" }, { ...sideView, slot: "@image2" }]);
     expect(plan.frame.references).toEqual([{ ...shelter, slot: "@image3" }, { ...umbrella, slot: "@image4" }]);
+  });
+
+  it("moves an image picked as the character out of the place and prop references", () => {
+    const plan = shortPlan({ character: { ...CHARACTER, references: [] }, extraReferences: [shelter, umbrella] });
+    const picked = withShortCharacterReferences(plan, [umbrella]);
+    expect(picked.character.references).toEqual([{ ...umbrella, slot: "@image1" }]);
+    expect(picked.frame.references).toEqual([{ ...shelter, slot: "@image2" }]);
+    expect(withShortCharacterReferences(plan, [sheet]).frame.references).toEqual([{ ...shelter, slot: "@image2" }, { ...umbrella, slot: "@image3" }]);
   });
 
   it("keeps only the reference fields, whatever slot a reference arrives with", () => {
@@ -400,19 +409,26 @@ describe("compiled short steps", () => {
     expect((compileShortContinuationStep(plan, 1, "@d1").params as StepParams).prompt).toMatch(/\n\nEarlier video rule\.\n\nEarlier silence rule\.$/u);
   });
 
-  it("makes the character sheet on a plain background with GPT Image 2.6 text-to-image, or with the edit model from the references", () => {
-    const prompt = "Character reference sheet of a man in a green shirt: the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.";
+  it("makes the character sheet on a plain background with GPT Image 2.6 text-to-image, or with the edit model from the person in the references", () => {
+    const views = "the same person three times on a plain light grey background, a front view, a three-quarter view and a full-body view, neutral expression, mouth closed, even daylight.";
     const options = { image_size: "landscape_16_9", quality: "high" };
     expect(shortSheetStep({ description: "a man in a green shirt", references: [] })).toEqual({
       id: "sheet",
       tool: "generate_image",
-      params: { model: "fal:openai/gpt-image-2.6/sunburst/text-to-image", prompt, options },
+      params: { model: "fal:openai/gpt-image-2.6/sunburst/text-to-image", prompt: `Character reference sheet of a man in a green shirt: ${views}`, options },
     });
     expect(shortSheetStep({ description: "a man in a green shirt.", references: [sheet.artifactId, "@b2"] })).toEqual({
       id: "sheet",
       tool: "generate_image",
-      params: { model: "fal:openai/gpt-image-2.6/sunburst/edit", prompt, refs: { image: [sheet.artifactId, "@b2"] }, options },
+      params: {
+        model: "fal:openai/gpt-image-2.6/sunburst/edit",
+        prompt: `Character reference sheet of the person in @image1 and @image2 (a man in a green shirt): ${views}\n\nKeep the face, hair, build and clothes from @image1 and @image2 exactly.`,
+        refs: { image: [sheet.artifactId, "@b2"] },
+        options,
+      },
     });
+    expect((shortSheetStep({ description: "a woman with a red umbrella", references: ["@a1"] }).params as StepParams).prompt)
+      .toBe(`Character reference sheet of the person in @image1 (a woman with a red umbrella): ${views}\n\nKeep the face, hair, build and clothes from @image1 exactly.`);
   });
 });
 

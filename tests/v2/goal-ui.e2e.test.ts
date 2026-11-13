@@ -18,6 +18,7 @@ import { createHttpHandler } from '../../server/src/server.js'
 import { configureProviderPollDriverForTests, queue, resetProviderPollDriverForTests, setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
 import { registerAllJobHandlers } from '../../server/src/jobs/index.js'
 import { loadLegacyGoalFixture } from '../../server/src/test-legacy-goals.js'
+import { uploadLocalStream } from '../../server/src/local-upload.js'
 import { installFalDynamicEstimator } from '../../server/src/media/cost.js'
 import { configureProviderEndpoints } from '../../server/src/media/endpoints.js'
 import { copyVideoFixture } from '../../server/src/test-media-fixtures.js'
@@ -81,6 +82,13 @@ describe('goal mode in the browser', () => {
     const app = express()
     app.use(express.json({ limit: '2mb' }))
     app.all('/mcp', (request, response) => { void handler(request, response, request.body) })
+    app.post('/api/books/:bookId/upload', async (request, response) => {
+      const book = books.get(String(request.params.bookId))
+      if (!book.ok) { response.status(404).json({ error: book.error.message }); return }
+      const result = await uploadLocalStream(book.value.engine, { bookId: book.value.bookId, filename: String(request.query.filename ?? ''), stream: request })
+      if (!result.ok) { response.status(result.statusCode).json({ error: result.message }); return }
+      response.json(result.value)
+    })
     app.get(/^\/files\/([^/]+)\/([^/]+)\/(.+)$/, async (request, response) => {
       const book = books.get(String(request.params[0]))
       if (!book.ok) { response.sendStatus(404); return }
@@ -187,7 +195,7 @@ describe('goal mode in the browser', () => {
       await command(`/goal ${brief}`)
       await expect.poll(async () => (await goals()).goals.find(goal => goal.brief === brief)?.status, { timeout: testBudget(30_000) }).toBe('review')
       const short = shortGoal((await goals()).goals.find(goal => goal.brief === brief))
-      expect(short).toMatchObject({ planVersion: 4, plan: null, shortPlan: { version: 4, title: 'Bus in the rain', segments: [{ seconds: 12 }] } })
+      expect(short).toMatchObject({ planVersion: 4, shortPlan: { version: 4, title: 'Bus in the rain', segments: [{ seconds: 12 }] } })
       expect(JSON.stringify(short)).not.toMatch(/nano-banana|seedance|kie:/iu)
       expect(stub.plannerRequests).toHaveLength(1)
       if (savedKeys.OPENAI_API_KEY === undefined) delete process.env.OPENAI_API_KEY
@@ -202,6 +210,13 @@ describe('goal mode in the browser', () => {
       }
       const primary = (label: RegExp) => panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: label })
       await tile(short).waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      if (!(await panel().isVisible())) {
+        await tile(short).click()
+        await panel().waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      }
+      expect(await tabs.getByRole('button', { name: 'Character', exact: true }).getAttribute('aria-pressed')).toBe('true')
+      await panel().getByRole('group', { name: 'Character images', exact: true }).waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      await screenshot('goal-character-first')
       await openTab('Frame')
       expect(await tabs.getByRole('button').allTextContents()).toEqual(['Character', 'Frame', 'Video', 'Finish'])
       await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review frame · estimate unavailable')
@@ -216,11 +231,30 @@ describe('goal mode in the browser', () => {
       const read = engine.notebooks.read(notebookId)
       if (!read.ok) throw new Error(read.error.message)
       const imageCell = read.value.cells.find(cell => cell.type === 'image' && cell.outputArtifactId)
-      if (!imageCell) throw new Error('missing image cell')
+      if (!imageCell?.outputArtifactId) throw new Error('missing image cell')
+      const imageCellCount = read.value.cells.filter(cell => cell.type === 'image').length
       await openTab('Character')
-      await panel().getByLabel('Character image cells', { exact: true }).fill(notebookGridTag(imageCell.slot))
+      const pick = (address: string) => panel().getByRole('button', { name: `Pick ${address}`, exact: true })
+      await pick(notebookGridTag(imageCell.slot)).click()
+      expect(await pick(notebookGridTag(imageCell.slot)).getAttribute('aria-pressed')).toBe('true')
+      const photo = await sharp({ create: { width: 120, height: 160, channels: 3, background: '#a4552f' } }).png().toBuffer()
+      await panel().getByLabel('Upload a character image', { exact: true }).setInputFiles({ name: 'character-photo.png', mimeType: 'image/png', buffer: photo })
+      const uploadedCell = async () => {
+        const after = engine.notebooks.read(notebookId)
+        if (!after.ok) throw new Error(after.error.message)
+        return after.value.cells.filter(cell => cell.type === 'image').length > imageCellCount
+          ? after.value.cells.find(cell => cell.type === 'image' && cell.outputArtifactId && !read.value.cells.some(before => before.id === cell.id)) ?? null
+          : null
+      }
+      await expect.poll(async () => Boolean((await uploadedCell())?.outputArtifactId), { timeout: testBudget(30_000) }).toBe(true)
+      const upload = (await uploadedCell())!
+      await expect.poll(() => pick(notebookGridTag(upload.slot)).getAttribute('aria-pressed'), { timeout: testBudget(15_000) }).toBe('true')
+      await primary(/^Generate character sheet from these 2 images · /).waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      await screenshot('goal-character-picked')
       await panel().getByRole('button', { name: 'Use these images', exact: true }).click()
-      await expect.poll(async () => (await call<{ references: unknown[] }>('video_goal', { action: 'character' })).references.length, { timeout: testBudget(15_000) }).toBe(1)
+      await expect.poll(async () => (await call<{ references: Array<{ artifactId: string }> }>('video_goal', { action: 'character' })).references.map(reference => reference.artifactId), { timeout: testBudget(15_000) })
+        .toEqual([imageCell.outputArtifactId, upload.outputArtifactId])
+      expect(await tabs.getByRole('button', { name: 'Character', exact: true }).getAttribute('aria-pressed')).toBe('true')
 
       await openTab('Frame')
       await expect.poll(() => primary(/^Generate frame · \$0\.21$/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)

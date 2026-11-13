@@ -308,7 +308,7 @@ import type {
 import { useLastWorkSlot } from '@/videobook/last-work-slot'
 import { useNotebookViewport } from '@/videobook/useNotebookViewport'
 import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
-import { composerGoal, goalGenerationMarks } from '@/videobook/goals'
+import { composerGoal, goalCharacterImages, goalGenerationMarks } from '@/videobook/goals'
 import { useVideoGoals } from '@/videobook/use-video-goals'
 import { parseSequenceSlashCommand } from '@/videobook/sequence-slash-command'
 import { parseExportSequenceCommand } from '@/videobook/export-sequence-command'
@@ -1511,6 +1511,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => new Set((notebook?.cells ?? []).filter((cell) => cell.type === 'goal').map((cell) => cell.id)),
     [notebook],
   )
+  const goalImages = useMemo(() => goalCharacterImages(notebook?.cells ?? []), [notebook])
   const visibleGoals = useMemo(
     () => goalSnapshots.filter((goal) => goalCellIds.has(goal.cellId)),
     [goalCellIds, goalSnapshots],
@@ -4947,6 +4948,67 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const attachArtifactToNewMediaCell = async (
+    target: { bookId: string; notebookId: string },
+    artifactRef: string,
+    kind: PassiveMediaKind,
+    slot: NotebookGridSlot,
+    makeRoom: boolean,
+  ): Promise<string> => {
+    const created = recordValue(await call('create_notebook_cell', {
+      book_id: target.bookId,
+      notebook_id: target.notebookId,
+      ...(makeRoom ? { make_room: true } : {}),
+      cell: {
+        type: kind,
+        slot,
+      },
+    }))
+    const cellId = created && asString(created.id)
+    if (!cellId) throw new Error('The server did not return the new media cell')
+    try {
+      await call('set_notebook_media_slot', {
+        book_id: target.bookId,
+        notebook_id: target.notebookId,
+        cell_id: cellId,
+        artifact_ref: artifactRef,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const rollbackFailure = await call('delete_notebook_cell', {
+        book_id: target.bookId,
+        notebook_id: target.notebookId,
+        cell_id: cellId,
+      }).then(
+        () => null,
+        (rollbackError: unknown) => rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+      )
+      throw new Error(rollbackFailure
+        ? `${message}. The empty ${notebookGridTag(slot)} cell could not be removed: ${rollbackFailure}`
+        : message)
+    }
+    return cellId
+  }
+
+  const addGoalCharacterImage = async (file: File): Promise<string> => {
+    if (!bookId || !notebook) throw new Error('Open the goal notebook first.')
+    if (mediaKindForFile(file) !== 'image') throw new Error(`${file.name} is not an image. Choose a picture of the main character.`)
+    const target = { bookId, notebookId: notebook.id }
+    const { artifactRef } = await resolveMediaFileArtifact(file, 'image')
+    if (notebook.cells.some((cell) => cell.type === 'image' && cell.outputArtifactId === artifactRef)) return artifactRef
+    const placement = notebookCreationPlacement('image', notebook.cells)
+    const cellId = await attachArtifactToNewMediaCell(target, artifactRef, 'image', placement.slot, placement.makeRoom)
+    await refreshBookData(target.bookId, target.notebookId)
+    setNotice(`Added ${notebookGridTag(placement.slot)} for the main character`)
+    void watchUploadedMediaAsset({
+      ...target,
+      cellId,
+      address: notebookGridAddress(placement.slot),
+      artifactId: artifactRef,
+    })
+    return artifactRef
+  }
+
   const createMediaCellFromFile = async (
     slot: NotebookGridSlot,
     file: File,
@@ -4970,29 +5032,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
 
     const address = notebookGridTag(slot)
-    let createdCellId: string | null = null
-    let attached = false
     setBusy(true)
     try {
       const { artifactRef, reusedExisting } = await resolveMediaFileArtifact(file, kind)
-      const created = recordValue(await call('create_notebook_cell', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        ...(makeRoom ? { make_room: true } : {}),
-        cell: {
-          type: kind,
-          slot,
-        },
-      }))
-      createdCellId = created && asString(created.id)
-      if (!createdCellId) throw new Error('The server did not return the new media cell')
-      await call('set_notebook_media_slot', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        cell_id: createdCellId,
-        artifact_ref: artifactRef,
-      })
-      attached = true
+      const createdCellId = await attachArtifactToNewMediaCell(
+        { bookId, notebookId: notebook.id },
+        artifactRef,
+        kind,
+        slot,
+        makeRoom,
+      )
       if (mediaLibraryPicker?.cellId === null) closeMediaLibrary()
       collapseComposerAfterCellCreation()
       rememberLastWorkSlot(slot)
@@ -5008,21 +5057,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         artifactId: artifactRef,
       })
     } catch (error) {
-      let message = error instanceof Error ? error.message : String(error)
-      if (createdCellId && !attached) {
-        try {
-          await call('delete_notebook_cell', {
-            book_id: bookId,
-            notebook_id: notebook.id,
-            cell_id: createdCellId,
-          })
-        } catch (rollbackError) {
-          const detail = rollbackError instanceof Error
-            ? rollbackError.message
-            : String(rollbackError)
-          message = `${message}. The empty ${address} cell could not be removed: ${detail}`
-        }
-      }
+      const message = error instanceof Error ? error.message : String(error)
       await refreshBookData(bookId, notebook.id).catch(() => undefined)
       setNotice(message, 'error')
     } finally {
@@ -10358,8 +10393,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         key={selectedGoal.goalId}
         goal={selectedGoal}
         connected={mcp.state === 'ready'}
+        images={goalImages}
         onAction={runGoalAction}
         onCharacter={runGoalCharacter}
+        onUploadImage={addGoalCharacterImage}
         onSelectCell={openCellInspector}
         resolveAsset={(artifactId) => assetById.get(artifactId) ?? null}
         onPreviewCell={(cellId) => {

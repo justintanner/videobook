@@ -1,7 +1,11 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Flag } from 'lucide-react'
 import type { AssetRecord } from '@/videobook/workspace-responses'
-import { goalCanRetry, goalProgress, goalStatusLine, goalStopLabel, goalTileView, LEGACY_GOAL_NOTE, shortPlanOf, type GoalSnapshot, type LegacyGoalSnapshot, type MainCharacterView } from '@/videobook/goals'
+import {
+  defaultShortTab, goalCanRetry, goalProgress, goalStatusLine, goalStopLabel, goalTileView, LEGACY_GOAL_NOTE, shortPlanOf,
+  type GoalCharacterImage, type GoalSnapshot, type LegacyGoalSnapshot, type MainCharacterView, type ShortTab,
+} from '@/videobook/goals'
+import { useMainCharacter } from '@/videobook/use-main-character'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
 import { GoalShortReview } from './GoalShortReview'
 import './GoalPanel.css'
@@ -10,8 +14,10 @@ type GoalAction = Record<string, unknown>
 type GoalPanelProps = {
   goal: GoalSnapshot
   connected: boolean
+  images: readonly GoalCharacterImage[]
   onAction: (args: GoalAction) => Promise<GoalSnapshot>
   onCharacter: (args: GoalAction) => Promise<MainCharacterView>
+  onUploadImage: (file: File) => Promise<string>
   onSelectCell: (cellId: string) => void
   onPreviewCell: (cellId: string) => void
   resolveAsset: (artifactId: string) => AssetRecord | null
@@ -34,10 +40,14 @@ function LegacyGoalSummary({ goal, onSelectCell, resolveAsset }: { goal: LegacyG
   </div>
 }
 
-export function GoalPanel({ goal, connected, onAction, onCharacter, onSelectCell, onPreviewCell, resolveAsset }: GoalPanelProps) {
+export function GoalPanel({ goal, connected, images, onAction, onCharacter, onUploadImage, onSelectCell, onPreviewCell, resolveAsset }: GoalPanelProps) {
   const [pending, setPending] = useState(false)
   const pendingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<ShortTab | null>(null)
+  const shortPlan = shortPlanOf(goal)
+  const shortView = goal.legacy || !shortPlan ? null : tab ?? defaultShortTab(goal, shortPlan)
+  const mainCharacter = useMainCharacter(onCharacter, connected && shortView === 'character')
   const line = goalStatusLine(goal)
   const view = goalTileView(goal, undefined)
   const disabled = pending || !connected
@@ -68,7 +78,6 @@ export function GoalPanel({ goal, connected, onAction, onCharacter, onSelectCell
     </div>
   }
   const progress = goalProgress(goal)
-  const shortPlan = shortPlanOf(goal)
   const active = goal.status === 'planning' || goal.status === 'running'
   const finished = ['completed', 'failed', 'interrupted', 'cancelled'].includes(goal.status)
   const retry = goalCanRetry(goal)
@@ -79,7 +88,23 @@ export function GoalPanel({ goal, connected, onAction, onCharacter, onSelectCell
       {finished && <button type="button" disabled={disabled || Boolean(goal.dismissedAt)} onClick={() => act({ action: 'dismiss' })}>Dismiss</button>}
     </>)}
     <div className="goal-panel-body">
-      {shortPlan && goal.status !== 'planning' && <GoalShortReview key={`${goal.goalId}:${goal.revision}`} goal={goal} plan={shortPlan} disabled={disabled} resolveAsset={resolveAsset} onPreviewCell={onPreviewCell} onRun={work => { void perform(work) }} onAction={args => onAction({ ...args, goal_id: goal.goalId })} onCharacter={onCharacter} />}
+      {shortPlan && shortView && goal.status !== 'planning' && <GoalShortReview
+        key={`${goal.goalId}:${goal.revision}`}
+        goal={goal}
+        plan={shortPlan}
+        view={shortView}
+        disabled={disabled}
+        character={mainCharacter.character}
+        characterError={mainCharacter.error}
+        images={images}
+        resolveAsset={resolveAsset}
+        onView={setTab}
+        onPreviewCell={onPreviewCell}
+        onRun={work => { void perform(work) }}
+        onAction={args => onAction({ ...args, goal_id: goal.goalId })}
+        onCharacter={mainCharacter.act}
+        onUploadImage={onUploadImage}
+      />}
       {!connected && <p role="status" className="goal-panel-muted">Reconnecting. Your goal is saved; generation continues on the server.</p>}
       {error && <p role="alert" className="goal-panel-error">{error}</p>}
       {goal.error && (progress.phase === 'failed' || progress.phase === 'interrupted') && <p role="alert" className="goal-panel-error">{goal.error}</p>}

@@ -4,21 +4,28 @@ import { describe, expect, it } from 'vitest'
 import { GoalShortReview } from '../../src/components/videobook/GoalShortReview'
 import { GoalPanel } from '../../src/components/videobook/GoalPanel'
 import type { AssetRecord } from '../../src/videobook/workspace-responses'
-import type { MainCharacterView, ShortGoalSnapshot } from '../../src/videobook/goals'
+import { defaultShortTab, type GoalCharacterImage, type MainCharacterView, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
+import { buildGoalShortPlan } from '../../server/src/goal-short-plan'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
 import { legacyGoalFixture, shortGoalFixture, shortPlanFixture, shortStage } from './goal-short-fixtures'
 
 const noop = async () => shortGoalFixture()
-const noCharacter = async (): Promise<MainCharacterView> => ({ character: { name: 'Main character', description: 'a man in a green shirt', silent: true }, references: [], sheet: { estimate: { usd: null, warnings: [] }, pending: null, lastError: null } })
+const mainCharacter: MainCharacterView = { character: { name: 'Main character', description: 'a man in a green shirt', silent: true }, references: [], sheet: { estimate: { usd: 0.12, warnings: [] }, pending: null, lastError: null } }
+const noCharacter = async (): Promise<MainCharacterView> => mainCharacter
+const uploaded = async () => 'uploaded-photo'
 
 function asset(artifactId: string): AssetRecord | null {
+  if (artifactId.startsWith('photo')) return { mediaUrl: `/media/${artifactId}.jpg`, thumbnailUrl: `/thumbs/${artifactId}.jpg` } as unknown as AssetRecord
   if (!artifactId.startsWith('clip') && !artifactId.startsWith('final') && !artifactId.startsWith('video')) return null
   return { mediaUrl: `/media/${artifactId}.mp4`, thumbnailUrl: null, duration: 20, fps: 24, objectHash: `${artifactId}-hash` } as unknown as AssetRecord
 }
 
-function render(goal: ShortGoalSnapshot): string {
+type ReviewExtras = { character?: MainCharacterView | null, characterError?: string | null, images?: readonly GoalCharacterImage[] }
+
+function render(goal: ShortGoalSnapshot, view: ShortTab = defaultShortTab(goal, goal.shortPlan!), extras: ReviewExtras = {}): string {
   return renderToStaticMarkup(createElement(GoalShortReview, {
-    goal, plan: goal.shortPlan!, disabled: false, resolveAsset: asset, onPreviewCell: () => undefined, onRun: () => undefined, onAction: noop, onCharacter: noCharacter,
+    goal, plan: goal.shortPlan!, view, disabled: false, character: extras.character ?? null, characterError: extras.characterError ?? null, images: extras.images ?? [],
+    resolveAsset: asset, onView: () => undefined, onPreviewCell: () => undefined, onRun: () => undefined, onAction: noop, onCharacter: noCharacter, onUploadImage: uploaded,
   }))
 }
 
@@ -32,16 +39,59 @@ const withFrame = { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a
 describe('GoalShortReview', () => {
   it('lists adaptation notes above the plan', () => {
     const note = '@a1 is a video, so its frame at 1.5 s (@c5) is the reference.'
-    const html = render(shortGoalFixture({ notes: [note, '@h8 is empty and was skipped.'] }))
+    const html = render(shortGoalFixture({ notes: [note, '@h8 is empty and was skipped.'] }), 'frame')
     expect(html.indexOf('aria-label="Notes"')).toBeGreaterThan(-1)
     expect(html.indexOf('aria-label="Notes"')).toBeLessThan(html.indexOf('aria-label="Short title"'))
     expect(html).toContain(note)
     expect(html).toContain('@h8 is empty and was skipped.')
+    expect(render(shortGoalFixture({ notes: [note] }))).toContain(note)
     expect(render(shortGoalFixture())).not.toContain('aria-label="Notes"')
   })
 
-  it('opens on the frame with the four tabs, its estimate and the read-only rule lines', () => {
+  it('opens a new short on the Character tab, first of the four, while the main character loads', () => {
     const html = render(shortGoalFixture())
+    expect([...html.matchAll(/aria-pressed="(true|false)">(\w+)<\/button>/gu)].map(match => [match[2], match[1]]).slice(0, 4))
+      .toEqual([['Character', 'true'], ['Frame', 'false'], ['Video', 'false'], ['Finish', 'false']])
+    expect(html).toContain('Loading the main character…')
+    expect(html).not.toContain('aria-label="Short title"')
+    expect(button(html, 'Generate frame')).toBe('')
+  })
+
+  it('offers the notebook images as the character, the ones the brief mentioned first, and an upload', () => {
+    const photo = (artifactId: string, column: number): GoalCharacterImage => ({ artifactId, cellId: `${artifactId}-cell`, address: `@a${column}`, label: artifactId })
+    const steps = { kind: 'image' as const, artifactId: 'photo-man', cellId: 'photo-man-cell', address: '@a2', label: 'umbrella_water', objectHash: 'a'.repeat(64) }
+    const plan = buildGoalShortPlan({
+      title: 'Every day, these steps', aspectRatio: '9:16', character: { name: 'Main character', description: 'a man in a green shirt', references: [] },
+      framePrompt: 'He stands at the top of wet steps.', beats: ['He slips.'], segmentSeconds: [12], extraReferences: [steps],
+    })
+    const html = render(shortGoalFixture({}, plan), 'character', { character: mainCharacter, images: [photo('photo-steps', 1), photo('photo-man', 2)] })
+    expect(html).toContain('<legend>Use an image</legend>')
+    const picks = [...html.matchAll(/aria-label="Pick (@\w+)"/gu)].map(match => match[1])
+    expect(picks).toEqual(['@a2', '@a1'])
+    const pick = (address: string) => new RegExp(`<button[^>]*aria-label="Pick ${address}"[^>]*>(?:(?!</button>).)*</button>`, 'u').exec(html)?.[0] ?? ''
+    expect(pick('@a2')).toMatch(/aria-pressed="false".*src="\/thumbs\/photo-man\.jpg".*<span>@a2<\/span><small>In brief<\/small>/u)
+    expect(pick('@a1')).toContain('<span>@a1</span>')
+    expect(pick('@a1')).not.toContain('In brief')
+    expect(html).toMatch(/<input type="file" accept="image\/\*" aria-label="Upload a character image"\/>/u)
+    expect(html).not.toContain('Character image cells')
+    expect(button(html, 'Use these images')).toContain('disabled=""')
+    expect(button(html, 'Generate character sheet')).toContain('Generate character sheet · $0.12')
+    expect(button(html, 'Generate character sheet')).not.toContain('disabled')
+    expect(button(html, 'Save character')).not.toContain('disabled')
+    expect(html).toContain('aria-label="Character name" maxLength="80" value="Main character"/>')
+    expect(html).toContain('>a man in a green shirt</textarea>')
+  })
+
+  it('says why the main character did not load and offers to try again', () => {
+    const html = render(shortGoalFixture(), 'character', { characterError: 'Reconnecting to the server' })
+    expect(html).toContain('role="alert" class="goal-panel-warning">Reconnecting to the server</p>')
+    expect(html).not.toContain('Loading the main character…')
+    expect(button(html, 'Try again')).not.toContain('disabled')
+    expect(button(html, 'Generate character sheet')).toBe('')
+  })
+
+  it('shows the frame tab with its estimate and the read-only rule lines', () => {
+    const html = render(shortGoalFixture(), 'frame')
     for (const tab of ['Character', 'Frame', 'Video', 'Finish']) expect(html).toContain(`>${tab}</button>`)
     expect(button(html, 'Generate frame')).toContain('Generate frame · $0.21')
     expect(button(html, 'Generate frame')).not.toContain('disabled')
@@ -52,10 +102,10 @@ describe('GoalShortReview', () => {
   })
 
   it('disables the frame with a reason while the character has no reference image', () => {
-    const html = render(shortGoalFixture({}, shortPlanFixture([12], [])))
+    const html = render(shortGoalFixture({}, shortPlanFixture([12], [])), 'frame')
     expect(button(html, 'Generate frame')).toContain('disabled=""')
     expect(html).toContain('Give the main character a reference image first')
-    const ready = render(shortGoalFixture({ mainCharacterReferences: 1 }, shortPlanFixture([12], [])))
+    const ready = render(shortGoalFixture({ mainCharacterReferences: 1 }, shortPlanFixture([12], [])), 'frame')
     expect(button(ready, 'Generate frame')).not.toContain('disabled')
     expect(ready).not.toContain('Give the main character a reference image first')
   })
@@ -159,9 +209,20 @@ describe('GoalShortReview', () => {
   })
 })
 
+const panelProps = { connected: true, images: [], onAction: noop, onCharacter: noCharacter, onUploadImage: uploaded, onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
+
 describe('GoalPanel with a short', () => {
+  it('opens a new short on the Character tab and a short with a frame on the Frame tab', () => {
+    const fresh = renderToStaticMarkup(createElement(GoalPanel, { ...panelProps, goal: shortGoalFixture() }))
+    expect(fresh).toContain('aria-pressed="true">Character</button>')
+    expect(fresh).toContain('Loading the main character…')
+    const framed = renderToStaticMarkup(createElement(GoalPanel, { ...panelProps, goal: shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]) } }) }))
+    expect(framed).toContain('aria-pressed="true">Frame</button>')
+    expect(framed).not.toContain('Loading the main character…')
+  })
+
   it('opens the short review for a version-4 goal and the older reviews for others', () => {
-    const props = { connected: true, onAction: noop, onCharacter: noCharacter, onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
+    const props = panelProps
     expect(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture() }))).toContain('aria-label="Short stages"')
     expect(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture({ status: 'planning', shortPlan: undefined }) }))).toContain('Planning the frame and the beats of your short')
     const failed = renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture({ status: 'failed', shortPlan: undefined, error: 'OpenAI API error 500' }) }))
@@ -173,7 +234,7 @@ describe('GoalPanel with a short', () => {
 })
 
 describe('GoalPanel with an earlier goal', () => {
-  const props = { connected: true, onAction: noop, onCharacter: noCharacter, onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
+  const props = panelProps
 
   it('summarises a version-2 goal read-only with its outputs as cell addresses', () => {
     const html = renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: legacyGoalFixture() }))

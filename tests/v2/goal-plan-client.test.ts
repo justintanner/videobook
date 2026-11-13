@@ -1,5 +1,7 @@
+import type { NotebookDocument } from 'videobook-engine'
 import { describe, expect, it } from 'vitest'
-import { composerGoal, goalCanRetry, goalGenerationMarks, goalOutputEstimate, goalPlanSeconds, goalStatusLine, goalStillVersions, goalTileView, goalWake, LEGACY_GOAL_NOTE, shortEstimateText } from '../../src/videobook/goals'
+import { buildGoalShortPlan } from '../../server/src/goal-short-plan'
+import { composerGoal, defaultShortTab, goalCanRetry, goalCharacterChoices, goalCharacterImages, goalGenerationMarks, goalOutputEstimate, goalPlanSeconds, goalStatusLine, goalStillVersions, goalTileView, goalWake, LEGACY_GOAL_NOTE, shortEstimateText } from '../../src/videobook/goals'
 import { LOWER_BOUND, legacyGoalFixture, shortGoalFixture, shortPlanFixture, shortStage, shortStep } from './goal-short-fixtures'
 
 describe('legacy goal model', () => {
@@ -84,6 +86,49 @@ describe('short goal model', () => {
     const clip = shortStep('clip1', 'completed')
     const goal = shortGoalFixture({ stage: 'videos', stages: { videos: { ...shortStage('videos', [{ index: 0, artifactId: 'clip1-asset' }], [clip]), allSteps: [clip] } } })
     expect(goalGenerationMarks([goal]).get('clip1-output')).toBe('Clip 1/2 · @b1')
+  })
+
+  it('opens a short on its character until the frame is approved, then on the stage it reached', () => {
+    expect(defaultShortTab(shortGoalFixture(), twoClips)).toBe('character')
+    expect(defaultShortTab(shortGoalFixture({ status: 'running', stages: { frame: shortStage('frame', []) } }), twoClips)).toBe('frame')
+    expect(defaultShortTab(shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]) } }), twoClips)).toBe('frame')
+    expect(defaultShortTab(firstClip(), twoClips)).toBe('video')
+    const finished = shortGoalFixture({
+      stage: 'videos',
+      stages: { ...firstClip().stages, videos: shortStage('videos', [{ index: 0, artifactId: 'clip-a' }, { index: 1, artifactId: 'clip-b' }]) },
+      finish: { status: 'review', sourceArtifactId: 'clip-b', finalArtifactId: null, error: null },
+    })
+    expect(defaultShortTab(finished, twoClips)).toBe('finish')
+    expect(defaultShortTab(finished, shortPlanFixture([10, 10, 5]))).toBe('video')
+  })
+})
+
+describe('main character images', () => {
+  const cell = (id: string, type: string, row: number, column: number, outputArtifactId?: string, label?: string) =>
+    ({ id, type, slot: { row, column }, ...(outputArtifactId ? { outputArtifactId } : {}), ...(label ? { label } : {}) }) as NotebookDocument['cells'][number]
+
+  it('offers each image cell once in grid order, skipping empty slots and other media', () => {
+    const cells = [
+      cell('later', 'image', 1, 0, 'photo-b'),
+      cell('video', 'video', 0, 2, 'clip-a'),
+      cell('first', 'image', 0, 1, 'photo-a', 'umbrella_water'),
+      cell('empty', 'image', 0, 0),
+      cell('copy', 'image', 2, 4, 'photo-a'),
+    ]
+    expect(goalCharacterImages(cells)).toEqual([
+      { artifactId: 'photo-a', cellId: 'first', address: '@a2', label: 'umbrella_water' },
+      { artifactId: 'photo-b', cellId: 'later', address: '@b1', label: null },
+    ])
+  })
+
+  it('puts the images the brief mentioned first, in the order it mentioned them', () => {
+    const images = ['photo-a', 'photo-b', 'photo-c'].map((artifactId, column) => ({ artifactId, cellId: `cell-${column}`, address: `@a${column + 1}`, label: null }))
+    const reference = (artifactId: string, index: number) => ({ kind: 'image' as const, artifactId, cellId: `cell-${artifactId}`, address: `@z${index}`, label: artifactId, objectHash: String(index).repeat(64) })
+    const plan = buildGoalShortPlan({
+      title: 'Steps', aspectRatio: '9:16', character: { name: 'Main character', description: 'a man in a green shirt', references: [] },
+      framePrompt: 'Wet steps.', beats: ['He slips.'], segmentSeconds: [10], extraReferences: [reference('photo-c', 1), reference('photo-b', 2)],
+    })
+    expect(goalCharacterChoices(images, plan).map(choice => [choice.artifactId, choice.mentioned])).toEqual([['photo-c', true], ['photo-b', true], ['photo-a', false]])
   })
 })
 
