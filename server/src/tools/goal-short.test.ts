@@ -16,7 +16,7 @@ import { createShortGoal, shortFingerprint } from "../goal-short-runtime.js";
 import { readGoal, saveGoal } from "../goal-store.js";
 import { installFalDynamicEstimator, lowerBoundWarnings } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
-import { configureProviderPollDriverForTests, resetProviderPollDriverForTests } from "../queue.js";
+import { configureProviderPollDriverForTests, pauseBookQueueForTests, resetProviderPollDriverForTests } from "../queue.js";
 import { testBudget } from "../test-budget.js";
 import { createTestClient } from "../test-client.js";
 import { goalTestCharacters } from "../test-goals.js";
@@ -371,7 +371,8 @@ describe("video_goal shorts", () => {
     const clip = await approved(await status(goal.goalId));
     expect(clip.stages.videos!.outputs).toHaveLength(1);
     warned(clip.stages.videos!.outputs[0]!.artifactId);
-    expect((await invoke({ action: "finish", goal_id: goal.goalId })).finish).toMatchObject({ status: "review" });
+    await pauseBookQueueForTests(bookId);
+    expect((await invoke({ action: "finish", goal_id: goal.goalId })).finish).toMatchObject({ status: "running" });
   });
 
   it("prices the frame and every segment, with H3 Max as a lower bound", async () => {
@@ -416,8 +417,13 @@ describe("video_goal shorts", () => {
     const original = await engine.metadata.artifacts.read<Record<string, unknown>>(clipId, "original");
     expect(original.ok && original.value).toMatchObject({ model: "fal:minimax/h3-max/reference-to-video", hasAudio: true, transcribe: false });
     expect(clip).toMatchObject({ stage: "videos", status: "review", finish: { status: "review", sourceArtifactId: clipId } });
-    expect((await invoke({ action: "finish", goal_id: goal.goalId })).finish).toMatchObject({ status: "review", sourceArtifactId: clipId });
     expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: clip.revision })).toBe("Every segment of this short is generated. Finish it, regenerate a segment or add a beat.");
+    await pauseBookQueueForTests(bookId);
+    const finishing = await invoke({ action: "finish", goal_id: goal.goalId });
+    expect(finishing.finish).toMatchObject({ status: "running", sourceArtifactId: clipId });
+    expect(finishing.finish?.startSeconds).toBeUndefined();
+    expect(finishing.coldOpen).toBeNull();
+    expect(engine.jobs.queue.list({ type: "finish_goal" })).toHaveLength(1);
     expect(stub.unexpected).toEqual([]);
   });
 

@@ -10,6 +10,8 @@ import { createTestClient } from "../test-client.js";
 import { testBudget } from "../test-budget.js";
 import { goalTestCharacters, settleGoalChain } from "../test-goals.js";
 import { v7 as uuidv7 } from "uuid";
+import { readGoal, saveGoal } from "../goal-store.js";
+import { probeVideo } from "../ffmpeg.js";
 import { saveMainCharacter } from "../goal-short-character.js";
 import { createShortGoal } from "../goal-short-runtime.js";
 import type { ShortGoalSnapshot } from "./goal.js";
@@ -57,7 +59,7 @@ describe("goal finishing burns the saved watermark through the graphics renderer
   };
   const settleChain = (chainId: string, kind: "image" | "video") => settleGoalChain(engine, root, chainId, kind);
 
-  it("finishes a short from its current clip with a cold open and a burned watermark", async () => {
+  it.each(["new", "saved-running", "saved-failed"])("finishes %s from the reviewed take with only a burned watermark", async (savedState) => {
     const oldFal = process.env.FAL_API_KEY;
     process.env.FAL_API_KEY = "test-goal-key";
     try {
@@ -70,7 +72,18 @@ describe("goal finishing burns the saved watermark through the graphics renderer
       const clip = await approve(await status(created.goalId));
       const clipId = await settleChain(clip.chainId!, "video");
       expect((await status(created.goalId)).finish).toMatchObject({ status: "review", sourceArtifactId: clipId });
-      const queued = await invoke({ action: "finish", goal_id: created.goalId, start_seconds: 0, end_seconds: 0.5 });
+      if (savedState === "saved-failed") {
+        const saved = readGoal(engine, created.goalId);
+        saveGoal(engine, { ...saved, finish: { ...saved.finish!, status: "failed", startSeconds: 0, endSeconds: 0.5, coldOpenRequestId: uuidv7(), coldOpenArtifactId: clipId } });
+      }
+      const queued = await invoke({ action: "finish", goal_id: created.goalId });
+      expect(queued.coldOpen).toBeNull();
+      expect(queued.finish?.startSeconds).toBeUndefined();
+      if (savedState === "saved-running") {
+        const saved = readGoal(engine, created.goalId);
+        saveGoal(engine, { ...saved, finish: { ...saved.finish!, startSeconds: 0, endSeconds: 0.5, coldOpenRequestId: uuidv7(), coldOpenArtifactId: clipId } });
+        expect((await invoke({ action: "finish", goal_id: created.goalId })).finish?.jobId).toBe(queued.finish?.jobId);
+      }
       expect(queued.finish).toMatchObject({ status: "running", sourceArtifactId: clipId });
       await resumeBookQueueForTests(bookId);
       let finished: ShortGoalSnapshot | null = null;
@@ -81,6 +94,20 @@ describe("goal finishing burns the saved watermark through the graphics renderer
       const done = finished as ShortGoalSnapshot | null;
       expect(done?.finalArtifactId).toEqual(expect.any(String));
       expect(done?.finalArtifactId).not.toBe(clipId);
+      expect(engine.jobs.queue.list({ type: "edit_cold_open" })).toHaveLength(0);
+      expect(engine.jobs.queue.list({ type: "prepare_cold_open" })).toHaveLength(0);
+      const manifest = await engine.files.manifest(done!.finalArtifactId!);
+      if (!manifest.ok) throw new Error(manifest.error.message);
+      const probe = await probeVideo(join(manifest.value.path, "original.mp4"));
+      expect(probe.videoDuration).toBeCloseTo(4, 1);
+      const saved = readGoal(engine, created.goalId);
+      saveGoal(engine, { ...saved, finish: { ...saved.finish!, startSeconds: 0, endSeconds: 0.5, coldOpenArtifactId: clipId, coldOpenRequestId: uuidv7() } });
+      const before = engine.jobs.queue.list().length;
+      const preserved = await invoke({ action: "finish", goal_id: created.goalId });
+      expect(preserved.finalArtifactId).toBe(done!.finalArtifactId);
+      expect(preserved.finish?.startSeconds).toBe(0);
+      expect(engine.jobs.queue.list()).toHaveLength(before);
+      expect(await engine.files.manifest(done!.finalArtifactId!)).toEqual(manifest);
       expect(engine.jobs.queue.list({ type: "burn_watermark" }).length).toBeGreaterThan(0);
       const finalOriginal = await engine.metadata.artifacts.read<Record<string, unknown>>(done!.finalArtifactId!, "original");
       expect(finalOriginal.ok && finalOriginal.value).toMatchObject({ origin: "watermark", transcribe: false });

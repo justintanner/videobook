@@ -1,12 +1,10 @@
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { cancelChainRun, getChainRun, type ChainRunRecord } from "./chain-executor.js";
-import { coldOpenSource } from "./cold-open.js";
 import {
   emptyGoalEstimates, findGoalCell, goalShortContent, legacyGoalText, requireGoalShortContent, saveGoal, writeGoalShortContent,
   type GoalGenerationStage, type GoalRecord, type GoalStageOutput,
 } from "./goal-store.js";
-import { suggestedColdOpen } from "./lightning-defaults.js";
 import { goalStageAttempts } from "./goal-stills.js";
 import { refreshGoalShortPlan } from "./goal-short-plan.js";
 import { readMainCharacter } from "./goal-short-character.js";
@@ -87,21 +85,7 @@ export function reconcileFinish(engine: Engine, goal: GoalRecord): GoalRecord {
       return saveGoal(engine, { ...goal, status: "completed", error: null, finish: { ...finish, status: "completed", finalArtifactId, coldOpenArtifactId, error: null } });
     }
   }
-  return saveGoal(engine, { ...goal, status: "review", finish: { ...finish, status: "failed", error: job?.error?.message ?? "Finishing was interrupted. Retry the cold open." } });
-}
-
-async function coldOpenReview(engine: Engine, goal: GoalRecord) {
-  if (goal.planVersion !== 4 || !goal.finish?.sourceArtifactId) return null;
-  try {
-    const source = await coldOpenSource(engine, goal.finish.sourceArtifactId, goal.finish.sourceObjectHash ?? undefined);
-    const approved = goal.finish.status !== "review" && goal.finish.startSeconds != null && goal.finish.endSeconds != null;
-    const range = approved
-      ? { startSeconds: goal.finish.startSeconds!, endSeconds: goal.finish.endSeconds! }
-      : suggestedColdOpen(source.durationSeconds);
-    return { ...range, durationSeconds: source.durationSeconds, sourceObjectHash: source.file.objectHash, analysisUsd: 0 };
-  } catch {
-    return null;
-  }
+  return saveGoal(engine, { ...goal, status: "review", finish: { ...finish, status: "failed", error: job?.error?.message ?? "Finishing was interrupted. Retry Finish." } });
 }
 
 async function settledShortStage(engine: Engine, goal: GoalRecord, next: GoalRecord, stage: GoalGenerationStage, previous: readonly GoalStageOutput[], outputs: readonly GoalStageOutput[]): Promise<GoalRecord> {
@@ -230,7 +214,7 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
     ...(short?.plan ? { shortPlan: refreshGoalShortPlan(short.plan, document), mainCharacterReferences: readMainCharacter(engine).referenceArtifactIds.length } : {}),
     finish: goal.finish ?? null,
     finalArtifactId: goal.finish?.finalArtifactId ?? null,
-    coldOpen: await coldOpenReview(engine, goal),
+    coldOpen: null,
     address: cell ? notebookGridTag(cell.slot) : null,
     stages: stages as Partial<Record<GoalGenerationStage, NonNullable<typeof stages[string]>>>,
     steps: goalChainSteps(engine, document, goal.chainId),

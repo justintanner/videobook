@@ -4,7 +4,6 @@ import { v7 as uuidv7 } from "uuid";
 import type { Engine } from "videobook-engine";
 import { findPrimaryMediaFile } from "videobook-engine";
 import { coldOpenDestination, coldOpenSource } from "../cold-open.js";
-import { coldOpenRangeError } from "../cold-open-model.js";
 import { probeVideo } from "../ffmpeg.js";
 import { readGoal, saveGoal, type GoalFinish, type GoalRecord } from "../goal-store.js";
 import { watermarkGraphicsTemplate } from "../graphics/templates.js";
@@ -14,10 +13,9 @@ import { mutateNotebook } from "../notebook-mutations.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { applyWatermarkDef } from "../tools/apply-watermark.js";
-import { coldOpenDefs } from "../tools/cold-open.js";
 import { effectiveWatermarkProfile, readWatermarkConfig } from "../watermark-config.js";
 
-const FINISH_MESSAGE = "Only a reviewed short can finish with a cold open.";
+const FINISH_MESSAGE = "Only a reviewed short can finish.";
 
 type FinishPayload = { goalId: string; identity: string };
 
@@ -31,54 +29,8 @@ function currentFinish(engine: Engine, goalId: string, identity: string): GoalRe
   return goal;
 }
 
-async function waitForQueuedJob(engine: Engine, id: number, signal: AbortSignal): Promise<void> {
-  const deadline = Date.now() + 180_000;
-  while (Date.now() < deadline) {
-    signal.throwIfAborted();
-    const job = engine.jobs.queue.get(id);
-    if (!job) throw new Error("The finishing job disappeared");
-    if (job.state === "done") return;
-    if (job.state === "failed" || job.state === "aborted") throw new Error(job.error?.message ?? `Finishing ${job.state}`);
-    await new Promise<void>(resolve => setTimeout(resolve, 50));
-  }
-  throw new Error("Finishing timed out");
-}
-
-async function renderColdOpen(engine: Engine, goal: GoalRecord, signal: AbortSignal): Promise<string> {
-  const finish = goal.finish;
-  if (!finish?.coldOpenRequestId || finish.startSeconds == null || finish.endSeconds == null || !finish.sourceObjectHash) {
-    throw new Error("The cold open is missing its reviewed range");
-  }
-  const existing = finish.coldOpenArtifactId;
-  if (existing && engine.artifacts.get(existing).ok) {
-    const manifest = await engine.files.manifest(existing);
-    if (manifest.ok && manifest.value.files.some(file => file.name === "original.mp4")) return existing;
-  }
-  const edit = coldOpenDefs(engine).find(def => def.name === "edit_cold_open");
-  if (!edit) throw new Error("Cold open editing is unavailable");
-  const result = await edit.handler({
-    book_id: goal.bookId,
-    notebook_id: goal.notebookId,
-    asset_id: finish.sourceArtifactId,
-    source_object_hash: finish.sourceObjectHash,
-    start_time: finish.startSeconds,
-    end_time: finish.endSeconds,
-    request_id: finish.coldOpenRequestId,
-  });
-  const text = textOf(result);
-  if (result.isError) throw new Error(text || "Cold open failed");
-  const parsed = JSON.parse(text) as { job_id?: number; output_asset_id?: string; status?: string };
-  if (typeof parsed.job_id === "number" && parsed.status !== "completed") await waitForQueuedJob(engine, parsed.job_id, signal);
-  if (!parsed.output_asset_id) throw new Error("Cold open did not return a video");
-  const saved = currentFinish(engine, goal.goalId, finish.identity ?? "");
-  if (saved?.finish) {
-    saveGoal(engine, { ...saved, finish: { ...saved.finish, coldOpenArtifactId: parsed.output_asset_id } });
-  }
-  return parsed.output_asset_id;
-}
-
-async function duplicatePlayableVideo(engine: Engine, sourceArtifactId: string, label: string): Promise<string> {
-  const source = await coldOpenSource(engine, sourceArtifactId);
+async function duplicatePlayableVideo(engine: Engine, sourceArtifactId: string, label: string, sourceObjectHash?: string): Promise<string> {
+  const source = await coldOpenSource(engine, sourceArtifactId, sourceObjectHash);
   const created = await engine.artifacts.create({ kind: "video", label });
   if (!created.ok) throw new Error(created.error.message);
   const artifactId = created.value.artifactId;
@@ -120,30 +72,28 @@ async function placeFinishedCell(engine: Engine, goal: GoalRecord, artifactId: s
   if (!placed.ok) throw new Error(placed.error.message);
 }
 
-async function runFinish(engine: Engine, payload: FinishPayload, signal: AbortSignal): Promise<{ finalArtifactId: string; coldOpenArtifactId: string }> {
+async function runFinish(engine: Engine, payload: FinishPayload, signal: AbortSignal): Promise<{ finalArtifactId: string }> {
   const goal = currentFinish(engine, payload.goalId, payload.identity);
-  if (!goal?.finish) return { finalArtifactId: "", coldOpenArtifactId: "" };
-  const coldOpenArtifactId = await renderColdOpen(engine, goal, signal);
-  const running = currentFinish(engine, payload.goalId, payload.identity);
-  if (!running?.finish) return { finalArtifactId: "", coldOpenArtifactId };
-  const finalArtifactId = await duplicatePlayableVideo(engine, coldOpenArtifactId, "Finished");
-  await burnSavedWatermark(engine, finalArtifactId, running.finish.sourceArtifactId);
+  if (!goal?.finish || goal.finish.status === "completed") return { finalArtifactId: goal?.finish?.finalArtifactId ?? "" };
+  signal.throwIfAborted();
+  const finalArtifactId = await duplicatePlayableVideo(engine, goal.finish.sourceArtifactId, "Finished", goal.finish.sourceObjectHash ?? undefined);
+  await burnSavedWatermark(engine, finalArtifactId, goal.finish.sourceArtifactId);
   const manifest = await engine.files.manifest(finalArtifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
   const file = findPrimaryMediaFile(manifest.value.files, "video");
   if (!file) throw new Error("The finished video is missing");
   const probe = await probeVideo(join(manifest.value.path, file.name));
   if (!probe.videoStream || probe.videoDuration < 0.5) throw new Error("The finished video is not playable");
-  await placeFinishedCell(engine, running, finalArtifactId, running.finish.sourceArtifactId);
+  await placeFinishedCell(engine, goal, finalArtifactId, goal.finish.sourceArtifactId);
   const latest = currentFinish(engine, payload.goalId, payload.identity);
-  if (!latest?.finish) return { finalArtifactId, coldOpenArtifactId };
+  if (!latest?.finish) return { finalArtifactId };
   saveGoal(engine, {
     ...latest,
     status: "completed",
     error: null,
-    finish: { ...latest.finish, status: "completed", coldOpenArtifactId, finalArtifactId, error: null },
+    finish: { ...latest.finish, status: "completed", finalArtifactId, error: null },
   });
-  return { finalArtifactId, coldOpenArtifactId };
+  return { finalArtifactId };
 }
 
 export function registerFinishGoalJob(engine: Engine): void {
@@ -166,56 +116,33 @@ export function registerFinishGoalJob(engine: Engine): void {
   });
 }
 
-export async function queueGoalFinish(engine: Engine, goal: GoalRecord, args: Record<string, unknown>): Promise<GoalRecord> {
+export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
   if (goal.planVersion !== 4) throw new Error(FINISH_MESSAGE);
   if (goal.status === "running") throw new Error("Wait until the video is ready before finishing it");
-  if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Review the finished video before approving its cold open");
-  const source = await coldOpenSource(engine, shortFinishSource(engine, goal));
-  const start = args.start_seconds;
-  const end = args.end_seconds;
-  if (start === undefined && end === undefined) {
-    if (goal.finish?.status === "completed" || goal.finish?.status === "running") return goal;
-    const suggestion: GoalFinish = {
-      status: "review",
-      sourceArtifactId: source.artifact.artifactId,
-      sourceObjectHash: source.file.objectHash,
-      finalArtifactId: null,
-      error: null,
-    };
-    return saveGoal(engine, { ...goal, status: "review", finish: suggestion });
+  if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Review the video before finishing it");
+  if (goal.finish?.status === "completed") return goal;
+  if (goal.finish?.status === "running" && goal.finish.jobId) {
+    const active = engine.jobs.queue.get(goal.finish.jobId);
+    if (active && ["queued", "running", "completing"].includes(active.state)) return goal;
   }
-  if (typeof start !== "number" || typeof end !== "number") throw new Error("Approve both the cold-open start and end");
-  const rangeError = coldOpenRangeError(start, end, source.durationSeconds);
-  if (rangeError) throw new Error(rangeError);
+  const source = await coldOpenSource(engine, shortFinishSource(engine, goal));
   const config = await readWatermarkConfig(engine, "tiktok");
   const profile = effectiveWatermarkProfile(config, "tiktok");
   const template = watermarkGraphicsTemplate(engine, "tiktok");
-  const identity = finishingIdentityKey({
+  const identity = "watermark-only:" + finishingIdentityKey({
     sourceObjectHash: source.file.objectHash,
-    startSeconds: start,
-    endSeconds: end,
+    startSeconds: 0,
+    endSeconds: 0,
     profile: watermarkProfileFor(profile.platform, profile),
     qrStartSeconds: config.profile?.qrStartSeconds,
     qrEndSeconds: config.profile?.qrEndSeconds,
     watermarkTemplate: template ? createHash("sha256").update(JSON.stringify(template.document)).digest("hex") : null,
   });
-  const same = goal.finish?.identity === identity;
-  if (same && goal.finish?.status === "completed" && goal.finish.finalArtifactId && engine.artifacts.get(goal.finish.finalArtifactId).ok) {
-    return saveGoal(engine, { ...goal, status: "completed", error: null });
-  }
-  if (same && goal.finish?.status === "running" && goal.finish.jobId) {
-    const active = engine.jobs.queue.get(goal.finish.jobId);
-    if (active && ["queued", "running", "completing"].includes(active.state)) return goal;
-  }
   const finish: GoalFinish = {
     status: "running",
     sourceArtifactId: source.artifact.artifactId,
     sourceObjectHash: source.file.objectHash,
-    startSeconds: start,
-    endSeconds: end,
     identity,
-    coldOpenArtifactId: same ? goal.finish?.coldOpenArtifactId ?? null : null,
-    coldOpenRequestId: same && goal.finish?.coldOpenRequestId ? goal.finish.coldOpenRequestId : uuidv7(),
     finalArtifactId: null,
     jobId: null,
     error: null,

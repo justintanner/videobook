@@ -42,7 +42,7 @@ describe('short goal model', () => {
     expect(goalStatusLine(failed).text).toBe('Clip 2 failed')
     expect(goalCanRetry(failed)).toBe(true)
     const finishing = shortGoalFixture({ stage: 'videos', finish: { status: 'running', sourceArtifactId: 'clip-b', finalArtifactId: null, error: null } })
-    expect(goalStatusLine(finishing).text).toBe('Finishing the cold open and watermark')
+    expect(goalStatusLine(finishing).text).toBe('Burning the saved watermark')
     expect(goalTileView(finishing, undefined).chip.label).toBe('Finishing')
     const bothClips = { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]), videos: shortStage('videos', [{ index: 0, artifactId: 'clip-a' }, { index: 1, artifactId: 'clip-b' }]) }
     expect(goalStatusLine(shortGoalFixture({ stage: 'videos', stages: bothClips, finish: { status: 'review', sourceArtifactId: 'clip-b', finalArtifactId: null, error: null } })).text).toBe('Review finish · 0:20')

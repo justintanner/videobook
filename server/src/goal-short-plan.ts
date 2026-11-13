@@ -3,7 +3,7 @@ import type { NotebookDocument } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import type { ChainStep } from "./chain-plan.js";
 import { SHORT_RULES } from "./goal-short-rules.js";
-import { LIGHTNING_COLD_OPEN_SECONDS, LIGHTNING_WATERMARK_PROFILE } from "./lightning-defaults.js";
+import { LIGHTNING_WATERMARK_PROFILE } from "./lightning-defaults.js";
 
 export const SHORT_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
 export const SHORT_FRAME_MODELS = ["fal:openai/gpt-image-2.6/sunburst/edit", "fal:openai/gpt-image-2.6/flare/edit"] as const;
@@ -120,7 +120,7 @@ export const goalShortPlanSchema = z.object({
     silence: z.string().trim().min(1),
   }).strict(),
   finish: z.object({
-    suggestedColdOpenSeconds: z.number().positive(),
+    suggestedColdOpenSeconds: z.number().positive().optional(),
     watermark: z.object({
       platform: z.literal("tiktok"),
       handle: z.string().min(1),
@@ -260,7 +260,6 @@ export function buildGoalShortPlan(input: {
     video: { ...GOAL_SHORT_DEFAULTS.video },
     rules: { ...SHORT_RULES },
     finish: {
-      suggestedColdOpenSeconds: LIGHTNING_COLD_OPEN_SECONDS,
       watermark: {
         platform: "tiktok",
         handle: profile.handle,

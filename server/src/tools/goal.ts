@@ -93,7 +93,7 @@ async function applyGoalAction(engine: Engine, notebookId: string, goalId: strin
   if (args.action === "select") return selectShortVersion(engine, goal, args);
   if (args.action === "approve" || args.action === "regenerate" || args.action === "revise") return startShortStage(engine, goal, args, args.action !== "approve");
   if (args.action === "cancel") return cancelGoal(engine, goal);
-  if (args.action === "finish") return queueGoalFinish(engine, goal, args);
+  if (args.action === "finish") return queueGoalFinish(engine, goal);
   if (args.action === "retry") return retryShortGoal(engine, goal);
   if (args.action === "check") return queueShortRealismCheck(engine, goal, args);
   if (args.action === "dismiss") {
@@ -140,7 +140,7 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Run Goal mode on a notebook. create makes a short from a brief: a real-looking phone video, 5 to 60 seconds, starring the book's main character, who never speaks; image cells mentioned in the brief become place or prop references for the opening frame. Videos are used through an extracted frame, and unusable mentions are skipped with a note. Then list, status, update, approve, regenerate, select, revise, cancel, retry, finish (cold open plus the saved watermark) or dismiss it by goal_id. revise (stage, index, feedback) first has OpenAI rewrite that frame prompt or beat with the feedback, billed like planning, replacing any sentence the feedback contradicts, and saves it in the plan before the paid regeneration. Each paid step needs its own approval with its estimate: the GPT Image 2.6 opening frame, the H3 Max base clip, and each H3 Max Extend continuation for the next beat. The character action reads the main character, saves its name, description or reference_ids (image cells), and with generate makes a paid GPT Image 2.6 character sheet. check (stage and index) looks at the selected frame, or 4 frames of a clip's new footage, for AI tells and stores up to 5 findings (note or warn) with that output; it is billed like planning, runs only when asked and never blocks an approval. Goals made by an earlier /goal are read-only: list, status, cancel and dismiss.",
+    description: "Run Goal mode on a notebook. create makes a short from a brief: a real-looking phone video, 5 to 60 seconds, starring the book's main character, who never speaks; image cells mentioned in the brief become place or prop references for the opening frame. Videos are used through an extracted frame, and unusable mentions are skipped with a note. Then list, status, update, approve, regenerate, select, revise, cancel, retry, finish (the reviewed take plus the saved watermark) or dismiss it by goal_id. revise (stage, index, feedback) first has OpenAI rewrite that frame prompt or beat with the feedback, billed like planning, replacing any sentence the feedback contradicts, and saves it in the plan before the paid regeneration. Each paid step needs its own approval with its estimate: the GPT Image 2.6 opening frame, the H3 Max base clip, and each H3 Max Extend continuation for the next beat. The character action reads the main character, saves its name, description or reference_ids (image cells), and with generate makes a paid GPT Image 2.6 character sheet. check (stage and index) looks at the selected frame, or 4 frames of a clip's new footage, for AI tells and stores up to 5 findings (note or warn) with that output; it is billed like planning, runs only when asked and never blocks an approval. Goals made by an earlier /goal are read-only: list, status, cancel and dismiss.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
       action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "retry", "dismiss", "finish", "character", "check"]),
@@ -148,7 +148,6 @@ export function goalDefs(engine: Engine): ToolDef[] {
       description: goalShortPlanSchema.shape.character.shape.description.optional().describe("character: what the main character looks like"),
       reference_ids: z.array(z.string().min(1).max(200)).min(1).max(4).optional().describe("character: 1 to 4 grid addresses or artifact ids of image cells that replace the references"),
       generate: z.boolean().optional().describe("character: true makes a paid character sheet that becomes the only reference"),
-      start_seconds: z.number().min(0).optional(), end_seconds: z.number().min(0).optional(),
       goal_id: z.string().uuid().optional(), request_id: z.string().min(1).max(200).optional(),
       brief: z.string().trim().min(1).max(6000).optional(), plan: advertisedAs(goalShortPlanSchema, {
         type: "object",

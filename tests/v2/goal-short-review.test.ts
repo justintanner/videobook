@@ -127,17 +127,35 @@ describe('GoalShortReview', () => {
     expect(running.match(/for AI tells…?<\/button>/gu) ?? []).toHaveLength(1)
   })
 
-  it('reviews the cold open and plays the finished short', () => {
+  it('offers Finish on the reviewed take without a range', () => {
+    const goal = shortGoalFixture({
+      stage: 'videos',
+      stages: { ...withFrame, videos: shortStage('videos', [{ index: 0, artifactId: 'clip-a' }, { index: 1, artifactId: 'clip-b' }]) },
+      finish: { status: 'review', sourceArtifactId: 'clip-b', finalArtifactId: null, error: null },
+    })
+    const html = render(goal)
+    expect(html).toContain('aria-label="Reviewed take"')
+    expect(html).toContain('class="goal-panel-primary">Finish</button>')
+    expect(html).toContain('burns the saved watermark')
+    expect(html).not.toContain('Cold-open')
+    expect(html).not.toContain('type="number"')
+    const running = render({ ...goal, finish: { ...goal.finish!, status: 'running' } })
+    expect(running).toContain('Burning the saved watermark onto the reviewed take.')
+    expect(running).not.toContain('class="goal-panel-primary">Finish</button>')
+  })
+
+  it('plays an already finished short without a cold-open review', () => {
     const goal = shortGoalFixture({
       status: 'completed', stage: 'videos', finalArtifactId: 'final-a',
       stages: { ...withFrame, videos: shortStage('videos', [{ index: 0, artifactId: 'clip-a' }, { index: 1, artifactId: 'clip-b' }]) },
       finish: { status: 'completed', sourceArtifactId: 'clip-b', finalArtifactId: 'final-a', error: null, startSeconds: 0, endSeconds: 2.3 },
-      coldOpen: { startSeconds: 0, endSeconds: 2.3, durationSeconds: 20, sourceObjectHash: 'clip-b-hash', analysisUsd: 0 },
     })
     const html = render(goal)
     expect(html).toContain('aria-label="Finished short"')
     expect(html).toContain('src="/media/final-a.mp4"')
     expect(button(html, 'Finish')).toContain('>Finish<')
+    expect(html).not.toContain('Cold-open')
+    expect(html).not.toContain('type="number"')
   })
 })
 

@@ -30,7 +30,7 @@ import {
   type GoalShortPlan,
 } from "./goal-short-plan.js";
 import { SHORT_RULES } from "./goal-short-rules.js";
-import { LIGHTNING_COLD_OPEN_SECONDS, LIGHTNING_WATERMARK_PROFILE } from "./lightning-defaults.js";
+import { LIGHTNING_WATERMARK_PROFILE } from "./lightning-defaults.js";
 import { resolveModel } from "./media/descriptor.js";
 import { applyPromptDialect } from "./media/prompt-dialects.js";
 import { buildWireRequest } from "./media/request.js";
@@ -196,10 +196,15 @@ describe("buildGoalShortPlan", () => {
     expect(shortPlan({ aspectRatio: "1:1" }).frame.imageSize).toBe("square_hd");
   });
 
-  it("stores the finish block version 3 stores: the Lightning cold open and the TikTok watermark", () => {
+  it("still parses a saved 0.7.0 cold-open suggestion", () => {
+    const saved = shortPlan();
+    saved.finish.suggestedColdOpenSeconds = 2.3;
+    expect(goalShortPlanSchema.parse(saved).finish.suggestedColdOpenSeconds).toBe(2.3);
+  });
+
+  it("stores only the TikTok watermark for new plans", () => {
     const profile = LIGHTNING_WATERMARK_PROFILE;
     expect(shortPlan().finish).toEqual({
-      suggestedColdOpenSeconds: LIGHTNING_COLD_OPEN_SECONDS,
       watermark: {
         platform: "tiktok",
         handle: profile.handle,

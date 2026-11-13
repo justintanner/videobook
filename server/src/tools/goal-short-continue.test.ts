@@ -13,7 +13,7 @@ import { createShortGoal } from "../goal-short-runtime.js";
 import { readGoal, saveGoal } from "../goal-store.js";
 import { installFalDynamicEstimator, lowerBoundWarnings } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
-import { configureProviderPollDriverForTests, resetProviderPollDriverForTests } from "../queue.js";
+import { configureProviderPollDriverForTests, pauseBookQueueForTests, resetProviderPollDriverForTests } from "../queue.js";
 import { testBudget } from "../test-budget.js";
 import { createTestClient } from "../test-client.js";
 import { goalTestCharacters } from "../test-goals.js";
@@ -142,7 +142,8 @@ describe("continuing a short with H3 Max Extend", () => {
     const original = await engine.metadata.artifacts.read<Record<string, unknown>>(wholeId, "original");
     expect(original.ok && original.value).toMatchObject({ model: "fal:minimax/h3-max/extend-video", hasAudio: true, transcribe: false });
     expect(extended).toMatchObject({ stage: "videos", status: "review", finish: { status: "review", sourceArtifactId: wholeId } });
-    expect((await invoke({ action: "finish", goal_id: extended.goalId })).finish).toMatchObject({ status: "review", sourceArtifactId: wholeId });
+    await pauseBookQueueForTests(bookId);
+    expect((await invoke({ action: "finish", goal_id: extended.goalId })).finish).toMatchObject({ status: "running", sourceArtifactId: wholeId });
     expect(stub.unexpected).toEqual([]);
   });
 

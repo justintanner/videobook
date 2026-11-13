@@ -88,8 +88,9 @@ approval with its estimate:
 3. **Video:** the base clip, made with MiniMax H3 Max from the frame and the
    character, then each continuation. Regenerate any generated clip, revise it
    with clip feedback, or choose an earlier version.
-4. **Finish:** review the cold open; **Finish** adds it and burns the saved
-   watermark into the finished short.
+4. **Finish:** keeps the reviewed take and burns the saved
+   watermark into the finished short. To add a cold open, use `/edit-cold-open`
+   on the finished video.
 
 **Revising.** A revision is a short instruction for the frame or a clip.
 Before the paid step, the planner's model rewrites that frame prompt or beat to

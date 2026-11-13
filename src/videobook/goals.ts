@@ -192,7 +192,7 @@ export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null
   const total = short?.segments.length ?? 0
   const finish = goal.finish
   if (progress.phase === 'planning') return statusLine('Planning', 'Planning', null, 'live', true)
-  if (finish?.status === 'running') return statusLine('Finishing the cold open and watermark', 'Finishing', null, 'live', true)
+  if (finish?.status === 'running') return statusLine('Burning the saved watermark', 'Finishing', null, 'live', true)
   if (finish?.status === 'failed') return statusLine('Finishing failed', 'Finishing failed', 'Finish', 'attention', false)
   if (progress.phase === 'review') {
     if (goal.stage !== 'videos') return statusLine(`Review frame · ${shortEstimateText(goal.estimate.frame)}`, 'Review', 'Review', 'review', false)

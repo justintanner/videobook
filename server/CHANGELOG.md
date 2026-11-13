@@ -48,6 +48,7 @@ and the package uses [Semantic Versioning](https://semver.org/).
   Seedance 2.5 also carry their video-editing ranks; Wan 3.0 edits a video
   connected in its References mode.
 - The GPT Image 2.6 prompting guide covers its Kie controls beside fal's.
+- `/goal` shorts no longer start with a cold open; Finish keeps the reviewed take and burns the saved watermark. Add a cold open separately with the cold-open tool.
 
 ## [0.7.0] - 2026-11-12
 

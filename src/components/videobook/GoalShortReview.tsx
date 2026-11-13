@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SHORT_WORD_CEILINGS, type GoalShortPlan } from '../../../server/src/goal-short-plan'
-import { coldOpenRangeError } from '../../../server/src/cold-open-model'
 import type { AssetRecord } from '@/videobook/workspace-responses'
-import type { ColdOpenReview } from '@/videobook/cold-open-review'
 import { goalCanRetry, goalPlanSeconds, goalStillStale, goalStillVersions, shortEstimateText, type GoalSnapshot, type MainCharacterView, type ShortGoalSnapshot } from '@/videobook/goals'
-import { ColdOpenBody } from './confirm/bodies/ColdOpenBody'
 import { GoalPromptInput } from './GoalPromptInput'
 import { GoalMedia } from './GoalStillCard'
 
@@ -73,9 +70,6 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
   const [characterDraft, setCharacterDraft] = useState({ name: '', description: '', cells: '' })
   const polling = useRef<AbortController | null>(null)
   useEffect(() => () => polling.current?.abort(), [])
-  const cold = goal.coldOpen
-  const [range, setRange] = useState(() => ({ start: cold?.startSeconds ?? 0, end: cold?.endSeconds ?? 0, hash: cold?.sourceObjectHash ?? '' }))
-  if (cold && cold.sourceObjectHash !== range.hash) setRange({ start: cold.startSeconds, end: cold.endSeconds, hash: cold.sourceObjectHash })
   const draft: GoalShortPlan = { ...plan, title: title.trim(), frame: { ...plan.frame, prompt: framePrompt.trim() }, segments: plan.segments.map((segment, index) => ({ ...segment, prompt: (beats[index] ?? '').trim() })) }
   const dirty = JSON.stringify(draft) !== JSON.stringify(plan)
   const promptsReady = Boolean(draft.title && draft.frame.prompt && draft.segments.every(segment => segment.prompt))
@@ -91,12 +85,8 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
   const sourceId = next === null ? goal.finish?.sourceArtifactId ?? currentClip?.artifactId ?? null : null
   const sourceAsset = sourceId ? resolveAsset(sourceId) : null
   const clipAsset = currentClip ? resolveAsset(currentClip.artifactId) : null
-  const duration = cold?.durationSeconds ?? sourceAsset?.duration ?? null
   const finalAsset = goal.finalArtifactId ? resolveAsset(goal.finalArtifactId) : null
-  const shownStart = range.hash ? range.start : cold?.startSeconds ?? 0
-  const shownEnd = range.hash ? range.end : cold?.endSeconds ?? (duration == null ? 0 : Math.min(duration, 2.3))
-  const shownError = duration == null ? null : coldOpenRangeError(shownStart, shownEnd, duration)
-  const canFinish = Boolean(sourceId) && duration != null && !shownError && !dirty && !disabled && !running && !finishing && (goal.status === 'review' || goal.status === 'completed' || finishFailed)
+  const canFinish = Boolean(sourceId) && Boolean(sourceAsset?.mediaUrl) && !dirty && !disabled && !running && !finishing && (goal.status === 'review' || goal.status === 'completed' || finishFailed)
   const totalSeconds = goalPlanSeconds(plan)
   const notes = goal.notes ?? []
   const beatLimit = Math.min(15, 60 - totalSeconds)
@@ -144,14 +134,6 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
       {(asset?.thumbnailUrl ?? asset?.mediaUrl) && <img src={asset.thumbnailUrl ?? asset.mediaUrl ?? ''} alt="" />}<span>{name}</span>
     </button>
   })
-  const review: ColdOpenReview | null = sourceId && duration != null && sourceAsset?.mediaUrl ? {
-    bookId: goal.bookId, notebookId: goal.notebookId, assetId: sourceId, label: plan.title, mediaUrl: sourceAsset.mediaUrl, requestId: goal.goalId,
-    suggestion: {
-      sourceArtifactId: sourceId, sourceObjectHash: cold?.sourceObjectHash ?? sourceAsset.objectHash ?? sourceId, durationSeconds: duration,
-      fps: sourceAsset.fps && sourceAsset.fps > 0 ? sourceAsset.fps : 24, startSeconds: shownStart, endSeconds: shownEnd,
-      reason: 'A 2.3 second highlight from the start of this short. Review the range before finishing. Analysis is free.', model: 'lightning',
-    },
-  } : null
   return <div className="goal-editor goal-simple goal-short" data-review={view}>
     <nav className="goal-stage-tabs" aria-label="Short stages">
       {TABS.map(([id, label]) => <button key={id} type="button" className="goal-panel-button" aria-pressed={view === id} onClick={() => openTab(id)}>{label}</button>)}
@@ -220,11 +202,12 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
     </>}
     {view === 'finish' && <>
       {!sourceId && <p className="goal-panel-muted">Generate every clip before finishing the short.</p>}
-      {finishing && <p role="status">Rendering the cold open, then burning the saved watermark.</p>}
+      {finishing && <p role="status">Burning the saved watermark onto the reviewed take.</p>}
       {finishFailed && <p role="alert">{goal.finish?.error ?? 'Finishing failed'}</p>}
       {goal.finalArtifactId && finalAsset?.mediaUrl && <video className="goal-video-preview" aria-label="Finished short" src={finalAsset.mediaUrl} poster={finalAsset.thumbnailUrl ?? undefined} controls preload="metadata" />}
-      {!finishing && review && <ColdOpenBody review={review} disabled={disabled || finishing} onChange={(start, end) => setRange({ start, end, hash: range.hash || cold?.sourceObjectHash || sourceId || '' })} />}
-      {!finishing && sourceId && !review && <p role="status">The short is not playable yet.</p>}
+      {!finishing && !goal.finalArtifactId && sourceAsset?.mediaUrl && <video className="goal-video-preview" aria-label="Reviewed take" src={sourceAsset.mediaUrl} poster={sourceAsset.thumbnailUrl ?? undefined} controls preload="metadata" />}
+      <p className="goal-panel-muted">Finish keeps the reviewed take and burns the saved watermark.</p>
+      {!finishing && sourceId && !sourceAsset?.mediaUrl && <p role="status">The short is not playable yet.</p>}
     </>}
     <div className="goal-panel-bar">
       <div className="goal-panel-bar-copy"><span>{dirty ? 'Saving keeps the settings with this short.' : 'Each paid step needs its own approval.'}</span></div>
@@ -237,7 +220,7 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
       {view === 'frame' && goal.status === 'review' && frameOutput && feedback.trim() && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('revise', 'frame', 0, feedback.trim())}>Revise frame</button>}
       {view === 'frame' && goal.status === 'review' && <button type="button" className="goal-panel-primary" disabled={!canGenerate || !hasReference} title={hasReference ? undefined : NO_REFERENCE} onClick={() => generate(frameOutput ? 'regenerate' : 'approve', 'frame')}>{frameOutput ? 'Regenerate frame' : 'Generate frame'} · {shortEstimateText(goal.estimate.frame)}</button>}
       {view === 'video' && goal.status === 'review' && next !== null && <button type="button" className="goal-panel-primary" disabled={!canGenerate || !frameOutput} onClick={() => generate('approve', 'videos', next)}>{next === 0 ? 'Generate clip' : `Continue · clip ${next + 1}`} · {shortEstimateText(goal.estimate.segments?.[next])}</button>}
-      {view === 'finish' && !finishing && (goal.status === 'review' || goal.status === 'completed' || finishFailed) && <button type="button" className="goal-panel-primary" disabled={!canFinish} onClick={() => onRun(() => onAction({ action: 'finish', start_seconds: shownStart, end_seconds: shownEnd }))}>Finish</button>}
+      {view === 'finish' && !finishing && (goal.status === 'review' || goal.status === 'completed' || finishFailed) && <button type="button" className="goal-panel-primary" disabled={!canFinish} onClick={() => onRun(() => onAction({ action: 'finish' }))}>Finish</button>}
       {goalCanRetry(goal) && <button type="button" className="goal-panel-primary" disabled={disabled} onClick={() => onRun(() => onAction({ action: 'retry' }))}>Retry</button>}
     </div>
   </div>
