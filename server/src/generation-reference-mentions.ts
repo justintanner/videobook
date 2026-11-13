@@ -138,6 +138,10 @@ export function rewriteGrokReferenceMentions(prompt: string, imageRefs: readonly
   return replaceNotebookMentions(prompt, indexedMentions(imageRefs, (index) => `<IMAGE_${index}>`));
 }
 
+export function rewriteMiniMaxPictureMentions(prompt: string, imageRefs: readonly string[]): string {
+  return replaceNotebookMentions(prompt, indexedMentions(imageRefs, (index) => `<Picture ${index + 1}>`));
+}
+
 export function rewriteKling4ReferenceMentions(
   prompt: string,
   imageRefs: readonly string[],

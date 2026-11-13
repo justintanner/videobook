@@ -6,6 +6,49 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Kie GPT Image 2.6 Sunburst and Flare, for text-to-image and edits, beside the
+  fal endpoints. Edits take up to 16 images plus either a mask or a markup
+  image connected to the Markup input, not both. Output is PNG, JPEG or WebP;
+  the GIF and SVG formats Kie also offers are left out, as they are on fal. Kie
+  bills these models by tokens no request shows, so their estimate stays $0 with
+  Apicity's warning until the task reports its cost.
+- Kie Gemini Omni 1.2 Flash as one model with four modes: text, frames (a first
+  frame and an optional last frame), up to six reference images, and Edit video.
+  Clips run 3-15 seconds, and frames default to 10 seconds, the most a clip with
+  a last frame can run. An edit sends no duration, follows its source video's
+  length and is priced on that length.
+- Kie Seedream 5.5 for text-to-image, edits of up to 10 images and layer
+  decomposition. Layer decomposition returns up to `max_images` images (30 by
+  default) and is estimated at that cap, an upper bound.
+- Kie MiniMax H3 Image for text-to-image and edits of up to 16 images. Edit
+  prompts name connected images `<Picture 1>`, `<Picture 2>` and so on. Images
+  are sized by resolution tier and aspect ratio.
+- Kie Kling 4.0 Flash keyframe-to-video and reference-to-video, at 720p for 3-20
+  seconds. Keyframe-to-video starts from text or a first frame.
+  Reference-to-video takes up to 10 images and 5 videos, and refuses book videos
+  that run longer than 20 seconds together before creating work.
+- KIE Image Upscale, by a factor of 1, 2, 4 or 8, and KIE Video Upscale, into a
+  1080P, 2K or 4K box. An image upscale of a book image is priced at the tier
+  its stored size reaches; without a known size the estimate quotes the 8K tier
+  and says so. A video upscale is priced on its source's seconds.
+
+### Changed
+
+- Every @apicity package moves to 0.28.0. Apicity drops KIE's withdrawn
+  Midjourney calls, which Videobook never used.
+- `@hono/node-server` resolves 2.1.8, and the dependency override now requires
+  at least that version. 2.1.7 fixed `serveStatic` with `allowPercentInPath`,
+  which Videobook does not use: Express serves its files and the MCP endpoint
+  uses only Hono's request listener.
+- The model pickers rank the new Kie endpoints: GPT Image 2.6 on both image
+  boards, Seedream 5.5 for text-to-image and edits, and Gemini Omni 1.2 Flash
+  for text-to-video, references and video edits. Kie Wan 3.0, Wan 3.0 Prime and
+  Seedance 2.5 also carry their video-editing ranks; Wan 3.0 edits a video
+  connected in its References mode.
+- The GPT Image 2.6 prompting guide covers its Kie controls beside fal's.
+
 ## [0.7.0] - 2026-11-12
 
 ### Added

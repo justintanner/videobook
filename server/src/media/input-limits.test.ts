@@ -20,6 +20,7 @@ const PROBES: readonly LimitProbe[] = [
   { model: "kie:grok-imagine/image-to-video", options: { resolution: "1080p" }, within: { image: 1 }, beyond: { image: 2 } },
   { model: "kie:bytedance/seedance-2-5", mode: "i2v", options: {}, within: { first_frame: 1, last_frame: 1 }, beyond: { last_frame: 1 } },
   { model: "kie:gemini-omni-video", mode: "v2v", options: {}, within: { image: 5, video: 1 }, beyond: { image: 6, video: 1 } },
+  { model: "kie:google/gemini-omni-flash-1-2", mode: "v2v", options: {}, within: { image: 5, video: 1 }, beyond: { image: 6, video: 1 } },
   { model: "kie:kling-4.0/keyframe-to-video", options: { duration: 5 }, within: { first_frame: 1, image: 4, last_frame: 1 }, beyond: { first_frame: 1, image: 5, last_frame: 1 } },
   {
     model: "wavespeed:runwayml/aleph-2",

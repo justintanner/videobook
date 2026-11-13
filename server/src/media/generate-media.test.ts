@@ -565,6 +565,60 @@ describe("generic media generation", () => {
     expect(usage?.costUsd).toBeCloseTo(usd);
   });
 
+  it("prices a Kie Image Upscale of a book image from its stored size in the estimate, the queued job and its usage row", async () => {
+    const book_id = engine.book.get().bookId;
+    const model = "kie:kie/image-upscale";
+    const source = await imageArtifact();
+    expect((await engine.metadata.artifacts.write(source, "original", { width: 1024, height: 1536 })).ok).toBe(true);
+    const input = { book_id, model, refs: { image: [source] }, options: { upscale_factor: "2" } };
+    const estimated = toolJson(await client.callTool({ name: "estimate_cost", arguments: { calls: [{ tool_name: "generate_image", input }] } }));
+    expect((estimated as { estimate: { usd: number; warnings: string[] } }).estimate).toMatchObject({ usd: expect.closeTo(0.02, 9), warnings: [] });
+    const enqueued = toolJson(await client.callTool({ name: "generate_image", arguments: input }));
+    const assetId = String(enqueued.asset_id);
+    await runGenerateMedia(engine, queuedJob(assetId), await ownerContext(assetId));
+    const submitted = JSON.parse(requests.find((entry) => entry.path === "/api/v1/jobs/createTask")!.body.toString()) as { model: string; input: Record<string, unknown> };
+    expect(submitted).toMatchObject({ model: "kie/image-upscale", input: { upscale_factor: "2", image_url: expect.stringMatching(/^http:\/\/127\.0\.0\.1:/u) } });
+    const persisted = await engine.metadata.artifacts.read(assetId, "generation-cost-hints");
+    expect(persisted.ok && persisted.value).toEqual({ inputWidth: 1024, inputHeight: 1536 });
+    const usage = engine.usage.recent(10).find((entry) => entry.artifactId === assetId);
+    expect(usage).toMatchObject({ provider: "kie", model: "kie/image-upscale", basis: "estimated", status: "pending", warnings: [] });
+    expect(usage?.costUsd).toBeCloseTo(0.02);
+  });
+
+  it("holds Kling 4.0 Flash reference videos to 20 s together before creating work", async () => {
+    const book_id = engine.book.get().bookId;
+    const model = "kie:kling-4.0/flash-reference-to-video";
+    const long = await probedVideoArtifact(longClip);
+    const short = await probedVideoArtifact(shortClip);
+    const before = engine.artifacts.list().length;
+    expect(toolError(await client.callTool({ name: "generate_video", arguments: { book_id, model, prompt: "@video1 then @video2", refs: { video: [long, short] } } })))
+      .toMatch(/video refs total 23 s; kie:kling-4\.0\/flash-reference-to-video accepts at most 20 s of video references/u);
+    expect(engine.artifacts.list()).toHaveLength(before);
+    const accepted = toolJson(await client.callTool({ name: "generate_video", arguments: { book_id, model, prompt: "@video1 dances", refs: { video: [long] } } }));
+    expect(queuedJob(String(accepted.asset_id)).refs).toEqual({ video: [long] });
+  });
+
+  it.each([
+    { model: "kie:google/gemini-omni-flash-1-2", prompt: "make it snow on @video1", mode: "v2v", options: { duration: 12, resolution: "720p" }, sent: { prompt: "make it snow on <VIDEO_REF_0>", aspect_ratio: "auto", resolution: "720p" }, usd: 6 * 0.045 },
+    { model: "kie:video/upscale", prompt: undefined, mode: undefined, options: { resolution: "2K" }, sent: { resolution: "2K" }, usd: 6 * 0.015 },
+  ])("submits $model without a duration and prices the source video's seconds", async ({ model, prompt, mode, options, sent, usd }) => {
+    const source = await probedVideoArtifact(shortClip);
+    const enqueued = toolJson(await client.callTool({
+      name: "generate_video",
+      arguments: { book_id: engine.book.get().bookId, model, ...(prompt ? { prompt } : {}), ...(mode ? { mode } : {}), refs: { video: [source] }, options },
+    }));
+    const assetId = String(enqueued.asset_id);
+    await runGenerateMedia(engine, queuedJob(assetId), await ownerContext(assetId));
+    const submitted = JSON.parse(requests.find((entry) => entry.path === "/api/v1/jobs/createTask")!.body.toString()) as { model: string; input: Record<string, unknown> };
+    expect(submitted).toMatchObject({ model: model.slice("kie:".length), input: sent });
+    expect(submitted.input).not.toHaveProperty("duration");
+    const persisted = await engine.metadata.artifacts.read(assetId, "generation-cost-hints");
+    expect(persisted.ok && persisted.value).toEqual({ inputDurationSeconds: 6, durationSeconds: 6 });
+    const usage = engine.usage.recent(10).find((entry) => entry.artifactId === assetId);
+    expect(usage).toMatchObject({ provider: "kie", model: model.slice("kie:".length), basis: "estimated", status: "pending", warnings: [] });
+    expect(usage?.costUsd).toBeCloseTo(usd);
+  });
+
   it.each([
     ["kie:suno/generate", "/api/v1/generate", 0.06],
     ["kie:suno/sounds-generate", "/api/v1/generate/sounds", 0.0125],

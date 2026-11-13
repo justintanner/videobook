@@ -9,6 +9,7 @@ export const FRONTIER_CATALOG_GAPS: Readonly<Record<string, string>> = {
   "fal:openai.gptImage2p5.sunburst.edit": "This exact endpoint is not in the Videobook catalog.",
   "fal:openai.gptImage2p5.flare.edit": "This exact endpoint is not in the Videobook catalog.",
   "kie:bytedance/seedance-2": "This exact endpoint is not in the Videobook catalog.",
+  "kie:google/gemini-omni-flash-1-1": "Kie serves the newer Gemini Omni 1.2 Flash as kie:google/gemini-omni-flash-1-2; Gemini Omni 1.1 edits are catalogued on fal and WaveSpeed.",
   "googleflow:omni-flash": "Google Flow is not a catalog provider.",
   "kie:wan/2-7-videoedit": "This exact endpoint is not in the Videobook catalog.",
   "alibaba:wan2.7-videoedit": "This exact endpoint is not in the Videobook catalog.",

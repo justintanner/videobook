@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.27.3 (2026-11-11). Image, video and audio
+Videobook now uses Apicity 0.28.0 (2026-11-13). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -1275,3 +1275,99 @@ Evidence is offline: `server/src/media/fal-0273.test.ts`, `frontier.test.ts`,
 `machgen.test.ts`, `fal-dynamic-cost.test.ts`, `prompt-dialects.test.ts`,
 `tests/v2/generation-field-slots.test.ts`, `tests/v2/generation-frontier.test.ts`
 and the regenerated generation-input goldens. No provider was called.
+
+## 55. (decision) Apicity 0.28.0 KIE additions and video-editing ranks — DECIDED 2026-11-13
+
+All 17 `@apicity` packages resolve 0.28.0 from npm (vb-l8470). Only
+`@apicity/cost`, `@apicity/kie` and `@apicity/xai` changed beyond their version.
+The xai change is the copy of KIE's Midjourney paid-endpoint row, removed with
+the withdrawn Midjourney calls (apicity PR 692); Videobook never called them.
+Every KIE createTask schema 0.27.3 published (the 162
+`MediaGenerationRequestSchema` members, plus the Grok preview, Veo and Suno
+schemas) converts to the same JSON schema in 0.28.0, so the 14 new KIE models
+are the only schema changes. All 14 are visible catalog entries.
+
+- GPT Image 2.6 Sunburst and Flare
+  (`kie:gpt-image-2-6/{sunburst,flare}-{text-to-image,image-to-image}`) mirror
+  the fal entries of §54. `server/src/media/wire.ts` drops the GIF fields
+  (`size`, `frame_count`, `frame_duration_ms`) and the `svg` author object and
+  offers `output_format` as `jpeg`, `png` or `webp`. Kie names the markup image
+  `markup`; it is a Markup field slot beside the mask
+  (`server/src/media/ref-fields.ts`). Apicity's Kie request schema refuses a
+  mask with a markup image, a transparent background outside PNG and WebP, and
+  `output_compression` outside JPEG and WebP, so Videobook adds no local rule.
+  `complexity` (default high) and `moderation` (default low) pass through.
+  `@apicity/cost` prices these models from token usage no request field shows,
+  so the estimate is $0 with Apicity's warning until KIE reports the task's
+  cost. The fal twins stay visible: both hosts are ranked, and a `hidden` entry
+  stays listed while it is ranked, so hiding them under §43 would change nothing
+  in the picker.
+- Gemini Omni 1.2 Flash (`kie:google/gemini-omni-flash-1-2`) is one model whose
+  inputs choose the task, so its entry has four modes: `t2v`, `i2v` (a first
+  frame and an optional last frame), `r2v` (up to 6 reference images) and `v2v`
+  (one `video_list` source plus reference images, where images plus two per
+  video stay within Kie's quota of 7). Clips run 3-15 s; the Frames mode
+  defaults to 10 s, the most Kie accepts with a last frame. An edit takes no
+  `duration`, because the output follows the source video, and Apicity's schema
+  refuses one, so the new `ModeSpec.omit` drops it from the defaults and options
+  of the Edit video mode, which also defaults `aspect_ratio` to `auto`. Prompts
+  use the `gemini_omni` markers of §52; frames keep their natural phrases. Kie
+  bills output seconds by resolution and an edit by its source's length: when
+  the active mode sends no duration, the job stores the source length as
+  `durationSeconds` (`server/src/jobs/generate-media.ts`), so the pending usage
+  row is priced.
+- Seedream 5.5 text-to-image, edits of 1-10 images and layer decomposition
+  (`kie:seedream/5-5-*`). Prompts take 5-5000 characters, and a transparent
+  background needs PNG output (Apicity's schema refuses the rest). Layer
+  decomposition bills every returned image plus the source; before the task
+  Videobook knows only the `max_images` cap (default 30), so the estimate is
+  that upper bound with Apicity's warning, and KIE's reported cost replaces it.
+- MiniMax H3 Image text-to-image and edits of 1-16 images
+  (`kie:minimax-h3/text-to-image`, `kie:minimax-h3/image-edit`). The edit
+  contract names inputs `<Picture 1>`, `<Picture 2>` and so on, so the new
+  `minimax_picture` dialect writes those markers. `width` and `height` are not
+  offered: Apicity's schema refuses them beside `resolution` or `aspect_ratio`,
+  which Videobook always fills (2K and 9:16 by default), so a custom size could
+  never be sent. The resolution tier and the aspect ratio size every image.
+- Kling 4.0 Flash keyframe-to-video and reference-to-video
+  (`kie:kling-4.0/flash-*`), 720p only, 3-20 s. Keyframe-to-video is an
+  `image_to_video` entry like its non-Flash sibling: its strict schema takes a
+  first frame at most, so it has no last-frame or keyframe slot, and with no
+  frame it generates from the prompt. Reference-to-video takes up to 10 images,
+  5 videos and the `elements` option, but no standalone `voices`. Its reference
+  videos and video elements must total 2-20 s, which Kie checks only when the
+  task completes, so Videobook refuses connected book videos above 20 s each or
+  20 s together before creating work (`rules.refDurationMs`). It leaves the 2 s
+  floor of the total to Kie, because two shorter clips can still reach it. Video
+  input bills output plus the longer of output and input seconds, which the
+  existing `inputDurationSeconds` hint supplies.
+- KIE Image Upscale (`kie:kie/image-upscale`) is an `edit_image` entry with no
+  prompt and an `upscale_factor` of 1, 2, 4 or 8 (default 2). KIE bills one tier
+  by output pixels, input size times the factor squared, which the request
+  cannot show. `resolveGenerationSource` now passes a connected book image's
+  stored width and height as `costHints.inputWidth` and `inputHeight`, and the
+  usage ledger keeps them (`server/src/provider-usage.ts`), so estimates and the
+  pending usage row price the exact tier. A URL or an image without a stored
+  size is quoted at the 8K tier with Apicity's upper-bound warning.
+- KIE Video Upscale (`kie:video/upscale`) is an `upscale_video` entry with no
+  prompt and an output box of `1080P`, `2K` or `4K` (default 4K, the highest).
+  KIE bills each source second at the box's rate. The entry sets `outputLength:
+  "video"`, so the job stores the source length as `durationSeconds` and the
+  pending usage row is priced.
+- Frontier: the registry adds KIE routes for GPT Image 2.6 Sunburst and Flare
+  (text-to-image #1 and #3, editing #1 and #2), Seedream 5.5 (text-to-image #10,
+  editing #6) and Gemini Omni 1.2 Flash (text-to-video #6, references #4, video
+  editing #2), all now catalog entries. Apicity PR 691 also lists five KIE
+  video-editing routes: Wan 3.0 and Wan 3.0 Prime (#1) and Seedance 2.5 (#4) map
+  to existing entries, Seedance 2.0 (#8) stays an existing gap, and Gemini Omni
+  1.1 (#5) is a new gap, because KIE serves the newer 1.2 as an entry and 1.1
+  edits are catalogued on fal and WaveSpeed. No gap went stale. Kie's Wan 3.0
+  schema has no separate source-video field: an edit connects the source as a
+  reference video in the References mode, named Video1 in the prompt, so the
+  entry gains no edit mode. Seedance 2.5's rank maps to its Edit video mode.
+
+Evidence is offline: `server/src/media/kie-0280.test.ts`, `frontier.test.ts`,
+`catalog-contract.test.ts`, `prompt-dialects.test.ts`,
+`server/src/media/generate-media.test.ts` (local KIE stub),
+`tests/v2/generation-field-slots.test.ts` and the regenerated generation-input
+goldens. No provider was called.

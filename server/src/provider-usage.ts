@@ -342,7 +342,13 @@ async function costHints(engine: Engine, artifactId?: string): Promise<CostHints
   const hints = result.value;
   const durationSeconds = number(hints.durationSeconds) ?? number(hints.duration);
   const inputDurationSeconds = number(hints.inputDurationSeconds) ?? number(hints.inputDuration);
-  return { ...(durationSeconds !== null ? { durationSeconds } : {}), ...(inputDurationSeconds !== null ? { inputDurationSeconds } : {}) };
+  const inputWidth = number(hints.inputWidth);
+  const inputHeight = number(hints.inputHeight);
+  return {
+    ...(durationSeconds !== null ? { durationSeconds } : {}),
+    ...(inputDurationSeconds !== null ? { inputDurationSeconds } : {}),
+    ...(inputWidth !== null && inputHeight !== null ? { inputWidth, inputHeight } : {}),
+  };
 }
 
 export function withUsageCostHints<T>(hints: CostHints, operation: () => Promise<T>): Promise<T> {

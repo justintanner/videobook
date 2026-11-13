@@ -7,6 +7,7 @@ import {
   rewriteKling4FrameMentions,
   rewriteKling4ReferenceMentions,
   rewriteKlingOmniReferenceMentions,
+  rewriteMiniMaxPictureMentions,
   rewriteSeedanceAssetMentions,
   rewriteViduReferenceMentions,
   stripRefMentions,
@@ -105,6 +106,8 @@ function rewrite(dialect: PromptDialect, prompt: string, refs: MediaRefs): strin
       return rewriteGrokReferenceMentions(prompt, refsFor(refs, "image"));
     case "happyhorse_edit":
       return replaceHappyHorseAssetMentions(prompt, refsFor(refs, "video")[0] ?? null, refsFor(refs, "image"));
+    case "minimax_picture":
+      return rewriteMiniMaxPictureMentions(prompt, refsFor(refs, "image"));
   }
 }
 

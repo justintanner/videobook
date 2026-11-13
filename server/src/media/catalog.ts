@@ -29,6 +29,24 @@ const SEEDANCE_US_REFERENCE_MODES: readonly ModeSpec[] = [
   { id: "extend", label: "Extend video", roles: ["video", "image", "audio"], requireAny: ["video"], defaults: { task: "extension" } },
 ];
 
+const GEMINI_OMNI_12_MODES: readonly ModeSpec[] = [
+  { id: "t2v", label: "Text to video", roles: [] },
+  { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"], requireAny: ["first_frame"], defaults: { duration: 10 } },
+  { id: "r2v", label: "References", roles: ["image"], requireAny: ["image"] },
+  { id: "v2v", label: "Edit video", roles: ["video", "image"], requireAny: ["video"], defaults: { aspect_ratio: "auto" }, omit: ["duration"] },
+];
+
+const GEMINI_OMNI_QUOTA: InputLimit = {
+  kind: "max",
+  roles: [{ role: "image" }, { role: "video", weight: 2 }],
+  max: 7,
+  message: "Images plus two per video can't exceed 7",
+};
+
+const KLING_40_FLASH_REFERENCE_CLIPS: InputRules = {
+  refDurationMs: { video: { minimum: 0, maximum: 20_000, maximumTotal: 20_000 } },
+};
+
 const XAI_MODES: readonly ModeSpec[] = [
   { id: "i2v", label: "Image to video", roles: ["first_frame"] },
   { id: "r2v", label: "References", roles: ["image"], defaults: { duration: 10, resolution: "720p" } },
@@ -209,6 +227,10 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:gpt-image-2-5-flare-image-to-image", media: "image", operations: ["edit_image"], guide: "gpt_image", dialect: "natural", defaults: { resolution: "2K" } },
   { id: "kie:gpt-image-2-5-sunburst-text-to-image", media: "image", operations: ["text_to_image"], guide: "gpt_image", dialect: "natural", defaults: { resolution: "2K" } },
   { id: "kie:gpt-image-2-5-sunburst-image-to-image", media: "image", operations: ["edit_image"], guide: "gpt_image", dialect: "natural", defaults: { resolution: "2K" } },
+  { id: "kie:gpt-image-2-6/sunburst-text-to-image", media: "image", operations: ["text_to_image"], guide: "gpt_image_26" },
+  { id: "kie:gpt-image-2-6/sunburst-image-to-image", media: "image", operations: ["edit_image"], guide: "gpt_image_26", dialect: "natural" },
+  { id: "kie:gpt-image-2-6/flare-text-to-image", media: "image", operations: ["text_to_image"], guide: "gpt_image_26" },
+  { id: "kie:gpt-image-2-6/flare-image-to-image", media: "image", operations: ["edit_image"], guide: "gpt_image_26", dialect: "natural" },
   { id: "kie:gpt-image-2-image-to-image", media: "image", operations: ["edit_image"], title: "GPT Image 2 Edit", dialect: "natural", hidden: true },
   { id: "kie:seedream/5-pro-image-to-image", media: "image", operations: ["edit_image"], dialect: "natural", hidden: true },
   { id: "kie:grok-imagine/text-to-image", media: "image", operations: ["text_to_image"], guide: "grok_image" },
@@ -233,6 +255,12 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:seedream/5-flash-text-to-image", media: "image", operations: ["text_to_image"] },
   { id: "kie:seedream/5-flash-image-to-image", media: "image", operations: ["edit_image"] },
   { id: "kie:seedream/5-flash-layer-decomposition", media: "image", operations: ["layer_image"] },
+  { id: "kie:seedream/5-5-text-to-image", media: "image", operations: ["text_to_image"] },
+  { id: "kie:seedream/5-5-image-to-image", media: "image", operations: ["edit_image"], dialect: "natural" },
+  { id: "kie:seedream/5-5-layer-decomposition", media: "image", operations: ["layer_image"] },
+  { id: "kie:minimax-h3/text-to-image", media: "image", operations: ["text_to_image"] },
+  { id: "kie:minimax-h3/image-edit", media: "image", operations: ["edit_image"], dialect: "minimax_picture" },
+  { id: "kie:kie/image-upscale", media: "image", operations: ["edit_image"] },
   { id: "alibaba:qwen-image-2.0-pro", media: "image", operations: ["text_to_image"], title: "Qwen Image 2.0 Pro (Alibaba)" },
   { id: "alibaba:qwen-image-edit-plus", media: "image", operations: ["edit_image"], title: "Qwen Image Edit Plus (Alibaba)" },
   { id: "fal:fal-ai/nano-banana", media: "image", operations: ["text_to_image"], guide: "nano_banana", hidden: true },
@@ -300,6 +328,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:grok-imagine/extend", media: "video", operations: ["extend_video"], hidden: true },
   { id: "kie:grok-imagine/upscale", media: "video", operations: ["upscale_video"], hidden: true },
   { id: "kie:topaz/video-upscale", media: "video", operations: ["upscale_video"], title: "Topaz Video Upscale (Kie)" },
+  { id: "kie:video/upscale", media: "video", operations: ["upscale_video"], outputLength: "video" },
   { id: "kie:kling-3.0-omni/text-to-video", media: "video", operations: ["text_to_video"], guide: "kling30", dialect: "natural", defaults: { customize_multi_shots: false } },
   { id: "kie:kling-3.0-omni/image-to-video", media: "video", operations: ["image_to_video"], guide: "kling30", dialect: "natural", defaults: { aspect_ratio: "auto" }, pinnedDefaults: ["aspect_ratio"] },
   { id: "kie:kling-3.0-omni/reference-to-video", media: "video", operations: ["reference_to_video"], guide: "kling30", dialect: "natural", defaults: { audio: false } },
@@ -317,7 +346,10 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:kling-3.0/motion-control", media: "video", operations: ["motion_control"], guide: "kling30", dialect: "natural", defaults: { mode: "720p" }, outputLength: "video" },
   { id: "kie:kling-4.0/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "kling4" },
   { id: "kie:kling-4.0/keyframe-to-video", media: "video", operations: ["image_to_video"], dialect: "kling4_keyframes", refs: { image: "keyframe_urls" }, inputLimits: [{ kind: "max", roles: [{ role: "first_frame" }, { role: "image" }, { role: "last_frame" }], max: { option: "duration", offset: 1, cap: 10 }, message: "Frames and keyframes together can't exceed the duration plus one, 10 at most" }] },
-  { id: "kie:gemini-omni-video", media: "video", operations: ["image_to_video", "edit_video"], dialect: "natural_source_video", defaults: { duration: "8" }, modes: [{ id: "i2v", label: "Image to video", roles: ["image"] }, { id: "v2v", label: "Edit video", roles: ["video", "image"], requireAny: ["video"] }], refItem: { video: { start: 0, ends: 8 } }, inputLimits: [{ kind: "max", roles: [{ role: "image" }, { role: "video", weight: 2 }], max: 7, message: "Images plus two per video can't exceed 7" }], aliases: { clip_start: "video_list.0.start", clip_end: "video_list.0.ends" } },
+  { id: "kie:kling-4.0/flash-reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "kling4", rules: KLING_40_FLASH_REFERENCE_CLIPS },
+  { id: "kie:kling-4.0/flash-keyframe-to-video", media: "video", operations: ["image_to_video"], dialect: "kling4_keyframes" },
+  { id: "kie:gemini-omni-video", media: "video", operations: ["image_to_video", "edit_video"], dialect: "natural_source_video", defaults: { duration: "8" }, modes: [{ id: "i2v", label: "Image to video", roles: ["image"] }, { id: "v2v", label: "Edit video", roles: ["video", "image"], requireAny: ["video"] }], refItem: { video: { start: 0, ends: 8 } }, inputLimits: [GEMINI_OMNI_QUOTA], aliases: { clip_start: "video_list.0.start", clip_end: "video_list.0.ends" } },
+  { id: "kie:google/gemini-omni-flash-1-2", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"], dialect: "gemini_omni", modes: GEMINI_OMNI_12_MODES, inputLimits: [GEMINI_OMNI_QUOTA] },
   { id: "kie:wan/3-0-video", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "seedance", modes: SEEDANCE_MODES },
   { id: "kie:wan/3-0-video-prime", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "seedance", modes: SEEDANCE_MODES },
   { id: "kie:happyhorse-1-1/text-to-video", media: "video", operations: ["text_to_video"] },

@@ -270,6 +270,14 @@ function applyModeDefaults(model: ResolvedModel, value: Record<string, unknown>,
   for (const [path, option] of Object.entries(activeMode(model, refs, mode)?.defaults ?? {})) setPath(value, path, clone(option));
 }
 
+function dropModeOmissions(model: ResolvedModel, value: Record<string, unknown>, refs: MediaRefs, mode: string | undefined): void {
+  for (const field of activeMode(model, refs, mode)?.omit ?? []) delete value[field];
+}
+
+export function modeSendsNoDuration(model: ResolvedModel, refs: MediaRefs, mode: string | undefined): boolean {
+  return activeMode(model, refs, mode)?.omit?.includes("duration") === true;
+}
+
 function hasFrames(refs: MediaRefs): boolean {
   return refCount(refs, "first_frame") > 0 || refCount(refs, "last_frame") > 0;
 }
@@ -327,6 +335,7 @@ export function buildWireRequest(model: ResolvedModel, call: WireRequestInput): 
   if (optionError) return { ok: false, error: optionError };
   placeFieldRefs(model, value, call.fieldUrls ?? {});
   applyFrameOptions(model, value, refs, call.mode);
+  dropModeOmissions(model, value, refs, call.mode);
   retimeKeyframes(model, value, explicitFrames);
   fillComputedItemParams(model, value);
   if (isSeedanceEdit(model.id, call.mode)) {

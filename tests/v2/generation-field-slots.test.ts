@@ -32,6 +32,10 @@ const INVENTORY = [
   'fal:openai/gpt-image-2.6/sunburst/edit slot:markup_image_url image 1',
   'fal:openai/gpt-image-2.6/sunburst/edit slot:mask_url image 1',
   'fal:openai/gpt-image-2/edit slot:mask_url image 1',
+  'kie:gpt-image-2-6/flare-image-to-image slot:markup image 1',
+  'kie:gpt-image-2-6/flare-image-to-image slot:mask_url image 1',
+  'kie:gpt-image-2-6/sunburst-image-to-image slot:markup image 1',
+  'kie:gpt-image-2-6/sunburst-image-to-image slot:mask_url image 1',
   'kie:omnihuman-1-5 slot:mask_url image 5',
   'kie:qwen2-1/image-to-image slot:mask_url image 1',
 ]
@@ -68,6 +72,19 @@ describe('field slots for request fields without a role', () => {
     expect((preview.preview.payload as { input: { markup_image_url: string } }).input.markup_image_url).toBe('http://url.resolved.later.for/art-notes')
     const both = previewGeneration({ model: model.id, prompt: 'Follow the arrows', refs: { image: ['art-photo'] }, field_refs: { markup_image_url: ['art-notes'], mask_url: ['art-mask'] } })
     expect(both.ok ? null : both.error).toContain("can't be combined with a mask")
+  })
+
+  it('offers Kie GPT Image 2.6 edits the same markup slot under their markup field', () => {
+    const model = resolveModel('kie:gpt-image-2-6/flare-image-to-image')
+    for (const mode of notebookGenerationInputContract(model).modes) {
+      expect(mode.inputs.find((input) => input.target === 'slot:markup')).toMatchObject({ label: 'Markup', kind: 'image', token: null })
+    }
+    expect(controlsForModel(model).find((control) => control.name === 'markup')?.hidden).toBe(true)
+    const preview = previewGeneration({ model: model.id, prompt: 'Follow the arrows', refs: { image: ['art-photo'] }, field_refs: { markup: ['art-notes'] } })
+    if (!preview.ok) throw new Error(preview.error)
+    expect((preview.preview.payload as { input: { markup: string } }).input.markup).toBe('http://url.resolved.later.for/art-notes')
+    const both = previewGeneration({ model: model.id, prompt: 'Follow the arrows', refs: { image: ['art-photo'] }, field_refs: { markup: ['art-notes'], mask_url: ['art-mask'] } })
+    expect(both.ok ? null : both.error).toContain('mask_url and markup cannot be used together')
   })
 })
 

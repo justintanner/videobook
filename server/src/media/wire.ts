@@ -61,13 +61,22 @@ function kieCreateTaskSchemas(): Map<string, AnyObject> {
 
 let kieSchemas: Map<string, AnyObject> | null = null;
 
+const KIE_GPT_IMAGE_26 = "gpt-image-2-6/";
+const KIE_GPT_IMAGE_26_ANIMATION_FIELDS = ["size", "frame_count", "frame_duration_ms", "svg"];
+const KIE_MINIMAX_H3_IMAGE = new Set(["minimax-h3/text-to-image", "minimax-h3/image-edit"]);
+const MINIMAX_H3_IMAGE_CUSTOM_SIZE = ["width", "height"];
+
+function kieCreateTaskInput(apiId: string, input: AnyObject): AnyObject {
+  if (apiId.startsWith(KIE_GPT_IMAGE_26)) return storedImageFormats(omitShape(input, KIE_GPT_IMAGE_26_ANIMATION_FIELDS));
+  return KIE_MINIMAX_H3_IMAGE.has(apiId) ? omitShape(input, MINIMAX_H3_IMAGE_CUSTOM_SIZE) : input;
+}
+
 function kieCreateTaskWire(apiId: string): WireSpec | null {
   kieSchemas ??= kieCreateTaskSchemas();
   const request = kieSchemas.get(apiId);
   if (!request) return null;
-  const input = request.shape.input as unknown as AnyObject;
   return {
-    input,
+    input: kieCreateTaskInput(apiId, request.shape.input as unknown as AnyObject),
     fixed: {},
     wrap: (value) => ({ model: apiId, input: value }),
     request,
@@ -77,6 +86,14 @@ function kieCreateTaskWire(apiId: string): WireSpec | null {
 function omitShape(schema: AnyObject, keys: readonly string[]): AnyObject {
   const shape = Object.fromEntries(Object.entries(schema.shape).filter(([key]) => !keys.includes(key)));
   return z.object(shape);
+}
+
+const STORED_IMAGE_FORMATS = ["jpeg", "png", "webp"] as const;
+
+function storedImageFormats(schema: AnyObject): AnyObject {
+  return schema.extend({
+    output_format: z.enum(STORED_IMAGE_FORMATS).default("png").describe("Output format for the images"),
+  });
 }
 
 function kieVeoWire(apiId: string): WireSpec | null {
@@ -220,12 +237,9 @@ function geminiOmniFramesInput(request: AnyObject): AnyObject {
 
 const GPT_IMAGE_26 = "openai/gpt-image-2.6/";
 const GPT_IMAGE_26_ANIMATION_FIELDS = ["frame_count", "frame_duration_ms", "svg_model"];
-const STORED_IMAGE_FORMATS = ["jpeg", "png", "webp"] as const;
 
 function gptImage26Request(request: AnyObject): AnyObject {
-  return omitShape(request, GPT_IMAGE_26_ANIMATION_FIELDS).extend({
-    output_format: z.enum(STORED_IMAGE_FORMATS).default("png").describe("Output format for the images"),
-  });
+  return storedImageFormats(omitShape(request, GPT_IMAGE_26_ANIMATION_FIELDS));
 }
 
 function markupWithoutMask(request: AnyObject): AnyObject {

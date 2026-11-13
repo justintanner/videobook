@@ -9,7 +9,7 @@ import { assertProviderPayload } from "../provider-prompt-transform.js";
 import { requireApiKey } from "../api-key.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { resolveModel } from "../media/descriptor.js";
-import { buildWireRequest, type RefParams } from "../media/request.js";
+import { buildWireRequest, modeSendsNoDuration, type RefParams } from "../media/request.js";
 import { applyPromptDialect } from "../media/prompt-dialects.js";
 import { checkSeedanceEditSource, checkInsertVideoTiming, checkReframeVideoGeometry, checkRefDurations, resolveRefInput, uploadFieldRefs, uploadRefs, type ResolvedRefs } from "../media/refs.js";
 import { seedanceDraftCostHints } from "../media/seedance-draft.js";
@@ -67,7 +67,7 @@ export async function generationSourceCostHints(engine: Engine, refs: ResolvedRe
   }
   const videoSeconds = await referenceVideoDuration(engine, refs.sourceVideoIds);
   if (videoSeconds !== undefined) {
-    const followsVideo = model.entry.outputLength === "video" || isSeedanceEdit(job.model, job.mode);
+    const followsVideo = model.entry.outputLength === "video" || isSeedanceEdit(job.model, job.mode) || modeSendsNoDuration(model, refs.urls, job.mode);
     return { inputDurationSeconds: videoSeconds, ...(followsVideo ? { durationSeconds: videoSeconds } : {}) };
   }
   if (model.provider !== "fal") return {};

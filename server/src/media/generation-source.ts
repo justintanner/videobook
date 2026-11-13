@@ -120,11 +120,28 @@ async function resolveMachGenTopaz(engine: Engine, model: ResolvedModel, refs: M
   };
 }
 
+const KIE_IMAGE_UPSCALE = "kie:kie/image-upscale";
+
+function positiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+async function sourceImageSize(engine: Engine, refs: MediaRefs): Promise<CostHints> {
+  const raw = refs.image?.[0];
+  if (!raw || /^https?:\/\//u.test(raw)) return {};
+  const input = await resolveRefInput(engine, "image", raw).catch(() => null);
+  if (!input?.filename.startsWith("original")) return {};
+  const metadata = await engine.metadata.artifacts.read<{ width?: unknown; height?: unknown }>(input.assetId, "original");
+  const { width, height } = metadata.ok && metadata.value ? metadata.value : {};
+  return positiveInteger(width) && positiveInteger(height) ? { inputWidth: width, inputHeight: height } : {};
+}
+
 export async function resolveGenerationSource(engine: Engine, model: ResolvedModel, refs: MediaRefs, options: Record<string, unknown> = {}): Promise<GenerationSource> {
   if (model.provider === "machgen" && machgenTopaz(model.apiId)) return resolveMachGenTopaz(engine, model, refs, options);
   const upscale = model.provider === "machgen" ? machgenUpscale(model.apiId) : null;
-  if (!upscale) return { ok: true, refs, sourceVideoIds: [], costHints: {}, options: {} };
-  return resolveMachGenUpscale(engine, model, upscale, refs);
+  if (upscale) return resolveMachGenUpscale(engine, model, upscale, refs);
+  const costHints = model.id === KIE_IMAGE_UPSCALE ? await sourceImageSize(engine, refs) : {};
+  return { ok: true, refs, sourceVideoIds: [], costHints, options: {} };
 }
 
 export async function sourcedGenerationInput(

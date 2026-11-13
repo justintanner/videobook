@@ -48,7 +48,8 @@ export type PromptDialect =
   | "kling_omni"
   | "gemini_omni"
   | "grok"
-  | "happyhorse_edit";
+  | "happyhorse_edit"
+  | "minimax_picture";
 
 export type PromptGuide =
   | "nano_banana"
@@ -67,6 +68,7 @@ export interface ModeSpec {
   roles: readonly RefRole[];
   requireAny?: readonly RefRole[];
   defaults?: Record<string, unknown>;
+  omit?: readonly string[];
 }
 
 export interface RefDurationWindowMs {

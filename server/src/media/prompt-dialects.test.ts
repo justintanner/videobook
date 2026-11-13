@@ -97,7 +97,7 @@ describe("prompt dialects", () => {
   it("never lets a connected artifact id reach the provider prompt", () => {
     const refs = { first_frame: [IMG_ID], last_frame: [VID_ID], loop: [VID_ID_2], keyframe: [AUD_ID, IMG_ID_2] };
     const prompt = "open on @firstframe, hold @keyframe1 then @keyframe2, close on @lastframe and return to @loop";
-    for (const dialect of ["natural", "natural_numbered", "natural_kinds", "natural_source_video", "brackets", "vidu", "kling4", "kling_omni", "gemini_omni", "grok", "happyhorse_edit", "plain"] as const) {
+    for (const dialect of ["natural", "natural_numbered", "natural_kinds", "natural_source_video", "brackets", "vidu", "kling4", "kling_omni", "gemini_omni", "grok", "happyhorse_edit", "minimax_picture", "plain"] as const) {
       expect(applyPromptDialect(dialect, prompt, refs), dialect)
         .toBe("open on the first frame, hold keyframe 1 then keyframe 2, close on the last frame and return to the loop frame");
     }

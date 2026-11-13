@@ -14,7 +14,9 @@ HeyGen Avatar 3 and 4 digital twins are text-to-video with a stock avatar (Abiga
 
 Kie Kling 4.0 reference-to-video and keyframe-to-video, PixVerse V6 Max text-to-video and image-to-video, OmniHuman 2.0 and the Kie Grok Imagine Video 1.5 preview are on no top-10 board, so they appear in the unranked group. Kling 4.0 prompts name connected media as Kling 4.0 documents them: `@image_1` and `@video_1` for references, `@first_frame`, `@keyframe_1` and `@last_frame` for frames; with no media connected, both endpoints generate from the prompt alone. PixVerse V6 Max image-to-video follows the image's aspect ratio. OmniHuman 2.0 renders as long as its driving audio. The Kie Grok Imagine Video 1.5 preview has two modes. Frames takes a reference image plus optional first and last frames; Loop takes a loop image (`loop_url`, `@loop`) that the clip starts and ends on, and the loop image is also the reference when no reference image is connected. Both modes take up to four keyframe images (`@keyframe1`-`@keyframe4`), sent as timed `keyframes`: `keyframe_1_seconds`-`keyframe_4_seconds` place each one, unset keyframes are spaced evenly across the clip, and every keyframe must fall inside the clip at least 1/3 s from the next.
 
-Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: MAI-Image-2.6, Seedream 5.5, MAI-Image-2.7-Preview, MAI-Image-2.6-Flash, Utopai X, SkyReels V4, Hyperflow H3, P-Video-2-Pro, Pika H3 Flex. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
+Kie Kling 4.0 Flash, MiniMax H3 Image, KIE Image Upscale and KIE Video Upscale are on no top-10 board either. Kling 4.0 Flash renders 720p clips of 3-20 s: its keyframe endpoint takes at most a first frame (`@first_frame`), and its reference videos may total at most 20 s. MiniMax H3 Image edits name connected images `<Picture 1>`, `<Picture 2>` and so on, and size every image by resolution tier and aspect ratio. Kie Gemini Omni 1.2 Flash serves text, frames, reference images and a video edit from one model; an edit sends no duration and follows its source video's length.
+
+Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: MAI-Image-2.6, MAI-Image-2.7-Preview, MAI-Image-2.6-Flash, Utopai X, SkyReels V4, Hyperflow H3, P-Video-2-Pro, Pika H3 Flex. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
 
 | Known endpoint gap | Reason |
 | --- | --- |
@@ -28,6 +30,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | fal:openai.gptImage2p5.sunburst.edit | This exact endpoint is not in the Videobook catalog. |
 | fal:openai.gptImage2p5.flare.edit | This exact endpoint is not in the Videobook catalog. |
 | kie:bytedance/seedance-2 | This exact endpoint is not in the Videobook catalog. |
+| kie:google/gemini-omni-flash-1-1 | Kie serves the newer Gemini Omni 1.2 Flash as kie:google/gemini-omni-flash-1-2; Gemini Omni 1.1 edits are catalogued on fal and WaveSpeed. |
 | googleflow:omni-flash | Google Flow is not a catalog provider. |
 | kie:wan/2-7-videoedit | This exact endpoint is not in the Videobook catalog. |
 | alibaba:wan2.7-videoedit | This exact endpoint is not in the Videobook catalog. |
@@ -36,7 +39,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | openai:gpt-image-2.5-sunburst | OpenAI is not a catalog provider. |
 | google:gemini-3.1-flash-image | Google is not a catalog provider. |
 
-- Models: 359
+- Models: 373
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -48,6 +51,10 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `kie:gpt-image-2-5-flare-image-to-image` | GPT Image 2.5 Flare Edit | image | edit_image | image 1-16 |  | visible |
 | `kie:gpt-image-2-5-sunburst-text-to-image` | GPT Image 2.5 Sunburst | image | text_to_image | none |  | visible |
 | `kie:gpt-image-2-5-sunburst-image-to-image` | GPT Image 2.5 Sunburst Edit | image | edit_image | image 1-16 |  | visible |
+| `kie:gpt-image-2-6/sunburst-text-to-image` | GPT Image 2.6 Sunburst | image | text_to_image | none |  | visible |
+| `kie:gpt-image-2-6/sunburst-image-to-image` | GPT Image 2.6 Sunburst Edit | image | edit_image | image 1-16 |  | visible |
+| `kie:gpt-image-2-6/flare-text-to-image` | GPT Image 2.6 Flare | image | text_to_image | none |  | visible |
+| `kie:gpt-image-2-6/flare-image-to-image` | GPT Image 2.6 Flare Edit | image | edit_image | image 1-16 |  | visible |
 | `kie:gpt-image-2-image-to-image` | GPT Image 2 Edit | image | edit_image | image 1-16 |  | hidden |
 | `kie:seedream/5-pro-image-to-image` | Seedream 5 Pro Edit | image | edit_image | image 1-10 |  | hidden |
 | `kie:grok-imagine/text-to-image` | Grok Imagine | image | text_to_image | none |  | visible |
@@ -72,6 +79,12 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `kie:seedream/5-flash-text-to-image` | Seedream 5 Flash | image | text_to_image | none |  | visible |
 | `kie:seedream/5-flash-image-to-image` | Seedream 5 Flash Edit | image | edit_image | image 1-10 |  | visible |
 | `kie:seedream/5-flash-layer-decomposition` | Seedream 5 Flash Layers | image | layer_image | image 1-1 |  | visible |
+| `kie:seedream/5-5-text-to-image` | Seedream 5.5 | image | text_to_image | none |  | visible |
+| `kie:seedream/5-5-image-to-image` | Seedream 5.5 Edit | image | edit_image | image 1-10 |  | visible |
+| `kie:seedream/5-5-layer-decomposition` | Seedream 5.5 Layer Decomposition | image | layer_image | image 1-1 |  | visible |
+| `kie:minimax-h3/text-to-image` | MiniMax H3 Image | image | text_to_image | none |  | visible |
+| `kie:minimax-h3/image-edit` | MiniMax H3 Image Edit | image | edit_image | image 1-16 |  | visible |
+| `kie:kie/image-upscale` | KIE Image Upscale | image | edit_image | image 1-1 |  | visible |
 | `alibaba:qwen-image-2.0-pro` | Qwen Image 2.0 Pro (Alibaba) | image | text_to_image | none |  | visible |
 | `alibaba:qwen-image-edit-plus` | Qwen Image Edit Plus (Alibaba) | image | edit_image | image 1-3 |  | visible |
 | `fal:fal-ai/nano-banana` | Nano Banana | image | text_to_image | none |  | hidden |
@@ -121,6 +134,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `kie:grok-imagine/extend` | Grok Extend | video | extend_video | none |  | hidden |
 | `kie:grok-imagine/upscale` | Grok Upscale | video | upscale_video | none |  | hidden |
 | `kie:topaz/video-upscale` | Topaz Video Upscale (Kie) | video | upscale_video | video 1-1 |  | visible |
+| `kie:video/upscale` | KIE Video Upscale | video | upscale_video | video 1-1 |  | visible |
 | `kie:kling-3.0-omni/text-to-video` | Kling 3.0 Omni Text-to-Video | video | text_to_video | none |  | visible |
 | `kie:kling-3.0-omni/image-to-video` | Kling 3.0 Omni Image-to-Video | video | image_to_video | image 1-2 |  | visible |
 | `kie:kling-3.0-omni/reference-to-video` | Kling 3.0 Omni Reference-to-Video | video | reference_to_video | image 0-7, video 0-1 |  | visible |
@@ -128,7 +142,10 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `kie:kling-3.0/motion-control` | Kling 3.0 Motion | video | motion_control | image 1-1, video 1-n |  | visible |
 | `kie:kling-4.0/reference-to-video` | Kling 4.0 Reference-to-Video | video | reference_to_video | image 0-10, video 0-5 |  | visible |
 | `kie:kling-4.0/keyframe-to-video` | Kling 4.0 Keyframe-to-Video | video | image_to_video | first_frame 0-1, last_frame 0-1, image 0-8 |  | visible |
+| `kie:kling-4.0/flash-reference-to-video` | Kling 4.0 Flash Reference-to-Video | video | reference_to_video | image 0-10, video 0-5 |  | visible |
+| `kie:kling-4.0/flash-keyframe-to-video` | Kling 4.0 Flash Keyframe-to-Video | video | image_to_video | first_frame 0-1 |  | visible |
 | `kie:gemini-omni-video` | Gemini Omni | video | image_to_video, edit_video | image 0-7, video 0-1 | i2v, v2v | visible |
+| `kie:google/gemini-omni-flash-1-2` | Gemini Omni 1.2 Flash | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, last_frame 0-1, image 0-6, video 0-1 | t2v, i2v, r2v, v2v | visible |
 | `kie:wan/3-0-video` | Wan 3.0 | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-10, video 0-5, audio 0-5 | t2v, i2v, r2v | visible |
 | `kie:wan/3-0-video-prime` | Wan 3.0 Prime | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-10, video 0-5, audio 0-5 | t2v, i2v, r2v | visible |
 | `kie:happyhorse-1-1/text-to-video` | HappyHorse 1.1 | video | text_to_video | none |  | visible |
