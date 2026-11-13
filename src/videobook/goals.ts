@@ -1,13 +1,13 @@
 import type { GoalSnapshot, LegacyGoalSnapshot, ShortGoalSnapshot } from '../../server/src/tools/goal'
 import type { GoalGenerationStage } from '../../server/src/goal-store'
-import type { GoalShortPlan } from '../../server/src/goal-short-plan'
+import { shortStoryboardOf, type GoalShortPlan } from '../../server/src/goal-short-plan'
 import { lowerBoundCost } from './command-plan'
 import { lowerBoundEstimate } from './provider-payload-preview'
 
 export type { GoalSnapshot, LegacyGoalSnapshot, ShortGoalSnapshot }
-export type ShortTab = 'character' | 'frame' | 'video' | 'finish'
+export type ShortTab = 'storyboard' | 'character' | 'frame' | 'video' | 'finish'
 export type GoalShotState = 'planned' | 'waiting' | 'submitting' | 'generating' | 'done' | 'failed' | 'skipped' | 'stopped'
-export type GoalPhase = 'planning' | 'review' | 'frame' | 'videos' | 'complete' | 'failed' | 'interrupted' | 'stopped'
+export type GoalPhase = 'planning' | 'review' | 'storyboards' | 'frame' | 'videos' | 'complete' | 'failed' | 'interrupted' | 'stopped'
 export type GoalShotView = {
   index: number
   number: string
@@ -45,6 +45,7 @@ export type GoalWake = {
   tone: 'live' | 'attention'
 }
 type GoalStep = ShortGoalSnapshot['steps'][number]
+type GoalEstimate = { usd: number | null, warnings: readonly string[] }
 
 export const LEGACY_GOAL_NOTE = 'Made by an earlier /goal. Its images and videos stay in the notebook.'
 
@@ -68,21 +69,47 @@ export function goalNextSegment(goal: ShortGoalSnapshot, plan: GoalShortPlan): n
 export function defaultShortTab(goal: ShortGoalSnapshot, plan: GoalShortPlan): ShortTab {
   if (goal.finish && goalNextSegment(goal, plan) === null) return 'finish'
   if (goal.stage === 'videos') return 'video'
+  if (goal.stage === 'storyboards') return 'storyboard'
   return plan.version === 4 && !goal.stages.frame ? 'character' : 'frame'
 }
 
+export function goalStoryboardClean(goal: ShortGoalSnapshot): boolean {
+  return (goal.storyboard?.frames ?? []).every(frame => frame.clean)
+}
+
+export function goalStoryboardEstimate(goal: ShortGoalSnapshot): GoalEstimate {
+  const frames = goal.storyboard?.frames ?? []
+  const missing = frames.filter(frame => !frame.clean)
+  const parts = missing.flatMap(frame => frame.estimate ? [frame.estimate] : [])
+  if (missing.length === frames.length || parts.length !== missing.length) return goal.estimate.storyboards
+  return {
+    usd: parts.every(part => part.usd !== null) ? parts.reduce((sum, part) => sum + (part.usd ?? 0), 0) : null,
+    warnings: [...new Set(parts.flatMap(part => part.warnings))],
+  }
+}
+
 export function goalOutputEstimate(goal: ShortGoalSnapshot, stage: GoalGenerationStage, index: number): number | null {
-  return stage === 'videos' ? goal.estimate.segments?.[index]?.usd ?? null : goal.estimate.frame.usd
+  if (stage === 'videos') return goal.estimate.segments?.[index]?.usd ?? null
+  if (stage === 'storyboards') return goal.estimate.storyboardFrames?.[index]?.usd ?? null
+  return goal.estimate.frame.usd
 }
 
 function revisionAttempt(goal: ShortGoalSnapshot) {
   return Object.values(goal.stages).flatMap(run => run.attempts ?? []).find(attempt => attempt.chainId === goal.chainId && attempt.feedback)
 }
 
+function stillName(stage: GoalGenerationStage, index: number): string {
+  if (stage === 'videos') return `clip ${index + 1}`
+  return stage === 'storyboards' ? `storyboard frame ${index + 1}` : 'frame'
+}
+
 function revisionLabel(goal: ShortGoalSnapshot): string | null {
   const attempt = revisionAttempt(goal)
-  if (!attempt) return null
-  return attempt.stage === 'videos' ? `clip ${attempt.index + 1}` : 'frame'
+  return attempt ? stillName(attempt.stage, attempt.index) : null
+}
+
+function capitalized(text: string): string {
+  return `${text[0]!.toUpperCase()}${text.slice(1)}`
 }
 
 export function goalCanRetry(goal: GoalSnapshot): boolean {
@@ -95,10 +122,11 @@ export function goalStopLabel(goal: ShortGoalSnapshot): string {
 }
 
 function stoppedStillLabel(previous: ShortGoalSnapshot, before: GoalProgress, after: GoalProgress, current: ShortGoalSnapshot): string | null {
-  if (after.phase !== 'review' || before.phase !== 'frame') return null
+  if (after.phase !== 'review' || (before.phase !== 'frame' && before.phase !== 'storyboards')) return null
   if (!previous.chainId || !current.stages[before.stage]?.previousChainIds.includes(previous.chainId)) return null
   const revised = revisionLabel(previous)
-  return `${revised ? `${revised[0]!.toUpperCase()}${revised.slice(1)} revision` : 'Frame generation'} stopped`
+  if (revised) return `${capitalized(revised)} revision stopped`
+  return before.phase === 'storyboards' ? 'Storyboard clean-up stopped' : 'Frame generation stopped'
 }
 
 export function asGoal(value: unknown): GoalSnapshot {
@@ -134,18 +162,30 @@ function shotState(goal: ShortGoalSnapshot, step: GoalStep | undefined, complete
   return 'waiting'
 }
 
+function rowNumber(index: number): string {
+  return String(index + 1).padStart(2, '0')
+}
+
 function shortRows(short: GoalShortPlan | null, stage: GoalGenerationStage) {
   if (!short) return []
+  if (stage === 'storyboards') {
+    return (shortStoryboardOf(short)?.frames ?? []).map(frame => ({ index: frame.index, number: rowNumber(frame.index), title: `Storyboard ${frame.index + 1}`, prompt: frame.prompt, seconds: 0 }))
+  }
   return stage === 'frame'
     ? [{ index: 0, number: '01', title: 'Frame', prompt: short.frame.prompt, seconds: 0 }]
-    : short.segments.map((segment, index) => ({ index, number: String(index + 1).padStart(2, '0'), title: `Clip ${index + 1}`, prompt: segment.prompt, seconds: segment.seconds }))
+    : short.segments.map((segment, index) => ({ index, number: rowNumber(index), title: `Clip ${index + 1}`, prompt: segment.prompt, seconds: segment.seconds }))
+}
+
+function stageStepId(stage: GoalGenerationStage, index: number): string {
+  if (stage === 'videos') return `clip${index + 1}`
+  return stage === 'storyboards' ? `storyboard${index + 1}` : 'frame'
 }
 
 function goalShots(goal: ShortGoalSnapshot, stage: GoalGenerationStage): GoalShotView[] {
   const run = goal.stages[stage]
   const steps = new Map((run?.steps ?? []).map(step => [step.id, step]))
   return shortRows(shortPlanOf(goal), stage).map(row => {
-    const step = steps.get(stage === 'videos' ? `clip${row.index + 1}` : 'frame')
+    const step = steps.get(stageStepId(stage, row.index))
     const output = run?.outputs.find(item => item.index === row.index)
     return {
       ...row, state: shotState(goal, step, Boolean(output)), startedAt: step?.startedAt ?? null,
@@ -155,7 +195,7 @@ function goalShots(goal: ShortGoalSnapshot, stage: GoalGenerationStage): GoalSho
   })
 }
 
-function goalPhase(goal: ShortGoalSnapshot, stage: 'frame' | 'videos'): GoalPhase {
+function goalPhase(goal: ShortGoalSnapshot, stage: GoalGenerationStage): GoalPhase {
   if (goal.status === 'cancelled') return 'stopped'
   if (goal.status === 'completed') return 'complete'
   if (goal.status !== 'running') return goal.status
@@ -163,7 +203,7 @@ function goalPhase(goal: ShortGoalSnapshot, stage: 'frame' | 'videos'): GoalPhas
 }
 
 export function goalProgress(goal: ShortGoalSnapshot): GoalProgress {
-  const stage = goal.stage === 'frame' ? 'frame' : 'videos'
+  const stage: GoalGenerationStage = goal.stage === 'storyboards' || goal.stage === 'frame' ? goal.stage : 'videos'
   const shots = goalShots(goal, stage)
   const phase = goalPhase(goal, stage)
   const active = shots.find(shot => shot.state === 'failed')
@@ -200,20 +240,24 @@ export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null
   if (finish?.status === 'running') return statusLine('Burning the saved watermark', 'Finishing', null, 'live', true)
   if (finish?.status === 'failed') return statusLine('Finishing failed', 'Finishing failed', 'Finish', 'attention', false)
   if (progress.phase === 'review') {
+    if (goal.stage === 'storyboards') return statusLine(`Review storyboard · ${shortEstimateText(goalStoryboardEstimate(goal))}`, 'Review', 'Review', 'review', false)
     if (goal.stage !== 'videos') return statusLine(`Review frame · ${shortEstimateText(goal.estimate.frame)}`, 'Review', 'Review', 'review', false)
     const next = progress.shots.find(shot => shot.state !== 'done' || goalStillStale(goal, 'videos', shot.index))?.index
     if (next === undefined) return statusLine(`Review finish · ${formatGoalClock(goalPlanSeconds(short))}`, 'Review', 'Review', 'review', false)
     return statusLine(`Review clip ${next + 1} of ${total} · ${shortEstimateText(goal.estimate.segments?.[next])}`, 'Review', 'Review', 'review', false)
   }
-  if (progress.phase === 'frame' || progress.phase === 'videos') {
+  if (progress.phase === 'storyboards' || progress.phase === 'frame' || progress.phase === 'videos') {
     const activity = progress.active?.state === 'generating' ? `Generating${elapsedSeconds === null ? '' : ` ${formatGoalClock(elapsedSeconds)}`}` : 'Submitting'
     const revised = revisionLabel(goal)
-    const name = progress.phase === 'frame' ? 'Frame' : `Clip ${(progress.active?.index ?? 0) + 1} of ${total}`
-    return statusLine(`${revised ? `Revising ${revised}` : name} · ${activity}`, progress.phase === 'frame' ? 'Frame' : `${(progress.active?.index ?? 0) + 1}/${total}`, null, 'live', true)
+    const number = (progress.active?.index ?? 0) + 1
+    const name = progress.phase === 'frame' ? 'Frame' : progress.phase === 'storyboards' ? `Storyboard ${number} of ${progress.total}` : `Clip ${number} of ${total}`
+    const compact = progress.phase === 'frame' ? 'Frame' : progress.phase === 'storyboards' ? 'Storyboard' : `${number}/${total}`
+    return statusLine(`${revised ? `Revising ${revised}` : name} · ${activity}`, compact, null, 'live', true)
   }
   if (progress.phase === 'failed' || progress.phase === 'interrupted') {
     const word = progress.phase === 'failed' ? 'failed' : 'interrupted'
-    const text = !goal.chainId ? `Planning ${word}` : progress.stage === 'videos' ? `Clip ${(progress.active?.index ?? 0) + 1} ${word}` : `Frame ${word}`
+    const number = (progress.active?.index ?? 0) + 1
+    const text = !goal.chainId ? `Planning ${word}` : progress.stage === 'videos' ? `Clip ${number} ${word}` : progress.stage === 'storyboards' ? `Storyboard ${number} ${word}` : `Frame ${word}`
     return statusLine(text, progress.phase === 'failed' ? 'Failed' : 'Interrupted', 'Retry', 'attention', false)
   }
   if (progress.phase === 'complete') return statusLine(`Short ready · ${formatGoalClock(goalPlanSeconds(short))}`, 'Done', 'Preview', 'done', false)
@@ -238,11 +282,12 @@ export function goalWake(previous: GoalSnapshot, current: GoalSnapshot): GoalWak
   else if (after.phase === 'complete') from = 'Short ready'
   else if (before.phase === 'planning' && after.phase === 'review') from = 'Plan ready'
   else if (stopped) from = stopped
-  else if (after.phase === 'review' && revised) from = `${revised[0]!.toUpperCase()}${revised.slice(1)} revised`
+  else if (after.phase === 'review' && revised) from = `${capitalized(revised)} revised`
+  else if (after.phase === 'review' && before.stage === 'storyboards') from = 'Storyboard clean'
   else if (after.phase === 'review' && after.stage === 'videos' && before.stage === 'frame') from = 'Frame ready'
   else if (after.phase === 'review' && after.stage === 'videos') from = `Clip ${Math.max(1, after.done)} ready`
-  else if (before.phase === 'review') from = revised ? `Revising ${revised}` : after.stage === 'frame' ? 'Frame approved' : 'Clip approved'
-  else if (before.phase === 'failed' || before.phase === 'interrupted') from = `Retrying the ${after.stage === 'frame' ? 'frame' : 'clip'}`
+  else if (before.phase === 'review') from = revised ? `Revising ${revised}` : { storyboards: 'Storyboard approved', frame: 'Frame approved', videos: 'Clip approved' }[after.stage]
+  else if (before.phase === 'failed' || before.phase === 'interrupted') from = `Retrying the ${{ storyboards: 'storyboard', frame: 'frame', videos: 'clip' }[after.stage]}`
   return { id, from, tone: after.phase === 'failed' || after.phase === 'interrupted' ? 'attention' : 'live' }
 }
 
@@ -254,16 +299,20 @@ export function goalGenerationMarks(goals: readonly GoalSnapshot[]): ReadonlyMap
   const marks = new Map<string, string>()
   for (const goal of goals) {
     if (goal.legacy) continue
-    const segments = shortPlanOf(goal)?.segments.length ?? 1
+    const plan = shortPlanOf(goal)
+    const segments = plan?.segments.length ?? 1
+    const boards = shortStoryboardOf(plan)?.frames.length ?? 1
     for (const step of Object.values(goal.stages).flatMap(run => run.allSteps)) {
       const clip = /^clip(\d+)$/.exec(step.id)
-      const stage = clip ? 'videos' : step.id === 'frame' ? 'frame' : null
+      const board = /^storyboard(\d+)$/.exec(step.id)
+      const stage = clip ? 'videos' : board ? 'storyboards' : step.id === 'frame' ? 'frame' : null
       if (!stage) continue
-      const attempts = goal.stages[stage]?.attempts?.filter(attempt => attempt.index === (clip ? Number(clip[1]) - 1 : 0)) ?? []
+      const numbered = clip ?? board
+      const attempts = goal.stages[stage]?.attempts?.filter(attempt => attempt.index === (numbered ? Number(numbered[1]) - 1 : 0)) ?? []
       const version = attempts.findIndex(attempt => attempt.chainId === step.chainId && attempt.stepId === step.id)
-      const label = clip
-        ? attempts.length > 1 && version >= 0 ? `Clip ${clip[1]} v${version + 1}` : `Clip ${clip[1]}/${segments}`
-        : attempts.length > 1 && version >= 0 ? `Frame v${version + 1}` : 'Frame'
+      const name = clip ? `Clip ${clip[1]}` : board ? `Storyboard ${board[1]}` : 'Frame'
+      const label = attempts.length > 1 && version >= 0 ? `${name} v${version + 1}`
+        : clip ? `${name}/${segments}` : board ? `${name}/${boards}` : name
       for (const id of [step.cellId, step.outputCellId]) if (id) marks.set(id, `${label}${goal.address ? ` · ${goal.address}` : ''}`)
     }
   }
@@ -299,7 +348,7 @@ type GoalTileView = {
 const TILE_ROW_LIMIT = 5
 const tileChips: Record<GoalPhase, { label: string, tone: GoalStatusTone }> = {
   planning: { label: 'Planning', tone: 'live' }, review: { label: 'Review', tone: 'review' },
-  frame: { label: 'Frame', tone: 'live' }, videos: { label: 'Videos', tone: 'live' },
+  storyboards: { label: 'Storyboard', tone: 'live' }, frame: { label: 'Frame', tone: 'live' }, videos: { label: 'Videos', tone: 'live' },
   complete: { label: 'Complete', tone: 'done' },
   failed: { label: 'Failed', tone: 'attention' }, interrupted: { label: 'Interrupted', tone: 'attention' }, stopped: { label: 'Stopped', tone: 'quiet' },
 }
@@ -316,8 +365,28 @@ function overallProgress(goal: ShortGoalSnapshot): number {
   if (goal.status === 'completed') return 100
   const short = shortPlanOf(goal)
   if (!short) return 0
-  const done = (goal.stages.frame?.outputs.length ? 1 : 0) + (goal.stages.videos?.outputs.length ?? 0)
-  return Math.round(done / (1 + short.segments.length) * 100)
+  const storyboard = goal.storyboard ? 1 : 0
+  const done = (storyboard && goalStoryboardClean(goal) ? 1 : 0) + (goal.stages.frame?.outputs.length ? 1 : 0) + (goal.stages.videos?.outputs.length ?? 0)
+  return Math.round(done / (storyboard + 1 + short.segments.length) * 100)
+}
+
+const STORYBOARD_STATE_ORDER: readonly GoalShotState[] = ['failed', 'generating', 'submitting', 'stopped', 'waiting', 'skipped', 'planned']
+
+function storyboardRowState(goal: ShortGoalSnapshot, progress: GoalProgress): Pick<GoalShotView, 'state' | 'startedAt'> {
+  if (progress.stage !== 'storyboards') return { state: goalStoryboardClean(goal) ? 'done' : 'planned', startedAt: null }
+  const shots = progress.shots
+  const state = shots.length > 0 && shots.every(shot => shot.state === 'done') ? 'done' : STORYBOARD_STATE_ORDER.find(candidate => shots.some(shot => shot.state === candidate)) ?? 'planned'
+  return { state, startedAt: shots.find(shot => shot.state === state)?.startedAt ?? null }
+}
+
+function storyboardTileShots(goal: ShortGoalSnapshot, progress: GoalProgress, short: GoalShortPlan): GoalShotView[] | null {
+  if (!goal.storyboard || progress.stage === 'videos') return null
+  const blank = { prompt: '', seconds: 0, cellId: null, address: null, artifactId: null, error: null }
+  const frame = progress.stage === 'frame' ? progress.shots[0] : undefined
+  return [
+    { ...blank, index: 0, number: '01', title: 'Storyboard', ...storyboardRowState(goal, progress) },
+    { ...blank, prompt: short.frame.prompt, ...frame, index: 1, number: '02', title: 'Frame', state: frame?.state ?? 'planned', startedAt: frame?.startedAt ?? null },
+  ]
 }
 
 function legacyTileView(goal: LegacyGoalSnapshot): GoalTileView {
@@ -347,7 +416,7 @@ export function goalTileView(goal: GoalSnapshot | null, label: string | undefine
     }
   }
   const progress = goalProgress(goal)
-  const shots = progress.shots
+  const shots = storyboardTileShots(goal, progress, short) ?? progress.shots
   const visible = shots.length > TILE_ROW_LIMIT ? shots.slice(0, TILE_ROW_LIMIT - 1) : shots
   const seconds = goalPlanSeconds(short)
   return {

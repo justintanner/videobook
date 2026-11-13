@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { SHORT_WORD_CEILINGS, type GoalShortPlan } from '../../../server/src/goal-short-plan'
+import { formatShortSeconds, SHORT_WORD_CEILINGS, type GoalShortPlan } from '../../../server/src/goal-short-plan'
+import type { GoalGenerationStage } from '../../../server/src/goal-store'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
-  goalCanRetry, goalNextSegment, goalPlanSeconds, goalStillStale, goalStillVersions, shortEstimateText,
+  goalCanRetry, goalNextSegment, goalPlanSeconds, goalStillStale, goalStillVersions, goalStoryboardClean, goalStoryboardEstimate, shortEstimateText,
   type GoalSnapshot, type ShortGoalSnapshot, type ShortTab,
 } from '@/videobook/goals'
 import { GoalPromptInput } from './GoalPromptInput'
@@ -23,7 +24,14 @@ type ShortReviewProps = {
 }
 
 const CURRENT_TABS = [['frame', 'Frame'], ['video', 'Video'], ['finish', 'Finish']] as const
+const STORYBOARD_TABS = [['storyboard', 'Storyboard'], ['frame', 'Frame'], ['video', 'Video'], ['finish', 'Finish']] as const
 const LEGACY_TABS = [['character', 'Character'], ['frame', 'Frame'], ['video', 'Video'], ['finish', 'Finish']] as const
+const STORYBOARD_FIRST = 'Remove the on-screen graphics from the storyboard first: the frame is made from clean storyboard frame 1.'
+const RUNNING: Record<GoalGenerationStage, string> = {
+  storyboards: 'Removing the on-screen graphics from the storyboard.',
+  frame: 'Generating the frame.',
+  videos: 'Generating a clip.',
+}
 
 type RealismView = NonNullable<NonNullable<ShortGoalSnapshot['stages']['frame']>['outputs'][number]['realism']>
 const REALISM_NOTE = 'The check for AI tells is billed like planning and never blocks a step.'
@@ -59,6 +67,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const [beats, setBeats] = useState(() => plan.segments.map(segment => segment.prompt))
   const [feedback, setFeedback] = useState('')
   const [clipFeedback, setClipFeedback] = useState<Record<number, string>>({})
+  const [boardFeedback, setBoardFeedback] = useState<Record<number, string>>({})
   const [revising, setRevising] = useState<string | null>(null)
   const [beat, setBeat] = useState({ prompt: '', seconds: 5 })
   const nextTitle = title.trim()
@@ -87,9 +96,10 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const beatLimit = Math.min(15, 60 - totalSeconds)
   const canAddBeat = plan.segments.length < 4 && beatLimit >= 2
   const saved = async () => dirty ? shortSnapshot(await onAction({ action: 'update', revision: goal.revision, plan: draft })) : goal
-  const generate = (action: 'approve' | 'regenerate' | 'revise', stage: 'frame' | 'videos', index = 0, note?: string) => onRun(async () => {
+  const revisingName = (stage: GoalGenerationStage, index: number) => ({ storyboards: `the clean-up of storyboard ${index + 1}`, frame: 'the frame prompt', videos: `beat ${index + 1}` })[stage]
+  const generate = (action: 'approve' | 'regenerate' | 'revise', stage: GoalGenerationStage, index = 0, note?: string) => onRun(async () => {
     const current = await saved()
-    if (note) setRevising(stage === 'frame' ? 'the frame prompt' : `beat ${index + 1}`)
+    if (note) setRevising(revisingName(stage, index))
     try {
       await onAction({ action, revision: current.revision, stage, index, ...(note ? { feedback: note } : {}) })
     } finally {
@@ -97,10 +107,14 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
     }
     if (note && stage === 'frame') setFeedback('')
     if (note && stage === 'videos') setClipFeedback(current => ({ ...current, [index]: '' }))
+    if (note && stage === 'storyboards') setBoardFeedback(current => ({ ...current, [index]: '' }))
   })
-  const tabs = plan.version === 4 ? LEGACY_TABS : CURRENT_TABS
+  const storyboard = goal.storyboard
+  const storyboardClean = goalStoryboardClean(goal)
+  const cleanFirst = storyboard?.frames[0]?.clean ?? null
+  const tabs = plan.version === 4 ? LEGACY_TABS : storyboard ? STORYBOARD_TABS : CURRENT_TABS
   const frameImages = plan.version === 4 ? [...plan.character.references, ...plan.frame.references] : plan.sourceImages
-  const versions = (stage: 'frame' | 'videos', index: number, label: string) => goalStillVersions(goal, stage, index).map((version, position, all) => {
+  const versions = (stage: GoalGenerationStage, index: number, label: string) => goalStillVersions(goal, stage, index).map((version, position, all) => {
     const asset = version.artifactId ? resolveAsset(version.artifactId) : null
     const name = `v${all.length - position}`
     return <button key={`${version.chainId}:${version.stepId}`} type="button" className="goal-version" aria-label={`${label} ${name}`} aria-pressed={version.current} disabled={disabled || !version.artifactId || version.status !== 'completed'} onClick={() => { if (version.artifactId) onRun(() => onAction({ action: 'select', revision: goal.revision, stage, index, artifact_id: version.artifactId })) }}>
@@ -111,9 +125,9 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
     <nav className="goal-stage-tabs" aria-label="Short stages">
       {tabs.map(([id, label]) => <button key={id} type="button" className="goal-panel-button" aria-pressed={view === id} onClick={() => onView(id)}>{label}</button>)}
     </nav>
-    <p className="goal-panel-muted">{plan.segments.length === 1 ? '1 clip' : `${plan.segments.length} clips`} · {totalSeconds}s · {plan.aspectRatio} · GPT Image 2.6 frame · H3 Max video</p>
+    <p className="goal-panel-muted">{plan.segments.length === 1 ? '1 clip' : `${plan.segments.length} clips`} · {totalSeconds}s · {plan.aspectRatio} · {storyboard ? 'Nano Banana 2.1 storyboard clean-up · ' : ''}GPT Image 2.6 frame · H3 Max video</p>
     {notes.length > 0 && <ul className="goal-short-notes" aria-label="Notes">{notes.map((note, index) => <li key={`${index}:${note}`}>{note}</li>)}</ul>}
-    {running && <p role="status">{goal.stage === 'videos' ? 'Generating a clip.' : 'Generating the frame.'}</p>}
+    {running && <p role="status">{RUNNING[goal.stage === 'storyboards' || goal.stage === 'frame' ? goal.stage : 'videos']}</p>}
     {revising && <p role="status">Writing your feedback into {revising}, then generating…</p>}
     {view === 'character' && plan.version === 4 && <>
       <p className="goal-panel-muted">This short was saved with a character. The name, description and pictures stay as they were.</p>
@@ -122,9 +136,36 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
       <p aria-label="Character name">{plan.character.name}</p>
       <p aria-label="Character description">{plan.character.description}</p>
     </>}
+    {view === 'storyboard' && storyboard && <>
+      <p className="goal-panel-muted">{storyboard.frames.length === 1 ? 'A frame' : `${storyboard.frames.length} frames`} of {storyboard.video.label}{storyboard.video.address ? ` (${storyboard.video.address})` : ''}, in order. The clean-up removes what was drawn on top of the picture, such as captions, stickers, logos, credits and shade, and the frame is made from clean storyboard frame 1.</p>
+      <ol className="goal-short-segments" aria-label="Storyboard frames">{storyboard.frames.map(frame => {
+        const name = `Storyboard ${frame.index + 1}`
+        const clean = frame.clean
+        const state = clean ? 'Clean' : running && goal.stage === 'storyboards' ? 'Cleaning' : 'Not cleaned'
+        const price = shortEstimateText(frame.estimate ?? undefined)
+        return <li key={frame.index} className="goal-short-segment" data-state={clean ? 'done' : 'pending'}>
+          <div className="goal-short-segment-head"><strong>{name}</strong><span>{formatShortSeconds(frame.atSeconds)} s</span><span>{state}</span><span>{price}</span></div>
+          <div className="goal-storyboard-pair">
+            <GoalMedia artifactId={frame.raw.artifactId} cellId={frame.raw.cellId} label={`${name} before · ${frame.raw.address}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />
+            {clean
+              ? <GoalMedia artifactId={clean.artifactId} cellId={clean.cellId} label={`${name} after${clean.address ? ` · ${clean.address}` : ''}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />
+              : <span className="goal-media goal-media-pending">Not cleaned yet</span>}
+          </div>
+          {clean && <div className="goal-versions" aria-label={`${name} versions`}>{versions('storyboards', frame.index, name)}</div>}
+          {clean && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'storyboards', frame.index)}>Regenerate storyboard {frame.index + 1} · {price}</button>}
+          {clean && <label><span>Revise storyboard {frame.index + 1}</span><textarea aria-label={`${name} feedback`} value={boardFeedback[frame.index] ?? ''} maxLength={2000} rows={2} disabled={!canGenerate} onChange={event => setBoardFeedback(current => ({ ...current, [frame.index]: event.target.value }))} /></label>}
+          {clean && <button type="button" className="goal-panel-button" disabled={!canGenerate || !boardFeedback[frame.index]?.trim()} onClick={() => generate('revise', 'storyboards', frame.index, boardFeedback[frame.index]?.trim())}>Revise storyboard {frame.index + 1} · {price}</button>}
+        </li>
+      })}</ol>
+    </>}
     {view === 'frame' && <>
-      <div className="goal-reference-grid" aria-label={plan.version === 4 ? 'Frame references' : 'Source images'}>{frameImages.map(ref => <GoalMedia key={ref.slot} artifactId={ref.artifactId} cellId={ref.cellId} label={`${ref.slot} · ${ref.address}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />)}</div>
+      <div className="goal-reference-grid" aria-label={plan.version === 4 || storyboard ? 'Frame references' : 'Source images'}>
+        {frameImages.map(ref => <GoalMedia key={ref.slot} artifactId={ref.artifactId} cellId={ref.cellId} label={`${ref.slot} · ${ref.address}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />)}
+        {cleanFirst && <GoalMedia artifactId={cleanFirst.artifactId} cellId={cleanFirst.cellId} label={`@image${frameImages.length + 1} · storyboard 1`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
+      </div>
+      {storyboard && !storyboardClean && <p role="note" className="goal-panel-muted">{STORYBOARD_FIRST}</p>}
       {frameOutput && <GoalMedia artifactId={frameOutput.artifactId} cellId={frameOutput.cellId} label="Frame" resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
+      {frameOutput?.stale && <p role="status" className="goal-panel-warning">{frameOutput.stale}</p>}
       {frameOutput && <div className="goal-versions" aria-label="Frame versions">{versions('frame', 0, 'Frame')}</div>}
       {frameOutput && <RealismCheck name="frame" check={frameOutput.realism} disabled={disabled} onCheck={() => onRun(() => onAction({ action: 'check', stage: 'frame', index: 0 }))} />}
       {frameOutput && <p className="goal-panel-muted">{REALISM_NOTE}</p>}
@@ -178,8 +219,9 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
     <div className="goal-panel-bar">
       <div className="goal-panel-bar-copy"><span>{dirty ? 'Saving keeps the settings with this short.' : 'Each paid step needs its own approval.'}</span></div>
       {dirty && <button type="button" className="goal-panel-button" disabled={disabled || !promptsReady || finishing} onClick={() => onRun(() => onAction({ action: 'update', revision: goal.revision, plan: draft }))}>Save</button>}
+      {view === 'storyboard' && goal.status === 'review' && goal.stage === 'storyboards' && <button type="button" className="goal-panel-primary" disabled={!canGenerate} onClick={() => generate('approve', 'storyboards')}>Remove on-screen graphics · {shortEstimateText(goalStoryboardEstimate(goal))}</button>}
       {view === 'frame' && goal.status === 'review' && frameOutput && feedback.trim() && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('revise', 'frame', 0, feedback.trim())}>Revise frame</button>}
-      {view === 'frame' && goal.status === 'review' && <button type="button" className="goal-panel-primary" disabled={!canGenerate} onClick={() => generate(frameOutput ? 'regenerate' : 'approve', 'frame')}>{frameOutput ? 'Regenerate frame' : 'Generate frame'} · {shortEstimateText(goal.estimate.frame)}</button>}
+      {view === 'frame' && goal.status === 'review' && <button type="button" className="goal-panel-primary" disabled={!canGenerate || !storyboardClean} onClick={() => generate(frameOutput ? 'regenerate' : 'approve', 'frame')}>{frameOutput ? 'Regenerate frame' : 'Generate frame'} · {shortEstimateText(goal.estimate.frame)}</button>}
       {view === 'video' && goal.status === 'review' && next !== null && <button type="button" className="goal-panel-primary" disabled={!canGenerate || !frameOutput} onClick={() => generate('approve', 'videos', next)}>{next === 0 ? 'Generate clip' : `Continue · clip ${next + 1}`} · {shortEstimateText(goal.estimate.segments?.[next])}</button>}
       {view === 'finish' && !finishing && (goal.status === 'review' || goal.status === 'completed' || finishFailed) && <button type="button" className="goal-panel-primary" disabled={!canFinish} onClick={() => onRun(() => onAction({ action: 'finish' }))}>Finish</button>}
       {goalCanRetry(goal) && <button type="button" className="goal-panel-primary" disabled={disabled} onClick={() => onRun(() => onAction({ action: 'retry' }))}>Retry</button>}

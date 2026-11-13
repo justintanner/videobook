@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { composerGoal, defaultShortTab, goalCanRetry, goalGenerationMarks, goalOutputEstimate, goalPlanSeconds, goalStatusLine, goalStillVersions, goalTileView, goalWake, LEGACY_GOAL_NOTE, shortEstimateText } from '../../src/videobook/goals'
-import { LOWER_BOUND, legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, shortStep } from './goal-short-fixtures'
+import { LOWER_BOUND, legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, shortStep, storyboardPlanFixture } from './goal-short-fixtures'
 
 describe('legacy goal model', () => {
   it('keeps an earlier goal as a read-only tile that never wakes, marks cells or becomes the composer goal', () => {
@@ -104,3 +104,51 @@ describe('short goal model', () => {
   })
 })
 
+describe('short goal model with a storyboard', () => {
+  const plan = storyboardPlanFixture()
+  const atStoryboard = (extra: Parameters<typeof shortGoalFixture>[0] = {}) => shortGoalFixture({ stage: 'storyboards', ...extra }, plan)
+  const allClean = () => shortStage('storyboards', [0, 1, 2, 3].map(index => ({ index, artifactId: `clean-${index + 1}` })))
+  const clean = () => shortGoalFixture({ stage: 'frame', stages: { storyboards: allClean() } }, plan)
+  const runningBoard = () => {
+    const done = shortStep('storyboard1', 'completed')
+    const step = shortStep('storyboard2', 'running', 1)
+    return atStoryboard({ status: 'running', chainId: step.chainId, steps: [done, step], stages: { storyboards: shortStage('storyboards', [{ index: 0, artifactId: 'clean-1' }], [done, step]) } })
+  }
+
+  it('opens on Storyboard, then on Frame once every storyboard frame is clean', () => {
+    expect(defaultShortTab(atStoryboard(), plan)).toBe('storyboard')
+    expect(defaultShortTab(runningBoard(), plan)).toBe('storyboard')
+    expect(defaultShortTab(clean(), plan)).toBe('frame')
+    expect(defaultShortTab(shortGoalFixture({ stage: 'videos', stages: { storyboards: allClean(), frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]) } }, plan), plan)).toBe('video')
+  })
+
+  it('lists the storyboard step before the frame on the tile, with the next action and its estimate', () => {
+    expect(goalStatusLine(atStoryboard()).text).toBe('Review storyboard · $0.84')
+    expect(goalTileView(atStoryboard(), undefined)).toMatchObject({ note: 'Review storyboard · $0.84', chip: { label: 'Review' }, progressPercent: 0 })
+    expect(goalTileView(atStoryboard(), undefined).rows.map(row => [row.number, row.title, row.state, row.detail])).toEqual([['01', 'Storyboard', 'planned', 'Planned'], ['02', 'Frame', 'planned', 'Planned']])
+    expect(goalStatusLine(atStoryboard({ stages: { storyboards: shortStage('storyboards', [{ index: 0, artifactId: 'clean-1' }]) } })).text).toBe('Review storyboard · $0.63')
+    expect(goalStatusLine(runningBoard(), 5).text).toBe('Storyboard 2 of 4 · Generating 0:05')
+    expect(goalTileView(runningBoard(), undefined)).toMatchObject({ chip: { label: 'Storyboard' } })
+    expect(goalTileView(runningBoard(), undefined).rows.map(row => [row.title, row.state, row.startedAt])).toEqual([['Storyboard', 'generating', '2026-11-12T00:01:00Z'], ['Frame', 'planned', null]])
+    const failedStep = shortStep('storyboard3', 'failed', 2)
+    const failed = atStoryboard({ status: 'failed', chainId: failedStep.chainId, steps: [failedStep], stages: { storyboards: shortStage('storyboards', [{ index: 0, artifactId: 'clean-1' }, { index: 1, artifactId: 'clean-2' }], [failedStep]) } })
+    expect(goalStatusLine(failed).text).toBe('Storyboard 3 failed')
+    expect(goalTileView(failed, undefined).rows[0]).toMatchObject({ title: 'Storyboard', state: 'failed' })
+    expect(goalStatusLine(clean()).text).toBe('Review frame · $0.21')
+    expect(goalTileView(clean(), undefined)).toMatchObject({ progressPercent: 25 })
+    expect(goalTileView(clean(), undefined).rows.map(row => [row.title, row.state])).toEqual([['Storyboard', 'done'], ['Frame', 'planned']])
+    const clips = shortGoalFixture({ stage: 'videos', stages: { storyboards: allClean(), frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]) } }, plan)
+    expect(goalTileView(clips, undefined).rows.map(row => row.title)).toEqual(['Clip 1', 'Clip 2'])
+    expect(goalTileView(clips, undefined).progressPercent).toBe(50)
+  })
+
+  it('wakes when the storyboard is approved and clean, and prices and marks each storyboard frame', () => {
+    expect(goalWake(atStoryboard(), runningBoard())?.from).toBe('Storyboard approved')
+    expect(goalWake(runningBoard(), clean())?.from).toBe('Storyboard clean')
+    expect(goalOutputEstimate(atStoryboard(), 'storyboards', 1)).toBe(0.21)
+    expect(goalStillVersions(clean(), 'storyboards', 2)).toHaveLength(1)
+    const board = shortStep('storyboard1', 'completed')
+    const marked = shortGoalFixture({ stage: 'frame', stages: { storyboards: { ...shortStage('storyboards', [{ index: 0, artifactId: 'storyboard1-asset' }], [board]), allSteps: [board] } } }, plan)
+    expect(goalGenerationMarks([marked]).get('storyboard1-output')).toBe('Storyboard 1/4 · @b1')
+  })
+})

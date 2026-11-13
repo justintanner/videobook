@@ -10,6 +10,7 @@ import sharp from 'sharp'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import type { Engine } from 'videobook-engine'
+import { firstEmptyNotebookGridSlot, notebookGridTag, notebookOccupiedSlots } from 'videobook-engine/notebook-grid'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
@@ -263,6 +264,114 @@ describe('goal mode in the browser', () => {
     }
   }, testBudget(600_000))
 
+
+  scenario('makes a short from a video: storyboard clean-up, frame, clip and finish, with the storyboard step on the tile', async () => {
+    for (const goal of (await goals()).goals) {
+      if (goal.status !== 'cancelled' && !goal.dismissedAt) await call('video_goal', { action: 'dismiss', goal_id: goal.goalId })
+    }
+    const fixtures = await mkdtemp(join(tmpdir(), 'videobook-goal-storyboard-media-'))
+    await copyVideoFixture({ width: 360, height: 640, durationSec: 6, fps: 12, source: 'color', color: '0x4f6b3a', audio: false }, join(fixtures, 'umbrella.mp4'))
+    await copyVideoFixture({ width: 360, height: 640, durationSec: 3, fps: 12, source: 'color', color: 'green', audio: { frequency: 330 } }, join(fixtures, 'clip.mp4'))
+    const clip = await readFile(join(fixtures, 'clip.mp4'))
+    const stub = await startShortStub({ frame: await sharp({ create: { width: 360, height: 640, channels: 3, background: '#5b7a4c' } }).png().toBuffer(), clip, extended: clip })
+    const savedKeys = { FAL_API_KEY: process.env.FAL_API_KEY, OPENAI_API_KEY: process.env.OPENAI_API_KEY }
+    const savedTagging = readTaggingSettings(engine)
+    writeTaggingSettings(engine, { analysisOnNewAssets: false })
+    process.env.FAL_API_KEY = 'local-fal-key'
+    process.env.OPENAI_API_KEY = 'offline-openai-key'
+    const restoreFetch = redirectFalStorage(stub.baseURL)
+    const restoreEndpoints = configureProviderEndpoints({ falQueueBaseURL: stub.baseURL, openaiBaseURL: stub.baseURL })
+    const restoreEstimator = installFalDynamicEstimator(async () => ({ total_cost: 0.21, currency: 'USD' }))
+    configureProviderPollDriverForTests({ intervalMs: 200 })
+    try {
+      const video = await engine.artifacts.create('video', 'Umbrella walk')
+      if (!video.ok) throw new Error(video.error.message)
+      const written = await engine.files.writeFromPath(video.value.artifactId, 'original.mp4', join(fixtures, 'umbrella.mp4'))
+      if (!written.ok) throw new Error(written.error.message)
+      const before = engine.notebooks.read(notebookId)
+      if (!before.ok) throw new Error(before.error.message)
+      const slot = firstEmptyNotebookGridSlot(notebookOccupiedSlots(before.value.cells))
+      const inserted = await engine.notebooks.insertCell(notebookId, engine.notebooks.createCell({ type: 'video', label: 'Umbrella walk', slot, outputArtifactId: video.value.artifactId }))
+      if (!inserted.ok) throw new Error(inserted.error.message)
+      const labelOf = (artifactId: string | undefined) => {
+        const artifact = artifactId ? engine.artifacts.get(artifactId) : null
+        return artifact?.ok ? artifact.value.label : null
+      }
+      const photo = before.value.cells.find(cell => cell.type === 'image' && labelOf(cell.outputArtifactId) === 'character-2')
+      if (!photo) throw new Error('missing the second character image')
+      await page.reload()
+      stub.plannerAnswers = [{ title: 'Umbrella for a lizard', frame: 'A man holds a red umbrella over a monitor lizard on a wet lane.', beats: ['He walks beside the lizard, keeping the umbrella over it as rain falls.'] }]
+      const brief = `make a 12s clip based on ${notebookGridTag(slot)} but with ${notebookGridTag(photo.slot)} holding the umbrella for a monitor lizard`
+      await command(`/goal ${brief}`)
+      await expect.poll(async () => (await goals()).goals.find(goal => goal.brief === brief)?.status, { timeout: testBudget(60_000) }).toBe('review')
+      const short = shortGoal((await goals()).goals.find(goal => goal.brief === brief))
+      expect(short).toMatchObject({ planVersion: 5, stage: 'storyboards', shortPlan: { version: 5, storyboard: { video: { artifactId: video.value.artifactId } } } })
+      expect(short.storyboard?.frames).toHaveLength(4)
+      expect(stub.plannerRequests).toHaveLength(1)
+      if (savedKeys.OPENAI_API_KEY === undefined) delete process.env.OPENAI_API_KEY
+      else process.env.OPENAI_API_KEY = savedKeys.OPENAI_API_KEY
+      const tabs = panel().getByRole('navigation', { name: 'Short stages' })
+      const openTab = async (name: string) => {
+        if (!(await panel().isVisible())) {
+          await tile(short).click()
+          await panel().waitFor({ state: 'visible', timeout: testBudget(15_000) })
+        }
+        await tabs.getByRole('button', { name, exact: true }).click()
+      }
+      const primary = (label: RegExp) => panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: label })
+      await tile(short).waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      if (!(await panel().isVisible())) {
+        await tile(short).click()
+        await panel().waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      }
+      expect(await tabs.getByRole('button').allTextContents()).toEqual(['Storyboard', 'Frame', 'Video', 'Finish'])
+      expect(await tabs.getByRole('button', { name: 'Storyboard', exact: true }).getAttribute('aria-pressed')).toBe('true')
+      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review storyboard · $0.84')
+      await expect.poll(() => tile(short).textContent(), { timeout: testBudget(15_000) }).toContain('Storyboard')
+      expect(await tile(short).locator('.goal-tile-row-title').allTextContents()).toEqual(['Storyboard', 'Frame'])
+      expect(await panel().getByRole('list', { name: 'Storyboard frames' }).getByRole('listitem').count()).toBe(4)
+      await openTab('Frame')
+      expect(await primary(/^Generate frame/).isDisabled()).toBe(true)
+      expect(await panel().getByText('Remove the on-screen graphics from the storyboard first', { exact: false }).isVisible()).toBe(true)
+      await screenshot('goal-storyboard-first')
+      await openTab('Storyboard')
+      await primary(/^Remove on-screen graphics · \$0\.84$/).click()
+      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review frame · $0.21')
+      await openTab('Storyboard')
+      for (const index of [1, 2, 3, 4]) expect(await panel().getByRole('button', { name: new RegExp(`^Open Storyboard ${index} after`) }).count()).toBe(1)
+      expect(await tile(short).locator('.goal-tile-row').first().getAttribute('data-state')).toBe('done')
+
+      await openTab('Frame')
+      await expect.poll(() => primary(/^Generate frame · \$0\.21$/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
+      await primary(/^Generate frame/).click()
+      await expect.poll(() => status().textContent(), { timeout: testBudget(90_000) }).toContain('Review clip 1 of 1 · at least $')
+      await openTab('Video')
+      await primary(/^Generate clip · at least \$/).click()
+      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review finish · 0:12')
+      await openTab('Finish')
+      await expect.poll(() => primary(/^Finish$/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
+      await primary(/^Finish$/).click()
+      await expect.poll(() => status().textContent(), { timeout: testBudget(240_000) }).toContain('Short ready · 0:12')
+      expect(stub.submissions.map(submission => submission.path)).toEqual([
+        '/google/nano-banana-2.1/edit', '/google/nano-banana-2.1/edit', '/google/nano-banana-2.1/edit', '/google/nano-banana-2.1/edit',
+        '/openai/gpt-image-2.6/sunburst/edit', '/minimax/h3-max/reference-to-video',
+      ])
+      expect(stub.unexpected).toEqual([])
+      expect(errors).toEqual([])
+    } finally {
+      resetProviderPollDriverForTests()
+      restoreEstimator()
+      restoreEndpoints()
+      restoreFetch()
+      await stub.close()
+      for (const [key, value] of Object.entries(savedKeys)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+      writeTaggingSettings(engine, savedTagging)
+      await rm(fixtures, { recursive: true, force: true })
+    }
+  }, testBudget(600_000))
 
   scenario('shows goals from an earlier /goal as read-only summaries whose outputs open their cells', async () => {
     const image = await sharp({ create: { width: 90, height: 160, channels: 3, background: '#7a6a4f' } }).png().toBuffer()

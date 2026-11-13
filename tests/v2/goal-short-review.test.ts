@@ -10,7 +10,7 @@ import { GoalTileContext } from '../../src/components/videobook/notebook-canvas-
 import type { CanvasNode } from '../../src/videobook/notebook-canvas'
 import { defaultShortTab, LEGACY_GOAL_NOTE, type GoalSnapshot, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
-import { legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage } from './goal-short-fixtures'
+import { legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, storyboardPlanFixture } from './goal-short-fixtures'
 
 const noop = async () => shortGoalFixture()
 
@@ -190,6 +190,67 @@ describe('GoalShortReview', () => {
   })
 })
 
+const tabsOf = (html: string) => [...html.matchAll(/aria-pressed="(true|false)">(\w+)<\/button>/gu)].map(match => [match[2], match[1]])
+const boardGoal = (extra: Partial<ShortGoalSnapshot> = {}) => shortGoalFixture({ stage: 'storyboards', ...extra }, storyboardPlanFixture())
+const cleaned = (versions = 1) => ({
+  storyboards: shortStage('storyboards', [0, 1, 2, 3].map(index => ({ index, artifactId: `clean-${index + 1}`, versions: index === 2 ? versions : 1 }))),
+})
+
+describe('GoalShortReview with a storyboard', () => {
+  it('opens a short made from a video on Storyboard, the first of Storyboard, Frame, Video and Finish', () => {
+    const html = render(boardGoal())
+    expect(tabsOf(html).slice(0, 4)).toEqual([['Storyboard', 'true'], ['Frame', 'false'], ['Video', 'false'], ['Finish', 'false']])
+    expect(html).toContain('Nano Banana 2.1 storyboard clean-up · GPT Image 2.6 frame · H3 Max video')
+    expect(html).toContain('4 frames of Umbrella walk (@d1), in order.')
+    expect(html).toContain('aria-label="Storyboard frames"')
+    for (const index of [1, 2, 3, 4]) expect(html).toContain(`aria-label="Open Storyboard ${index} before · @a${index + 2}"`)
+    expect(html).toMatch(/Storyboard 1<\/strong><span>0\.8 s<\/span><span>Not cleaned<\/span><span>\$0\.21<\/span>/u)
+    expect(html).toMatch(/Storyboard 4<\/strong><span>5\.3 s<\/span><span>Not cleaned<\/span>/u)
+    expect(html.match(/Not cleaned yet/gu)).toHaveLength(4)
+    expect(button(html, 'Remove on-screen graphics')).toContain('Remove on-screen graphics · $0.84')
+    expect(button(html, 'Remove on-screen graphics')).not.toContain('disabled')
+    expect(button(html, 'Regenerate storyboard')).toBe('')
+    expect(html).not.toContain('Storyboard 1 feedback')
+    const partly = render(boardGoal({ stages: { storyboards: shortStage('storyboards', [{ index: 0, artifactId: 'clean-1' }]) } }))
+    expect(button(partly, 'Remove on-screen graphics')).toContain('Remove on-screen graphics · $0.63')
+    expect(render(boardGoal({ status: 'running' }))).toContain('Removing the on-screen graphics from the storyboard.')
+  })
+
+  it('keeps Generate frame disabled, saying why, until the storyboard is clean', () => {
+    const html = render(boardGoal(), 'frame')
+    expect(button(html, 'Generate frame')).toContain('disabled=""')
+    expect(html).toContain('Remove the on-screen graphics from the storyboard first: the frame is made from clean storyboard frame 1.')
+    const clean = render(boardGoal({ stage: 'frame', stages: cleaned() }), 'frame')
+    expect(button(clean, 'Generate frame')).toContain('Generate frame · $0.21')
+    expect(button(clean, 'Generate frame')).not.toContain('disabled')
+    expect(clean).not.toContain('Remove the on-screen graphics from the storyboard first')
+    expect(clean).toMatch(/aria-label="Frame references">.*aria-label="Open @image1 · @a1".*aria-label="Open @image2 · storyboard 1"/su)
+  })
+
+  it('shows each clean frame before and after its clean-up, with its versions, a regenerate and a revise', () => {
+    const html = render(boardGoal({ stage: 'frame', stages: cleaned(2) }), 'storyboard')
+    expect(html).not.toContain('Not cleaned yet')
+    expect(html).toContain('aria-label="Open Storyboard 3 before · @a5"')
+    expect(html).toContain('aria-label="Open Storyboard 3 after · @c3"')
+    expect(html).toMatch(/Storyboard 3<\/strong><span>3\.8 s<\/span><span>Clean<\/span><span>\$0\.21<\/span>/u)
+    expect(html).toContain('aria-label="Storyboard 3 versions"')
+    expect(html).toMatch(/aria-label="Storyboard 3 v2" aria-pressed="true"/u)
+    expect(html).toMatch(/aria-label="Storyboard 3 v1" aria-pressed="false"/u)
+    expect(button(html, 'Regenerate storyboard 3')).toContain('Regenerate storyboard 3 · $0.21')
+    expect(button(html, 'Regenerate storyboard 3')).not.toContain('disabled')
+    expect(html).toContain('aria-label="Storyboard 3 feedback"')
+    expect(button(html, 'Revise storyboard 3')).toContain('disabled=""')
+    expect(button(html, 'Remove on-screen graphics')).toBe('')
+  })
+
+  it('marks a frame made from an earlier clean storyboard frame 1 out of date', () => {
+    const stale = 'Storyboard frame 1 changed after this frame was made.'
+    const html = render(boardGoal({ stage: 'videos', stages: { ...cleaned(), frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', stale }]) } }), 'frame')
+    expect(html).toContain(stale)
+    expect(button(html, 'Regenerate frame')).not.toContain('disabled')
+  })
+})
+
 const panelProps = { connected: true, onAction: noop, onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
 
 describe('GoalPanel with a short', () => {
@@ -202,6 +263,9 @@ describe('GoalPanel with a short', () => {
     expect(saved).toContain('This short was saved with a character.')
     const framed = renderToStaticMarkup(createElement(GoalPanel, { ...panelProps, goal: shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]) } }) }))
     expect(framed).toContain('aria-pressed="true">Frame</button>')
+    const boarded = renderToStaticMarkup(createElement(GoalPanel, { ...panelProps, goal: boardGoal() }))
+    expect(boarded).toContain('aria-pressed="true">Storyboard</button>')
+    expect(button(boarded, 'Remove on-screen graphics')).toContain('Remove on-screen graphics · $0.84')
   })
 
   it('opens the short review for a current short and the older reviews for earlier goals', () => {
