@@ -106,6 +106,7 @@ export default defineConfig({
       'scripts/changelog-section.test.ts',
       'scripts/ci-media-bins.test.ts',
       'scripts/release.test.ts',
+      'scripts/lint-edited-file.test.ts',
       'src/videobook/post-delivery-review.test.ts', 'src/videobook/post-copy-review.test.ts',
       'src/videobook/post-progress.test.ts',
       'src/videobook/x-post-thread.test.ts',
