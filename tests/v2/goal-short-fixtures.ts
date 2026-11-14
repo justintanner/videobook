@@ -89,8 +89,16 @@ function storyboardView(short: GoalShortPlan, stage: Stage | undefined, estimate
       index, atSeconds, aspectRatio, prompt, raw: { artifactId, cellId, address, label },
       clean: stage?.outputs.find(output => output.index === index) ?? null,
       estimate: estimate.storyboardFrames?.[index] ?? null,
+      failure: null,
     })),
   }
+}
+
+type Failure = NonNullable<NonNullable<ShortGoalSnapshot['storyboard']>['frames'][number]['failure']>
+
+export function withStoryboardFailures(goal: ShortGoalSnapshot, failures: Readonly<Record<number, Failure>>): ShortGoalSnapshot {
+  if (!goal.storyboard) return goal
+  return { ...goal, storyboard: { ...goal.storyboard, frames: goal.storyboard.frames.map(frame => ({ ...frame, failure: failures[frame.index] ?? frame.failure })) } }
 }
 
 export function shortGoalFixture(extra: Partial<ShortGoalSnapshot> = {}, short: GoalShortPlan = shortPlanFixture()): ShortGoalSnapshot {

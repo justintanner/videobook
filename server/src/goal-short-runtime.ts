@@ -6,7 +6,7 @@ import { findPrimaryMediaFile, resolveNotebookCellArtifactId } from "videobook-e
 import { notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
 import { replaceNotebookMentions, scanNotebookMentions, type NotebookMention } from "videobook-engine/notebook-mentions";
 import { getApiKey } from "./api-key.js";
-import { getChainRun, preflightAndAccept, retryChainRun } from "./chain-executor.js";
+import { getChainRun, preflightAndAccept, retryChainRun, type ChainRunRecord } from "./chain-executor.js";
 import type { ChainStep } from "./chain-plan.js";
 import { probeVideo } from "./ffmpeg.js";
 import {
@@ -34,6 +34,7 @@ type GoalArgs = Record<string, unknown>;
 type ShortReference = Omit<GoalShortImageRef, "slot">;
 type ShortTarget = { stage: GoalGenerationStage; indexes: number[] };
 type BriefReferences = { references: ShortReference[]; storyboard: ShortStoryboard | null; notes: ReferenceNote[] };
+export type StoryboardFrameFailure = { kind: "failed" | "not-run"; message: string };
 
 const EXTRA_REFERENCE_LIMIT = 12;
 const NO_FAL_KEY = "Set FAL_API_KEY in Settings before generating this stage";
@@ -245,6 +246,24 @@ export function shortSegmentStale(goal: GoalRecord, index: number): boolean {
 
 function shortStoryboardClean(goal: GoalRecord, plan: GoalShortPlan | null): boolean {
   return (shortStoryboardOf(plan)?.frames ?? []).every((frame) => selectedOutput(goal, "storyboards", frame.index));
+}
+
+function notRunReason(chain: ChainRunRecord): string {
+  if (chain.status === "interrupted") return "Not run: the clean-up was interrupted.";
+  const failed = chain.continueOnFailure ? undefined : chain.steps.find((step) => step.status === "failed");
+  const number = failed ? /\d+$/u.exec(failed.id)?.[0] : undefined;
+  if (failed) return number ? `Not run: storyboard ${number} failed first.` : "Not run: another frame failed first.";
+  return "Not run: the clean-up was stopped.";
+}
+
+export function storyboardFrameFailure(engine: Engine, goal: GoalRecord, index: number): StoryboardFrameFailure | null {
+  const attempt = goalStageAttempts(goal, "storyboards").filter((candidate) => candidate.index === index).at(-1);
+  const chain = attempt ? getChainRun(engine, attempt.chainId) : null;
+  const step = chain?.steps.find((candidate) => candidate.id === attempt?.stepId);
+  if (!chain || !step) return null;
+  if (step.status === "failed") return { kind: "failed", message: step.error ?? "The clean-up failed." };
+  if (selectedOutput(goal, "storyboards", index) || !["interrupted", "skipped", "cancelled", "rejected"].includes(step.status)) return null;
+  return { kind: "not-run", message: notRunReason(chain) };
 }
 
 export function storyboardReview(goal: GoalRecord, next: GoalRecord, plan: GoalShortPlan | null): GoalRecord {
@@ -460,7 +479,7 @@ function approvedTarget(goal: GoalRecord, plan: GoalShortPlan, args: GoalArgs): 
   return { stage: "videos", indexes: [index] };
 }
 
-function shortTarget(goal: GoalRecord, plan: GoalShortPlan, args: GoalArgs, regenerate: boolean): ShortTarget {
+function shortTarget(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, args: GoalArgs, regenerate: boolean): ShortTarget {
   if (!regenerate) return approvedTarget(goal, plan, args);
   const stage = args.stage !== undefined || args.action === "revise" ? stageSchema.parse(args.stage) : goal.stage === "videos" ? "frame" : null;
   if (!stage) throw new Error("There are no stage outputs to regenerate yet");
@@ -472,7 +491,9 @@ function shortTarget(goal: GoalRecord, plan: GoalShortPlan, args: GoalArgs, rege
     if (count === 0) throw new Error("This short has no storyboard.");
     if (index >= count) throw new Error(`The storyboard has ${count} frames.`);
   }
-  if (!selectedOutput(goal, stage, index)) throw new Error("There is no current output to regenerate or revise");
+  if (!selectedOutput(goal, stage, index) && !(stage === "storyboards" && storyboardFrameFailure(engine, goal, index)?.kind === "failed")) {
+    throw new Error("There is no current output to regenerate or revise");
+  }
   return { stage, indexes: [index] };
 }
 
@@ -509,7 +530,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
     throw new Error("Review the goal before approving, regenerating or revising a stage");
   }
   let content = assertShortRevision(engine, goal, args.revision);
-  const target = shortTarget(goal, content.plan, args, regenerate);
+  const target = shortTarget(engine, goal, content.plan, args, regenerate);
   const { stage, indexes } = target;
   const index = indexes[0]!;
   const feedback = args.action === "revise" ? plainFeedback(engine, goal.notebookId, shortFeedbackSchema.parse(args.feedback)) : null;
@@ -542,7 +563,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   }, {
     engine, bookId: goal.bookId, notebookId: goal.notebookId,
     toolSchemas: new Map(defs.map((def) => [def.name, def.schema])), autoApplyTools: new Set(),
-    effectForTool: () => "generation",
+    effectForTool: () => "generation", continueOnFailure: stage === "storyboards",
   }, lookup, { actor: "chat" });
   const approvedAt = new Date().toISOString();
   const { finish: _finish, ...stored } = goal;
@@ -687,6 +708,6 @@ export async function retryShortGoal(engine: Engine, goal: GoalRecord): Promise<
   }
   if (!process.env.FAL_API_KEY) throw new Error(NO_FAL_KEY);
   const { lookup } = await toolLookup(engine);
-  retryChainRun(engine, goal.chainId, lookup);
+  retryChainRun(engine, goal.chainId, lookup, { continueOnFailure: stage === "storyboards" });
   return saveGoal(engine, { ...goal, status: "running", error: null });
 }

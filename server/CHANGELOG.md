@@ -9,6 +9,11 @@ and the package uses [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Fal content-policy refusals name the model, explain how to revise the request, and settle at zero cost.
+- When the clean-up of one storyboard frame of a short fails, for example
+  because the model refuses it, the other frames are still cleaned and the goal
+  stays open on the Storyboard tab instead of failing. The failed frame shows
+  its error with its own Regenerate and Revise, a frame that never ran says why
+  instead of "Not cleaned yet", and the goal tile names how many frames failed.
 
 ## [0.7.3] - 2026-11-14
 

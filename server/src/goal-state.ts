@@ -7,7 +7,9 @@ import {
 } from "./goal-store.js";
 import { goalStageAttempts } from "./goal-stills.js";
 import { refreshGoalShortPlan, shortStoryboardOf, type GoalShortPlan } from "./goal-short-plan.js";
-import { currentShortClip, nextShortSegment, shortFrameStale, shortSegmentStale, storyboardReview } from "./goal-short-runtime.js";
+import {
+  currentShortClip, nextShortSegment, shortFrameStale, shortSegmentStale, storyboardFrameFailure, storyboardReview, type StoryboardFrameFailure,
+} from "./goal-short-runtime.js";
 import { goalTitleEstimate } from "./graphics/suggest.js";
 import { watermarkTitleSlots } from "./graphics/templates.js";
 
@@ -86,10 +88,17 @@ export function reconcileFinish(engine: Engine, goal: GoalRecord): GoalRecord {
   return saveGoal(engine, { ...goal, status: "review", finish: { ...finish, status: "failed", error: job?.error?.message ?? "Finishing was interrupted. Retry Finish." } });
 }
 
-async function settledShortStage(engine: Engine, goal: GoalRecord, next: GoalRecord, stage: GoalGenerationStage, previous: readonly GoalStageOutput[], outputs: readonly GoalStageOutput[]): Promise<GoalRecord> {
+function ranEveryStep(chain: ChainRunRecord): boolean {
+  return chain.status === "failed" && chain.continueOnFailure === true && chain.steps.every(step => step.status === "completed" || step.status === "failed");
+}
+
+async function settledShortStage(
+  engine: Engine, goal: GoalRecord, next: GoalRecord, stage: GoalGenerationStage, previous: readonly GoalStageOutput[], outputs: readonly GoalStageOutput[], chain: ChainRunRecord,
+): Promise<GoalRecord> {
   const cleared = { resumeStage: null, resumeStatus: null, resumeOutputs: null, resumeFinish: null };
   const approved = goal.stages[stage]?.shotIndexes ?? [0];
-  if (!approved.every(index => outputs.some(output => output.index === index))) {
+  const failed = new Set(chain.steps.filter(step => step.status === "failed").map(step => stageOutputIndex(step.id)));
+  if (!approved.every(index => failed.has(index) || outputs.some(output => output.index === index))) {
     return { ...next, status: "failed", error: "The stage finished without its media output. Retry the stage.", ...cleared };
   }
   const content = requireGoalShortContent(engine, goal);
@@ -145,8 +154,8 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
     return step?.status === "completed" && step.artifactId ? { ...attempt, artifactId: step.artifactId, cellId: step.outputCellId } : attempt;
   });
   let next: GoalRecord = { ...goal, stages: { ...goal.stages, [stage]: { ...run, outputs, ...(attempts ? { attempts } : {}) } } };
-  if (chain.status === "completed") {
-    next = await settledShortStage(engine, goal, next, stage, run.outputs, outputs);
+  if (chain.status === "completed" || ranEveryStep(chain)) {
+    next = await settledShortStage(engine, goal, next, stage, run.outputs, outputs, chain);
   } else if (["failed", "interrupted", "cancelled"].includes(chain.status)) {
     next = { ...next, status: chain.status as "failed" | "interrupted" | "cancelled", error: chain.error,
       ...(goal.resumeOutputs ? { stages: { ...next.stages, [stage]: { ...next.stages[stage]!, outputs: goal.resumeOutputs } } } : {}),
@@ -188,7 +197,9 @@ function outputStale(goal: GoalRecord, stage: GoalGenerationStage, index: number
   return stage === "frame" && shortFrameStale(goal) ? FRAME_STALE_MESSAGE : null;
 }
 
-function storyboardView<Output extends { index: number }>(plan: GoalShortPlan | null, outputs: readonly Output[], estimate: GoalEstimates) {
+function storyboardView<Output extends { index: number }>(
+  plan: GoalShortPlan | null, outputs: readonly Output[], estimate: GoalEstimates, failureOf: (index: number) => StoryboardFrameFailure | null,
+) {
   const storyboard = shortStoryboardOf(plan);
   if (!storyboard) return null;
   return {
@@ -200,6 +211,7 @@ function storyboardView<Output extends { index: number }>(plan: GoalShortPlan | 
       raw: { artifactId, cellId, address, label },
       clean: outputs.find(output => output.index === index) ?? null,
       estimate: estimate.storyboardFrames?.[index] ?? null,
+      failure: failureOf(index),
     })),
   };
 }
@@ -243,7 +255,7 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
   return {
     kind: "video-goal" as const, legacy: false as const, ...goal, ...content,
     ...(shortPlan ? { shortPlan } : {}),
-    storyboard: storyboardView(shortPlan, stages.storyboards?.outputs ?? [], content.estimate),
+    storyboard: storyboardView(shortPlan, stages.storyboards?.outputs ?? [], content.estimate, index => storyboardFrameFailure(engine, goal, index)),
     finish: goal.finish ?? null,
     finalArtifactId: goal.finish?.finalArtifactId ?? null,
     titleSlots: watermarkTitleSlots(engine, "tiktok"),

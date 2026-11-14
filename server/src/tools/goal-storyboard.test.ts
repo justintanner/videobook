@@ -20,7 +20,7 @@ import { testBudget } from "../test-budget.js";
 import { createTestClient } from "../test-client.js";
 import { goalTestCharacters } from "../test-goals.js";
 import { copyVideoFixture } from "../test-media-fixtures.js";
-import { redirectFalStorage, startShortStub, type ShortStub } from "../test-short-stub.js";
+import { redirectFalStorage, SHORT_STUB_REFUSAL, startShortStub, type ShortStub } from "../test-short-stub.js";
 import type { ShortGoalSnapshot } from "./goal.js";
 
 const CLEANUP_MODEL = "fal:google/nano-banana-2.1/edit";
@@ -37,6 +37,7 @@ const PLAN = {
 };
 const STORYBOARD_FIRST = "Clean the storyboard first: approve the storyboard stage to remove its on-screen graphics before the frame is made.";
 const FRAME_STALE = "Storyboard frame 1 changed after this frame was made.";
+const REWRITTEN = "Remove the sticker at the top left with its underline and every other overlay, and fill the sky behind them. Keep the people, the lizard, the umbrella and its printed logo exactly as they are.";
 
 type PlannerRequest = { instructions: string; input: Array<{ role: string; content: Array<{ type: string; text?: string }> }> };
 type RewriteRequest = { instructions: string; input: Array<{ role: string; content: string }> };
@@ -317,9 +318,11 @@ describe("video_goal storyboard stage", () => {
     expect(restored.stages.frame!.outputs[0]!.stale).toBeNull();
 
     stub.failNext = true;
-    const failed = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: restored.revision, stage: "storyboards", index: 0 }));
-    expect(failed).toMatchObject({ status: "failed", stage: "storyboards", resumeStage: "videos" });
-    expect(failed.stages.storyboards!.outputs[0]!.artifactId).toBe(cleanOne);
+    const refused = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: restored.revision, stage: "storyboards", index: 0 }));
+    expect(refused).toMatchObject({ status: "review", stage: "videos", error: null, resumeStage: null, resumeOutputs: null, finish: { status: "review" } });
+    expect(refused.stages.storyboards!.outputs[0]!.artifactId).toBe(cleanOne);
+    expect(refused.storyboard!.frames[0]!.failure).toEqual({ kind: "failed", message: expect.stringContaining(SHORT_STUB_REFUSAL) });
+    expect(refused.stages.frame!.outputs[0]!.stale).toBeNull();
     const recovered = await invoke({ action: "select", goal_id: goal.goalId, stage: "storyboards", index: 0, artifact_id: restaled.stages.storyboards!.outputs[0]!.artifactId });
     expect(recovered).toMatchObject({ stage: "videos", status: "review", error: null, resumeStage: null, resumeOutputs: null, finish: { status: "review" } });
     expect(recovered.stages.frame!.outputs[0]!.stale).toBe(FRAME_STALE);
@@ -331,7 +334,7 @@ describe("video_goal storyboard stage", () => {
   it("reports a result-GET content refusal consistently and settles it at zero cost", async () => {
     const goal = await short(`based on @b1 with @a2, ${AUTHORED}`);
     stub.refuseNext = true;
-    const failed = await approved(goal);
+    const refused = await approved(goal);
     const usage = engine.usage.recent(100).find((entry) => entry.provider === "fal" && entry.status === "failed");
     expect(usage).toMatchObject({ costUsd: 0, basis: "free", units: 0 });
     expect(usage?.artifactId).toBeTruthy();
@@ -344,9 +347,45 @@ describe("video_goal storyboard stage", () => {
     expect(failure!.message).not.toContain("Fal API error");
     expect(value(await engine.metadata.artifacts.read(artifactId, "provider-refusal")))
       .toMatchObject({ failCode: "content_policy_violation", categories: ["model_moderated"] });
-    expect(failed.error).toContain(failure!.message);
+    expect(refused).toMatchObject({ status: "review", stage: "storyboards", error: null });
+    expect(refused.storyboard!.frames[0]!.failure).toEqual({ kind: "failed", message: expect.stringContaining(failure!.message) });
     const notebook = value(engine.notebooks.read(notebookId));
     expect(Object.values(notebook.execution ?? {}).some((state) => state.error === failure!.message)).toBe(true);
+    expect(stub.unexpected).toEqual([]);
+  });
+
+  it("cleans the other frames when one is refused, keeps the goal reviewable with the error on that frame, and cleans that frame alone before Frame review", async () => {
+    const goal = await short(`based on @b1 with @a2, ${AUTHORED}`);
+    stub.failNext = true;
+    const partial = await approved(goal);
+    expect(stub.submissions.map((submission) => submission.path)).toEqual([CLEANUP, CLEANUP, CLEANUP, CLEANUP]);
+    expect(partial).toMatchObject({ stage: "storyboards", status: "review", error: null, revision: goal.revision + 1 });
+    const chain = getChainRun(engine, partial.chainId!)!;
+    expect(chain).toMatchObject({ status: "failed", continueOnFailure: true, error: expect.stringContaining(SHORT_STUB_REFUSAL) });
+    expect(chain.steps.map((step) => step.status)).toEqual(["failed", "completed", "completed", "completed"]);
+    const outputs = partial.stages.storyboards!.outputs;
+    expect(outputs.map((output) => output.index)).toEqual([1, 2, 3]);
+    const [refusedFrame, ...cleanFrames] = partial.storyboard!.frames;
+    expect(refusedFrame).toMatchObject({ clean: null, failure: { kind: "failed", message: expect.stringContaining(SHORT_STUB_REFUSAL) } });
+    expect(cleanFrames.map((frame) => [frame.clean?.artifactId, frame.failure])).toEqual(outputs.map((output) => [output.artifactId, null]));
+    expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: partial.revision, stage: "frame" })).toBe(STORYBOARD_FIRST);
+
+    stub.plannerAnswers = [{ prompt: REWRITTEN }];
+    stub.failNext = true;
+    const beforeRevise = stub.submissions.length;
+    const refusedAgain = await settled(await invoke({ action: "revise", goal_id: goal.goalId, revision: partial.revision, stage: "storyboards", index: 0, feedback: "Only remove the sticker." }));
+    expect(stub.submissions.slice(beforeRevise)).toEqual([expect.objectContaining({ path: CLEANUP, body: expect.objectContaining({ prompt: REWRITTEN }) })]);
+    expect(refusedAgain).toMatchObject({ stage: "storyboards", status: "review", error: null, resumeStage: null, resumeOutputs: null });
+    expect(refusedAgain.storyboard!.frames[0]).toMatchObject({ prompt: REWRITTEN, clean: null, failure: { kind: "failed" } });
+    expect(refusedAgain.stages.storyboards!.outputs.map((output) => output.artifactId)).toEqual(outputs.map((output) => output.artifactId));
+
+    const beforeRegenerate = stub.submissions.length;
+    const cleaned = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: refusedAgain.revision, stage: "storyboards", index: 0 }));
+    expect(stub.submissions.slice(beforeRegenerate).map((submission) => submission.path)).toEqual([CLEANUP]);
+    expect(cleaned).toMatchObject({ stage: "frame", status: "review", error: null });
+    expect(cleaned.stages.storyboards!.outputs.map((output) => output.index)).toEqual([0, 1, 2, 3]);
+    expect(cleaned.stages.storyboards!.outputs.slice(1).map((output) => output.artifactId)).toEqual(outputs.map((output) => output.artifactId));
+    expect(cleaned.storyboard!.frames.map((frame) => frame.failure)).toEqual([null, null, null, null]);
     expect(stub.unexpected).toEqual([]);
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { asGoalTitleOptions, composerGoal, defaultShortTab, goalCanRetry, goalGenerationMarks, goalOutputEstimate, goalPlanSeconds, goalStatusLine, goalStillVersions, goalTileView, goalWake, LEGACY_GOAL_NOTE, shortEstimateText } from '../../src/videobook/goals'
-import { LOWER_BOUND, legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, shortStep, storyboardPlanFixture } from './goal-short-fixtures'
+import { LOWER_BOUND, legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, shortStep, storyboardPlanFixture, withStoryboardFailures } from './goal-short-fixtures'
 
 describe('legacy goal model', () => {
   it('keeps an earlier goal as a read-only tile that never wakes, marks cells or becomes the composer goal', () => {
@@ -150,6 +150,30 @@ describe('short goal model with a storyboard', () => {
     const clips = shortGoalFixture({ stage: 'videos', stages: { storyboards: allClean(), frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]) } }, plan)
     expect(goalTileView(clips, undefined).rows.map(row => row.title)).toEqual(['Clip 1', 'Clip 2'])
     expect(goalTileView(clips, undefined).progressPercent).toBe(50)
+  })
+
+  it('names how many storyboard frames failed on the tile and the status line, and wakes with that count', () => {
+    const refused = shortStep('storyboard1', 'failed')
+    const done = [1, 2, 3].map(index => shortStep(`storyboard${index + 1}`, 'completed', index))
+    const cleanRest = (steps: ReturnType<typeof shortStep>[]) => shortStage('storyboards', [1, 2, 3].map(index => ({ index, artifactId: `clean-${index + 1}` })), steps)
+    const failure = { kind: 'failed' as const, message: 'Rejected' }
+    const partial = withStoryboardFailures(atStoryboard({ chainId: refused.chainId, steps: [refused, ...done], stages: { storyboards: cleanRest([refused, ...done]) } }), { 0: failure })
+    expect(goalStatusLine(partial)).toMatchObject({ text: 'Storyboard: 1 of 4 failed', action: 'Review', tone: 'attention' })
+    expect(goalTileView(partial, undefined)).toMatchObject({ note: 'Storyboard: 1 of 4 failed', noteTone: 'attention', chip: { label: 'Review' } })
+    expect(goalTileView(partial, undefined).rows.map(row => [row.title, row.state, row.detail])).toEqual([['Storyboard', 'failed', 'Failed'], ['Frame', 'planned', 'Planned']])
+    expect(goalWake(runningBoard(), partial)).toMatchObject({ from: 'Storyboard: 1 of 4 failed', tone: 'attention' })
+    expect(goalStatusLine(atStoryboard()).tone).toBe('review')
+
+    const again = shortStep('storyboard3', 'completed', 2)
+    const otherCleaned = withStoryboardFailures(atStoryboard({ chainId: again.chainId, steps: [again], stages: { storyboards: cleanRest([again]) } }), { 0: failure })
+    expect(goalTileView(otherCleaned, undefined).rows[0]).toMatchObject({ title: 'Storyboard', state: 'failed' })
+    expect(goalStatusLine(otherCleaned).text).toBe('Storyboard: 1 of 4 failed')
+
+    const skipped = [1, 2, 3].map(index => shortStep(`storyboard${index + 1}`, 'skipped', index))
+    const notRun = { kind: 'not-run' as const, message: 'Not run: storyboard 1 failed first.' }
+    const earlier = withStoryboardFailures(atStoryboard({ status: 'failed', chainId: refused.chainId, steps: [refused, ...skipped], stages: { storyboards: shortStage('storyboards', [], [refused, ...skipped]) } }), { 0: failure, 1: notRun, 2: notRun, 3: notRun })
+    expect(goalStatusLine(earlier).text).toBe('Storyboard: 1 of 4 failed')
+    expect(goalTileView(earlier, undefined).note).toBe('Storyboard: 1 of 4 failed · open to retry')
   })
 
   it('wakes when the storyboard is approved and clean, and prices and marks each storyboard frame', () => {

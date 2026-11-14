@@ -389,7 +389,8 @@ span.goal-progress-address {
   border-radius: 6px;
 }
 
-.goal-short-segment[data-state='stale'] {
+.goal-short-segment[data-state='stale'],
+.goal-short-segment[data-state='failed'] {
   border-color: rgba(227, 184, 105, 0.6);
 }
 

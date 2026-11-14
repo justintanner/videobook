@@ -151,20 +151,24 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
       <ol className="goal-short-segments" aria-label="Storyboard frames">{storyboard.frames.map(frame => {
         const name = `Storyboard ${frame.index + 1}`
         const clean = frame.clean
-        const state = clean ? 'Clean' : running && goal.stage === 'storyboards' ? 'Cleaning' : 'Not cleaned'
+        const failure = frame.failure
+        const failed = failure?.kind === 'failed'
+        const redo = Boolean(clean) || failed
+        const state = clean ? 'Clean' : failure ? failed ? 'Failed' : 'Not run' : running && goal.stage === 'storyboards' ? 'Cleaning' : 'Not cleaned'
         const price = shortEstimateText(frame.estimate ?? undefined)
-        return <li key={frame.index} className="goal-short-segment" data-state={clean ? 'done' : 'pending'}>
+        return <li key={frame.index} className="goal-short-segment" data-state={clean ? 'done' : failed ? 'failed' : 'pending'}>
           <div className="goal-short-segment-head"><strong>{name}</strong><span>{formatShortSeconds(frame.atSeconds)} s</span><span>{state}</span><span>{price}</span></div>
           <div className="goal-storyboard-pair">
             <GoalMedia artifactId={frame.raw.artifactId} cellId={frame.raw.cellId} label={`${name} before · ${frame.raw.address}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />
             {clean
               ? <GoalMedia artifactId={clean.artifactId} cellId={clean.cellId} label={`${name} after${clean.address ? ` · ${clean.address}` : ''}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />
-              : <span className="goal-media goal-media-pending">Not cleaned yet</span>}
+              : <span className="goal-media goal-media-pending">{failed ? 'Clean-up failed' : failure ? 'Not run' : 'Not cleaned yet'}</span>}
           </div>
+          {failure && <p role={failed ? 'alert' : undefined} className={failed ? 'goal-panel-warning' : 'goal-panel-muted'}>{failure.message}</p>}
           {clean && <div className="goal-versions" aria-label={`${name} versions`}>{versions('storyboards', frame.index, name)}</div>}
-          {clean && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'storyboards', frame.index)}>Regenerate storyboard {frame.index + 1} · {price}</button>}
-          {clean && <label><span>Revise storyboard {frame.index + 1}</span><textarea aria-label={`${name} feedback`} value={boardFeedback[frame.index] ?? ''} maxLength={2000} rows={2} disabled={!canGenerate} onChange={event => setBoardFeedback(current => ({ ...current, [frame.index]: event.target.value }))} /></label>}
-          {clean && <button type="button" className="goal-panel-button" disabled={!canGenerate || !boardFeedback[frame.index]?.trim()} onClick={() => generate('revise', 'storyboards', frame.index, boardFeedback[frame.index]?.trim())}>Revise storyboard {frame.index + 1} · {price}</button>}
+          {redo && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'storyboards', frame.index)}>Regenerate storyboard {frame.index + 1} · {price}</button>}
+          {redo && <label><span>Revise storyboard {frame.index + 1}</span><textarea aria-label={`${name} feedback`} value={boardFeedback[frame.index] ?? ''} maxLength={2000} rows={2} disabled={!canGenerate} onChange={event => setBoardFeedback(current => ({ ...current, [frame.index]: event.target.value }))} /></label>}
+          {redo && <button type="button" className="goal-panel-button" disabled={!canGenerate || !boardFeedback[frame.index]?.trim()} onClick={() => generate('revise', 'storyboards', frame.index, boardFeedback[frame.index]?.trim())}>Revise storyboard {frame.index + 1} · {price}</button>}
         </li>
       })}</ol>
     </>}

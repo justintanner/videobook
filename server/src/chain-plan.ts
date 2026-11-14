@@ -228,6 +228,7 @@ export type ChainPreflightPlan = {
   fingerprint: string;
   autoApply: boolean;
   effect: "read" | "mutation" | "generation";
+  continueOnFailure?: boolean;
 };
 
 export type ChainPreflightContext = {
@@ -237,6 +238,7 @@ export type ChainPreflightContext = {
   toolSchemas: ReadonlyMap<string, ZodRawShape>;
   autoApplyTools: ReadonlySet<string>;
   effectForTool: (name: string) => "read" | "mutation" | "generation";
+  continueOnFailure?: boolean;
 };
 
 type ChainPreflightSuccess = {
@@ -793,6 +795,7 @@ export async function preflightChainPlan(
       }),
       autoApply,
       effect,
+      ...(context.continueOnFailure ? { continueOnFailure: true } : {}),
     },
   };
 }

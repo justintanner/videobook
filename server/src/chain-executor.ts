@@ -92,6 +92,7 @@ export type ChainRunRecord = {
   autoApply: boolean;
   effect: "read" | "mutation" | "generation";
   awaitingStepId: string | null;
+  continueOnFailure?: boolean;
 };
 
 type ChainStore = {
@@ -690,7 +691,15 @@ function recordFromPlan(
       } : null,
       review: null,
     })),
+    ...(plan.continueOnFailure ? { continueOnFailure: true } : {}),
   };
+}
+
+function failedRunError(steps: readonly ChainStepRecord[]): string | null {
+  const failed = steps.filter((step) => step.status === "failed");
+  if (failed.length === 0) return null;
+  const first = failed[0]!.error ?? "A step failed";
+  return failed.length === 1 ? first : `${failed.length} of ${steps.length} steps failed. ${first}`;
 }
 
 async function runChain(
@@ -712,6 +721,7 @@ async function runChain(
         prior.set(record.id, record.outputs);
         continue;
       }
+      if (record.status === "failed") continue;
       if (signal.aborted) {
         record.status = "cancelled";
         for (const later of run.steps.slice(index + 1)) {
@@ -784,6 +794,14 @@ async function runChain(
         const cancelled = signal.aborted || /cancel/i.test(message);
         record.status = cancelled ? "cancelled" : "failed";
         record.error = message;
+        if (!cancelled && plan.continueOnFailure) {
+          run.updatedAt = nowIso();
+          saveRun(engine, run);
+          if (record.childJobIds.length > 0) {
+            await abortOwnedJobs(engine, record.childJobIds).catch(() => undefined);
+          }
+          continue;
+        }
         for (const later of run.steps.slice(index + 1)) {
           if (later.status === "pending") later.status = "skipped";
         }
@@ -798,8 +816,8 @@ async function runChain(
         return;
       }
     }
-    run.status = "completed";
-    run.error = null;
+    run.error = failedRunError(run.steps);
+    run.status = run.error === null ? "completed" : "failed";
     run.awaitingStepId = null;
     run.updatedAt = nowIso();
     saveRun(engine, run);
@@ -909,6 +927,7 @@ export function retryChainRun(
   engine: Engine,
   chainId: string,
   lookup: ToolLookup,
+  options: { continueOnFailure?: boolean } = {},
 ): ChainRunRecord {
   const run = getChainRun(engine, chainId);
   if (!run) throw new Error("Chain run not found");
@@ -916,6 +935,7 @@ export function retryChainRun(
   if (run.status !== "failed" && run.status !== "interrupted") {
     throw new Error("Only a failed or interrupted chain can be retried");
   }
+  if (options.continueOnFailure) run.continueOnFailure = true;
   for (const step of run.steps) {
     if (step.status !== "failed" && step.status !== "interrupted" && step.status !== "skipped") continue;
     step.status = step.approval ? "approved" : "pending";
@@ -1009,6 +1029,7 @@ function planFromRecord(run: ChainRunRecord): ChainPreflightPlan {
       effect: step.effect ?? "mutation",
       requiresApproval: step.requiresApproval ?? true,
     })),
+    ...(run.continueOnFailure ? { continueOnFailure: true } : {}),
   };
 }
 

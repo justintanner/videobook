@@ -108,7 +108,10 @@ own approval with its estimate:
    bars, borders, black or blurred bars and shade gradients. Printing that is
    physically in the scene, such as a logo on an umbrella, stays. Regenerate a
    frame, revise its clean-up with a short instruction, or choose an earlier
-   version.
+   version. When one frame's clean-up fails, for example because the model
+   refuses it, the other frames are still cleaned. The failed frame shows its
+   error and can be regenerated or revised on its own, and the goal stays on
+   this tab until every frame is clean.
 2. **Frame:** the opening still, made with GPT Image 2.6 from the source
    images and, for a short made from a video, clean storyboard frame 1. That
    frame gives the camera angle, framing, pose and action; the people and

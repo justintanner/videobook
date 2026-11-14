@@ -12,7 +12,7 @@ import type { CanvasNode } from '../../src/videobook/notebook-canvas'
 import { defaultShortTab, LEGACY_GOAL_NOTE, type GoalSnapshot, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
 import { goalShortPlanSchema, withShortFinishTitle, type ShortFinishTitle } from '../../server/src/goal-short-plan'
-import { legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, storyboardPlanFixture } from './goal-short-fixtures'
+import { legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, storyboardPlanFixture, withStoryboardFailures } from './goal-short-fixtures'
 
 const noop = async () => shortGoalFixture()
 
@@ -296,6 +296,33 @@ describe('GoalShortReview with a storyboard', () => {
     expect(html).toContain('aria-label="Storyboard 3 feedback"')
     expect(button(html, 'Revise storyboard 3')).toContain('disabled=""')
     expect(button(html, 'Remove on-screen graphics')).toBe('')
+  })
+
+  it('shows a refused frame with its error, a regenerate and a revise, and a frame another failure stopped as not run', () => {
+    const goal = withStoryboardFailures(boardGoal({ stages: { storyboards: shortStage('storyboards', [1, 2].map(index => ({ index, artifactId: `clean-${index + 1}` }))) } }), {
+      0: { kind: 'failed', message: 'Nano Banana 2.1 Edit refused this request.' },
+      3: { kind: 'not-run', message: 'Not run: storyboard 1 failed first.' },
+    })
+    const html = render(goal, 'storyboard')
+    expect(html).toMatch(/Storyboard 1<\/strong><span>0\.8 s<\/span><span>Failed<\/span><span>\$0\.21<\/span>/u)
+    expect(html).toContain('data-state="failed"')
+    expect(html).toContain('<span class="goal-media goal-media-pending">Clean-up failed</span>')
+    expect(html).toContain('<p role="alert" class="goal-panel-warning">Nano Banana 2.1 Edit refused this request.</p>')
+    expect(button(html, 'Regenerate storyboard 1')).toContain('Regenerate storyboard 1 · $0.21')
+    expect(button(html, 'Regenerate storyboard 1')).not.toContain('disabled')
+    expect(html).toContain('aria-label="Storyboard 1 feedback"')
+    expect(button(html, 'Revise storyboard 1')).toContain('Revise storyboard 1 · $0.21')
+    expect(html).not.toContain('aria-label="Storyboard 1 versions"')
+    expect(html).toMatch(/Storyboard 4<\/strong><span>5\.3 s<\/span><span>Not run<\/span>/u)
+    expect(html).toContain('<span class="goal-media goal-media-pending">Not run</span>')
+    expect(html).toContain('<p class="goal-panel-muted">Not run: storyboard 1 failed first.</p>')
+    expect(button(html, 'Regenerate storyboard 4')).toBe('')
+    expect(html).not.toContain('Storyboard 4 feedback')
+    expect(html).not.toContain('Not cleaned yet')
+    expect(button(html, 'Remove on-screen graphics')).toContain('Remove on-screen graphics · $0.42')
+    const cleaning = render({ ...goal, status: 'running', storyboard: { ...goal.storyboard!, frames: goal.storyboard!.frames.map(frame => frame.index === 0 ? { ...frame, failure: null } : frame) } }, 'storyboard')
+    expect(cleaning).toMatch(/Storyboard 1<\/strong><span>0\.8 s<\/span><span>Cleaning<\/span>/u)
+    expect(cleaning).toMatch(/Storyboard 4<\/strong><span>5\.3 s<\/span><span>Not run<\/span>/u)
   })
 
   it('marks a frame made from an earlier clean storyboard frame 1 out of date', () => {

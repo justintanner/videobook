@@ -77,6 +77,14 @@ export function goalStoryboardClean(goal: ShortGoalSnapshot): boolean {
   return (goal.storyboard?.frames ?? []).every(frame => frame.clean)
 }
 
+function goalStoryboardFailures(goal: ShortGoalSnapshot): number {
+  return (goal.storyboard?.frames ?? []).filter(frame => frame.failure?.kind === 'failed').length
+}
+
+function storyboardFailureText(goal: ShortGoalSnapshot): string {
+  return `Storyboard: ${goalStoryboardFailures(goal)} of ${goal.storyboard?.frames.length ?? 0} failed`
+}
+
 export function goalStoryboardEstimate(goal: ShortGoalSnapshot): GoalEstimate {
   const frames = goal.storyboard?.frames ?? []
   const missing = frames.filter(frame => !frame.clean)
@@ -197,10 +205,11 @@ function goalShots(goal: ShortGoalSnapshot, stage: GoalGenerationStage): GoalSho
   return shortRows(shortPlanOf(goal), stage).map(row => {
     const step = steps.get(stageStepId(stage, row.index))
     const output = run?.outputs.find(item => item.index === row.index)
+    const failure = !step && !output && stage === 'storyboards' ? goal.storyboard?.frames.find(frame => frame.index === row.index)?.failure ?? null : null
     return {
-      ...row, state: shotState(goal, step, Boolean(output)), startedAt: step?.startedAt ?? null,
+      ...row, state: failure ? failure.kind === 'failed' ? 'failed' : 'skipped' : shotState(goal, step, Boolean(output)), startedAt: step?.startedAt ?? null,
       cellId: step?.cellId ?? output?.cellId ?? null, address: step?.address ?? output?.address ?? null,
-      artifactId: step?.status === 'completed' ? step.artifactId : output?.artifactId ?? null, error: step?.error ?? null,
+      artifactId: step?.status === 'completed' ? step.artifactId : output?.artifactId ?? null, error: step?.error ?? failure?.message ?? null,
     }
   })
 }
@@ -250,6 +259,7 @@ export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null
   if (finish?.status === 'running') return statusLine('Burning the saved watermark', 'Finishing', null, 'live', true)
   if (finish?.status === 'failed') return statusLine('Finishing failed', 'Finishing failed', 'Finish', 'attention', false)
   if (progress.phase === 'review') {
+    if (goal.stage === 'storyboards' && goalStoryboardFailures(goal) > 0) return statusLine(storyboardFailureText(goal), 'Review', 'Review', 'attention', false)
     if (goal.stage === 'storyboards') return statusLine(`Review storyboard · ${shortEstimateText(goalStoryboardEstimate(goal))}`, 'Review', 'Review', 'review', false)
     if (goal.stage !== 'videos') return statusLine(`Review frame · ${shortEstimateText(goal.estimate.frame)}`, 'Review', 'Review', 'review', false)
     const next = progress.shots.find(shot => shot.state !== 'done' || goalStillStale(goal, 'videos', shot.index))?.index
@@ -267,7 +277,8 @@ export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null
   if (progress.phase === 'failed' || progress.phase === 'interrupted') {
     const word = progress.phase === 'failed' ? 'failed' : 'interrupted'
     const number = (progress.active?.index ?? 0) + 1
-    const text = !goal.chainId ? `Planning ${word}` : progress.stage === 'videos' ? `Clip ${number} ${word}` : progress.stage === 'storyboards' ? `Storyboard ${number} ${word}` : `Frame ${word}`
+    const board = progress.phase === 'failed' && goalStoryboardFailures(goal) > 0 ? storyboardFailureText(goal) : `Storyboard ${number} ${word}`
+    const text = !goal.chainId ? `Planning ${word}` : progress.stage === 'videos' ? `Clip ${number} ${word}` : progress.stage === 'storyboards' ? board : `Frame ${word}`
     return statusLine(text, progress.phase === 'failed' ? 'Failed' : 'Interrupted', 'Retry', 'attention', false)
   }
   if (progress.phase === 'complete') return statusLine(`Short ready · ${formatGoalClock(goalPlanSeconds(short))}`, 'Done', 'Preview', 'done', false)
@@ -288,17 +299,19 @@ export function goalWake(previous: GoalSnapshot, current: GoalSnapshot): GoalWak
   let from = goalStatusLine(previous).text
   const revised = revisionLabel(current)
   const stopped = stoppedStillLabel(previous, before, after, current)
+  const boardFailed = after.phase === 'review' && before.phase === 'storyboards' && goalStoryboardFailures(current) > 0
   if (after.phase === 'failed' || after.phase === 'interrupted') from = goalStatusLine(current).text
   else if (after.phase === 'complete') from = 'Short ready'
   else if (before.phase === 'planning' && after.phase === 'review') from = 'Plan ready'
   else if (stopped) from = stopped
+  else if (boardFailed) from = storyboardFailureText(current)
   else if (after.phase === 'review' && revised) from = `${capitalized(revised)} revised`
   else if (after.phase === 'review' && before.stage === 'storyboards') from = 'Storyboard clean'
   else if (after.phase === 'review' && after.stage === 'videos' && before.stage === 'frame') from = 'Frame ready'
   else if (after.phase === 'review' && after.stage === 'videos') from = `Clip ${Math.max(1, after.done)} ready`
   else if (before.phase === 'review') from = revised ? `Revising ${revised}` : { storyboards: 'Storyboard approved', frame: 'Frame approved', videos: 'Clip approved' }[after.stage]
   else if (before.phase === 'failed' || before.phase === 'interrupted') from = `Retrying the ${{ storyboards: 'storyboard', frame: 'frame', videos: 'clip' }[after.stage]}`
-  return { id, from, tone: after.phase === 'failed' || after.phase === 'interrupted' ? 'attention' : 'live' }
+  return { id, from, tone: after.phase === 'failed' || after.phase === 'interrupted' || boardFailed ? 'attention' : 'live' }
 }
 
 export function composerGoal(goals: readonly GoalSnapshot[]): ShortGoalSnapshot | null {
@@ -437,7 +450,8 @@ export function goalTileView(goal: GoalSnapshot | null, label: string | undefine
         : shot.seconds > 0 && (shot.state === 'done' || shot.state === 'planned') ? shot.state === 'done' ? formatGoalClock(shot.seconds) : `${shot.seconds}s` : goalShotStateLabel(shot.state),
       startedAt: shot.state === 'generating' ? shot.startedAt : null,
     })),
-    hiddenRows: shots.length - visible.length, note: tileNote(goal, progress), noteTone: tileChips[progress.phase].tone,
+    hiddenRows: shots.length - visible.length, note: tileNote(goal, progress),
+    noteTone: progress.phase === 'review' && goal.stage === 'storyboards' && goalStoryboardFailures(goal) > 0 ? 'attention' : tileChips[progress.phase].tone,
     chip: goal.finish?.status === 'running' ? { label: 'Finishing', tone: 'live' } : tileChips[progress.phase],
     progressPercent: overallProgress(goal),
     shotsLabel: short.segments.length === 1 ? `1 × ${seconds}s` : `${short.segments.length} clips · ${seconds}s`,
