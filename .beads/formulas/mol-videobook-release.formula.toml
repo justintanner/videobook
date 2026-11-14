@@ -172,18 +172,40 @@ printf '%s' "{{version}}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "STOP:
 
 The rig checkout carries gc-managed files (`.agents/`, `.gc/`,
 `.codex/hooks.json`) that fail the release script's clean-tree check, so
-release from a fresh clone of GitHub `main`. Keep it outside `/tmp` scratch
-that a session restart can wipe.
+release from a fresh clone of GitHub `main`. The clone, the release log and
+the exit file live in `/gc/.videobook-npm-release`, on the persistent `/gc`
+volume. A session restart can wipe `/tmp`, and a city redeploy rebuilds the
+container, which wipes `/root` (`$HOME`) as well. Until the final push, the
+clone holds the only copy of the local release commit and of
+`.artifacts/release-{{version}}`, and finishing a published release needs
+both.
 
 ```bash
-work="$HOME/.videobook-release/v{{version}}"
+work=/gc/.videobook-npm-release/v{{version}}
+if [ -d "$work" ] && ! npm view "videobook@{{version}}" version 2>&1 | grep -q E404; then
+  echo "KEEP $work: npm has videobook@{{version}} or did not answer" >&2
+  exit 1
+fi
 rm -rf "$work"
-mkdir -p "$(dirname "$work")"
+mkdir -p /gc/.videobook-npm-release
 git clone --branch main https://github.com/justintanner/videobook.git "$work"
 cd "$work"
 git fetch origin stable --tags
 npm ci
 ```
+
+**After a session restart or a city redeploy,** recreate nothing but the
+session: `/gc/.videobook-npm-release` survives both. Ask npm with
+`npm view "videobook@{{version}}" version`:
+  - It fails with E404: nothing was published or pushed. Start again from
+    the block above, which replaces the clone.
+  - It prints {{version}}: the publish happened, and the block above keeps
+    the clone. Run the credential check (step 5 below), then skip to
+    sub-step 4 and rerun its command in that clone: the release script takes
+    the finish-published path from the tested tarball and the recorded
+    release commit.
+  - It fails another way: npm did not answer. Ask again. Never remove the
+    clone by hand.
 
 **5. Verify the publish credential and GitHub auth:**
 ```bash
@@ -202,7 +224,7 @@ push cannot authenticate.
 
 **1. GitHub CI is green for the `origin/main` commit being released:**
 ```bash
-cd "$HOME/.videobook-release/v{{version}}"
+cd /gc/.videobook-npm-release/v{{version}}
 main_sha=$(git rev-parse origin/main)
 run_id=$(gh run list --branch main --workflow CI --commit "$main_sha" --limit 1 --json databaseId --jq '.[0].databaseId')
 [ -n "$run_id" ] || { echo "STOP: no GitHub CI run for $main_sha" >&2; exit 1; }
@@ -238,7 +260,7 @@ tag, `stable`, push, and GitHub release.
 
 **1. Bump the package version:**
 ```bash
-cd "$HOME/.videobook-release/v{{version}}"
+cd /gc/.videobook-npm-release/v{{version}}
 npm version {{version}} -w server --no-git-tag-version
 ```
 
@@ -287,21 +309,24 @@ run, the final `git push origin main` fails after publishing and tagging;
 recover with a merge as described below.
 
 ```bash
-cd "$HOME/.videobook-release/v{{version}}"
+cd /gc/.videobook-npm-release/v{{version}}
 if [ "{{dry_run}}" = "true" ]; then
   flags="--dry-run"
 else
   flags="--push"
 fi
-VIDEOBOOK_TEST_WORKERS=2 npm run release -- {{version}} $flags 2>&1 | tee "$HOME/.videobook-release/v{{version}}.log"
+VIDEOBOOK_TEST_WORKERS=2 npm run release -- {{version}} $flags 2>&1 | tee /gc/.videobook-npm-release/v{{version}}.log
 ```
 
 The run takes about an hour on the shared gc box. The controller kills
 sessions that end their turn holding a claim, and that also kills background
 gates. Start the command with `run_in_background` through a wrapper that
 heartbeats the claim (`gc bd` heartbeat, lease 5 min) and writes the exit code
-to `$HOME/.videobook-release/v{{version}}.exit`, then keep the turn alive with
-foreground waits of at most 9 minutes until that file exists.
+to `/gc/.videobook-npm-release/v{{version}}.exit` (remove an old one first),
+then keep the turn alive with foreground waits of at most 9 minutes until that
+file exists. A session restart or a city redeploy stops the run but keeps the
+release directory: follow the restart steps under **Make a fresh release
+clone** in sub-step 1.
 
 On a non-zero exit:
   - A gate failed before publishing: nothing is on npm and nothing is pushed.
@@ -317,7 +342,7 @@ at the tested release commit before it pushes `main`. Merge the new `main`
 on top of that commit:
 
 ```bash
-cd "$HOME/.videobook-release/v{{version}}"
+cd /gc/.videobook-npm-release/v{{version}}
 git fetch origin
 git merge --no-edit origin/main
 ```
@@ -331,7 +356,7 @@ HEAD`. Never rebase, republish, or move the tag. If a rebase already
 happened, put the clone back on the tested commit and merge:
 
 ```bash
-cd "$HOME/.videobook-release/v{{version}}"
+cd /gc/.videobook-npm-release/v{{version}}
 git reset --hard "v{{version}}^{commit}"
 git fetch origin
 git merge --no-edit origin/main
@@ -343,7 +368,7 @@ under `## [Unreleased]` into the `{{version}}` section, and the rerun writes
 the GitHub release notes from that section. This must print nothing:
 
 ```bash
-cd "$HOME/.videobook-release/v{{version}}"
+cd /gc/.videobook-npm-release/v{{version}}
 diff <(git show "v{{version}}:server/CHANGELOG.md" | node scripts/changelog-section.mjs {{version}} /dev/stdin) \
   <(node scripts/changelog-section.mjs {{version}})
 ```
@@ -365,15 +390,24 @@ v{{version}} is pushed, and the GitHub release exists`.
 
 # Sub-step 5: Verify and close
 
+The block removes the release directory only after every check passes; until
+then a rerun of sub-step 4 can still finish the release from it.
+
 ```bash
-git -C "$HOME/.videobook-release/v{{version}}" fetch origin
-test "$(git -C "$HOME/.videobook-release/v{{version}}" rev-parse origin/stable)" = "$(git -C "$HOME/.videobook-release/v{{version}}" rev-parse 'v{{version}}^{commit}')"
-git -C "$HOME/.videobook-release/v{{version}}" merge-base --is-ancestor origin/stable origin/main
-npm view videobook dist-tags.latest   # expect {{version}}
-gh release view "v{{version}}" --repo justintanner/videobook
+work=/gc/.videobook-npm-release/v{{version}}
+git -C "$work" fetch origin
+tag=$(git -C "$work" rev-parse 'v{{version}}^{commit}')
+test "$(npm view videobook dist-tags.latest)" = "{{version}}" || { echo "STOP: npm latest is not {{version}}" >&2; exit 1; }
+test "$(git -C "$work" rev-parse origin/stable)" = "$tag" || { echo "STOP: origin/stable is not at v{{version}}" >&2; exit 1; }
+test "$(git -C "$work" ls-remote origin 'refs/tags/v{{version}}^{}' | cut -f1)" = "$tag" || { echo "STOP: origin has no v{{version}} tag at $tag" >&2; exit 1; }
+git -C "$work" merge-base --is-ancestor origin/stable origin/main || { echo "STOP: origin/main does not contain v{{version}}" >&2; exit 1; }
+gh release view "v{{version}}" --repo justintanner/videobook >/dev/null || { echo "STOP: the GitHub release v{{version}} is missing" >&2; exit 1; }
+rm -rf "$work" "$work.log" "$work.exit"
+rmdir --ignore-fail-on-non-empty /gc/.videobook-npm-release
 ```
 
-If `origin/stable` is not at the tag, STOP and mail the mayor.
+If it prints `STOP`, it removed nothing: STOP and mail the mayor with its
+output.
 
 ```bash
 release_bead="{{release_bead}}"
@@ -382,10 +416,10 @@ if [ -z "$release_bead" ]; then
 fi
 bd close "$release_bead" --reason "Published videobook {{version}} on npm latest; v{{version}} tagged on stable; stable and main pushed; GitHub release created"
 bd remember --key videobook-last-release "version={{version}} tag=v{{version}} release_bead=$release_bead released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-rm -rf "$HOME/.videobook-release/v{{version}}"
 gc runtime drain-ack
 ```
 
 **Exit criteria:** npm `latest` is {{version}}, `origin/stable` is at
-`v{{version}}`, `main` contains it, the GitHub release exists, the release bead
-is closed, and the drain is acknowledged.'''
+`v{{version}}`, `main` contains it, the GitHub release exists, the release
+directory is removed, the release bead is closed, and the drain is
+acknowledged.'''
