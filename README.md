@@ -188,6 +188,38 @@ frames), the goal tile and its generators, image versions (clean storyboard
 frames and frames), and clip versions. **Stop goal** stops the remaining work;
 requests already submitted may still finish.
 
+## On-screen graphics
+
+`/graphics @a1` (also `/overlay` and `/osg`), the cell menu or the media dock
+opens a video's graphics: layers of text, images, QR codes and shade, placed in
+the platform's safe area and sized to the frame, so one look fits 9:16, 1:1 and
+16:9. The editor previews with the same drawing code the render uses, saves as
+you edit, and renders only when you press Render: into a new connected cell by
+default, or in place.
+
+- **Motion.** Each layer enters and exits with Fade, Slide (from or to the
+  nearest edge), Pop or, for text, Words (one word after another). The fade
+  length is how long the move takes.
+- **Subtitles and graphics in one render.** When the video has a subtitle
+  draft, **With subtitles** draws both in one pass into one new cell, with the
+  subtitles on top. The subtitle editor has the matching **With graphics**
+  switch.
+- **Frame.** Reframe the render to 9:16, 1:1, 4:5 or 16:9, cropped around a
+  focus point you drag or filled out with a blurred copy of the video. The
+  preview shows the graphics on that frame, and a reframed render always makes
+  a new cell.
+- **Templates.** Save a look as a template of the book, make it the book's
+  default look, or copy templates into another book. To give several videos
+  one look, select their cells and choose **Apply graphics template** from the
+  cell menu: each video keeps its typed text, credit, handle and frame, and
+  **Render into new cells** makes a new cell per video.
+- **Watermark.** `/watermark @a1` opens the editor on the platform's watermark
+  look. `apply_watermark` and `/goal` finishing burn the saved watermark
+  template through the same renderer.
+
+`render_video` draws no overlay image and no graphics: put graphics on a video
+with the editor or the watermark burn.
+
 ## Generation models
 
 New image editing sessions also default to **Nano Banana 2.1 Edit**. Explicit

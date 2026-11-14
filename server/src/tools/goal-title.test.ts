@@ -194,6 +194,9 @@ describe("video_goal burned title", () => {
     expect(prompt).toContain("Source image 1: Character 1");
     expect(prompt).not.toMatch(/TRANSCRIPT|ANALYSIS|@a1/u);
     expect(titleJobs().map((job) => job.payload)).toEqual([{ type: "suggest_graphics", bookId, goalId: goal.goalId }]);
+    expect(engine.usage.recent(20).filter((entry) => entry.provider === "openai")).toEqual([
+      expect.objectContaining({ externalId: "resp_short", status: "completed", inputTokens: 10, outputTokens: 10 }),
+    ]);
     const after = await status(goal.goalId);
     expect(after.revision).toBe(goal.revision);
     expect(after.shortPlan?.finish).not.toHaveProperty("title");

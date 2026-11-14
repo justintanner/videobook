@@ -8,6 +8,31 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- On-screen graphics can move as well as fade. Each layer has an Enter and an
+  Exit choice: Fade, Slide (in from and out to the nearest frame edge), Pop
+  (growing from 85% as it fades in), and, for text, Words (the words appear one
+  after another). The fade length sets how long each move takes. The editor
+  preview and every render move the same way, and layers left on Fade burn
+  exactly as before.
+- One render can draw subtitles and graphics together. The graphics editor's
+  render has a With subtitles switch, with a language choice when the video
+  has several subtitle drafts, and the subtitle editor's render has a With
+  graphics switch. Either makes one new cell, or a new version of it, with one
+  video encode and the subtitles on top. Over MCP, `video_graphics` `render`
+  takes `with_subtitles` and `subtitles_revision`, and `caption_video`
+  `render` takes `with_graphics` and `graphics_revision`.
+- The graphics editor's Frame control reframes the video to 9:16, 1:1, 4:5 or
+  16:9, either cropped around a focus point you drag or filled out with a
+  blurred copy of the video. The preview and the render lay the graphics out on
+  that frame, and a reframed render always makes a new cell (1080x1920,
+  1080x1080, 1080x1350 or 1920x1080). With subtitles on, the subtitle draft's
+  frame and background are used.
+- A graphics template can be applied to up to 50 videos at once: select video
+  cells and choose Apply graphics template from the cell menu, or run
+  `/apply-graphics-template`. Each video keeps the text typed into its slots,
+  its own credit and handle, and its frame, and with Render into new cells (on
+  by default) gets its own new cell. A video that fails is reported by itself
+  and the others go on. Over MCP this is `video_graphics` op `apply_template`.
 - A `/goal` short's Finish tab has a burned title: a Thai headline and an
   English line under it, burned into the watermark's title block when the short
   finishes. Type it, or click Write title, which shows its estimate first and
@@ -51,6 +76,10 @@ and the package uses [Semantic Versioning](https://semver.org/).
 - The `/goal` planner names a mentioned image or video by the address it had
   when the brief was typed, so the goal's own notebook layout no longer points
   a mention at the wrong cell.
+- Subtitle renders, `render_video` and QR outros first check that the host's
+  hardware H264 encoder can really encode, and render in software when it
+  cannot, so a host that advertises an encoder it cannot load no longer fails
+  these renders.
 
 ## [0.7.1] - 2026-11-13
 

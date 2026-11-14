@@ -477,7 +477,7 @@ describe("slash commands e2e", () => {
       expect(parsed.orientations).toEqual(["landscape"]);
     });
 
-    it("errors for an osg_asset_id that is not an image", async () => {
+    it("refuses the retired osg_asset_id argument", async () => {
       const assetId = await createVideoAsset("my-video2");
       const osgId = await createVideoAsset("osg-not-an-image");
 
@@ -1041,7 +1041,7 @@ describe("slash commands e2e", () => {
       expect(parsed.orientations).toEqual(["portrait"]);
     });
 
-    it("errors when osg_asset_id is nonexistent", async () => {
+    it("refuses the retired osg_asset_id argument even when it names no asset", async () => {
       const fs = createEngineForTest(tempDir);
       const asset = await fs.artifacts.create("vid", "osg-test");
       if (!asset.ok) throw new Error("Failed to create asset");

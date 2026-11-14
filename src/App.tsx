@@ -10210,7 +10210,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       choices[`${kind}_asset_ids`] = selected
     }
     for (const name of ['source_asset_id', 'target_asset_id', 'first_asset_id', 'second_asset_id', 'additional_asset_ids', 'output_artifact_id', 'replacement_artifact_id', 'expected_output_artifact_id', 'exclude_artifact_ids']) choices[name] = mediaChoices
-    for (const name of ['osg_asset_id', 'card_asset_id', 'qr_image_refs', 'character_image_refs', 'first_frame_ref', 'last_frame_ref', 'end_frame_ref']) choices[name] = choices.image_ref!
+    for (const name of ['card_asset_id', 'qr_image_refs', 'character_image_refs', 'first_frame_ref', 'last_frame_ref', 'end_frame_ref']) choices[name] = choices.image_ref!
     choices.motion_video_refs = choices.video_ref!
     choices.layer_asset_id = choices.audio_ref!
     choices.sound_effect_ref = choices.audio_ref!

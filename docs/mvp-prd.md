@@ -193,7 +193,10 @@ Since that audit, on-screen graphics (2026-11) replaced the single-image
 overlay form and the watermark review: each video carries an editable
 document of text, image, QR and shade layers that the editor previews and the
 render burns with the same drawing components, and the watermark burns
-through the same renderer.
+through the same renderer. Since 2026-11-13 the render-time image overlay
+(`set_video_overlay`, `render_video`'s `osg_*` arguments and
+`apply_watermark`'s overlay mode) is retired, and `render_video` draws no
+graphics.
 
 The engine also has opt-in, local, book-scoped similarity for whole image,
 video, audio, and text artifacts. The application does not configure or expose
@@ -440,9 +443,9 @@ parsing requirement are fixed.
 | VB-EDT-009 | P0 | Playback uses proxies when necessary and keeps audio, video, playhead, captions, transcript highlight, and notebook selection synchronized. |
 | VB-EDT-010 | P0 | Keyboard actions cover play/pause, shuttle, frame step, mark in/out, split, delete/ripple delete, undo/redo, search focus, and timeline zoom. |
 | VB-EDT-011 | P1 | Transform, opacity, and volume keyframes are added after creator beta unless benchmark users cannot finish representative projects without them. |
-| VB-EDT-012 | P1 | A video's on-screen graphics are an ordered document of at most 24 text, image, QR, and gradient-shade layers. Each layer has a nine-point anchor inside the platform-safe area, an inset frame, or the whole frame, a size relative to the frame's short side, an opacity, and a time window with optional fades, so one layout fits 9:16, 1:1, and 16:9 video. Latin and Thai text wraps and shrinks to fit with bundled fonts and no network request; text that still overflows is reported, never cut. |
-| VB-EDT-013 | P1 | One graphics editor, opened from `/osg` (also `/overlay` and `/graphics`), the cell menu, the media dock, typed chat, and voice, previews with the same drawing components the render uses; edits through quick fields, a layer timeline that scrubs and trims, an inspector that shows one section at a time, and direct drag, resize, and snapping; autosaves against a revision with undo, redo, and conflict reload; and renders only when Render is pressed, into a new connected cell by default (the source is kept) or in place with the earlier version kept in history. |
-| VB-EDT-014 | P1 | A layout can be saved as a named template of the book, made the default look for the book's videos without graphics, and copied into another book with the images it uses. Built-in starters provide the TikTok title (the default look: the TikTok handle, a big Thai title, and an English line, no QR code), a lower third, a headline, a credit, and a watermark. |
+| VB-EDT-012 | P1 | A video's on-screen graphics are an ordered document of at most 24 text, image, QR, and gradient-shade layers. Each layer has a nine-point anchor inside the platform-safe area, an inset frame, or the whole frame, a size relative to the frame's short side, an opacity, and a time window whose enter and exit are a fade, a slide from or to the nearest frame edge, a pop, or, for text, words that appear one after another, drawn the same way in the preview and every render, so one layout fits 9:16, 1:1, and 16:9 video. Latin and Thai text wraps and shrinks to fit with bundled fonts and no network request; text that still overflows is reported, never cut. |
+| VB-EDT-013 | P1 | One graphics editor, opened from `/osg` (also `/overlay` and `/graphics`), the cell menu, the media dock, typed chat, and voice, previews with the same drawing components the render uses; edits through quick fields, a layer timeline that scrubs and trims, an inspector that shows one section at a time, and direct drag, resize, and snapping; autosaves against a revision with undo, redo, and conflict reload; and renders only when Render is pressed, into a new connected cell by default (the source is kept) or in place with the earlier version kept in history. A render can include the video's subtitle draft in the same pass (subtitles on top, one encode), and can reframe the video to 9:16, 1:1, 4:5, or 16:9 by cropping around a focus point or filling with a blurred copy, with the graphics laid out on that frame and the result always in a new cell. |
+| VB-EDT-014 | P1 | A layout can be saved as a named template of the book, made the default look for the book's videos without graphics, copied into another book with the images it uses, and applied to up to 50 selected videos at once, each keeping its typed slot text, credit, handle, and frame and rendering into its own new cell, with a failed video reported by itself. Built-in starters provide the TikTok title (the default look: the TikTok handle, a big Thai title, and an English line, no QR code), a lower third, a headline, a credit, and a watermark. |
 
 ### 12.6 AI assist and generation
 
@@ -455,7 +458,7 @@ parsing requirement are fixed.
 | VB-AI-005 | P0 | Every generated output is a new artifact with prompt, provider, model, inputs, cost when known, job, and parent action provenance. |
 | VB-AI-006 | P0 | Provider failure preserves the plan and lets the user retry, switch an allowed provider/model, or omit the generation step. |
 | VB-AI-007 | P1 | An evaluator can compare alternative rough cuts or generations side by side without adding all candidates to the primary sequence. |
-| VB-AI-008 | P1 | The graphics credit is filled for free from the downloaded video's platform and uploader. Headline options and a translation of the headline each come from one paid model call, made only when the operator asks; neither starts transcription or analysis, and nothing is applied until an option is picked. A layer that covers a face or on-screen text already found is flagged without a model call, and finding it a clear spot needs a paid vision check only for frames not yet checked. |
+| VB-AI-008 | P1 | The graphics credit is filled for free from the downloaded video's platform and uploader. Headline options and a translation of the headline each come from one paid model call, made only when the operator asks; neither starts transcription or analysis, and nothing is applied until an option is picked. A layer that covers a face or on-screen text already found is flagged without a model call, and finding it a clear spot needs a paid vision check only for frames not yet checked. A goal short's burned title options come from one paid model call (asked again once when an answer breaks the title rules), made only when the operator clicks Write title after seeing its estimate. |
 
 ### 12.7 Export
 
@@ -468,7 +471,7 @@ parsing requirement are fixed.
 | VB-EXP-005 | P0 | A final artifact records the exact sequence revision, renderer version, render settings, input object hashes, and output object hash. |
 | VB-EXP-006 | P0 | A successful export is playable inside Videobook and can be revealed/downloaded without a watermark. |
 | VB-EXP-007 | P1 | Batch export creates multiple orientations from one revision with per-orientation reframe overrides. |
-| VB-EXP-008 | P1 | `/watermark`, `apply_watermark`, and goal finishing build the watermark as graphics layers from the platform's watermark profile or its saved watermark template and burn it through the graphics renderer. The QR code is off by default; when included, it still decodes to the profile URL. |
+| VB-EXP-008 | P1 | `/watermark`, `apply_watermark`, and goal finishing build the watermark as graphics layers from the platform's watermark profile or its saved watermark template and burn it through the graphics renderer. The QR code is off by default; when included, it still decodes to the profile URL. Goal finishing also burns the short's typed or approved Thai title and English line when the watermark template has a headline. |
 
 ## 13. Search quality contract
 
