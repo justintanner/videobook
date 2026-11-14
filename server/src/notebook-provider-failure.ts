@@ -73,6 +73,7 @@ export function notebookProviderFailureMessage(
     ? sanitizeProviderFailureMessage(failure.value.failCode).slice(0, 120)
     : "";
   if (!message && !failCode) return fallback;
+  if (failCode === "content_policy_violation" && message) return message;
   const technical = message || failCode;
   const detail = failCode && !technical.toLowerCase().includes(failCode.toLowerCase())
     ? `${technical} (${failCode})`

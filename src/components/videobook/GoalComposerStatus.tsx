@@ -62,8 +62,8 @@ export function GoalComposerStatus({ goal, disabled = false, onOpen }: GoalCompo
           type="button"
           className="goal-status-button"
           disabled={disabled}
-          aria-label={`Goal ${goal.address ?? ''}: ${line.text}. Open the goal panel`}
-          title={shortPlanOf(goal)?.title ?? goal.brief}
+          aria-label={`Goal ${goal.address ?? ''}: ${line.text}. ${goal.error ? `${goal.error} ` : ''}Open the goal panel`}
+          title={goal.error ?? shortPlanOf(goal)?.title ?? goal.brief}
           onClick={onOpen}
         >
           <Flag size={13} aria-hidden="true" className="goal-status-flag" />
@@ -72,13 +72,13 @@ export function GoalComposerStatus({ goal, disabled = false, onOpen }: GoalCompo
             {wake ? (
               <>
                 <span key={`in:${wake.id}`} className="goal-status-roll goal-status-roll-in" onAnimationEnd={finishWake}>
-                  <GoalStatusText text={line.text} short={line.short} />
+                  <GoalStatusText text={goal.error ?? line.text} short={line.short} />
                 </span>
                 <span key={`out:${wake.id}`} className="goal-status-roll goal-status-roll-out">{wake.from}</span>
               </>
             ) : (
               <span className="goal-status-roll">
-                <GoalStatusText text={line.text} short={line.short} />
+                <GoalStatusText text={goal.error ?? line.text} short={line.short} />
               </span>
             )}
           </span>

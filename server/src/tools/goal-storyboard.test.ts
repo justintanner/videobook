@@ -328,6 +328,28 @@ describe("video_goal storyboard stage", () => {
     expect(stub.unexpected).toEqual([]);
   });
 
+  it("reports a result-GET content refusal consistently and settles it at zero cost", async () => {
+    const goal = await short(`based on @b1 with @a2, ${AUTHORED}`);
+    stub.refuseNext = true;
+    const failed = await approved(goal);
+    const usage = engine.usage.recent(100).find((entry) => entry.provider === "fal" && entry.status === "failed");
+    expect(usage).toMatchObject({ costUsd: 0, basis: "free", units: 0 });
+    expect(usage?.artifactId).toBeTruthy();
+    const artifactId = usage!.artifactId!;
+    const failure = value(engine.jobs.failures.read(artifactId));
+    expect(failure).toMatchObject({ failCode: "content_policy_violation" });
+    expect(failure!.message).toContain("Nano Banana 2.1");
+    expect(failure!.message).toContain("refused this request");
+    expect(failure!.message).toContain("Sending the same request again will most likely be refused again.");
+    expect(failure!.message).not.toContain("Fal API error");
+    expect(value(await engine.metadata.artifacts.read(artifactId, "provider-refusal")))
+      .toMatchObject({ failCode: "content_policy_violation", categories: ["model_moderated"] });
+    expect(failed.error).toContain(failure!.message);
+    const notebook = value(engine.notebooks.read(notebookId));
+    expect(Object.values(notebook.execution ?? {}).some((state) => state.error === failure!.message)).toBe(true);
+    expect(stub.unexpected).toEqual([]);
+  });
+
   it("revises one storyboard frame's clean-up prompt with the feedback before cleaning it again, and keeps the storyboard locked", async () => {
     const goal = await short(`based on @b1 with @a2, ${AUTHORED}`);
     const original = storyboardOf(goal).frames[1]!.prompt;

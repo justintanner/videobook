@@ -13,6 +13,7 @@ export type ShortStub = {
   unexpected: string[];
   media: ShortStubMedia;
   failNext: boolean;
+  refuseNext: boolean;
   reset(): void;
   close(): Promise<void>;
 };
@@ -47,6 +48,7 @@ function kindOf(path: string): "frame" | "clip" | "extend" {
 export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> {
   const served = new Map<string, Buffer>();
   const failing = new Set<string>();
+  const refused = new Set<string>();
   let counter = 0;
   const stub: ShortStub = {
     baseURL: "",
@@ -56,6 +58,7 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
     unexpected: [],
     media,
     failNext: false,
+    refuseNext: false,
     reset() {
       stub.submissions = [];
       stub.plannerRequests = [];
@@ -63,6 +66,8 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
       stub.unexpected = [];
       stub.failNext = false;
       failing.clear();
+      refused.clear();
+      stub.refuseNext = false;
     },
     close: async () => {
       server.closeAllConnections();
@@ -73,6 +78,8 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
     if (method === "POST" && SUBMIT.test(path)) {
       const kind = kindOf(path);
       const id = `${kind}-${++counter}`;
+      if (stub.refuseNext) refused.add(id);
+      stub.refuseNext = false;
       if (stub.failNext) failing.add(id);
       stub.failNext = false;
       served.set(id, kind === "frame" ? stub.media.frame : kind === "clip" ? stub.media.clip : stub.media.extended);
@@ -83,6 +90,11 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
     if (method === "GET" && poll) {
       const id = poll[1]!;
       if (poll[2]) return sendJson(response, failing.has(id) ? { status: "COMPLETED", error: SHORT_STUB_REFUSAL } : { status: "COMPLETED" });
+      if (refused.has(id)) {
+        response.writeHead(422, { "content-type": "application/json" });
+        response.end(JSON.stringify({ detail: [{ loc: ["body"], msg: "The content could not be processed because it contained material flagged by a content checker.", type: "content_policy_violation", url: "https://docs.fal.ai/errors#content_policy_violation", input: "", categories: ["model_moderated"] }] }));
+        return;
+      }
       return sendJson(response, id.startsWith("frame")
         ? { images: [{ url: `${stub.baseURL}/files/${id}.png`, content_type: "image/png" }] }
         : { video: { url: `${stub.baseURL}/files/${id}.mp4`, content_type: "video/mp4" } });

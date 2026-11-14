@@ -1,7 +1,7 @@
 import { seedanceEditFailure } from "../media/seedance-edit.js";
 import { reframeVideoFailure } from "../media/reframe-video.js";
 import { createKie, createXai, createAlibaba, createFal } from "../usage-providers.js";
-import { describeFalError } from "../jobs/_fal-shared.js";
+import { describeFalError, recordFalRefusal } from "../jobs/_fal-shared.js";
 import { currentBookContext, withBookContext } from "../book-context.js";
 import { settleFinishedUsage } from "../provider-usage.js";
 import { legacyMediaForTaskType } from "../media/legacy-task-types.js";
@@ -1371,10 +1371,12 @@ export async function pollPendingProviderTasks(
           });
         }
       } catch (e) {
-        const failMsg = reframeVideoFailure(task.meta?.model ?? task.meta?.falEndpointId, describeFalError(e));
+        const model = typeof task.meta?.model === "string" ? task.meta.model : typeof task.meta?.falEndpointId === "string" ? task.meta.falEndpointId : undefined;
+        const refusal = await recordFalRefusal(engine, task.artifactId, e, model);
+        const failMsg = refusal?.message ?? reframeVideoFailure(model, describeFalError(e));
         result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
         if (falPollFailureIsFinal(e)) {
-          await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+          await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, ...refusal, prompt });
         }
       }
     })));

@@ -12,7 +12,7 @@ import {
   LOWER_BOUND_ESTIMATE_SOURCE,
   lowerBoundWarnings,
 } from "./media/cost.js";
-import { falErrorDetail } from "./jobs/_fal-shared.js";
+import { falErrorDetail, falRefusalCategories } from "./jobs/_fal-shared.js";
 import { currentBookContext } from "./book-context.js";
 import { installedPackageVersion } from "./package-version.js";
 import { httpDotPath, usageQuote, type UsageQuote } from "./usage-quote.js";
@@ -298,9 +298,11 @@ async function nothingBilledUsd(model: string): Promise<number | null> {
 }
 
 async function falNotBilledPatch(exchange: ProviderExchange, status: UsageEntry["status"], model: string): Promise<Partial<UsageEntry> | null> {
-  if (exchange.provider !== "fal" || status === "pending" || statedFalUnits(exchange) !== 0) return null;
+  if (exchange.provider !== "fal" || status === "pending") return null;
+  const refused = exchange.status === 422 && falRefusalCategories(exchange.responseBody) !== null;
+  if (!refused && statedFalUnits(exchange) !== 0) return null;
   if (/\/status$/u.test(new URL(exchange.url).pathname)) return null;
-  const costUsd = await nothingBilledUsd(model);
+  const costUsd = refused ? 0 : await nothingBilledUsd(model);
   if (costUsd === null) return null;
   return {
     status, costUsd, basis: "free", units: 0, unit: "billable-units", actualBasis: "derived",

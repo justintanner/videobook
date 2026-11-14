@@ -1,3 +1,4 @@
+import { falContentRefusal } from "./_fal-shared.js";
 import { submitMediaJob } from "../usage-providers.js";
 import { type GrokImagineImage2ImageEditRequest, type KieProvider, type SeedreamProLayerDecompositionRequest } from "@apicity/kie";
 import {
@@ -1491,7 +1492,8 @@ export function registerImageSubjectJobs(engine: Engine): void {
       await enqueueSearchIndex(engine, payload.imageAssetId);
       return { success: true, imageAssetId: payload.imageAssetId };
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause);
+      const refusal = falContentRefusal(cause, payload.modelId);
+      const message = refusal?.message ?? (cause instanceof Error ? cause.message : String(cause));
       await updateNotebookEditState(engine, payload, "error", message).catch(() => undefined);
       if (payload.generationId) {
         await engine.generations.update(payload.generationId, {
@@ -1499,6 +1501,7 @@ export function registerImageSubjectJobs(engine: Engine): void {
           error: message,
         }).catch(() => undefined);
       }
+      if (refusal) throw new Error(message, { cause });
       throw cause;
     }
   });

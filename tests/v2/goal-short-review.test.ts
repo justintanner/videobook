@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { GoalShortReview } from '../../src/components/videobook/GoalShortReview'
+import { GoalComposerStatus } from '../../src/components/videobook/GoalComposerStatus'
 import { GoalPanel } from '../../src/components/videobook/GoalPanel'
 import type { AssetRecord } from '../../src/videobook/workspace-responses'
 import type { NodeProps } from '@xyflow/react'
@@ -377,5 +378,16 @@ describe('GoalCellNode with an earlier goal', () => {
     expect(html).toContain('>The skateboard champion<')
     expect(html).toContain('>Goal<')
     expect(html).not.toContain(LEGACY_GOAL_NOTE)
+  })
+})
+
+describe('GoalComposerStatus refusal details', () => {
+  it('shows the same refusal in the chip, tooltip and accessible label', () => {
+    const error = 'Nano Banana 2.1 Edit refused this request: its content checker flagged it (model_moderated). Sending the same request again will most likely be refused again. Change the prompt or the input, or use another model.'
+    const goal = shortGoalFixture({ status: 'failed', error })
+    const html = renderToStaticMarkup(createElement(GoalComposerStatus, { goal, onOpen: () => undefined }))
+    expect(html).toContain(`title="${error}"`)
+    expect(html).toContain(`<span class="goal-status-long">${error}</span>`)
+    expect(html).toContain(`${error} Open the goal panel`)
   })
 })

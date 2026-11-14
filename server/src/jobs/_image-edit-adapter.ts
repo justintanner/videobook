@@ -1,3 +1,4 @@
+import { falContentRefusal } from "./_fal-shared.js";
 import { createFal } from "../usage-providers.js";
 import { submitMediaJob } from "../usage-providers.js";
 import type { MediaGenerationRequest } from "@apicity/kie";
@@ -274,7 +275,15 @@ function falImageEditAdapter(model: ResolvedModel): ImageEditAdapter {
       if (!taskMetadata.ok) throw new Error(taskMetadata.error.message);
       return submitted.request_id;
     },
-    awaitResult: (taskId, signal) => awaitFalImages(model, taskId, signal),
+    awaitResult: async (taskId, signal) => {
+      try {
+        return await awaitFalImages(model, taskId, signal);
+      } catch (cause) {
+        const refusal = falContentRefusal(cause, model.id);
+        if (refusal) throw new Error(refusal.message, { cause });
+        throw cause;
+      }
+    },
     parseStoredPayload: (payload) => {
       if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return null;
       if (!("endpoint_id" in payload) || payload.endpoint_id !== model.apiId) return null;

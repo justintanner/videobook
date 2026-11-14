@@ -6,6 +6,10 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fal content-policy refusals name the model, explain how to revise the request, and settle at zero cost.
+
 ## [0.7.3] - 2026-11-14
 
 ### Changed
