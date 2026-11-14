@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-11-14
+
 ### Added
 
 - A storyboard frame whose clean-up failed offers "Clean with" the other
