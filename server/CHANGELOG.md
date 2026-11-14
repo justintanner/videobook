@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-14
+
 ### Added
 
 - On-screen graphics can move as well as fade. Each layer has an Enter and an
