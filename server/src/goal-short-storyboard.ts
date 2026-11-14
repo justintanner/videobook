@@ -3,8 +3,8 @@ import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { findPrimaryMediaFile } from "videobook-engine";
 import { firstEmptyNotebookGridSlots, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
 import {
-  formatShortSeconds, SHORT_STORYBOARD_ASPECT_RATIOS, SHORT_STORYBOARD_MODELS,
-  type ShortStoryboard, type ShortStoryboardAspectRatio, type ShortStoryboardVideo,
+  formatShortSeconds, SHORT_STORYBOARD_ASPECT_RATIOS, SHORT_STORYBOARD_MODELS, SHORT_STORYBOARD_SIZES,
+  type ShortStoryboard, type ShortStoryboardAspectRatio, type ShortStoryboardSize, type ShortStoryboardVideo,
 } from "./goal-short-plan.js";
 import { EXTRACT_FRAME_OUTPUT_ROLE } from "./notebook-cell-outputs.js";
 import { existingFrameCell, readableImage, type UsableImage } from "./notebook-frame-cells.js";
@@ -15,6 +15,7 @@ import { selectSceneCuts } from "./scene-cuts.js";
 import { awaitScenes } from "./tools/detect-scenes.js";
 
 const STORYBOARD_COUNT = 4;
+const CLEANUP_SIZE_SIDES: Record<ShortStoryboardSize, number> = { "1K": 1024, "1.5K": 1536, "2K": 2048 };
 const EDGE_GUARD_SECONDS = 0.25;
 const MIN_PART_SECONDS = 1;
 const CLEANUP_PROMPT = [
@@ -33,6 +34,8 @@ export type StoryboardFrame = UsableImage & {
   atSeconds: number;
   requestedSeconds: number;
   aspectRatio: ShortStoryboardAspectRatio;
+  width: number;
+  height: number;
 };
 
 type CapturedFrame = { artifactId: string; atSeconds: number; label: string };
@@ -114,14 +117,19 @@ function nearestAspectRatio(width: number, height: number): ShortStoryboardAspec
   return SHORT_STORYBOARD_ASPECT_RATIOS.reduce((best, ratio) => distance(ratio) < distance(best) ? ratio : best);
 }
 
-async function frameAspectRatio(engine: Engine, artifactId: string): Promise<ShortStoryboardAspectRatio> {
+async function frameShape(engine: Engine, artifactId: string): Promise<{ aspectRatio: ShortStoryboardAspectRatio; width: number; height: number }> {
   const manifest = await engine.files.manifest(artifactId);
   const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, "image") : null;
   const bytes = file ? await engine.files.read(artifactId, file.name) : null;
   if (!bytes?.ok) throw new Error("A storyboard frame has no readable image.");
   const { width, height } = await sharp(bytes.value).metadata();
   if (!width || !height) throw new Error("A storyboard frame has no readable size.");
-  return nearestAspectRatio(width, height);
+  return { aspectRatio: nearestAspectRatio(width, height), width, height };
+}
+
+export function storyboardCleanupSize(frames: readonly { width: number; height: number }[]): ShortStoryboardSize {
+  const pixels = Math.max(...frames.map((frame) => frame.width * frame.height));
+  return SHORT_STORYBOARD_SIZES.find((size) => CLEANUP_SIZE_SIDES[size] ** 2 >= pixels) ?? "2K";
 }
 
 async function captureMissingFrames(engine: Engine, video: StoryboardVideo, moments: readonly number[], existing: readonly (NotebookCell | null)[]): Promise<(CapturedFrame | null)[]> {
@@ -181,7 +189,7 @@ async function storyboardFrame(engine: Engine, document: NotebookDocument, cellI
     index,
     atSeconds: typeof stamped === "number" ? stamped : requestedSeconds,
     requestedSeconds,
-    aspectRatio: await frameAspectRatio(engine, image.artifactId),
+    ...await frameShape(engine, image.artifactId),
   };
 }
 
@@ -202,6 +210,7 @@ export function shortStoryboard(video: ShortStoryboardVideo, frames: readonly St
   return {
     video,
     model: SHORT_STORYBOARD_MODELS[0],
-    frames: frames.map(({ requestedSeconds: _requested, ...frame }) => ({ ...frame, prompt: CLEANUP_PROMPT })),
+    size: storyboardCleanupSize(frames),
+    frames: frames.map(({ requestedSeconds: _requested, width: _width, height: _height, ...frame }) => ({ ...frame, prompt: CLEANUP_PROMPT })),
   };
 }

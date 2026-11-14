@@ -4,7 +4,10 @@ import { resolveNotebookCellArtifactId } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { replaceNotebookMentions } from "videobook-engine/notebook-mentions";
 import { getApiKey } from "./api-key.js";
-import { grownShortSegments, isLegacyShortDraft, shortStoryboardOf, SHORT_WORD_CEILINGS, type GoalShortDraft, type GoalShortPlan, type ShortAspectRatio } from "./goal-short-plan.js";
+import {
+  grownShortSegments, isLegacyShortDraft, shortStoryboardOf, SHORT_STORYBOARD_MODEL_TITLES, SHORT_STORYBOARD_MODELS, SHORT_WORD_CEILINGS,
+  type GoalShortDraft, type GoalShortPlan, type ShortAspectRatio,
+} from "./goal-short-plan.js";
 import type { GoalGenerationStage } from "./goal-store.js";
 import { SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES, shortBannedWords, shortMentionsPhone } from "./goal-short-rules.js";
 import { loadGuide } from "./tools/rewrite-prompt.js";
@@ -256,9 +259,11 @@ export async function shortPlannerInstructions(input: {
 
 function storyboardRevisionInstructions(plan: GoalShortPlan, index: number): string {
   const part = shortRevisionPart(plan, "storyboards", index);
-  const count = shortStoryboardOf(plan)?.frames.length ?? 1;
+  const storyboard = shortStoryboardOf(plan);
+  const count = storyboard?.frames.length ?? 1;
+  const model = SHORT_STORYBOARD_MODEL_TITLES[storyboard?.model ?? SHORT_STORYBOARD_MODELS[0]];
   return [
-    `Revise the clean-up prompt for storyboard frame ${index + 1} of ${count}, one frame of a video. Nano Banana 2.1 edit follows it to remove the on-screen graphics added on top of the camera picture, such as ${OVERLAYS}, and to fill those areas with what the camera saw.`,
+    `Revise the clean-up prompt for storyboard frame ${index + 1} of ${count}, one frame of a video. ${model} edit follows it to remove the on-screen graphics added on top of the camera picture, such as ${OVERLAYS}, and to fill those areas with what the camera saw.`,
     "Rewrite it so it follows the operator's feedback.",
     FOLLOW_FEEDBACK,
     DROP_CONTRADICTED,

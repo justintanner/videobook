@@ -16,11 +16,20 @@ export const SHORT_EXTEND_MODELS = ["fal:minimax/h3-max/extend-video"] as const;
 export const SHORT_RESOLUTIONS = ["1080P", "768P"] as const;
 export const SHORT_PROMPT_EXPANSIONS = ["disabled", "balanced"] as const;
 export const SHORT_EXTEND_OUTPUTS = ["extended"] as const;
-export const SHORT_STORYBOARD_MODELS = ["fal:google/nano-banana-2.1/edit"] as const;
+export const SHORT_STORYBOARD_MODELS = ["kie:seedream/5-5-image-to-image", "fal:google/nano-banana-2.1/edit"] as const;
+export const SHORT_STORYBOARD_SIZES = ["1K", "1.5K", "2K"] as const;
 export const SHORT_STORYBOARD_ASPECT_RATIOS = ["1:1", "16:9", "21:9", "9:16", "4:3", "3:4", "3:2", "5:4", "4:5", "2:3", "4:1", "1:4", "8:1", "1:8"] as const;
+const SEEDREAM_ASPECT_RATIOS: readonly string[] = ["1:1", "4:3", "3:4", "16:9", "9:16", "2:3", "3:2", "21:9"];
 
 export type ShortAspectRatio = (typeof SHORT_ASPECT_RATIOS)[number];
 export type ShortStoryboardAspectRatio = (typeof SHORT_STORYBOARD_ASPECT_RATIOS)[number];
+export type ShortStoryboardModel = (typeof SHORT_STORYBOARD_MODELS)[number];
+export type ShortStoryboardSize = (typeof SHORT_STORYBOARD_SIZES)[number];
+
+export const SHORT_STORYBOARD_MODEL_TITLES: Record<ShortStoryboardModel, string> = {
+  "kie:seedream/5-5-image-to-image": "Seedream 5.5",
+  "fal:google/nano-banana-2.1/edit": "Nano Banana 2.1",
+};
 
 export const GOAL_SHORT_DEFAULTS = {
   aspectRatio: "9:16",
@@ -87,6 +96,7 @@ const storyboardSchema = z.object({
     label: z.string(),
   }).strict(),
   model: z.enum(SHORT_STORYBOARD_MODELS),
+  size: z.enum(SHORT_STORYBOARD_SIZES).optional(),
   frames: z.array(goalShortImageRefSchema.omit({ slot: true }).extend({
     index: z.number().int().nonnegative(),
     atSeconds: z.number().nonnegative(),
@@ -527,6 +537,11 @@ function frameStep(plan: GoalShortPlan, prompt: string, images: readonly string[
   };
 }
 
+function storyboardOptions(storyboard: ShortStoryboard, aspectRatio: ShortStoryboardAspectRatio): Record<string, string> {
+  if (storyboard.model === "fal:google/nano-banana-2.1/edit") return { aspect_ratio: aspectRatio, output_format: "jpeg" };
+  return { aspect_ratio: SEEDREAM_ASPECT_RATIOS.includes(aspectRatio) ? aspectRatio : "auto", size: storyboard.size ?? "2K", output_format: "jpeg" };
+}
+
 export function compileShortStoryboardStep(storyboard: ShortStoryboard, index: number): ChainStep {
   const frame = storyboard.frames[index];
   if (!frame) throw new RangeError(`The storyboard has ${storyboard.frames.length} frames.`);
@@ -537,7 +552,7 @@ export function compileShortStoryboardStep(storyboard: ShortStoryboard, index: n
       model: storyboard.model,
       prompt: frame.prompt,
       refs: { image: [frame.address] },
-      options: { aspect_ratio: frame.aspectRatio, output_format: "jpeg" },
+      options: storyboardOptions(storyboard, frame.aspectRatio),
     },
   };
 }

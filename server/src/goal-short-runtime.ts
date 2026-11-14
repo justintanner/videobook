@@ -25,6 +25,7 @@ import {
 } from "./goal-store.js";
 import { goalTitleEstimate, type GoalTitleShort } from "./graphics/suggest.js";
 import { assessToolCallEstimate } from "./jobs/cost-estimate-assessment.js";
+import { resolveModel } from "./media/descriptor.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { resolveNotebookArtifactReference } from "./notebook-reference-resolver.js";
@@ -37,7 +38,6 @@ type BriefReferences = { references: ShortReference[]; storyboard: ShortStoryboa
 export type StoryboardFrameFailure = { kind: "failed" | "not-run"; message: string };
 
 const EXTRA_REFERENCE_LIMIT = 12;
-const NO_FAL_KEY = "Set FAL_API_KEY in Settings before generating this stage";
 const NO_OPENAI_KEY = "Set OPENAI_API_KEY in Settings to revise with feedback, or edit the prompt and regenerate.";
 const REVISE_TIMEOUT_MS = 240_000;
 const SETTINGS_LOCKED = "Models, resolution, aspect ratio and rules stay with this short once its frame exists. Start a new /goal to change them.";
@@ -242,6 +242,12 @@ export function shortSegmentStale(goal: GoalRecord, index: number): boolean {
   if (!selectedOutput(goal, "videos", index)) return false;
   if (index > 0 && shortSegmentStale(goal, index - 1)) return true;
   return madeFromStaleSource(goal, "videos", index);
+}
+
+function assertStageKey(plan: GoalShortPlan, stage: GoalGenerationStage): void {
+  const storyboard = stage === "storyboards" ? shortStoryboardOf(plan) : null;
+  const key = storyboard && resolveModel(storyboard.model).provider === "kie" ? "KIE_API_KEY" : "FAL_API_KEY";
+  if (!process.env[key]) throw new Error(`Set ${key} in Settings before generating this stage`);
 }
 
 function shortStoryboardClean(goal: GoalRecord, plan: GoalShortPlan | null): boolean {
@@ -534,7 +540,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   const { stage, indexes } = target;
   const index = indexes[0]!;
   const feedback = args.action === "revise" ? plainFeedback(engine, goal.notebookId, shortFeedbackSchema.parse(args.feedback)) : null;
-  if (!process.env.FAL_API_KEY) throw new Error(NO_FAL_KEY);
+  assertStageKey(content.plan, stage);
   if (feedback && !getApiKey("OPENAI_API_KEY")) throw new Error(NO_OPENAI_KEY);
   assertStageInputs(goal, content.plan, target, readNotebook(engine, goal.notebookId));
   const sourceClip = stage === "videos" && index > 0 ? await continuationSource(engine, goal, index) : null;
@@ -648,6 +654,7 @@ function lockedStoryboard(plan: GoalShortPlan) {
   return {
     video: { artifactId: storyboard.video.artifactId, cellId: storyboard.video.cellId },
     model: storyboard.model,
+    size: storyboard.size ?? null,
     frames: storyboard.frames.map(({ index, atSeconds, aspectRatio, artifactId, cellId, objectHash }) => ({ index, atSeconds, aspectRatio, artifactId, cellId, objectHash })),
   };
 }
@@ -706,7 +713,7 @@ export async function retryShortGoal(engine: Engine, goal: GoalRecord): Promise<
     if (attempt.chainId !== goal.chainId || !attempt.fingerprint) continue;
     if (attempt.fingerprint !== await shortFingerprint(engine, plan, stage, attempt.index, stageSource(goal, stage, attempt.index))) throw new Error(STALE_RETRY);
   }
-  if (!process.env.FAL_API_KEY) throw new Error(NO_FAL_KEY);
+  assertStageKey(plan, stage);
   const { lookup } = await toolLookup(engine);
   retryChainRun(engine, goal.chainId, lookup, { continueOnFailure: stage === "storyboards" });
   return saveGoal(engine, { ...goal, status: "running", error: null });

@@ -10,8 +10,8 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { getChainRun, waitForChainRun } from "../chain-executor.js";
 import { createEngineForTest } from "../engine.js";
 import { formatShortSeconds } from "../goal-short-plan.js";
-import { shortFingerprint } from "../goal-short-runtime.js";
-import { readGoal } from "../goal-store.js";
+import { estimateShort, shortFingerprint } from "../goal-short-runtime.js";
+import { readGoal, requireGoalShortContent, writeGoalShortContent } from "../goal-store.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
 import { configureProviderPollDriverForTests, resetProviderPollDriverForTests } from "../queue.js";
@@ -23,10 +23,12 @@ import { copyVideoFixture } from "../test-media-fixtures.js";
 import { redirectFalStorage, SHORT_STUB_REFUSAL, startShortStub, type ShortStub } from "../test-short-stub.js";
 import type { ShortGoalSnapshot } from "./goal.js";
 
-const CLEANUP_MODEL = "fal:google/nano-banana-2.1/edit";
+const CLEANUP_MODEL = "kie:seedream/5-5-image-to-image" as const;
+const LEGACY_CLEANUP_MODEL = "fal:google/nano-banana-2.1/edit" as const;
 const FRAME_MODEL = "fal:openai/gpt-image-2.6/sunburst/edit";
 const CLIP_MODEL = "fal:minimax/h3-max/reference-to-video";
-const CLEANUP = "/google/nano-banana-2.1/edit";
+const CLEANUP = "/api/v1/jobs/createTask";
+const LEGACY_CLEANUP = "/google/nano-banana-2.1/edit";
 const FRAME_EDIT = "/openai/gpt-image-2.6/sunburst/edit";
 const UMBRELLA = "make a 12s viral TikTok clip based on @b1 but with @a2 holding the umbrella for a monitor lizard, realistic";
 const AUTHORED = 'frame: "He holds a red umbrella over a monitor lizard on a wet lane." beat 1: "He walks beside the lizard, keeping the umbrella over it."';
@@ -87,12 +89,12 @@ describe("video_goal storyboard stage", () => {
 
   beforeEach(async () => {
     stub.reset();
-    for (const [key, setting] of [["FAL_API_KEY", "local-fal-key"], ["OPENAI_API_KEY", "offline-openai-key"], ["VIDEOBOOK_HAR_CAPTURE", "off"]] as const) {
+    for (const [key, setting] of [["FAL_API_KEY", "local-fal-key"], ["KIE_API_KEY", "local-kie-key"], ["OPENAI_API_KEY", "offline-openai-key"], ["VIDEOBOOK_HAR_CAPTURE", "off"]] as const) {
       savedEnv.set(key, process.env[key]);
       process.env[key] = setting;
     }
     restoreFetch = redirectFalStorage(stub.baseURL);
-    restoreEndpoints = configureProviderEndpoints({ falQueueBaseURL: stub.baseURL, openaiBaseURL: stub.baseURL });
+    restoreEndpoints = configureProviderEndpoints({ falQueueBaseURL: stub.baseURL, kieBaseURL: stub.baseURL, kieUploadBaseURL: stub.baseURL, openaiBaseURL: stub.baseURL });
     restoreEstimator = installFalDynamicEstimator(async () => ({ total_cost: 0.21, currency: "USD" }));
     configureProviderPollDriverForTests({ intervalMs: 50 });
     root = await mkdtemp(join(tmpdir(), "videobook-goal-storyboard-"));
@@ -151,6 +153,17 @@ describe("video_goal storyboard stage", () => {
     return settled(await invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision }));
   }
 
+  async function onNanoBanana(goal: ShortGoalSnapshot): Promise<ShortGoalSnapshot> {
+    const stored = readGoal(engine, goal.goalId);
+    const content = requireGoalShortContent(engine, stored);
+    const plan = content.plan;
+    if (plan?.version !== 5 || !plan.storyboard) throw new Error("expected a version 5 plan with a storyboard");
+    const { size: _size, ...storyboard } = plan.storyboard;
+    const legacy = { ...plan, storyboard: { ...storyboard, model: LEGACY_CLEANUP_MODEL } };
+    await writeGoalShortContent(engine, stored, { ...content, plan: legacy, estimate: await estimateShort(engine, legacy, content) });
+    return status(goal.goalId);
+  }
+
   function storyboardOf(goal: ShortGoalSnapshot) {
     const plan = goal.shortPlan;
     if (!plan || plan.version !== 5 || !plan.storyboard) throw new Error("expected a version 5 plan with a storyboard");
@@ -201,23 +214,23 @@ describe("video_goal storyboard stage", () => {
     const goal = await status(planning.goalId);
     expect(goal).toMatchObject({ stage: "storyboards", status: "review", error: null });
     const storyboard = storyboardOf(goal);
-    expect(storyboard).toMatchObject({ video: { artifactId: videoId, cellId: videoCellId, label: "Umbrella walk" }, model: CLEANUP_MODEL });
+    expect(storyboard).toMatchObject({ video: { artifactId: videoId, cellId: videoCellId, label: "Umbrella walk" }, model: CLEANUP_MODEL, size: "1K" });
     expect(storyboard.frames.map((frame) => [frame.index, frame.artifactId, frame.cellId])).toEqual(cells.map((cell, index) => [index, cell.outputArtifactId, cell.id]));
     for (const frame of storyboard.frames) expect(frame.prompt).toMatch(/^Remove every on-screen graphic that was added on top of the camera picture/u);
     expect(sourceImagesOf(goal)).toEqual([expect.objectContaining({ artifactId: imageIds[1], slot: "@image1" })]);
     expect(goal.shortPlan).not.toHaveProperty("character");
     expect(JSON.stringify(goal)).not.toMatch(/Main character|a man in a green shirt/u);
 
-    expect(goal.estimate.storyboards.usd).toBeCloseTo(0.84);
-    expect(goal.estimate.storyboardFrames?.map((estimate) => estimate.usd)).toEqual([0.21, 0.21, 0.21, 0.21]);
-    expect(goal.estimate.total.usd).toBeCloseTo(0.84 + goal.estimate.frame.usd! + goal.estimate.videos.usd!);
+    expect(goal.estimate.storyboards).toEqual({ usd: expect.closeTo(0.1008), warnings: [] });
+    expect(goal.estimate.storyboardFrames?.map((estimate) => estimate.usd)).toEqual(Array.from({ length: 4 }, () => expect.closeTo(0.0252)));
+    expect(goal.estimate.total.usd).toBeCloseTo(0.1008 + goal.estimate.frame.usd! + goal.estimate.videos.usd!);
     expect(goal.storyboard).toMatchObject({
       video: { artifactId: videoId },
       model: CLEANUP_MODEL,
-      estimate: { usd: expect.closeTo(0.84) },
+      estimate: { usd: expect.closeTo(0.1008) },
       frames: storyboard.frames.map((frame) => ({
         index: frame.index, atSeconds: frame.atSeconds,
-        raw: { artifactId: frame.artifactId, cellId: frame.cellId, address: frame.address }, clean: null, estimate: { usd: 0.21 },
+        raw: { artifactId: frame.artifactId, cellId: frame.cellId, address: frame.address }, clean: null, estimate: { usd: expect.closeTo(0.0252) },
       })),
     });
 
@@ -257,7 +270,10 @@ describe("video_goal storyboard stage", () => {
     expect(cleaned).toMatchObject({ stage: "frame", status: "review", error: null, revision: goal.revision + 1 });
     expect(stub.submissions.map((submission) => submission.path)).toEqual([CLEANUP, CLEANUP, CLEANUP, CLEANUP]);
     for (const submission of stub.submissions) {
-      expect(submission.body).toMatchObject({ prompt: storyboard.frames[0]!.prompt, aspect_ratio: "9:16", output_format: "jpeg", image_urls: [expect.stringMatching(/^http/u)] });
+      expect(submission.body).toMatchObject({
+        model: "seedream/5-5-image-to-image",
+        input: { prompt: storyboard.frames[0]!.prompt, aspect_ratio: "9:16", size: "1K", output_format: "jpeg", image_urls: [expect.stringMatching(/^http/u)] },
+      });
     }
     expect(mediaJobs(CLEANUP_MODEL).map((job) => (job.payload.refs as { image: string[] }).image).sort())
       .toEqual(storyboard.frames.map((frame) => [frame.artifactId]).sort());
@@ -332,7 +348,7 @@ describe("video_goal storyboard stage", () => {
   });
 
   it("reports a result-GET content refusal consistently and settles it at zero cost", async () => {
-    const goal = await short(`based on @b1 with @a2, ${AUTHORED}`);
+    const goal = await onNanoBanana(await short(`based on @b1 with @a2, ${AUTHORED}`));
     stub.refuseNext = true;
     const refused = await approved(goal);
     const usage = engine.usage.recent(100).find((entry) => entry.provider === "fal" && entry.status === "failed");
@@ -374,7 +390,7 @@ describe("video_goal storyboard stage", () => {
     stub.failNext = true;
     const beforeRevise = stub.submissions.length;
     const refusedAgain = await settled(await invoke({ action: "revise", goal_id: goal.goalId, revision: partial.revision, stage: "storyboards", index: 0, feedback: "Only remove the sticker." }));
-    expect(stub.submissions.slice(beforeRevise)).toEqual([expect.objectContaining({ path: CLEANUP, body: expect.objectContaining({ prompt: REWRITTEN }) })]);
+    expect(stub.submissions.slice(beforeRevise)).toEqual([expect.objectContaining({ path: CLEANUP, body: expect.objectContaining({ input: expect.objectContaining({ prompt: REWRITTEN }) }) })]);
     expect(refusedAgain).toMatchObject({ stage: "storyboards", status: "review", error: null, resumeStage: null, resumeOutputs: null });
     expect(refusedAgain.storyboard!.frames[0]).toMatchObject({ prompt: REWRITTEN, clean: null, failure: { kind: "failed" } });
     expect(refusedAgain.stages.storyboards!.outputs.map((output) => output.artifactId)).toEqual(outputs.map((output) => output.artifactId));
@@ -386,6 +402,34 @@ describe("video_goal storyboard stage", () => {
     expect(cleaned.stages.storyboards!.outputs.map((output) => output.index)).toEqual([0, 1, 2, 3]);
     expect(cleaned.stages.storyboards!.outputs.slice(1).map((output) => output.artifactId)).toEqual(outputs.map((output) => output.artifactId));
     expect(cleaned.storyboard!.frames.map((frame) => frame.failure)).toEqual([null, null, null, null]);
+    expect(stub.unexpected).toEqual([]);
+  });
+
+  it("needs KIE_API_KEY to clean a Seedream storyboard, and keeps a storyboard saved on Nano Banana 2.1 on fal", async () => {
+    const goal = await short(`based on @b1 with @a2, ${AUTHORED}`);
+    delete process.env.KIE_API_KEY;
+    expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: goal.revision })).toBe("Set KIE_API_KEY in Settings before generating this stage");
+    expect(stub.submissions).toEqual([]);
+
+    const legacy = await onNanoBanana(goal);
+    expect(storyboardOf(legacy).model).toBe(LEGACY_CLEANUP_MODEL);
+    expect(storyboardOf(legacy)).not.toHaveProperty("size");
+    expect(legacy.storyboard).toMatchObject({ model: LEGACY_CLEANUP_MODEL });
+    expect(legacy.estimate.storyboardFrames?.map((estimate) => estimate.usd)).toEqual([0.21, 0.21, 0.21, 0.21]);
+    const cleaned = await approved(legacy);
+    expect(cleaned).toMatchObject({ stage: "frame", status: "review", error: null });
+    expect(stub.submissions.map((submission) => submission.path)).toEqual([LEGACY_CLEANUP, LEGACY_CLEANUP, LEGACY_CLEANUP, LEGACY_CLEANUP]);
+    for (const submission of stub.submissions) {
+      expect(submission.body).toMatchObject({ prompt: storyboardOf(legacy).frames[0]!.prompt, aspect_ratio: "9:16", output_format: "jpeg", image_urls: [expect.stringMatching(/^http/u)] });
+      expect(submission.body).not.toHaveProperty("size");
+    }
+    expect(mediaJobs(LEGACY_CLEANUP_MODEL)).toHaveLength(4);
+    const before = stub.submissions.length;
+    const regenerated = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: cleaned.revision, stage: "storyboards", index: 1 }));
+    expect(stub.submissions.slice(before).map((submission) => submission.path)).toEqual([LEGACY_CLEANUP]);
+    expect(regenerated).toMatchObject({ stage: "frame", status: "review", error: null });
+    expect(regenerated.stages.storyboards!.outputs[1]!.versions).toHaveLength(2);
+    expect(mediaJobs(CLEANUP_MODEL)).toEqual([]);
     expect(stub.unexpected).toEqual([]);
   });
 
@@ -405,7 +449,7 @@ describe("video_goal storyboard stage", () => {
       revise: "storyboard frame 2 clean-up", prompt: original, feedback,
       brief: `based on the storyboard with Source image 1, ${AUTHORED}`,
     });
-    expect(stub.submissions.slice(before)).toEqual([expect.objectContaining({ path: CLEANUP, body: expect.objectContaining({ prompt: rewritten }) })]);
+    expect(stub.submissions.slice(before)).toEqual([expect.objectContaining({ path: CLEANUP, body: expect.objectContaining({ input: expect.objectContaining({ prompt: rewritten }) }) })]);
     expect(storyboardOf(revised).frames.map((frame) => frame.prompt)).toEqual([original, rewritten, original, original]);
     expect(revised.stages.storyboards!.outputs[1]!.versions[0]).toMatchObject({ basePrompt: rewritten, feedback, current: true });
     expect(revised).toMatchObject({ stage: "frame", status: "review" });

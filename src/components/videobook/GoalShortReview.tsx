@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  formatShortSeconds, shortFinishTitleInput, shortFinishTitleIssue, SHORT_WORD_CEILINGS, withShortFinishTitle, type GoalShortPlan, type ShortFinishTitle,
+  formatShortSeconds, shortFinishTitleInput, shortFinishTitleIssue, SHORT_STORYBOARD_MODEL_TITLES, SHORT_WORD_CEILINGS, withShortFinishTitle, type GoalShortPlan, type ShortFinishTitle,
 } from '../../../server/src/goal-short-plan'
 import type { GoalGenerationStage } from '../../../server/src/goal-store'
 import type { AssetRecord } from '@/videobook/workspace-responses'
@@ -135,7 +135,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
     <nav className="goal-stage-tabs" aria-label="Short stages">
       {tabs.map(([id, label]) => <button key={id} type="button" className="goal-panel-button" aria-pressed={view === id} onClick={() => onView(id)}>{label}</button>)}
     </nav>
-    <p className="goal-panel-muted">{plan.segments.length === 1 ? '1 clip' : `${plan.segments.length} clips`} · {totalSeconds}s · {plan.aspectRatio} · {storyboard ? 'Nano Banana 2.1 storyboard clean-up · ' : ''}GPT Image 2.6 frame · H3 Max video</p>
+    <p className="goal-panel-muted">{plan.segments.length === 1 ? '1 clip' : `${plan.segments.length} clips`} · {totalSeconds}s · {plan.aspectRatio} · {storyboard ? `${SHORT_STORYBOARD_MODEL_TITLES[storyboard.model]} storyboard clean-up · ` : ''}GPT Image 2.6 frame · H3 Max video</p>
     {notes.length > 0 && <ul className="goal-short-notes" aria-label="Notes">{notes.map((note, index) => <li key={`${index}:${note}`}>{note}</li>)}</ul>}
     {running && <p role="status">{RUNNING[goal.stage === 'storyboards' || goal.stage === 'frame' ? goal.stage : 'videos']}</p>}
     {revising && <p role="status">Writing your feedback into {revising}, then generating…</p>}

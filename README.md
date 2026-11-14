@@ -102,7 +102,7 @@ own approval with its estimate:
 
 1. **Storyboard** (only for a short made from a video): the video's frames in
    order with their times, each before and after its clean-up. **Remove
-   on-screen graphics** runs one Nano Banana 2.1 edit per frame that removes
+   on-screen graphics** runs one Seedream 5.5 Edit per frame on Kie that removes
    what was drawn on top of the picture: captions, titles, stickers, emoji,
    platform logos and watermarks, creator credits with their icons, progress
    bars, borders, black or blurred bars and shade gradients. Printing that is
@@ -169,17 +169,22 @@ garbled text, waxy skin, warped objects, drift from the source image, or mouth
 movement that reads as speech. It is billed like planning and never blocks a
 step.
 
-**Models and keys.** The storyboard clean-up, frames and clips use Nano
-Banana 2.1, GPT Image 2.6 and MiniMax H3 Max through fal with `FAL_API_KEY`.
+**Models and keys.** The storyboard clean-up uses Seedream 5.5 Edit through
+Kie with `KIE_API_KEY`, so a short made from a video needs a Kie key. Each
+frame is sent at its own aspect ratio (or `auto` when Seedream lacks it) at
+the smallest size, 1K, 1.5K or 2K, that keeps the frame's resolution. A
+storyboard saved before this keeps cleaning with Nano Banana 2.1 through fal.
+The frames and clips use GPT Image 2.6 and MiniMax H3 Max through fal with
+`FAL_API_KEY`.
 Planning, revising and the AI-tell check use `OPENAI_API_KEY`; a brief that
 quotes the frame and every beat needs no planning, and without that key an
 unquoted brief uses the plain plan described above. A short's clips and
 finished video skip the speech-to-text pass that imported videos get, so no
 transcription provider is called. H3 Max is billed per requested second, so
-its estimates are lower bounds and read "at least". Nano Banana 2.1 and GPT
-Image 2.6 are priced from fal's historical average, which needs
-`FAL_ADMIN_API_KEY`; without it the clean-up and the frame show their estimate
-as unavailable.
+its estimates are lower bounds and read "at least". Seedream 5.5 is priced
+per frame from Kie's rate for its size. GPT Image 2.6, and Nano Banana 2.1 for
+an earlier storyboard, are priced from fal's historical average, which needs
+`FAL_ADMIN_API_KEY`; without it they show their estimate as unavailable.
 
 **Earlier goals.** Goals saved by earlier versions of `/goal` stay in their
 notebooks as read-only tiles. Their panel lists their images and videos by

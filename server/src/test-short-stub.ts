@@ -74,7 +74,24 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },
   };
-  const route = (method: string, path: string, body: Buffer, response: ServerResponse): void => {
+  const route = (method: string, path: string, body: Buffer, response: ServerResponse, query: URLSearchParams): void => {
+    if (method === "POST" && path === "/api/v1/jobs/createTask") {
+      const id = `frame-${++counter}`;
+      if (stub.failNext) failing.add(id);
+      stub.failNext = false;
+      served.set(id, stub.media.frame);
+      stub.submissions.push({ path, body: JSON.parse(body.toString()) as Record<string, unknown> });
+      return sendJson(response, { code: 200, msg: "success", data: { taskId: id } });
+    }
+    if (method === "GET" && path === "/api/v1/jobs/recordInfo") {
+      const id = query.get("taskId") ?? "";
+      return sendJson(response, { code: 200, msg: "success", data: failing.has(id)
+        ? { taskId: id, state: "fail", failCode: "422", failMsg: SHORT_STUB_REFUSAL, completeTime: Date.now() }
+        : { taskId: id, state: "success", resultJson: JSON.stringify({ resultUrls: [`${stub.baseURL}/files/${id}.png`] }) } });
+    }
+    if (method === "POST" && path === "/api/file-stream-upload") {
+      return sendJson(response, { code: 200, msg: "success", data: { downloadUrl: `${stub.baseURL}/files/kie-upload-${++counter}.png` } });
+    }
     if (method === "POST" && SUBMIT.test(path)) {
       const kind = kindOf(path);
       const id = `${kind}-${++counter}`;
@@ -126,7 +143,10 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
   const server = createServer((request, response) => {
     const chunks: Buffer[] = [];
     request.on("data", (chunk: Buffer) => chunks.push(chunk));
-    request.on("end", () => route(request.method ?? "", new URL(request.url ?? "/", "http://127.0.0.1").pathname, Buffer.concat(chunks), response));
+    request.on("end", () => {
+      const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      route(request.method ?? "", url.pathname, Buffer.concat(chunks), response, url.searchParams);
+    });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   stub.baseURL = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

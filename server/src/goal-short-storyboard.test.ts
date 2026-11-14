@@ -9,10 +9,10 @@ import { findPrimaryMediaFile } from "videobook-engine";
 import { preflightAndAccept, waitForChainRun } from "./chain-executor.js";
 import { createEngineForTest } from "./engine.js";
 import { runFfmpeg } from "./ffmpeg.js";
-import { buildGoalShortPlan, compileShortStoryboardStep } from "./goal-short-plan.js";
+import { buildGoalShortPlan, compileShortStoryboardStep, type ShortStoryboard } from "./goal-short-plan.js";
 import { estimateShort } from "./goal-short-runtime.js";
 import {
-  captureStoryboardFrames, shortStoryboard, storyboardMoments, videoStoryboardMoments,
+  captureStoryboardFrames, shortStoryboard, storyboardCleanupSize, storyboardMoments, videoStoryboardMoments,
   type StoryboardVideo,
 } from "./goal-short-storyboard.js";
 import { installFalDynamicEstimator } from "./media/cost.js";
@@ -24,7 +24,8 @@ import { createTestClient } from "./test-client.js";
 import { redirectFalStorage, startShortStub, type ShortStub } from "./test-short-stub.js";
 import { getAllToolDefs } from "./tools/index.js";
 
-const CLEANUP_MODEL = "fal:google/nano-banana-2.1/edit";
+const CLEANUP_MODEL = "kie:seedream/5-5-image-to-image" as const;
+const LEGACY_CLEANUP_MODEL = "fal:google/nano-banana-2.1/edit" as const;
 const GRAPHICS = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">
   <defs><linearGradient id="shade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.75"/></linearGradient></defs>
   <rect x="0" y="1280" width="1080" height="640" fill="url(#shade)"/>
@@ -71,6 +72,28 @@ describe("storyboardMoments", () => {
   });
 });
 
+describe("storyboard clean-up request", () => {
+  it("picks the smallest Seedream 5.5 size that keeps every frame's pixels", () => {
+    expect(storyboardCleanupSize([{ width: 576, height: 1024 }])).toBe("1K");
+    expect(storyboardCleanupSize([{ width: 720, height: 1280 }])).toBe("1K");
+    expect(storyboardCleanupSize([{ width: 1080, height: 1920 }])).toBe("1.5K");
+    expect(storyboardCleanupSize([{ width: 720, height: 1280 }, { width: 1080, height: 1920 }])).toBe("1.5K");
+    expect(storyboardCleanupSize([{ width: 1440, height: 2560 }])).toBe("2K");
+    expect(storyboardCleanupSize([{ width: 2160, height: 3840 }])).toBe("2K");
+  });
+
+  it("sends Seedream the frame's aspect ratio when it has one, and auto otherwise", () => {
+    const frame = {
+      kind: "image" as const, artifactId: "raw-1", cellId: "raw-1-cell", address: "@a2", label: "Storyboard 1 of 1", objectHash: "5".repeat(64),
+      index: 0, atSeconds: 0.75, aspectRatio: "4:5" as const, prompt: "Remove every overlay.",
+    };
+    const storyboard: ShortStoryboard = { video: { artifactId: "video-1", cellId: null, address: null, label: "Walk" }, model: CLEANUP_MODEL, size: "1K", frames: [frame] };
+    expect(compileShortStoryboardStep(storyboard, 0).params.options).toEqual({ aspect_ratio: "auto", size: "1K", output_format: "jpeg" });
+    expect(compileShortStoryboardStep({ ...storyboard, frames: [{ ...frame, aspectRatio: "21:9" }] }, 0).params.options).toEqual({ aspect_ratio: "21:9", size: "1K", output_format: "jpeg" });
+    expect(compileShortStoryboardStep({ ...storyboard, model: LEGACY_CLEANUP_MODEL }, 0).params.options).toEqual({ aspect_ratio: "4:5", output_format: "jpeg" });
+  });
+});
+
 describe("goal short storyboard of a video", () => {
   let stub: ShortStub;
   let fixtures: string;
@@ -110,12 +133,12 @@ describe("goal short storyboard of a video", () => {
 
   beforeEach(async () => {
     stub.reset();
-    for (const [key, setting] of [["FAL_API_KEY", "local-fal-key"], ["VIDEOBOOK_HAR_CAPTURE", "off"]] as const) {
+    for (const [key, setting] of [["FAL_API_KEY", "local-fal-key"], ["KIE_API_KEY", "local-kie-key"], ["VIDEOBOOK_HAR_CAPTURE", "off"]] as const) {
       savedEnv.set(key, process.env[key]);
       process.env[key] = setting;
     }
     restoreFetch = redirectFalStorage(stub.baseURL);
-    restoreEndpoints = configureProviderEndpoints({ falQueueBaseURL: stub.baseURL });
+    restoreEndpoints = configureProviderEndpoints({ falQueueBaseURL: stub.baseURL, kieBaseURL: stub.baseURL, kieUploadBaseURL: stub.baseURL });
     restoreEstimator = installFalDynamicEstimator(async () => ({ total_cost: 0.21, currency: "USD" }));
     configureProviderPollDriverForTests({ intervalMs: 50 });
     root = await mkdtemp(join(tmpdir(), "videobook-storyboard-"));
@@ -190,10 +213,15 @@ describe("goal short storyboard of a video", () => {
     expect(imageCount()).toBe(images);
   });
 
-  it("builds and prices one on-screen-graphics clean-up per frame, and runs them through fal into connected clean-frame cells", async () => {
+  it("builds and prices one on-screen-graphics clean-up per frame, and runs them through Seedream 5.5 on Kie into connected clean-frame cells", async () => {
     const frames = await captureStoryboardFrames(engine, notebookId, video, await videoStoryboardMoments(engine, bookId, video.artifactId));
+    expect(frames.map((frame) => [frame.width, frame.height])).toEqual([[1080, 1920], [1080, 1920]]);
     const storyboard = shortStoryboard({ artifactId: video.artifactId, cellId: video.cellId, address: "@a1", label: "Umbrella walk" }, frames);
-    expect(storyboard).toMatchObject({ model: CLEANUP_MODEL, frames: frames.map(({ requestedSeconds: _requested, ...frame }) => ({ ...frame, prompt: expect.any(String) })) });
+    expect(storyboard).toMatchObject({
+      model: CLEANUP_MODEL, size: "1.5K",
+      frames: frames.map(({ requestedSeconds: _requested, width: _width, height: _height, ...frame }) => ({ ...frame, prompt: expect.any(String) })),
+    });
+    expect(storyboard.frames[0]).not.toHaveProperty("width");
     const steps = frames.map((frame) => compileShortStoryboardStep(storyboard, frame.index));
     expect(steps[0]).toEqual({
       id: "storyboard1",
@@ -202,7 +230,7 @@ describe("goal short storyboard of a video", () => {
         model: CLEANUP_MODEL,
         prompt: expect.any(String),
         refs: { image: ["@a2"] },
-        options: { aspect_ratio: "9:16", output_format: "jpeg" },
+        options: { aspect_ratio: "9:16", size: "1.5K", output_format: "jpeg" },
       },
     });
     expect(steps.map((step) => step.id)).toEqual(["storyboard1", "storyboard2"]);
@@ -221,16 +249,29 @@ describe("goal short storyboard of a video", () => {
       title: "Umbrella", aspectRatio: "9:16", sourceImages: [], storyboard, framePrompt: "A walk in the rain.", beats: ["They walk on."], segmentSeconds: [12],
     });
     const estimate = await estimateShort(engine, plan, { brief: "walk with the umbrella like @d1", draft: null });
-    expect(estimate.storyboards.usd).toBeCloseTo(0.42);
-    expect(estimate.storyboardFrames?.map((frame) => frame.usd)).toEqual([0.21, 0.21]);
+    expect(estimate.storyboards).toEqual({ usd: expect.closeTo(0.0504), warnings: [] });
+    expect(estimate.storyboardFrames?.map((frame) => frame.usd)).toEqual([expect.closeTo(0.0252), expect.closeTo(0.0252)]);
     const restoreUnpriced = installFalDynamicEstimator(null);
     try {
-      const unpriced = await estimateShort(engine, plan, { brief: "walk with the umbrella like @d1", draft: null });
-      expect(unpriced.storyboards.usd).toBeNull();
-      expect(unpriced.storyboards.warnings.length).toBeGreaterThan(0);
-      expect(unpriced.total.usd).toBeNull();
+      expect((await estimateShort(engine, plan, { brief: "walk with the umbrella like @d1", draft: null })).storyboards.usd).toBeCloseTo(0.0504);
     } finally {
       restoreUnpriced();
+    }
+
+    const { size: _size, ...seedream } = storyboard;
+    const legacy = { ...seedream, model: LEGACY_CLEANUP_MODEL } as const;
+    expect(compileShortStoryboardStep(legacy, 0).params).toEqual({ ...steps[0]!.params, model: LEGACY_CLEANUP_MODEL, options: { aspect_ratio: "9:16", output_format: "jpeg" } });
+    const legacyPlan = buildGoalShortPlan({
+      title: "Umbrella", aspectRatio: "9:16", sourceImages: [], storyboard: legacy, framePrompt: "A walk in the rain.", beats: ["They walk on."], segmentSeconds: [12],
+    });
+    expect((await estimateShort(engine, legacyPlan, { brief: "walk with the umbrella like @d1", draft: null })).storyboardFrames?.map((frame) => frame.usd)).toEqual([0.21, 0.21]);
+    const restoreLegacyUnpriced = installFalDynamicEstimator(null);
+    try {
+      const unpriced = await estimateShort(engine, legacyPlan, { brief: "walk with the umbrella like @d1", draft: null });
+      expect(unpriced.storyboards.usd).toBeNull();
+      expect(unpriced.storyboards.warnings.length).toBeGreaterThan(0);
+    } finally {
+      restoreLegacyUnpriced();
     }
     expect(stub.submissions).toEqual([]);
 
@@ -245,9 +286,12 @@ describe("goal short storyboard of a video", () => {
     }, (name) => defs.find((def) => def.name === name), { actor: "chat" });
     const run = await waitForChainRun(engine, accepted.chainId, testBudget(90_000));
     expect(run.status, run.error ?? "").toBe("completed");
-    expect(stub.submissions.map((submission) => submission.path)).toEqual(["/google/nano-banana-2.1/edit", "/google/nano-banana-2.1/edit"]);
+    expect(stub.submissions.map((submission) => submission.path)).toEqual(["/api/v1/jobs/createTask", "/api/v1/jobs/createTask"]);
     for (const submission of stub.submissions) {
-      expect(submission.body).toMatchObject({ prompt, aspect_ratio: "9:16", output_format: "jpeg", image_urls: [expect.stringMatching(/^http/u)] });
+      expect(submission.body).toMatchObject({
+        model: "seedream/5-5-image-to-image",
+        input: { prompt, aspect_ratio: "9:16", size: "1.5K", output_format: "jpeg", image_urls: [expect.stringMatching(/^http/u)] },
+      });
     }
     const jobs = engine.jobs.queue.list({ type: "generate_media", limit: 10 }).filter((job) => job.payload.model === CLEANUP_MODEL);
     expect(jobs.map((job) => job.payload.refs)).toEqual(expect.arrayContaining(frames.map((frame) => ({ image: [frame.artifactId] }))));

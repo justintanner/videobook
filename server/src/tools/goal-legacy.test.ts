@@ -145,6 +145,6 @@ describe("goals made by an earlier /goal", () => {
     const goalTool = tools.tools.find(tool => tool.name === "video_goal")!;
     const schema = JSON.stringify(goalTool.inputSchema);
     for (const word of ["assemble", "combine", "shot_indexes", "panel"]) expect(schema).not.toContain(word);
-    expect(goalTool.description).not.toMatch(/seedance|kie|panel/iu);
+    expect(goalTool.description).not.toMatch(/seedance|kie:|panel/iu);
   });
 });

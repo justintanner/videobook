@@ -301,13 +301,14 @@ describe('goal mode in the browser', () => {
     await copyVideoFixture({ width: 360, height: 640, durationSec: 3, fps: 12, source: 'color', color: 'green', audio: { frequency: 330 } }, join(fixtures, 'clip.mp4'))
     const clip = await readFile(join(fixtures, 'clip.mp4'))
     const stub = await startShortStub({ frame: await sharp({ create: { width: 360, height: 640, channels: 3, background: '#5b7a4c' } }).png().toBuffer(), clip, extended: clip })
-    const savedKeys = { FAL_API_KEY: process.env.FAL_API_KEY, OPENAI_API_KEY: process.env.OPENAI_API_KEY }
+    const savedKeys = { FAL_API_KEY: process.env.FAL_API_KEY, KIE_API_KEY: process.env.KIE_API_KEY, OPENAI_API_KEY: process.env.OPENAI_API_KEY }
     const savedTagging = readTaggingSettings(engine)
     writeTaggingSettings(engine, { analysisOnNewAssets: false })
     process.env.FAL_API_KEY = 'local-fal-key'
+    process.env.KIE_API_KEY = 'local-kie-key'
     process.env.OPENAI_API_KEY = 'offline-openai-key'
     const restoreFetch = redirectFalStorage(stub.baseURL)
-    const restoreEndpoints = configureProviderEndpoints({ falQueueBaseURL: stub.baseURL, openaiBaseURL: stub.baseURL })
+    const restoreEndpoints = configureProviderEndpoints({ falQueueBaseURL: stub.baseURL, kieBaseURL: stub.baseURL, kieUploadBaseURL: stub.baseURL, openaiBaseURL: stub.baseURL })
     const restoreEstimator = installFalDynamicEstimator(async () => ({ total_cost: 0.21, currency: 'USD' }))
     configureProviderPollDriverForTests({ intervalMs: 200 })
     try {
@@ -353,7 +354,7 @@ describe('goal mode in the browser', () => {
       }
       expect(await tabs.getByRole('button').allTextContents()).toEqual(['Storyboard', 'Frame', 'Video', 'Finish'])
       expect(await tabs.getByRole('button', { name: 'Storyboard', exact: true }).getAttribute('aria-pressed')).toBe('true')
-      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review storyboard · $0.84')
+      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review storyboard · $0.10')
       await expect.poll(() => tile(short).textContent(), { timeout: testBudget(15_000) }).toContain('Storyboard')
       expect(await tile(short).locator('.goal-tile-row-title').allTextContents()).toEqual(['Storyboard', 'Frame'])
       expect(await panel().getByRole('list', { name: 'Storyboard frames' }).getByRole('listitem').count()).toBe(4)
@@ -362,7 +363,7 @@ describe('goal mode in the browser', () => {
       expect(await panel().getByText('Remove the on-screen graphics from the storyboard first', { exact: false }).isVisible()).toBe(true)
       await screenshot('goal-storyboard-first')
       await openTab('Storyboard')
-      await primary(/^Remove on-screen graphics · \$0\.84$/).click()
+      await primary(/^Remove on-screen graphics · \$0\.10$/).click()
       await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review frame · $0.21')
       await openTab('Storyboard')
       for (const index of [1, 2, 3, 4]) expect(await panel().getByRole('button', { name: new RegExp(`^Open Storyboard ${index} after`) }).count()).toBe(1)
@@ -380,7 +381,7 @@ describe('goal mode in the browser', () => {
       await primary(/^Finish$/).click()
       await expect.poll(() => status().textContent(), { timeout: testBudget(240_000) }).toContain('Short ready · 0:12')
       expect(stub.submissions.map(submission => submission.path)).toEqual([
-        '/google/nano-banana-2.1/edit', '/google/nano-banana-2.1/edit', '/google/nano-banana-2.1/edit', '/google/nano-banana-2.1/edit',
+        '/api/v1/jobs/createTask', '/api/v1/jobs/createTask', '/api/v1/jobs/createTask', '/api/v1/jobs/createTask',
         '/openai/gpt-image-2.6/sunburst/edit', '/minimax/h3-max/reference-to-video',
       ])
       expect(stub.unexpected).toEqual([])

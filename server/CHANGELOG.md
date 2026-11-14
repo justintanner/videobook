@@ -6,6 +6,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- A short made from a video removes its storyboard's on-screen graphics with
+  Seedream 5.5 Edit on Kie instead of Nano Banana 2.1, so it needs a Kie key
+  (`KIE_API_KEY`), and the Storyboard step shows a real price per frame. Each
+  frame keeps its aspect ratio and resolution. A storyboard saved earlier keeps
+  cleaning with Nano Banana 2.1.
+
 ### Fixed
 
 - OpenAI and xAI structured text refusals name the model and retain refusal details through chat and queued jobs; chat does not retry a refused request.

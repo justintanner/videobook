@@ -1,4 +1,4 @@
-import { buildGoalShortPlan, buildLegacyGoalShortPlan, shortStoryboardOf, type GoalShortPlan } from '../../server/src/goal-short-plan'
+import { buildGoalShortPlan, buildLegacyGoalShortPlan, shortStoryboardOf, type GoalShortPlan, type ShortStoryboardModel } from '../../server/src/goal-short-plan'
 import type { LegacyGoalSnapshot, ShortGoalSnapshot } from '../../src/videobook/goals'
 
 type Stage = NonNullable<ShortGoalSnapshot['stages']['frame']>
@@ -24,12 +24,15 @@ export function shortPlanFixture(seconds: readonly number[] = [10, 10], referenc
 
 const STORYBOARD_TIMES = [0.75, 2.25, 3.75, 5.25]
 
-export function storyboardPlanFixture(seconds: readonly number[] = [10, 10], references = [shortReference(1, 'Man with an umbrella')], frames = 4): GoalShortPlan {
+export function storyboardPlanFixture(
+  seconds: readonly number[] = [10, 10], references = [shortReference(1, 'Man with an umbrella')], frames = 4, model: ShortStoryboardModel = 'kie:seedream/5-5-image-to-image',
+): GoalShortPlan {
   return buildGoalShortPlan({
     title: 'Umbrella for a lizard', aspectRatio: '9:16', sourceImages: references,
     storyboard: {
       video: { artifactId: '019a1f3e-5b10-7c2a-9d41-3f6b2a8c1e09', cellId: '019a1f3e-5b10-7c2a-9d41-3f6b2a8c1e19', address: '@d1', label: 'Umbrella walk' },
-      model: 'fal:google/nano-banana-2.1/edit',
+      model,
+      ...(model === 'kie:seedream/5-5-image-to-image' ? { size: '1K' as const } : {}),
       frames: Array.from({ length: frames }, (_, index) => ({
         kind: 'image' as const, artifactId: `raw-${index + 1}`, cellId: `raw-${index + 1}-cell`, address: `@a${index + 3}`, label: `Storyboard ${index + 1} of ${frames}`,
         objectHash: String(index + 5).repeat(64), index, atSeconds: STORYBOARD_TIMES[index] ?? index, aspectRatio: '9:16' as const,

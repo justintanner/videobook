@@ -255,7 +255,9 @@ describe('GoalShortReview with a storyboard', () => {
   it('opens a short made from a video on Storyboard, the first of Storyboard, Frame, Video and Finish', () => {
     const html = render(boardGoal())
     expect(tabsOf(html).slice(0, 4)).toEqual([['Storyboard', 'true'], ['Frame', 'false'], ['Video', 'false'], ['Finish', 'false']])
-    expect(html).toContain('Nano Banana 2.1 storyboard clean-up · GPT Image 2.6 frame · H3 Max video')
+    expect(html).toContain('Seedream 5.5 storyboard clean-up · GPT Image 2.6 frame · H3 Max video')
+    expect(render(shortGoalFixture({ stage: 'storyboards' }, storyboardPlanFixture(undefined, undefined, undefined, 'fal:google/nano-banana-2.1/edit'))))
+      .toContain('Nano Banana 2.1 storyboard clean-up · GPT Image 2.6 frame · H3 Max video')
     expect(html).toContain('4 frames of Umbrella walk (@d1), in order.')
     expect(html).toContain('aria-label="Storyboard frames"')
     for (const index of [1, 2, 3, 4]) expect(html).toContain(`aria-label="Open Storyboard ${index} before · @a${index + 2}"`)

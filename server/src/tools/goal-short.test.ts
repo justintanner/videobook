@@ -277,7 +277,7 @@ describe("video_goal shorts", () => {
     const goal = await status(planning.goalId);
     expect(goal).toMatchObject({ stage: "storyboards", status: "review" });
     expect(goal.notes).toEqual([storyboardNote("@a1", storyboardOf(goal).frames)]);
-    expect(storyboardOf(goal)).toMatchObject({ video: { artifactId: videoId }, model: "fal:google/nano-banana-2.1/edit" });
+    expect(storyboardOf(goal)).toMatchObject({ video: { artifactId: videoId }, model: "kie:seedream/5-5-image-to-image", size: expect.stringMatching(/^(1K|1\.5K|2K)$/u) });
     expect(storyboardOf(goal).frames).toHaveLength(3);
     expect(stub.submissions).toEqual([]);
     expect(chainRuns()).toBe(0);
