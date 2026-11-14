@@ -17,6 +17,7 @@ import { enqueueLazyAnalysisIfSlotted } from "../lazy-render.js";
 import {
   probeVideo,
   runFfmpeg,
+  extractMp3,
   extractWaveform,
   isThumbnailBlank,
   H264_MEDIUM,
@@ -526,7 +527,7 @@ async function processVideoSnapshot(
       : null;
     if (probe.hasAudio && (!existingMp3 || !existingMp3.ok)) {
       const mp3TempPath = join(dirname(videoPath), "original.mp3.tmp");
-      await runFfmpeg(["-y", "-i", activeVideoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", mp3TempPath], { signal });
+      await extractMp3(activeVideoPath, mp3TempPath, signal);
       try {
         const mp3Buf = await fsReadFile(mp3TempPath);
         await writeBinaryIfChanged(engine, assetId, "original.mp3", mp3Buf);

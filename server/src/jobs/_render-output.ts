@@ -8,6 +8,8 @@ import { registerMediaProbe } from "../notebook-media-ops.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { queue } from "../queue.js";
 import { extractVideoPoster } from "../video-poster.js";
+import type { RenderSource } from "./_render-transcripts.js";
+import { adoptSourceTranscripts } from "./_render-transcripts.js";
 
 export type RenderedCellPlacement = { cellId: string | null; address: string | null };
 
@@ -71,11 +73,12 @@ export function sourceCellPlacement(engine: Engine, notebookId: string | null, s
   return cell ? { cellId: cell.id, address: notebookGridTag(cell.slot) } : UNPLACED;
 }
 
-export async function writeRenderedVideo(engine: Engine, artifactId: string, path: string, signal: AbortSignal): Promise<ProbeResult> {
+export async function writeRenderedVideo(engine: Engine, artifactId: string, path: string, source: RenderSource, signal: AbortSignal): Promise<ProbeResult> {
   const probe = await probeVideo(path, { signal });
   const written = await engine.files.writeFromPath(artifactId, RENDERED_VIDEO, path);
   if (!written.ok) throw new Error(written.error.message);
-  await registerMediaProbe(engine, artifactId, RENDERED_VIDEO, probe);
+  const transcripts = await adoptSourceTranscripts(engine, { source, artifactId, videoPath: path, probe, signal });
+  await registerMediaProbe(engine, artifactId, RENDERED_VIDEO, probe, transcripts);
   const poster = await engine.files.write(artifactId, "original.jpg", await extractVideoPoster(path, probe.videoDuration, signal));
   if (!poster.ok) throw new Error(poster.error.message);
   return probe;
@@ -93,6 +96,7 @@ export async function processRenderedVideo(engine: Engine, bookId: string, artif
       bookId,
       provenance,
       skipDownstreamJobs: true,
+      preserveAudioArtifacts: true,
     });
   } catch (error) {
     logger.warn("process-video-enqueue-failed", { jobType: "process_video", artifactId, error });

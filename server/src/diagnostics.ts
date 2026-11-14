@@ -11,7 +11,7 @@ const EVENTS = [
   "overlay-skipped", "kie-upload-fallback",
   "kie-upload-unconfigured", "fal-upload-fallback", "fal-upload-unconfigured",
   "alibaba-upload-fallback", "alibaba-upload-unconfigured", "suggest-cuts-dropped",
-  "suggest-sfx-dropped", "transcribe-soft-fail", "post-record-failed", "post-cell-failed",
+  "suggest-sfx-dropped", "transcribe-soft-fail", "render-transcript-copy-failed", "post-record-failed", "post-cell-failed",
   "process-video-enqueue-failed", "waveform-write-failed", "timeline-reencode",
   "pad-video-started", "video-analysis-failed", "description-truncated",
   "description-cache-failed", "watermark-placement-fallback", "waveform-enqueue-failed",

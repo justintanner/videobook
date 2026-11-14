@@ -6,7 +6,7 @@ import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { cropGeometry, type CropRect, type CropRatio } from "../crop-geometry.js";
-import { SOUND_SIDECARS } from "../stale-sidecars.js";
+import { PICTURE_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 300_000;
 type CropVideoPayload = {
@@ -85,7 +85,7 @@ export function registerCropVideoJob(engine: Engine): void {
           outputPath,
         );
 
-        for (const stale of SOUND_SIDECARS) {
+        for (const stale of PICTURE_SIDECARS) {
           await engine.files.delete(assetId, stale);
         }
 
@@ -103,6 +103,9 @@ export function registerCropVideoJob(engine: Engine): void {
       bookId,
       provenance: { origin: "crop", ratio, cropped_at: new Date().toISOString() },
       force: true,
+      skipDownstreamJobs: true,
+      preserveAudioArtifacts: true,
+      reviveVisualAnalysis: true,
     } as unknown as Record<string, unknown>);
 
     return { success: true };

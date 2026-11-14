@@ -285,6 +285,9 @@ export function registerBurnWatermarkJob(engine: Engine): void {
         ...(payload.transcribe === false ? { transcribe: false } : {}),
       },
       force: true,
+      skipDownstreamJobs: true,
+      preserveAudioArtifacts: true,
+      reviveVisualAnalysis: true,
     } as unknown as Record<string, unknown>);
 
     return {

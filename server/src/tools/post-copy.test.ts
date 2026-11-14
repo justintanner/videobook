@@ -259,8 +259,9 @@ describe("draft_post_copy for a rendered copy", () => {
       "-y", "-f", "lavfi", "-i", "color=c=teal:s=360x640:r=24:d=3",
       "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-an", clip,
     ]);
+    const source = value(await engine.artifacts.create("video", "Red light"));
     const artifact = value(await engine.artifacts.create("video", "Red light — Graphics"));
-    await writeRenderedVideo(engine, artifact.artifactId, clip, new AbortController().signal);
+    await writeRenderedVideo(engine, artifact.artifactId, clip, { artifactId: source.artifactId, durationSeconds: 3, fps: 24 }, new AbortController().signal);
     const notebook = value(await engine.notebooks.create("Clips"));
     const cell = engine.notebooks.createCell({ type: "video", slot: { row: 0, column: 0 }, outputArtifactId: artifact.artifactId, label: "Red light — Graphics" });
     value(await engine.notebooks.write({ ...notebook, cells: [cell] }));

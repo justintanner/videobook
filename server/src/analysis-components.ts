@@ -17,6 +17,7 @@ export interface AnalysisProvenance {
   provider: string | null;
   model: string | null;
   createdAt: string;
+  copiedFrom?: string;
 }
 
 export interface StoredAnalysisComponent<T> {

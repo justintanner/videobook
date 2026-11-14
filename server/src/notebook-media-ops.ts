@@ -80,6 +80,7 @@ export async function registerMediaProbe(
   artifactId: string,
   sourcePath: string,
   probe: ProbeResult,
+  fields: Record<string, unknown> = {},
 ): Promise<void> {
   const manifest = await engine.files.manifest(artifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
@@ -116,6 +117,7 @@ export async function registerMediaProbe(
       hasAudio: probe.hasAudio,
       videoCodec: probe.videoCodec,
       audioCodec: probe.audioCodec,
+      ...fields,
     },
   );
   if (!metadata.ok) throw new Error(metadata.error.message);

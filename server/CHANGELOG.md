@@ -10,6 +10,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 - The default TikTok watermark places the handle above the title as solid text with a shadow, without a pill or border.
 
+### Fixed
+
+- Graphics, reframed, stacked, batch and subtitle renders give the new video
+  the transcripts of the video it was rendered from instead of queuing a paid
+  speech-to-text call for it; a render of an untranscribed video, or one whose
+  length changed, is left for you to transcribe. Burning a watermark in place
+  and cropping keep the video's transcripts too.
+
 ## [0.7.2] - 2026-11-14
 
 ### Added

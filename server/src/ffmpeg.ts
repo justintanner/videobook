@@ -368,6 +368,10 @@ const SAMPLE_RATE = 8000;
 // extractWaveform.
 const WAVEFORM_FINE_BUCKETS = 1 << 16;
 
+export async function extractMp3(videoPath: string, outputPath: string, signal?: AbortSignal): Promise<void> {
+  await runFfmpeg(["-y", "-i", videoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", outputPath], { signal });
+}
+
 /**
  * Streams an asset's decoded audio and folds it into a bounded set of RMS
  * accumulators, returning `barCount` normalised peaks (0..1).

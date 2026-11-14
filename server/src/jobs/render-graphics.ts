@@ -129,7 +129,7 @@ async function renderGraphicsCopy(engine: Engine, payload: RenderGraphicsPayload
   const request = requireRequest(engine, payload);
   const source = await reviewedSource(engine, request);
   const duration = await withRenderedGraphics(engine, request, source, ctx.signal, async ({ outputPath, durationSeconds }) => {
-    const probe = await writeRenderedVideo(engine, request.outputArtifactId, outputPath, ctx.signal);
+    const probe = await writeRenderedVideo(engine, request.outputArtifactId, outputPath, source, ctx.signal);
     await writeProvenance(engine, request.outputArtifactId, request, durationSeconds, renderedAt);
     return probe.videoDuration;
   });

@@ -125,8 +125,8 @@ function placeCell(engine: Engine, request: CaptionRenderRequest): Promise<Rende
   });
 }
 
-async function writeOutput(engine: Engine, request: CaptionRenderRequest, outputPath: string, signal: AbortSignal): Promise<number> {
-  const probe = await writeRenderedVideo(engine, request.outputArtifactId, outputPath, signal);
+async function writeOutput(engine: Engine, request: CaptionRenderRequest, source: CaptionMediaSource, outputPath: string, signal: AbortSignal): Promise<number> {
+  const probe = await writeRenderedVideo(engine, request.outputArtifactId, outputPath, source, signal);
   const snapshot = await engine.files.write(request.outputArtifactId, "captions.json", JSON.stringify(request.document, null, 2));
   if (!snapshot.ok) throw new Error(snapshot.error.message);
   await writeProvenance(engine, request);
@@ -179,7 +179,7 @@ async function renderCaptions(engine: Engine, payload: RenderCaptionsPayload, ct
     await renderComposition(engine, { request, source, snapshotPath: snapshot.path, outputPath, signal: ctx.signal });
     ctx.signal.throwIfAborted();
     await reviewedSource(engine, request);
-    const duration = await writeOutput(engine, request, outputPath, ctx.signal);
+    const duration = await writeOutput(engine, request, source, outputPath, ctx.signal);
     await publishCorrections(engine, payload.bookId, request);
     const placement = await placeCell(engine, request);
     return { output_asset_id: request.outputArtifactId, duration, cell_id: placement.cellId, address: placement.address };

@@ -78,6 +78,13 @@ export async function recordOpenAiTranscript(engine: Engine, artifactId: string,
   });
 }
 
+export async function recordCopiedTranscript(engine: Engine, spec: SidecarAnalysisSpec, record: SidecarInput, sourceArtifactId: string): Promise<void> {
+  await recordSidecarAnalysis(engine, spec, {
+    ...record,
+    provenance: { analyzer: `${spec.component}-copy`, provider: null, model: null, copiedFrom: sourceArtifactId },
+  });
+}
+
 export async function audioObjectHash(engine: Engine, artifactId: string, filename: string): Promise<string> {
   const hash = await fileObjectHash(engine, artifactId, filename);
   if (!hash) throw new Error(`${filename} is missing from ${artifactId}; process the media again before transcribing it.`);
