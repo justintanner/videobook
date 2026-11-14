@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Reduce idle server CPU and database reads across book libraries by updating videobook-engine to 5.9.2.
+
 ## [0.7.4] - 2026-11-14
 
 ### Added
