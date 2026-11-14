@@ -1,3 +1,4 @@
+import { providerRefusal, recordProviderRefusal } from "../provider-refusal.js";
 import type { ArtifactRuntimeMeta, Engine, ArtifactWorkKind } from "videobook-engine";
 import { logger } from "../logger.js";
 import type { JobHandlerContext } from "../queue.js";
@@ -150,8 +151,10 @@ export async function withLocalLease<T>(
     await engine.jobs.artifactWork.complete(assetId, lease.ownerId);
     return result;
   } catch (err) {
+    const refusal = providerRefusal(err) ? await recordProviderRefusal(engine, assetId, err) : null;
     await engine.jobs.artifactWork.fail(assetId, lease.ownerId, {
-      message: err instanceof Error ? err.message : String(err),
+      message: refusal?.message ?? (err instanceof Error ? err.message : String(err)),
+      ...(refusal ? { code: refusal.failCode } : {}),
     });
     throw err;
   } finally {

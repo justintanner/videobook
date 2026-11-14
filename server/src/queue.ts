@@ -1,4 +1,4 @@
-import { recordFalRefusal } from "./jobs/_fal-shared.js";
+import { recordProviderRefusal } from "./provider-refusal.js";
 import { sweepHarCaptures } from "./har-retention.js";
 import { appendDiagnostic, registerDiagnosticName } from "./diagnostics.js";
 import {
@@ -515,10 +515,12 @@ async function dispatchFailure(
   job?: Job,
 ): Promise<void> {
   const model = job?.payload.model ?? job?.payload.modelId;
-  const refusal = await recordFalRefusal(engine, assetId, cause, typeof model === "string" ? model : undefined);
+  const refusal = await recordProviderRefusal(engine, assetId, cause, typeof model === "string" ? model : undefined);
   const info = refusal ?? { message: cause instanceof Error ? cause.message : String(cause) };
   if (lease?.kind === "owner") {
-    await engine.jobs.artifactWork.fail(assetId, lease.ownerId, info);
+    await engine.jobs.artifactWork.fail(assetId, lease.ownerId, {
+      message: info.message, ...(refusal ? { code: refusal.failCode } : {}),
+    });
   } else if (lease?.kind === "task") {
     await engine.jobs.pending.fail(assetId, lease.taskId, info);
   } else {

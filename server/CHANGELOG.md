@@ -8,6 +8,7 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- OpenAI and xAI structured text refusals name the model and retain refusal details through chat and queued jobs; chat does not retry a refused request.
 - Fal content-policy refusals name the model, explain how to revise the request, and settle at zero cost.
 - When the clean-up of one storyboard frame of a short fails, for example
   because the model refuses it, the other frames are still cleaned and the goal

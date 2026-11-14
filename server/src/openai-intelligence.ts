@@ -1,3 +1,4 @@
+import { responseRefusal } from "./provider-refusal.js";
 import { providerEndpoints } from "./media/endpoints.js";
 import { createOpenAi } from "./usage-providers.js";
 import { withRetry } from "@apicity/openai";
@@ -136,13 +137,13 @@ export function firstResponseText(response: OpenAiResponseResponse): string {
     throw new Error(`OpenAI Responses request did not complete (status=${response.status})`);
   }
 
+  const refusal = responseRefusal("openai", response);
+  if (refusal) throw refusal;
+
   const texts: string[] = [];
   for (const item of response.output) {
     if (item.type !== "message") continue;
     for (const content of item.content) {
-      if (content.type === "refusal") {
-        throw new Error(`OpenAI Responses refused the request: ${content.refusal}`);
-      }
       if (content.type === "output_text") {
         texts.push(content.text);
       }

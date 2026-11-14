@@ -1,3 +1,4 @@
+import { providerRefusal } from "../provider-refusal.js";
 /**
  * chat MCP tool — natural language interface that routes to appropriate tools.
  */
@@ -779,11 +780,12 @@ async function handleChatRequest(
         break;
       } catch (e) {
         lastError = e;
+        if (providerRefusal(e)) break;
       }
     }
     if (lastError) {
       const msg = lastError instanceof Error ? lastError.message : String(lastError);
-      return error(`Routing failed: ${msg}`);
+      return error(providerRefusal(lastError)?.message ?? `Routing failed: ${msg}`);
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

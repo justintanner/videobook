@@ -258,6 +258,6 @@ describe("firstResponseText", () => {
         status: "completed",
         content: [{ type: "refusal", refusal: "not allowed" }],
       }],
-    }))).toThrow("OpenAI Responses refused the request: not allowed");
+    }))).toThrow("refused this request: not allowed");
   });
 });

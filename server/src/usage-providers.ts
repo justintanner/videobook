@@ -1,3 +1,4 @@
+import { withResponseRefusals } from "./provider-refusal.js";
 import { createEndless as endless } from "@apicity/endless";
 import { createOmkar as omkar } from "@apicity/omkar";
 import { createTiktokCreativeCenter as tiktokCreativeCenter } from "@apicity/tiktok-creative-center";
@@ -18,11 +19,21 @@ import { capturedProvider, withHarCapture, withProviderCall } from "./har-captur
 import { providerUsageFetch } from "./provider-usage.js";
 
 export function createOpenAi(options: Parameters<typeof openai>[0]): ReturnType<typeof openai> {
-  return capturedProvider("openai", (fetch) => openai({ ...options, fetch }), providerUsageFetch("openai", options.fetch));
+  return capturedProvider("openai", (fetch) => {
+    const provider = openai({ ...options, fetch });
+    provider.post.v1.responses = withResponseRefusals("openai", provider.post.v1.responses);
+    provider.post.v1.chat.completions = withResponseRefusals("openai", provider.post.v1.chat.completions);
+    return provider;
+  }, providerUsageFetch("openai", options.fetch));
 }
 
 export function createXai(options: Parameters<typeof xai>[0]): ReturnType<typeof xai> {
-  return capturedProvider("xai", (fetch) => xai({ ...options, fetch }), providerUsageFetch("xai", options.fetch));
+  return capturedProvider("xai", (fetch) => {
+    const provider = xai({ ...options, fetch });
+    provider.post.v1.responses = withResponseRefusals("xai", provider.post.v1.responses);
+    provider.post.v1.chat.completions = withResponseRefusals("xai", provider.post.v1.chat.completions);
+    return provider;
+  }, providerUsageFetch("xai", options.fetch));
 }
 
 export function createKie(options: Parameters<typeof kie>[0]): ReturnType<typeof kie> {
