@@ -381,11 +381,30 @@ changed. Then rerun the same `npm run release` command. It recognizes the
 published tarball, keeps `stable` and the tag on the tested commit, pushes
 the merge to `main`, and creates the GitHub release.
 
-When `dry_run` = true, stop after a successful dry run: run
-`gc runtime drain-ack` and leave the release bead open.
+**When `dry_run` = true.** The release stops here and the release bead stays
+open. A dry run's result is its log; nothing reads the clone afterwards. A
+failed dry run (a non-zero exit, above) keeps the clone, the log and the exit
+file for diagnosis, and the next run of {{version}} replaces all three. After
+a successful dry run, remove the clone and the exit file and keep only the
+log, `/gc/.videobook-npm-release/v{{version}}.log`. The block removes nothing
+unless the exit file holds `0` and the log has the script's
+`release: dry run complete:` line:
+
+```bash
+work=/gc/.videobook-npm-release/v{{version}}
+test "$(cat "$work.exit" 2>/dev/null)" = 0 || { echo "KEEP $work: $work.exit does not hold 0" >&2; exit 1; }
+grep -qF 'release: dry run complete: ' "$work.log" || { echo "KEEP $work: $work.log has no dry run complete line" >&2; exit 1; }
+rm -rf "$work" "$work.exit"
+gc runtime drain-ack
+```
+
+If it prints `KEEP`, it removed nothing: the dry run failed, so handle it like
+a failed gate above.
 
 **Exit criteria:** The script printed `done: videobook@{{version}} is on npm,
-v{{version}} is pushed, and the GitHub release exists`.
+v{{version}} is pushed, and the GitHub release exists`. For a dry run it
+printed `dry run complete:` instead, the clone and the exit file are removed,
+and the log is kept.
 
 
 # Sub-step 5: Verify and close
