@@ -6,14 +6,14 @@ import type {
   GraphicsFontPreset,
   GraphicsFrame,
   GraphicsLayerInput,
-  GraphicsPlateInput,
   GraphicsTextItemInput,
   GraphicsTextLayerInput,
   GraphicsTextSlot,
 } from "./model.js";
 import { graphicsDocumentFromLayers } from "./model.js";
 import type { WatermarkDocumentOverrides } from "./watermark-profile.js";
-import { watermarkDocumentFromProfile, watermarkLayerInputs, watermarkSlotValues } from "./watermark-profile.js";
+import { watermarkDocumentFromProfile, watermarkLayerInputs } from "./watermark-profile.js";
+import { bottomLeftBlock, titleHandleItem } from "./title-block.js";
 
 export type GraphicsStarterId = "tiktok-title" | "lower-third" | "headline" | "credit" | "watermark";
 
@@ -27,9 +27,7 @@ export const DEFAULT_GRAPHICS_STARTER_ID: GraphicsStarterId = "tiktok-title";
 
 const WHITE = "#FFFFFF";
 const SHADE = "#000000";
-const BLOCK_WIDTH = 0.86;
 const TITLE_GAP = 0.02;
-const HANDLE_SIZE = 0.036;
 const STARTER_FONT: GraphicsFontPreset = "heavy";
 const HEADLINE_ACCENT: GraphicsAccent = "brush";
 
@@ -53,37 +51,11 @@ function edgeShade(edge: "top" | "bottom", height: number, strength: number): Gr
   return { kind: "scrim", name: "Shade", edge, height, color: SHADE, strength };
 }
 
-function bottomLeftBlock(
-  name: string,
-  gap: number,
-  items: GraphicsTextItemInput[],
-  plate: GraphicsPlateInput | null = null,
-): GraphicsTextLayerInput {
-  return {
-    kind: "text",
-    name,
-    position: { anchor: "bottom-left", x: 0, y: 1, space: "safe" },
-    width: BLOCK_WIDTH,
-    align: "left",
-    gap,
-    plate,
-    items,
-  };
-}
-
 function titleItems(): GraphicsTextItemInput[] {
   return [
     slotItem("headline", 0.09, { maxLines: 3, accent: HEADLINE_ACCENT }),
     slotItem("secondary", 0.045, { maxLines: 2 }),
   ];
-}
-
-function handleItem(profile: LightningWatermarkProfile): GraphicsTextItemInput {
-  return slotItem("handle", HANDLE_SIZE, {
-    text: watermarkSlotValues(profile).handle ?? "",
-    maxLines: 1,
-    icon: profile.includePlatformIcon ? profile.platform : null,
-  });
 }
 
 function titleShade(): GraphicsLayerInput {
@@ -97,7 +69,7 @@ function tiktokTitleLayers(): GraphicsLayerInput[] {
 function tiktokTitle(_frame: GraphicsFrame, profile: LightningWatermarkProfile = LIGHTNING_WATERMARK_PROFILE): GraphicsDocument {
   return graphicsDocumentFromLayers([
     titleShade(),
-    bottomLeftBlock("Title", TITLE_GAP, [handleItem(profile), ...titleItems()]),
+    bottomLeftBlock("Title", TITLE_GAP, [titleHandleItem(profile), ...titleItems()]),
   ]);
 }
 
@@ -107,6 +79,12 @@ export function platformWatermarkDocument(
   overrides: WatermarkDocumentOverrides,
 ): GraphicsDocument {
   const watermark = watermarkLayerInputs(profile, frame, overrides);
+  const placement = overrides.handlePlacement ?? profile.handlePlacement;
+  if (placement === "above-title") {
+    const handle = watermark.find((layer) => layer.kind === "text");
+    const title = bottomLeftBlock("Title", TITLE_GAP, [...(handle?.kind === "text" ? handle.items ?? [] : []), ...titleItems()]);
+    return graphicsDocumentFromLayers([titleShade(), title, ...watermark.filter((layer) => layer.kind !== "text")]);
+  }
   return graphicsDocumentFromLayers(profile.platform === "tiktok" ? [...tiktokTitleLayers(), ...watermark] : watermark);
 }
 

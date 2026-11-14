@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { LIGHTNING_WATERMARK_PROFILE } from "../lightning-defaults.js";
+import { LIGHTNING_WATERMARK_PROFILE, X_WATERMARK_PROFILE } from "../lightning-defaults.js";
 import type { GraphicsDocument, GraphicsFrame, GraphicsLayer, GraphicsTextLayer } from "./model.js";
 import { parseGraphicsDocument } from "./model.js";
-import { DEFAULT_GRAPHICS_STARTER_ID, GRAPHICS_STARTERS, graphicsSlotBlock } from "./starters.js";
+import { DEFAULT_GRAPHICS_STARTER_ID, GRAPHICS_STARTERS, graphicsSlotBlock, platformWatermarkDocument } from "./starters.js";
 
 const FRAMES: GraphicsFrame[] = [
   { width: 1080, height: 1920 },
@@ -24,7 +24,39 @@ function kinds(document: GraphicsDocument): GraphicsLayer["kind"][] {
   return document.layers.map((layer) => layer.kind);
 }
 
+import { fillGraphicsSlots } from "./slots.js";
+import { layoutGraphics } from "./layout.js";
+
 describe("graphics starters", () => {
+
+  it("stacks the default handle above three Thai title lines within the portrait safe space", () => {
+    const frame = FRAMES[0];
+    const document = fillGraphicsSlots(platformWatermarkDocument(LIGHTNING_WATERMARK_PROFILE, frame, {}), {
+      handle: "jtbkk", headline: "ฝนตกหนัก\nรถเมล์ไม่มา\nรอต่อไป", secondary: "Still waiting for the bus",
+    }, { overwrite: true });
+    expect(kinds(document)).toEqual(["scrim", "text"]);
+    const [title] = textLayers(document);
+    expect(title).toMatchObject({ name: "Title", plate: null, opacity: 1, timing: { start: null, end: null, fade: 0 } });
+    expect(title.items.map(item => item.slot)).toEqual(["handle", "headline", "secondary"]);
+    expect(title.items[0]).toMatchObject({ shadow: true, icon: "tiktok", size: 0.036 });
+    const layout = layoutGraphics({ document, frame, measure: (text, font) => Array.from(text).length * font.size * 0.5 });
+    const block = layout.find(layer => layer.kind === "text");
+    if (!block || block.kind !== "text") throw new Error("missing title");
+    expect(block.overflow).toBe(false);
+    expect(block.items.every(item => !item.overflow)).toBe(true);
+    expect(block.items[0].box.y + block.items[0].box.height).toBeLessThan(block.items[1].box.y);
+    expect(block.items[1].box.y + block.items[1].box.height).toBeLessThan(block.items[2].box.y);
+  });
+
+  it("keeps explicit center and X profiles as separate handle pills", () => {
+    const centered = platformWatermarkDocument({ ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center" }, FRAMES[0], {});
+    expect(textLayers(centered).map(layer => layer.name)).toEqual(["Title", "Handle"]);
+    expect(textLayers(centered)[1]).toMatchObject({ plate: { border: true }, position: { anchor: "center", y: 0.1 }, opacity: 0.28 });
+    const x = platformWatermarkDocument(X_WATERMARK_PROFILE, FRAMES[0], {});
+    expect(kinds(x)).toEqual(["text"]);
+    expect(textLayers(x)[0]).toMatchObject({ name: "Handle", plate: { border: true }, position: { y: 0.33 }, opacity: 0.5 });
+  });
+
   it("lists five starters with tiktok-title first as the default", () => {
     expect(GRAPHICS_STARTERS.map((candidate) => candidate.id)).toEqual(["tiktok-title", "lower-third", "headline", "credit", "watermark"]);
     expect(DEFAULT_GRAPHICS_STARTER_ID).toBe("tiktok-title");

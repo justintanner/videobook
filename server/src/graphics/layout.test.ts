@@ -283,12 +283,15 @@ describe("layoutGraphics", () => {
     expect(Math.abs(plate.radius - plate.height / 2)).toBeLessThanOrEqual(0.5);
   });
 
-  it("fits the starters' handle pill and centres it on the profile's line", () => {
+  it("fits the watermark starter handle without a plate in the bottom-left safe area", () => {
     const handle = only(layout(starter("watermark", PORTRAIT)), "text", "l2");
     expect(handle.overflow).toBe(false);
     expect(handle.items.map((item) => item.lines.map((line) => line.text))).toEqual([["jtbkk"]]);
-    expect(Math.abs(handle.box.x + handle.box.width / 2 - 540)).toBeLessThanOrEqual(1);
-    expect(Math.abs(handle.box.y + handle.box.height / 2 - 192)).toBeLessThanOrEqual(1);
+    expect(handle.plate).toBeNull();
+    const safe = graphicsSpaceRect(PORTRAIT, "safe");
+    expect(handle.box.x).toBe(safe.x);
+    expect(handle.box.y + handle.box.height).toBe(safe.y + safe.height);
+    expect(inside(handle.box, safe)).toBe(true);
     expect(handle.items[0].icon).not.toBeNull();
   });
 

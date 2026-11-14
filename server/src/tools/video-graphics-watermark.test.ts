@@ -133,7 +133,7 @@ describe("video_graphics watermark mode", () => {
     const tiktok = await read(assetId);
     expect(tiktok).toMatchObject({ saved: false, watermark: { platform: "tiktok", template_id: null, template_name: null } });
     expect(tiktok.revision).toMatch(/^default:[0-9a-f]{32}$/u);
-    expect(tiktok.document.layers.map((layer) => layer.kind)).toEqual(["scrim", "text", "text"]);
+    expect(tiktok.document.layers.map((layer) => layer.kind)).toEqual(["scrim", "text"]);
     expect(tiktok.document.layers.some((layer) => layer.kind === "qr")).toBe(false);
     expect(slotText(tiktok.document, "handle")).toBe("jtbkk");
     expect(slotText(tiktok.document, "headline")).toBe("");
@@ -194,7 +194,7 @@ describe("video_graphics watermark mode", () => {
     const stored = readGraphicsTemplates(engine).templates.find((template) => template.id === saved.template.id);
     expect(stored && slotText(stored.document, "headline")).toBe("");
     expect(stored && slotText(stored.document, "handle")).toBe("");
-    expect(stored?.document.layers.map((layer) => layer.name)).toEqual(["Shade", "Title", "Handle", "QR code", "Credit", "Follow"]);
+    expect(stored?.document.layers.map((layer) => layer.name)).toEqual(["Shade", "Title", "QR code", "Credit", "Follow"]);
 
     const downloaded = await video(TIKTOK_SOURCE);
     const look = await read(downloaded);
@@ -204,7 +204,7 @@ describe("video_graphics watermark mode", () => {
     const { applied, document } = await burnedByApply(downloaded);
     expect(applied).toMatchObject({ include_qr: true, include_handle: true, template_id: saved.template.id });
     expect(watermarkDrawnDocument(look.document)).toEqual(document);
-    expect(document.layers.map((layer) => layer.name)).toEqual(["Shade", "Title", "Handle", "QR code", "Credit", "Follow"]);
+    expect(document.layers.map((layer) => layer.name)).toEqual(["Shade", "Title", "QR code", "Credit", "Follow"]);
 
     const again = await ok<TemplateSaved>({ asset_id: assetId, op: "save_watermark", expected_revision: titled.revision });
     expect(again.template.id).toBe(saved.template.id);
@@ -213,6 +213,9 @@ describe("video_graphics watermark mode", () => {
     expect(readGraphicsTemplates(engine).templates.map((template) => template.name)).toEqual(["Look", "Brand"]);
 
     const cleared = await ok<TemplateSaved>({ op: "set_watermark_template", template_id: null });
+    const resetLook = await read(await video());
+    expect(textLayers(resetLook.document).map(layer => layer.items.map(item => item.slot))).toEqual([["handle", "headline", "secondary"]]);
+    expect(textLayers(resetLook.document)[0]).toMatchObject({ plate: null, position: { anchor: "bottom-left" } });
     expect(cleared).toMatchObject({ watermark: { platform: "tiktok", template_id: null }, watermark_template_ids: {} });
     expect((await burnedByApply(downloaded)).applied).toMatchObject({ include_qr: false, template_id: null });
     expect(await fails({ op: "set_watermark_template", template_id: "tiktok-title" })).toMatchObject({ status: "not_found" });
@@ -261,12 +264,12 @@ describe("video_graphics watermark mode", () => {
     const plain = await ok<{ render: { request_id: string; status: string } }>({ ...render, expected_revision: fresh.revision, request_id: randomUUID() });
     expect(plain.render.status).toBe("queued");
     const plainRequest = engine.settings.get<GraphicsRenderRequest>(`graphics.request.${plain.render.request_id}`);
-    expect(plainRequest?.document.layers.map((layer) => layer.kind)).toEqual(["text", "text"]);
+    expect(plainRequest?.document.layers.map((layer) => layer.kind)).toEqual(["text"]);
 
     const titled = await ok<Saved>({ asset_id: assetId, watermark: true, op: "update", expected_revision: fresh.revision, edits: [{ op: "set_slot_text", slot: "headline", text: THAI_TITLE }] });
     const requestId = randomUUID();
     const shaded = await ok<{ render: { request_id: string } }>({ ...render, expected_revision: titled.revision, request_id: requestId });
-    expect(engine.settings.get<GraphicsRenderRequest>(`graphics.request.${shaded.render.request_id}`)?.document.layers.map((layer) => layer.kind)).toEqual(["scrim", "text", "text"]);
+    expect(engine.settings.get<GraphicsRenderRequest>(`graphics.request.${shaded.render.request_id}`)?.document.layers.map((layer) => layer.kind)).toEqual(["scrim", "text"]);
     expect(await fails({ ...render, watermark: false, expected_revision: titled.revision, request_id: requestId })).toMatchObject({
       status: "invalid",
       message: expect.stringMatching(/different render/u),

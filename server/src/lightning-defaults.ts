@@ -46,7 +46,7 @@ export type LightningWatermarkProfile = {
   handleRounding: number;
   scale: number;
   mode: "burn";
-  handlePlacement: "center" | "above-qr" | "on-qr" | "below-qr";
+  handlePlacement: "above-title" | "center" | "above-qr" | "on-qr" | "below-qr";
   handleVerticalPercent: number;
   handleStartSeconds: number;
   handleEndSeconds: number | null;
@@ -68,7 +68,7 @@ export const LIGHTNING_WATERMARK_PROFILE: LightningWatermarkProfile = {
   handleRounding: 56,
   scale: 1,
   mode: "burn",
-  handlePlacement: "center",
+  handlePlacement: "above-title",
   handleVerticalPercent: 10,
   handleStartSeconds: 0,
   handleEndSeconds: LIGHTNING_HANDLE_SECONDS,
@@ -103,6 +103,7 @@ export const X_WATERMARK_PROFILE: LightningWatermarkProfile = {
 
 export type StoredWatermarkProfile = Partial<Omit<LightningWatermarkProfile, "platform" | "mode">> & {
   mode?: "burn" | "overlay";
+  handleLayoutVersion?: 2;
   qrStartSeconds?: number | null;
   qrEndSeconds?: number | null;
 };

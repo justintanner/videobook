@@ -177,9 +177,9 @@ describe('watermark in the graphics editor', () => {
 
   it('keeps the TikTok look on the handle, an empty Thai title and an English line with no QR', () => {
     const read = watermarkRead('tiktok')
-    expect(read.document.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'text'])
+    expect(read.document.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text'])
     const items = read.document.layers.flatMap((layer) => (layer.kind === 'text' ? layer.items : []))
-    expect(items.map((item) => [item.slot, item.text, item.icon])).toEqual([['headline', '', null], ['secondary', '', null], ['handle', 'jtbkk', 'tiktok']])
+    expect(items.map((item) => [item.slot, item.text, item.icon])).toEqual([['handle', 'jtbkk', 'tiktok'], ['headline', '', null], ['secondary', '', null]])
     const x = watermarkRead('x')
     expect(x.document.layers.flatMap((layer) => (layer.kind === 'text' ? layer.items : [])).map((item) => [item.slot, item.text, item.icon])).toEqual([['handle', 'someone', 'x']])
   })

@@ -10,6 +10,7 @@ import { graphicsDocumentFromLayers } from "../graphics/model.js";
 import { saveGraphicsTemplate, setWatermarkGraphicsTemplate } from "../graphics/templates.js";
 import { watermarkLayerInputs } from "../graphics/watermark-profile.js";
 import type { BurnWatermarkPayload } from "../jobs/burn-watermark.js";
+import { watermarkPayloadDocument } from "../jobs/burn-watermark.js";
 import { LIGHTNING_WATERMARK_PROFILE } from "../lightning-defaults.js";
 import { pauseBookQueueForTests } from "../queue.js";
 import { withBookContext } from "../book-context.js";
@@ -129,6 +130,31 @@ describe("apply_watermark tool", () => {
     expect(parsed.mode).toBe("burn");
     expect(await queuedPayload(parsed.job_id)).toMatchObject({ type: "burn_watermark", assetId, handle: "alice" });
     expect((await readWatermarkConfig(fs, "x")).profile?.mode).toBe("burn");
+  });
+
+  it("accepts above-title without a QR and ignores pill appearance and window arguments", async () => {
+    await pauseBookQueueForTests(fs.book.get().bookId);
+    const assetId = await createRealVideoAsset();
+    const result = await apply({ asset_id: assetId, platform: "tiktok", handle_position: "above-title", handle_start_seconds: 20, handle_end_seconds: 21, handle_opacity: 0.1, handle_vertical_percent: 80, handle_padding: 90, wait: false });
+    expect(result.handle_position).toBe("above-title");
+    const payload = await queuedPayload(result.job_id);
+    const document = await watermarkPayloadDocument(fs, payload, 1, { width: 1080, height: 1920 }, "bottom-right", null);
+    const blocks = document.layers.filter(layer => layer.kind === "text");
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({ plate: null, opacity: 1, timing: { start: null, end: null }, position: { anchor: "bottom-left" } });
+    expect(blocks[0].items.map(item => item.slot)).toEqual(["handle", "headline", "secondary"]);
+  });
+
+  it("upgrades a stored old default, preserves restyled profiles, and remembers an explicit center", async () => {
+    await pauseBookQueueForTests(fs.book.get().bookId);
+    const assetId = await createRealVideoAsset();
+    const legacy = { ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center" };
+    expect(fs.settings.set("application.watermark.tiktok.v1", { profile: legacy }).ok).toBe(true);
+    expect((await apply({ asset_id: assetId, platform: "tiktok", wait: false })).handle_position).toBe("above-title");
+    expect(fs.settings.set("application.watermark.tiktok.v1", { profile: { ...legacy, handlePaddingX: 30 } }).ok).toBe(true);
+    expect((await apply({ asset_id: assetId, platform: "tiktok", wait: false })).handle_position).toBe("center");
+    await apply({ asset_id: assetId, platform: "tiktok", handle_position: "center", handle_padding: 15, save_default: true, wait: false });
+    expect((await apply({ asset_id: assetId, platform: "tiktok", wait: false })).handle_position).toBe("center");
   });
 
   it("rejects non-video targets", async () => {
@@ -271,7 +297,7 @@ describe("apply_watermark tool", () => {
       handlePaddingY: 28,
       handleRounding: 56,
       handleVerticalPercent: 10,
-      handlePlacement: "center",
+      handlePlacement: "above-title",
       handleOpacity: 0.28,
       fadeSeconds: 0.3,
       handleStartSeconds: 0,

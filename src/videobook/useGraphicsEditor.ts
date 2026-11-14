@@ -405,7 +405,18 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
 
   const saveWatermark = useCallback(() => templateAction('save_watermark', () => ({ expected_revision: stateRef.current.revision })), [templateAction])
 
-  const resetWatermark = useCallback(() => templateAction('set_watermark_template', () => ({ template_id: null })), [templateAction])
+  const resetWatermark = useCallback(async (): Promise<GraphicsTemplateOutcome> => {
+    const ticket = epoch.current
+    const outcome = await templateAction('set_watermark_template', () => ({ template_id: null }))
+    if (!outcome.ok || ticket !== epoch.current) return outcome
+    const current = stateRef.current
+    if (current.document && current.read) {
+      if (!edit(graphicsWatermarkSwitchEdits(current.document, current.read)) || !(await flush())) {
+        return { ok: false, message: stateRef.current.saveError ?? 'The default watermark could not be saved.' }
+      }
+    }
+    return outcome
+  }, [edit, flush, templateAction])
 
   const suggest = useCallback(async (kind: GraphicsSuggestKind, language: GraphicsSuggestLanguage) => {
     const current = stateRef.current

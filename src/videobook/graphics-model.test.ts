@@ -467,11 +467,28 @@ describe('graphics watermark mode', () => {
     expect(graphicsOpenEdits(tiktokLook, { image: null, text: null, watermark: null }, parsed)).toEqual([])
   })
 
+  it('opens and resets to one title block whose handle the inspector can edit', () => {
+    const parsed = watermarkRead('tiktok')
+    const title = parsed.document.layers.find(layer => layer.kind === 'text')
+    if (!title || title.kind !== 'text') throw new Error('missing title')
+    expect(title.items.map(item => item.slot)).toEqual(['handle', 'headline', 'secondary'])
+    expect(title).toMatchObject({ plate: null, opacity: 1, position: { anchor: 'bottom-left' } })
+    const changed = apply(parsed.document, [
+      { op: 'set_item', layer_id: title.id, item_id: title.items[0].id, item: { text: 'newname' } },
+      { op: 'set_position', layer_id: title.id, position: { anchor: 'center', x: 0.5, y: 0.5 } },
+    ])
+    expect(graphicsSlotText(changed, 'handle')).toBe('newname')
+    const reset = apply(changed, graphicsWatermarkSwitchEdits(changed, watermarkRead('tiktok')))
+    const resetTitle = reset.layers.find(layer => layer.kind === 'text')
+    expect(resetTitle).toMatchObject({ plate: null, position: { anchor: 'bottom-left' } })
+    expect(resetTitle?.kind === 'text' && resetTitle.items.map(item => item.slot)).toEqual(['handle', 'headline', 'secondary'])
+  })
+
   it('draws the shade only behind a typed title and blocks a watermark with nothing to burn', () => {
-    expect(graphicsDrawnDocument(tiktokLook, true).layers.map((layer) => layer.kind)).toEqual(['text', 'text'])
+    expect(graphicsDrawnDocument(tiktokLook, true).layers.map((layer) => layer.kind)).toEqual(['text'])
     expect(graphicsDrawnDocument(tiktokLook, false)).toBe(tiktokLook)
     const titledLook = apply(tiktokLook, [{ op: 'set_slot_text', slot: 'headline', text: THAI_TITLE }])
-    expect(graphicsDrawnDocument(titledLook, true).layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'text'])
+    expect(graphicsDrawnDocument(titledLook, true).layers.map((layer) => layer.kind)).toEqual(['scrim', 'text'])
     const shadeOnly = graphicsDocumentFromLayers([{ kind: 'scrim', edge: 'bottom' }])
     expect(graphicsRenderBlocker(shadeOnly, 8, false, true)).toBe('Add the handle, a title, an image or a QR code to render.')
     expect(graphicsRenderBlocker(shadeOnly, 8, false)).toBeNull()
@@ -487,7 +504,7 @@ describe('graphics watermark mode', () => {
     expect(graphicsSlotText(switched, 'headline')).toBeNull()
     const back = apply(switched, graphicsWatermarkSwitchEdits(switched, watermarkRead('tiktok')))
     expect(graphicsSlotText(back, 'handle')).toBe('jtbkk')
-    expect(back.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'text'])
+    expect(back.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text'])
     expect(graphicsWatermarkSwitchEdits(draft, read())).toEqual([])
   })
 

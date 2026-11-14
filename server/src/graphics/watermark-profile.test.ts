@@ -9,7 +9,7 @@ import { GRAPHICS_ANCHOR_POINTS, GRAPHICS_INSET_FRACTION, parseGraphicsDocument 
 import { resolveLayerTiming } from "./timing.js";
 import { watermarkDocumentFromProfile, watermarkHandleHeight } from "./watermark-profile.js";
 
-const PROFILES = [["tiktok", LIGHTNING_WATERMARK_PROFILE], ["x", X_WATERMARK_PROFILE]] as const;
+const PROFILES = [["tiktok", { ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center" }], ["x", X_WATERMARK_PROFILE]] as const;
 const FRAMES: GraphicsFrame[] = [{ width: 1080, height: 1920 }, { width: 1920, height: 1080 }];
 const CORNERS: OsgPosition[] = [
   "top-left", "top-center", "top-right",
@@ -150,7 +150,7 @@ describe("watermark documents from a saved profile", () => {
   it("keeps handle windows that start late or end before they start equal to watermarkWindowsFor", () => {
     const profiles: LightningWatermarkProfile[] = [
       { ...X_WATERMARK_PROFILE, handleStartSeconds: 1.5, handleEndSeconds: null, qrLeadSeconds: 4 },
-      { ...LIGHTNING_WATERMARK_PROFILE, handleStartSeconds: 5, handleEndSeconds: 2 },
+      { ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center", handleStartSeconds: 5, handleEndSeconds: 2 },
     ];
     for (const profile of profiles) {
       const document = built(profile, { width: 1920, height: 1080 }, { includeQr: true });
@@ -237,7 +237,7 @@ describe("watermark documents from a saved profile", () => {
     expect(handle.items[0]).toMatchObject({ text: "someone", icon: null });
     expect(handle.opacity).toBe(0.6);
     expect(handle.timing).toEqual({ start: null, end: 2, tail: null, fade: X_WATERMARK_PROFILE.fadeSeconds, enter: "fade", exit: "fade" });
-    const clamped = built(LIGHTNING_WATERMARK_PROFILE, { width: 720, height: 1280 }, {
+    const clamped = built({ ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center" }, { width: 720, height: 1280 }, {
       includeQr: true,
       handleOpacity: 0,
       qrOpacity: 3,

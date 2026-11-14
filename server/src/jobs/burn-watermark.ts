@@ -200,7 +200,7 @@ export async function watermarkPayloadDocument(
     qrWindow: includeQr
       ? watermarkWindow("QR watermark", duration, payload.qrStartSeconds ?? payload.startSeconds, payload.qrEndSeconds ?? payload.endSeconds)
       : WHOLE_CLIP,
-    handleWindow: includeHandle
+    handleWindow: includeHandle && (payload.template || profile.handlePlacement !== "above-title")
       ? watermarkWindow("Handle watermark", duration, payload.handleStartSeconds ?? payload.startSeconds, payload.handleEndSeconds ?? payload.endSeconds)
       : WHOLE_CLIP,
     values: {

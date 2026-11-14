@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { LIGHTNING_WATERMARK_PROFILE } from "../lightning-defaults.js";
 import type { GraphicsDocument, GraphicsLayerInput, GraphicsScrimLayerInput, GraphicsTiming } from "./model.js";
 import { graphicsDocumentFromLayers } from "./model.js";
 import { GRAPHICS_STARTERS } from "./starters.js";
@@ -77,10 +76,10 @@ describe("graphicsStillGroups", () => {
     expect(groups).toEqual([{ layerIds: ["l1", "l2"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0, enter: "fade", exit: "fade" } }]);
   });
 
-  it("still draws the watermark starter's handle only for the profile's first seconds", () => {
+  it("draws the watermark starter's above-title handle for the whole clip", () => {
     const watermark = GRAPHICS_STARTERS.find((starter) => starter.id === "watermark");
     if (!watermark) throw new Error("expected the watermark starter");
     const groups = graphicsStillGroups(watermark.build({ width: 1080, height: 1920 }), 8);
-    expect(groups).toContainEqual({ layerIds: ["l2"], timing: { start: 0, end: 3, fadeIn: 0, fadeOut: LIGHTNING_WATERMARK_PROFILE.fadeSeconds, enter: "fade", exit: "fade" } });
+    expect(groups).toContainEqual({ layerIds: ["l2"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0, enter: "fade", exit: "fade" } });
   });
 });

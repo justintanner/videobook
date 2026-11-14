@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createEngineForTest } from "../engine.js";
 import { pauseBookQueueForTests, resumeBookQueueForTests } from "../queue.js";
 import { createTestClient } from "../test-client.js";
+import { registerMediaProbe } from "../notebook-media-ops.js";
+import { copyVideoFixture } from "../test-media-fixtures.js";
 import { testBudget } from "../test-budget.js";
 import { goalTestCharacters, settleGoalChain } from "../test-goals.js";
 import { v7 as uuidv7 } from "uuid";
@@ -24,9 +26,9 @@ const SECOND_TITLE: ShortFinishTitle = { headline: "ฝนตกหนักม�
 
 type BottomHalf = { blue: number; white: Set<number> };
 
-async function bottomHalf(path: string): Promise<BottomHalf> {
+async function bottomHalf(path: string, seconds = 1.5): Promise<BottomHalf> {
   const { width, height } = await probeVideo(path);
-  const { stdout } = await execFileAsync(FFMPEG, ["-v", "error", "-ss", "1.5", "-i", path, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], { encoding: "buffer", maxBuffer: width * height * 4 });
+  const { stdout } = await execFileAsync(FFMPEG, ["-v", "error", "-ss", String(seconds), "-i", path, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], { encoding: "buffer", maxBuffer: width * height * 4 });
   const white = new Set<number>();
   const shade: number[] = [];
   for (let pixel = width * Math.floor(height / 2); pixel < width * height; pixel += 1) {
@@ -79,7 +81,17 @@ describe("goal finishing burns the saved watermark through the graphics renderer
   }
   const status = (goalId: string) => invoke({ action: "status", goal_id: goalId });
   const approve = (goal: ShortGoalSnapshot) => invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
-  const settleChain = (chainId: string, kind: "image" | "video") => settleGoalChain(engine, root, chainId, kind);
+  const settleChain = async (chainId: string, kind: "image" | "video") => {
+    const artifactId = await settleGoalChain(engine, root, chainId, kind);
+    if (kind === "video") {
+      const scratch = join(root, "portrait.mp4");
+      await copyVideoFixture({ width: 360, height: 640, durationSec: 4, fps: 12, source: "color", color: "blue", audio: { frequency: 440 } }, scratch);
+      const written = await engine.files.writeFromPath(artifactId, "original.mp4", scratch);
+      if (!written.ok) throw new Error(written.error.message);
+      await registerMediaProbe(engine, artifactId, "original.mp4", await probeVideo(scratch));
+    }
+    return artifactId;
+  };
 
   it.each(["new", "saved-running", "saved-failed"])("finishes %s from the reviewed take with only a burned watermark", async (savedState) => {
     const oldFal = process.env.FAL_API_KEY;
@@ -120,6 +132,11 @@ describe("goal finishing burns the saved watermark through the graphics renderer
       if (!manifest.ok) throw new Error(manifest.error.message);
       const probe = await probeVideo(join(manifest.value.path, "original.mp4"));
       expect(probe.videoDuration).toBeCloseTo(4, 1);
+      expect(probe).toMatchObject({ width: 360, height: 640 });
+      const late = await bottomHalf(join(manifest.value.path, "original.mp4"), 3.6);
+      expect(late.white.size).toBeGreaterThan(20);
+      expect(Math.min(...late.white) / probe.width).toBeGreaterThan(probe.height * 0.7);
+      expect(late.blue).toBeGreaterThan(240);
       const saved = readGoal(engine, created.goalId);
       saveGoal(engine, { ...saved, finish: { ...saved.finish!, startSeconds: 0, endSeconds: 0.5, coldOpenArtifactId: clipId, coldOpenRequestId: uuidv7() } });
       const before = engine.jobs.queue.list().length;

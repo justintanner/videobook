@@ -13,7 +13,7 @@
 import type { Engine } from "videobook-engine";
 import { getActiveEngine } from "./queue.js";
 import type { LightningWatermarkProfile, StoredWatermarkProfile } from "./lightning-defaults.js";
-import { watermarkProfileFor } from "./lightning-defaults.js";
+import { LIGHTNING_WATERMARK_PROFILE, watermarkProfileFor } from "./lightning-defaults.js";
 import type { WatermarkPlatform } from "./watermark-platform.js";
 
 const RECENT_LIMIT = 8;
@@ -59,12 +59,35 @@ function readConfig(engine: Engine, platform: WatermarkPlatform = "x"): Watermar
   return { savedHandle, recent, authenticatedHandle, ...(profile ? { profile } : {}) };
 }
 
+const LEGACY_HANDLE_DEFAULTS = {
+  includePlatformIcon: true,
+  includeHandleBorder: true,
+  handlePaddingX: 15,
+  handlePaddingY: 28,
+  handleRounding: 56,
+  scale: 1,
+  handlePlacement: "center",
+  handleVerticalPercent: 10,
+  handleStartSeconds: 0,
+  handleEndSeconds: 3,
+  handleOpacity: 0.28,
+  fadeSeconds: 0.3,
+} as const;
+
+function currentProfile(config: WatermarkConfig, platform: WatermarkPlatform): StoredWatermarkProfile | undefined {
+  const stored = config.profile;
+  if (platform !== "tiktok" || !stored || stored.handleLayoutVersion === 2 || stored.handlePlacement === "above-title") return stored;
+  const customized = (Object.keys(LEGACY_HANDLE_DEFAULTS) as (keyof typeof LEGACY_HANDLE_DEFAULTS)[])
+    .some((key) => stored[key] !== undefined && stored[key] !== LEGACY_HANDLE_DEFAULTS[key]);
+  return { ...stored, handlePlacement: customized ? stored.handlePlacement ?? "center" : LIGHTNING_WATERMARK_PROFILE.handlePlacement };
+}
+
 export function effectiveWatermarkProfile(
   config: WatermarkConfig,
   platform: WatermarkPlatform,
 ): LightningWatermarkProfile {
   return watermarkProfileFor(platform, {
-    ...config.profile,
+    ...currentProfile(config, platform),
     ...(config.savedHandle ? { handle: config.savedHandle } : {}),
   });
 }
@@ -144,7 +167,7 @@ export async function saveWatermarkProfile(
       savedHandle: handle ?? current.savedHandle,
       recent: current.recent,
       authenticatedHandle: current.authenticatedHandle,
-      profile: { ...current.profile, ...profile, mode: "burn", ...(handle ? { handle } : {}) },
+      profile: { ...currentProfile(current, platform), ...profile, handleLayoutVersion: 2, mode: "burn", ...(handle ? { handle } : {}) },
     };
     writeWatermarkConfig(engine, next, platform);
     return next;

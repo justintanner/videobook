@@ -34,6 +34,8 @@ import {
   MAX_GRAPHICS_PLATE_PADDING,
 } from "./model.js";
 
+import { bottomLeftBlock, titleHandleItem } from "./title-block.js";
+
 export type WatermarkWindow = { startSeconds: number | null; endSeconds: number | null };
 
 type ProfileOverrides = Partial<Pick<
@@ -94,7 +96,7 @@ const CORNER_ANCHORS: Record<OsgPosition, GraphicsAnchor> = {
   "bottom-right": "bottom-right",
 };
 
-const ATTACHED_ANCHORS: Record<Exclude<WatermarkHandlePlacement, "center">, GraphicsAnchor> = {
+const ATTACHED_ANCHORS: Record<Exclude<WatermarkHandlePlacement, "center" | "above-title">, GraphicsAnchor> = {
   "above-qr": "bottom",
   "on-qr": "center",
   "below-qr": "top",
@@ -159,7 +161,7 @@ function centeredHandlePosition(verticalPercent: number): GraphicsPosition {
   return { anchor: "center", x: 0.5, y: percent / 100, space: "frame" };
 }
 
-function attachedPointY(placement: Exclude<WatermarkHandlePlacement, "center">, top: number, side: number, gap: number): number {
+function attachedPointY(placement: Exclude<WatermarkHandlePlacement, "center" | "above-title">, top: number, side: number, gap: number): number {
   if (placement === "above-qr") return top - gap;
   if (placement === "below-qr") return top + side + gap;
   return top + side / 2;
@@ -169,7 +171,7 @@ function attachedHandlePosition(
   frame: GraphicsFrame,
   corner: OsgPosition,
   scale: number,
-  placement: Exclude<WatermarkHandlePlacement, "center">,
+  placement: Exclude<WatermarkHandlePlacement, "center" | "above-title">,
 ): GraphicsPosition {
   const space = spaceRect(frame, "inset");
   const side = qrSidePixels(frame, scale);
@@ -243,7 +245,7 @@ function handleLayer(
   profile: LightningWatermarkProfile,
   frame: GraphicsFrame,
   corner: OsgPosition,
-  placement: WatermarkHandlePlacement,
+  placement: Exclude<WatermarkHandlePlacement, "above-title">,
   timing: GraphicsTiming,
 ): GraphicsLayerInput {
   const attached = placement === "center" ? null : placement;
@@ -315,6 +317,7 @@ export function watermarkLayerInputs(
     ? [qrLayer(merged, corner, overrides.qrWindow ? windowTiming(overrides.qrWindow, fade) : qrTiming(merged, fade))]
     : [];
   if (overrides.includeHandle === false) return qr;
+  if (merged.handlePlacement === "above-title") return [...qr, bottomLeftBlock("Title", 0.02, [titleHandleItem(merged)])];
   const placement = includeQr ? merged.handlePlacement : "center";
   const timing = overrides.handleWindow ? windowTiming(overrides.handleWindow, fade) : handleTiming(merged, fade);
   return [...qr, handleLayer(merged, size, corner, placement, timing)];

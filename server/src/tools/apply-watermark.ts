@@ -268,7 +268,7 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false;
   return {
     name: "apply_watermark",
     description:
-      "Burn the X or TikTok handle and an optional positioned QR code (off by default), or the platform's saved watermark template, onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued.",
+      "Burn the X or TikTok handle and an optional positioned QR code (off by default), or the platform's saved watermark template, onto a video in place. TikTok defaults to handle_position=above-title: solid icon and text above the title, no pill, sharing the title window. Other placements retain pill opacity, padding and visibility windows. wait=false returns once the burn is queued.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Video asset id to watermark"),
@@ -296,11 +296,11 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false;
         .min(MIN_HANDLE_VERTICAL_PERCENT)
         .max(MAX_HANDLE_VERTICAL_PERCENT)
         .optional()
-        .describe("Burn-mode centered-handle centerline as percent from the top (fresh TikTok 10, X 33; range 10-90). Ignored when handle_position attaches the handle to the QR"),
+        .describe("Burn-mode centered-handle centerline as percent from the top (fresh TikTok 10, X 33; range 10-90). Ignored for above-title and when handle_position attaches the handle to the QR"),
       handle_position: z
         .enum(WATERMARK_HANDLE_PLACEMENTS)
         .optional()
-        .describe("Burn-mode handle placement: center (default), above-qr, on-qr, or below-qr"),
+        .describe("Burn-mode handle placement: above-title (TikTok default; solid text above the title for the whole title window, no pill), center (X default), above-qr, on-qr, or below-qr"),
       include_platform_icon: z
         .boolean()
         .optional()
@@ -308,28 +308,28 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false;
       include_handle_border: z
         .boolean()
         .optional()
-        .describe("Draw a border around the handle pill (default true)"),
+        .describe("Draw a border around the handle pill (default true). Ignored for above-title"),
       handle_padding: z
         .number()
         .int()
         .min(MIN_HANDLE_PADDING)
         .max(MAX_HANDLE_PADDING)
         .optional()
-        .describe(`Horizontal handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING})`),
+        .describe(`Horizontal handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING}). Ignored for above-title`),
       handle_padding_y: z
         .number()
         .int()
         .min(MIN_HANDLE_PADDING)
         .max(MAX_HANDLE_PADDING)
         .optional()
-        .describe(`Vertical handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING_Y}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING})`),
+        .describe(`Vertical handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING_Y}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING}). Ignored for above-title`),
       handle_rounding: z
         .number()
         .int()
         .min(MIN_HANDLE_ROUNDING)
         .max(MAX_HANDLE_ROUNDING)
         .optional()
-        .describe(`Handle corner rounding percent (default ${DEFAULT_HANDLE_ROUNDING}; range ${MIN_HANDLE_ROUNDING}-${MAX_HANDLE_ROUNDING})`),
+        .describe(`Handle corner rounding percent (default ${DEFAULT_HANDLE_ROUNDING}; range ${MIN_HANDLE_ROUNDING}-${MAX_HANDLE_ROUNDING}). Ignored for above-title`),
       qr_start_seconds: z
         .number()
         .min(0)
@@ -344,12 +344,12 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false;
         .number()
         .min(0)
         .optional()
-        .describe("First second where the handle is visible (default clip start)"),
+        .describe("First second where the handle is visible (default clip start). Ignored for above-title"),
       handle_end_seconds: z
         .number()
         .min(0)
         .optional()
-        .describe("Last second where the handle is visible (default clip end)"),
+        .describe("Last second where the handle is visible (default clip end). Ignored for above-title"),
       fade_seconds: z
         .number()
         .min(0)
@@ -367,7 +367,7 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false;
         .min(0.05)
         .max(1)
         .optional()
-        .describe("Handle opacity from 0.05 to 1 (fresh TikTok 0.28, X 0.5)"),
+        .describe("Handle opacity from 0.05 to 1 (pill defaults: TikTok 0.28, X 0.5). Ignored for above-title"),
       scale: z
         .number()
         .min(0.5)
@@ -488,7 +488,7 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false;
           resolvedHandleEndSeconds = times.handleEndSeconds;
         }
         if (include_qr) effectiveWatermarkTiming("QR watermark", video.videoDuration, resolvedQrStartSeconds, resolvedQrEndSeconds);
-        if (include_handle) effectiveWatermarkTiming("Handle watermark", video.videoDuration, resolvedHandleStartSeconds, resolvedHandleEndSeconds);
+        if (include_handle && (template || handle_position !== "above-title")) effectiveWatermarkTiming("Handle watermark", video.videoDuration, resolvedHandleStartSeconds, resolvedHandleEndSeconds);
       } catch (error) {
         return toolError(error instanceof Error ? error.message : String(error));
       }
@@ -500,7 +500,7 @@ export function applyWatermarkDef(engine: Engine, options: { transcribe?: false;
       const storedProfileUrl = typeof config.profile?.profileUrl === "string" ? config.profile.profileUrl.trim() : "";
       const resolvedUrl = (url ?? (storedProfileUrl || (resolvedHandle ? defaultUrl(resolvedHandle, platform) : ""))).trim();
       if (include_qr && !resolvedUrl) return toolError("url or handle must provide a QR destination");
-      const resolvedHandlePosition: WatermarkHandlePlacement = include_qr
+      const resolvedHandlePosition: WatermarkHandlePlacement = include_qr || handle_position === "above-title"
         ? handle_position
         : "center";
       const savedProfile = watermarkProfileToSave(profile, {

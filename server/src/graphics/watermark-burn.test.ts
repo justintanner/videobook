@@ -62,7 +62,7 @@ function savedTemplate(layers: readonly GraphicsLayerInput[]): GraphicsDocument 
 }
 
 function creditTemplate(): GraphicsDocument {
-  const pill = watermarkLayerInputs({ ...LIGHTNING_WATERMARK_PROFILE, handleVerticalPercent: 20, handleOpacity: 0.6 }, FRAME, { includeQr: false });
+  const pill = watermarkLayerInputs({ ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center", handleVerticalPercent: 20, handleOpacity: 0.6 }, FRAME, { includeQr: false });
   return savedTemplate([
     { kind: "scrim", edge: "bottom", height: 0.3, strength: 0.6 },
     {
@@ -80,15 +80,15 @@ describe("watermark burn documents", () => {
     const document = burned(input(LIGHTNING_WATERMARK_PROFILE));
     expect(document.layers.some((layer) => layer.kind === "qr")).toBe(false);
     expect(document.layers.some((layer) => layer.kind === "scrim")).toBe(false);
-    expect(document.layers.filter((layer) => layer.kind === "text").map((layer) => layer.name)).toEqual(["Title", "Handle"]);
+    expect(document.layers.filter((layer) => layer.kind === "text").map((layer) => layer.name)).toEqual(["Title"]);
     expect(kinds(drawn(document))).toEqual(["text"]);
     expect(handleLayer(document).items[0]).toMatchObject({ text: "jtbkk", slot: "handle", icon: "tiktok" });
-    expect(handleLayer(document).timing).toEqual({ start: null, end: 3, tail: null, fade: LIGHTNING_WATERMARK_PROFILE.fadeSeconds, enter: "fade", exit: "fade" });
+    expect(handleLayer(document).timing).toEqual({ start: null, end: null, tail: null, fade: 0, enter: "fade", exit: "fade" });
   });
 
   it("adds the QR code when asked, at the resolved corner and inside its window", () => {
     const document = burned(input(LIGHTNING_WATERMARK_PROFILE, { includeQr: true, corner: "top-left" }));
-    expect(kinds(drawn(document))).toEqual(["qr", "text"]);
+    expect(kinds(drawn(document))).toEqual(["text", "qr"]);
     expect(qrOf(document)).toMatchObject({
       url: "https://www.tiktok.com/@jtbkk",
       slot: "profile",
@@ -103,14 +103,14 @@ describe("watermark burn documents", () => {
     expect(handleLayer(document).items[0]).toMatchObject({ text: "justinwtanner", icon: "x" });
   });
 
-  it("burns a short's Thai title and English line in the TikTok title block, with its shade, beside the handle", () => {
+  it("burns a short's Thai title and English line in the TikTok title block, with its shade, under the handle", () => {
     const values = { ...watermarkSlotValues(LIGHTNING_WATERMARK_PROFILE), headline: "รอรถเมล์กลางฝน", secondary: "Waiting for the bus in the rain" };
     const document = burned(input(LIGHTNING_WATERMARK_PROFILE, { values }));
-    expect(kinds(drawn(document))).toEqual(["scrim", "text", "text"]);
+    expect(kinds(drawn(document))).toEqual(["scrim", "text"]);
     const title = document.layers.find((layer): layer is GraphicsTextLayer => layer.kind === "text" && layer.name === "Title");
-    expect(title?.items.map((item) => [item.slot, item.text])).toEqual([["headline", "รอรถเมล์กลางฝน"], ["secondary", "Waiting for the bus in the rain"]]);
+    expect(title?.items.map((item) => [item.slot, item.text])).toEqual([["handle", "jtbkk"], ["headline", "รอรถเมล์กลางฝน"], ["secondary", "Waiting for the bus in the rain"]]);
     expect(handleLayer(document).items[0]).toMatchObject({ text: "jtbkk", slot: "handle" });
-    expect(kinds(drawn(burned(input(LIGHTNING_WATERMARK_PROFILE, { values: { ...values, secondary: "" } }))))).toEqual(["scrim", "text", "text"]);
+    expect(kinds(drawn(burned(input(LIGHTNING_WATERMARK_PROFILE, { values: { ...values, secondary: "" } }))))).toEqual(["scrim", "text"]);
   });
 
   it("reports whether a saved template can draw a title, ignoring hidden layers", () => {
@@ -206,6 +206,9 @@ describe("watermark burn documents", () => {
     expect(withQr.layers).toHaveLength(1);
     expect(withQr.layers[0]).toMatchObject({ kind: "image", artifactId: "card-image", position: { anchor: "bottom-right", space: "inset" }, opacity: X_WATERMARK_PROFILE.qrOpacity });
     expect(withQr.layers[0].kind === "image" && withQr.layers[0].size).toBeCloseTo(0.32, 10);
+    const tiktokCard = burned(input(LIGHTNING_WATERMARK_PROFILE, { card }));
+    expect(tiktokCard.layers).toHaveLength(1);
+    expect(tiktokCard.layers[0]).toMatchObject({ kind: "image", artifactId: "card-image", position: { anchor: "bottom-left", space: "safe" } });
     const handleOnly = burned(input(X_WATERMARK_PROFILE, { card }));
     expect(handleOnly.layers[0]).toMatchObject({ kind: "image", artifactId: "card-image", position: { anchor: "center", x: 0.5, y: 0.33, space: "frame" } });
     expect(handleOnly.layers[0].kind === "image" && handleOnly.layers[0].size).toBeCloseTo(watermarkHandleHeight(X_WATERMARK_PROFILE, FRAME) * 2, 10);

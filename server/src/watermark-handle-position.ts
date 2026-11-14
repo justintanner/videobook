@@ -4,6 +4,7 @@ export const MAX_HANDLE_VERTICAL_PERCENT = 90;
 
 export const WATERMARK_HANDLE_PLACEMENTS = [
   "center",
+  "above-title",
   "above-qr",
   "on-qr",
   "below-qr",

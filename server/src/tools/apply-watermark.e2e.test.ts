@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -9,6 +9,8 @@ import sharp from "sharp";
 import type { Engine } from "videobook-engine";
 import { findVideoFile } from "videobook-engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { withBookContext } from "../book-context.js";
+import { applyWatermarkDef } from "./apply-watermark.js";
 import { createEngineForTest } from "../engine.js";
 import { FFMPEG, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { graphicsDocumentFromLayers } from "../graphics/model.js";
@@ -110,6 +112,36 @@ function changedBox(base: Buffer, marked: Buffer, frame: Frame, rows: readonly [
     }
   }
   return box.maxX < 0 ? null : { left: box.minX, top: box.minY, width: box.maxX - box.minX + 1, height: box.maxY - box.minY + 1 };
+}
+
+function whiteBands(pixels: Buffer, frame: Frame): Array<{ top: number; bottom: number; left: number; right: number }> {
+  const bands: Array<{ top: number; bottom: number; left: number; right: number }> = [];
+  for (let y = 0; y < frame.height; y += 1) {
+    let left = frame.width;
+    let right = -1;
+    for (let x = 0; x < frame.width; x += 1) {
+      const at = (y * frame.width + x) * 3;
+      if (pixels[at] > 210 && pixels[at + 1] > 210 && pixels[at + 2] > 210) {
+        left = Math.min(left, x);
+        right = x;
+      }
+    }
+    if (right < left) continue;
+    const last = bands.at(-1);
+    if (last && y - last.bottom < 12) {
+      last.bottom = y;
+      last.left = Math.min(last.left, left);
+      last.right = Math.max(last.right, right);
+    } else bands.push({ top: y, bottom: y, left, right });
+  }
+  return bands;
+}
+
+async function evidenceFrame(pixels: Buffer, frame: Frame, name: string): Promise<void> {
+  const directory = process.env.VIDEOBOOK_TEST_EVIDENCE_DIR;
+  if (!directory) return;
+  await mkdir(directory, { recursive: true });
+  await sharp(pixels, { raw: { ...frame, channels: 3 } }).png().toFile(join(directory, name));
 }
 
 function decodeQr(pixels: Buffer, frame: Frame): string | null {
@@ -435,11 +467,11 @@ describe("apply_watermark burns through the graphics renderer", () => {
   }, testBudget(240_000));
 
   it.each([
-    ["tiktok", LIGHTNING_WATERMARK_PROFILE, 1.5, 5.5],
+    ["tiktok", { ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center" }, 1.5, 5.5],
     ["x", X_WATERMARK_PROFILE, 3, 3],
-  ] as const)("keeps the default %s QR code and handle within 2 px of today's burn, decoding to the profile URL", async (platform, profile, handleAt, qrAt) => {
+  ] as const)("keeps the explicit centered %s QR code and handle within 2 px of today's burn, decoding to the profile URL", async (platform, profile, handleAt, qrAt) => {
     const { assetId, sourcePath } = await greyAsset(PORTRAIT, 6);
-    const parsed = await apply({ asset_id: assetId, platform, include_qr: true, position: "bottom-right" });
+    const parsed = await apply({ asset_id: assetId, platform, handle_position: "center", include_qr: true, position: "bottom-right" });
     expect(parsed).toMatchObject({ status: "completed", include_qr: true, include_handle: true, position: "bottom-right", handle: profile.handle });
     const burned = await videoPath(assetId);
     const split = Math.round(PORTRAIT.height * 0.6);
@@ -455,20 +487,52 @@ describe("apply_watermark burns through the graphics renderer", () => {
   }, testBudget(240_000));
 
   it("burns the TikTok handle alone by default, with no QR code and no shade", async () => {
-    const { assetId, sourcePath } = await greyAsset(SMALL, 4);
+    const { assetId, sourcePath } = await greyAsset(PORTRAIT, 4);
     const parsed = await apply({ asset_id: assetId, platform: "tiktok" });
     expect(parsed).toMatchObject({ status: "completed", include_qr: false, include_handle: true, position: null, placement_source: "fixed", template_id: null });
     const burned = await videoPath(assetId);
     const [baseEarly, early, baseLate, late] = await Promise.all([
-      frameAt(sourcePath, 1, SMALL),
-      frameAt(burned, 1, SMALL),
-      frameAt(sourcePath, 3.6, SMALL),
-      frameAt(burned, 3.6, SMALL),
+      frameAt(sourcePath, 1, PORTRAIT),
+      frameAt(burned, 1, PORTRAIT),
+      frameAt(sourcePath, 3.6, PORTRAIT),
+      frameAt(burned, 3.6, PORTRAIT),
     ]);
-    expect(changedBox(baseEarly, early, SMALL, [0, SMALL.height * 0.3])).not.toBeNull();
-    expect(changedBox(baseEarly, early, SMALL, [SMALL.height * 0.3, SMALL.height])).toBeNull();
-    expect(changedBox(baseLate, late, SMALL, [0, SMALL.height])).toBeNull();
-    expect(decodeQr(late, SMALL)).toBeNull();
+    expect(changedBox(baseEarly, early, PORTRAIT, [0, PORTRAIT.height * 0.5])).toBeNull();
+    const handleBox = changedBox(baseEarly, early, PORTRAIT, [PORTRAIT.height * 0.5, PORTRAIT.height]);
+    expect(handleBox).not.toBeNull();
+    expect(handleBox!.left).toBeLessThan(PORTRAIT.width * 0.15);
+    expect(handleBox!.width).toBeLessThan(PORTRAIT.width * 0.3);
+    expect(changedBox(baseLate, late, PORTRAIT, [0, PORTRAIT.height])).toEqual(handleBox);
+    expect(decodeQr(late, PORTRAIT)).toBeNull();
+    const bands = whiteBands(late, PORTRAIT);
+    expect(bands).toHaveLength(1);
+    expect(bands[0].top).toBeGreaterThan(PORTRAIT.height * 0.7);
+    await evidenceFrame(late, PORTRAIT, "tiktok-untitled-1080x1920.png");
+  }, testBudget(240_000));
+
+  it("burns a solid handle directly above the Thai title with no pill for the entire clip", async () => {
+    const { assetId, sourcePath } = await greyAsset(PORTRAIT, 4);
+    const tool = applyWatermarkDef(engine, { transcribe: false, title: { headline: "ฝนตกหนัก", secondary: "Waiting" } });
+    const result = await withBookContext({ bookId: engine.book.get().bookId, engine }, () => tool.handler({ book_id: engine.book.get().bookId, asset_id: assetId, platform: "tiktok", handle_opacity: 0.1, handle_end_seconds: 0.5 }));
+    expect(result.isError, JSON.stringify(result)).toBeFalsy();
+    const burned = await videoPath(assetId);
+    const early = await frameAt(burned, 1, PORTRAIT);
+    const late = await frameAt(burned, 3.6, PORTRAIT);
+    const bands = whiteBands(early, PORTRAIT);
+    await evidenceFrame(late, PORTRAIT, "tiktok-titled-1080x1920.png");
+    expect(bands, JSON.stringify(bands)).toHaveLength(4);
+    expect(bands[2].bottom - bands[2].top).toBeLessThan(12);
+    expect(bands[0].top).toBeGreaterThan(PORTRAIT.height * 0.5);
+    expect(bands[0].left).toBeLessThan(PORTRAIT.width * 0.15);
+    expect(bands[0].bottom - bands[0].top).toBeLessThan(bands[1].bottom - bands[1].top);
+    expect(bands[1].top - bands[0].bottom).toBeLessThan(PORTRAIT.width * 0.1);
+    expect(whiteBands(late, PORTRAIT)).toEqual(bands);
+    const y = Math.round((bands[0].top + bands[0].bottom) / 2);
+    const at = (y * PORTRAIT.width + bands[0].right + 16) * 3;
+    const outside = (y * PORTRAIT.width + bands[0].right + 80) * 3;
+    expect(Math.abs(early[at] - early[outside])).toBeLessThan(8);
+    expect(changedBox(await frameAt(sourcePath, 1, PORTRAIT), early, PORTRAIT, [0, PORTRAIT.height * 0.4])).toBeNull();
+    await evidenceFrame(late, PORTRAIT, "tiktok-titled-1080x1920.png");
   }, testBudget(240_000));
 
   it("burns a saved watermark template's credit on a downloaded video and skips it on a generated one", async () => {
@@ -484,7 +548,7 @@ describe("apply_watermark burns through the graphics renderer", () => {
           plate: { color: "#FF00FF", opacity: 1, radius: 0 },
           items: [{ text: "credit", slot: "credit", size: 0.04, icon: "camera", shadow: false }],
         },
-        ...watermarkLayerInputs(LIGHTNING_WATERMARK_PROFILE, SMALL, { includeQr: false }),
+        ...watermarkLayerInputs({ ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center" }, SMALL, { includeQr: false }),
       ]),
     });
     await setWatermarkGraphicsTemplate(engine, "tiktok", template.id);

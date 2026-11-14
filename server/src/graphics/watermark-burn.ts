@@ -79,7 +79,8 @@ function overrides(input: WatermarkBurnInput): WatermarkDocumentOverrides {
 }
 
 function profileInputs(input: WatermarkBurnInput): ProfileInputs {
-  const layers = watermarkLayerInputs(input.profile, input.frame, overrides(input));
+  const profile = input.profile.handlePlacement === "above-title" ? { ...input.profile, handlePlacement: "center" as const } : input.profile;
+  const layers = watermarkLayerInputs(profile, input.frame, overrides(input));
   return { qr: layers.find((layer) => layer.kind === "qr") ?? null, handle: layers.find((layer) => layer.kind === "text") ?? null };
 }
 
@@ -187,7 +188,7 @@ function withCard(document: GraphicsDocument, input: WatermarkBurnInput, card: W
   const handleHeight = watermarkHandleHeight(input.profile, input.frame);
   const layers = document.layers.map((layer) => {
     if (input.includeQr && isProfileQr(layer)) return cardLayer(layer, card, layer.size);
-    if (!input.includeQr && onlyHandle(layer)) return cardLayer(layer, card, handleHeight);
+    if (!input.includeQr && holdsHandle(layer) && layer.items.every((item) => item.slot === "handle" || !item.text.trim())) return cardLayer(layer, card, handleHeight);
     return layer;
   });
   return { ...document, layers };

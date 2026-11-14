@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
 import { closeEngineForTest, createEngineForTest } from "./engine.js";
-import { normalizeHandle, readWatermarkConfig, recordHandle, setAuthenticatedHandle } from "./watermark-config.js";
+import { effectiveWatermarkProfile, saveWatermarkProfile, normalizeHandle, readWatermarkConfig, recordHandle, setAuthenticatedHandle } from "./watermark-config.js";
+
+import { LIGHTNING_WATERMARK_PROFILE } from "./lightning-defaults.js";
 
 describe("watermark-config store", () => {
   let tempDir: string;
@@ -34,6 +36,35 @@ describe("watermark-config store", () => {
   function setTestAuthenticatedHandle(handle: string | null) {
     return setAuthenticatedHandle(handle, engine);
   }
+
+
+  it("upgrades a stored old-default TikTok look without rewriting its settings", async () => {
+    const profile = { ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center", handle: "creator", qrOpacity: 0.8 };
+    expect(engine.settings.set("application.watermark.tiktok.v1", { profile }).ok).toBe(true);
+    const config = await readWatermarkConfig(engine, "tiktok");
+    expect(effectiveWatermarkProfile(config, "tiktok")).toMatchObject({ handlePlacement: "above-title", handle: "creator", qrOpacity: 0.8 });
+    expect((await readWatermarkConfig(engine, "tiktok")).profile).toEqual(profile);
+    expect(effectiveWatermarkProfile(config, "x").handlePlacement).toBe("center");
+    await saveWatermarkProfile({ handle: "newname" }, "tiktok", engine);
+    expect(effectiveWatermarkProfile(await readWatermarkConfig(engine, "tiktok"), "tiktok")).toMatchObject({ handlePlacement: "above-title", handle: "newname" });
+  });
+
+  it.each([
+    { handleVerticalPercent: 30 }, { handlePaddingX: 18 }, { handleOpacity: 0.8 },
+    { handleEndSeconds: null }, { includePlatformIcon: false }, { scale: 1.2 },
+    { handlePlacement: "above-qr" as const },
+  ])("preserves customized legacy TikTok handles: %j", async (custom) => {
+    const profile = { ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center", ...custom };
+    expect(engine.settings.set("application.watermark.tiktok.v1", { profile }).ok).toBe(true);
+    expect(effectiveWatermarkProfile(await readWatermarkConfig(engine, "tiktok"), "tiktok")).toMatchObject(profile);
+  });
+
+  it("keeps a newly saved explicit center placement, even at the old defaults", async () => {
+    await saveWatermarkProfile({ ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center" }, "tiktok", engine);
+    const config = await readWatermarkConfig(engine, "tiktok");
+    expect(config.profile?.handleLayoutVersion).toBe(2);
+    expect(effectiveWatermarkProfile(config, "tiktok").handlePlacement).toBe("center");
+  });
 
   it("returns an empty config when nothing is stored", async () => {
     expect(await readConfig()).toEqual({ savedHandle: null, recent: [], authenticatedHandle: null });

@@ -6,6 +6,10 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The default TikTok watermark places the handle above the title as solid text with a shadow, without a pill or border.
+
 ## [0.7.2] - 2026-11-14
 
 ### Added

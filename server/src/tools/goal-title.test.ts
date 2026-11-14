@@ -290,7 +290,7 @@ describe("video_goal burned title", () => {
     const { goal, clipId } = await reviewedTake();
     const untitled = await invoke({ action: "finish", goal_id: goal.goalId });
     expect(finishJob(untitled)).not.toHaveProperty("title");
-    expect(untitled.finish?.identity).not.toContain("title");
+    expect(JSON.parse(untitled.finish!.identity!.slice("watermark-only:".length))).not.toHaveProperty("title");
     await invoke({ action: "cancel", goal_id: goal.goalId });
 
     const titled = await retitle(await status(goal.goalId), TITLE);
@@ -324,7 +324,7 @@ describe("video_goal burned title", () => {
     await saveWatermarkTemplate(handleOnly());
     const handleOnlyFinish = await invoke({ action: "finish", goal_id: goal.goalId });
     expect(finishJob(handleOnlyFinish)).not.toHaveProperty("title");
-    expect(handleOnlyFinish.finish?.identity).not.toContain("title");
+    expect(JSON.parse(handleOnlyFinish.finish!.identity!.slice("watermark-only:".length))).not.toHaveProperty("title");
     expect(titled.shortPlan?.finish.title).toEqual(TITLE);
   });
 
@@ -342,12 +342,12 @@ describe("video_goal burned title", () => {
     };
     const titled = await burn(TITLE);
     expect(titled.payload).toMatchObject({ headline: TITLE.headline, secondary: TITLE.secondary, transcribe: false });
-    expect(titled).toMatchObject({ items: [["headline", TITLE.headline], ["secondary", TITLE.secondary]], shade: true });
+    expect(titled).toMatchObject({ items: [["handle", LIGHTNING_WATERMARK_PROFILE.handle], ["headline", TITLE.headline], ["secondary", TITLE.secondary]], shade: true });
     const headlineOnlyBurn = await burn(RETITLED);
     expect(headlineOnlyBurn.payload).not.toHaveProperty("secondary");
-    expect(headlineOnlyBurn.items).toEqual([["headline", RETITLED.headline], ["secondary", ""]]);
+    expect(headlineOnlyBurn.items).toEqual([["handle", LIGHTNING_WATERMARK_PROFILE.handle], ["headline", RETITLED.headline], ["secondary", ""]]);
     const plain = await burn(null);
     expect(plain.payload).not.toHaveProperty("headline");
-    expect(plain).toMatchObject({ items: [["headline", ""], ["secondary", ""]], shade: false });
+    expect(plain).toMatchObject({ items: [["handle", LIGHTNING_WATERMARK_PROFILE.handle], ["headline", ""], ["secondary", ""]], shade: false });
   });
 });
