@@ -6,6 +6,13 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A storyboard frame whose clean-up failed offers "Clean with" the other
+  clean-up model, Nano Banana 2.1 for a Seedream 5.5 frame and Seedream 5.5 for
+  a storyboard saved on Nano Banana, with its own price, and "Try again with"
+  the same model. Versions from both models stay selectable.
+
 ### Changed
 
 - A short made from a video removes its storyboard's on-screen graphics with

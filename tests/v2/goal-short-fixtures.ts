@@ -99,9 +99,11 @@ function storyboardView(short: GoalShortPlan, stage: Stage | undefined, estimate
 
 type Failure = NonNullable<NonNullable<ShortGoalSnapshot['storyboard']>['frames'][number]['failure']>
 
-export function withStoryboardFailures(goal: ShortGoalSnapshot, failures: Readonly<Record<number, Failure>>): ShortGoalSnapshot {
-  if (!goal.storyboard) return goal
-  return { ...goal, storyboard: { ...goal.storyboard, frames: goal.storyboard.frames.map(frame => ({ ...frame, failure: failures[frame.index] ?? frame.failure })) } }
+export function withStoryboardFailures(goal: ShortGoalSnapshot, failures: Readonly<Record<number, Omit<Failure, 'model'> & { model?: Failure['model'] }>>): ShortGoalSnapshot {
+  const storyboard = goal.storyboard
+  if (!storyboard) return goal
+  const failureOf = (index: number) => failures[index] ? { ...failures[index], model: failures[index].model ?? storyboard.model } : null
+  return { ...goal, storyboard: { ...storyboard, frames: storyboard.frames.map(frame => ({ ...frame, failure: failureOf(frame.index) ?? frame.failure })) } }
 }
 
 export function shortGoalFixture(extra: Partial<ShortGoalSnapshot> = {}, short: GoalShortPlan = shortPlanFixture()): ShortGoalSnapshot {
@@ -110,7 +112,10 @@ export function shortGoalFixture(extra: Partial<ShortGoalSnapshot> = {}, short: 
     frame: { usd: 0.21, warnings: [] }, storyboards: { usd: Math.round(boards * 21) / 100, warnings: [] }, videos: { usd: 1.2, warnings: [LOWER_BOUND] },
     total: { usd: Math.round(141 + boards * 21) / 100, warnings: [LOWER_BOUND] },
     segments: short.segments.map(() => ({ usd: 0.6, warnings: [LOWER_BOUND] })),
-    ...(boards > 0 ? { storyboardFrames: Array.from({ length: boards }, () => ({ usd: 0.21, warnings: [] })) } : {}),
+    ...(boards > 0 ? {
+      storyboardFrames: Array.from({ length: boards }, () => ({ usd: 0.21, warnings: [] })),
+      storyboardFallbackFrames: Array.from({ length: boards }, () => ({ usd: 0.18, warnings: [] })),
+    } : {}),
   }
   return {
     kind: 'video-goal', legacy: false, planVersion: short.version, stage: 'frame', stages: {}, goalId: 'short-1', bookId: 'book', notebookId: 'notebook',

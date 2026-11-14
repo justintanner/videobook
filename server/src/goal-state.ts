@@ -6,7 +6,7 @@ import {
   type GoalEstimates, type GoalGenerationStage, type GoalRecord, type GoalStageOutput, type GoalStageRun,
 } from "./goal-store.js";
 import { goalStageAttempts } from "./goal-stills.js";
-import { refreshGoalShortPlan, shortStoryboardOf, type GoalShortPlan } from "./goal-short-plan.js";
+import { refreshGoalShortPlan, shortStoryboardOf, type GoalShortPlan, type ShortStoryboardModel } from "./goal-short-plan.js";
 import {
   currentShortClip, nextShortSegment, shortFrameStale, shortSegmentStale, storyboardFrameFailure, storyboardReview, type StoryboardFrameFailure,
 } from "./goal-short-runtime.js";
@@ -197,6 +197,10 @@ function outputStale(goal: GoalRecord, stage: GoalGenerationStage, index: number
   return stage === "frame" && shortFrameStale(goal) ? FRAME_STALE_MESSAGE : null;
 }
 
+function withFailureModel(failure: StoryboardFrameFailure | null, model: ShortStoryboardModel) {
+  return failure ? { ...failure, model: failure.model ?? model } : null;
+}
+
 function storyboardView<Output extends { index: number }>(
   plan: GoalShortPlan | null, outputs: readonly Output[], estimate: GoalEstimates, failureOf: (index: number) => StoryboardFrameFailure | null,
 ) {
@@ -211,7 +215,7 @@ function storyboardView<Output extends { index: number }>(
       raw: { artifactId, cellId, address, label },
       clean: outputs.find(output => output.index === index) ?? null,
       estimate: estimate.storyboardFrames?.[index] ?? null,
-      failure: failureOf(index),
+      failure: withFailureModel(failureOf(index), storyboard.model),
     })),
   };
 }

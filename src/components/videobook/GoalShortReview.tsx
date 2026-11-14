@@ -5,7 +5,7 @@ import {
 import type { GoalGenerationStage } from '../../../server/src/goal-store'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
-  goalCanRetry, goalNextSegment, goalPlanSeconds, goalStillStale, goalStillVersions, goalStoryboardClean, goalStoryboardEstimate, shortEstimateText,
+  goalCanRetry, goalNextSegment, goalPlanSeconds, goalStillStale, goalStillVersions, goalStoryboardClean, goalStoryboardEstimate, goalStoryboardRetry, shortEstimateText,
   type GoalSnapshot, type ShortGoalSnapshot, type ShortTab,
 } from '@/videobook/goals'
 import { GoalFinishTitle } from './GoalFinishTitle'
@@ -107,11 +107,11 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const canAddBeat = plan.segments.length < 4 && beatLimit >= 2
   const saved = async () => dirty ? shortSnapshot(await onAction({ action: 'update', revision: goal.revision, plan: draft })) : goal
   const revisingName = (stage: GoalGenerationStage, index: number) => ({ storyboards: `the clean-up of storyboard ${index + 1}`, frame: 'the frame prompt', videos: `beat ${index + 1}` })[stage]
-  const generate = (action: 'approve' | 'regenerate' | 'revise', stage: GoalGenerationStage, index = 0, note?: string) => onRun(async () => {
+  const generate = (action: 'approve' | 'regenerate' | 'revise', stage: GoalGenerationStage, index = 0, note?: string, model?: string) => onRun(async () => {
     const current = await saved()
     if (note) setRevising(revisingName(stage, index))
     try {
-      await onAction({ action, revision: current.revision, stage, index, ...(note ? { feedback: note } : {}) })
+      await onAction({ action, revision: current.revision, stage, index, ...(note ? { feedback: note } : {}), ...(model ? { model } : {}) })
     } finally {
       setRevising(null)
     }
@@ -154,6 +154,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
         const failure = frame.failure
         const failed = failure?.kind === 'failed'
         const redo = Boolean(clean) || failed
+        const retry = goalStoryboardRetry(goal, frame.index)
         const state = clean ? 'Clean' : failure ? failed ? 'Failed' : 'Not run' : running && goal.stage === 'storyboards' ? 'Cleaning' : 'Not cleaned'
         const price = shortEstimateText(frame.estimate ?? undefined)
         return <li key={frame.index} className="goal-short-segment" data-state={clean ? 'done' : failed ? 'failed' : 'pending'}>
@@ -166,7 +167,9 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
           </div>
           {failure && <p role={failed ? 'alert' : undefined} className={failed ? 'goal-panel-warning' : 'goal-panel-muted'}>{failure.message}</p>}
           {clean && <div className="goal-versions" aria-label={`${name} versions`}>{versions('storyboards', frame.index, name)}</div>}
-          {redo && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'storyboards', frame.index)}>Regenerate storyboard {frame.index + 1} · {price}</button>}
+          {retry && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'storyboards', frame.index, undefined, retry.other.model)}>Clean with {retry.other.title} · {shortEstimateText(retry.other.estimate)}</button>}
+          {retry && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'storyboards', frame.index, undefined, retry.same.model)}>Try again with {retry.same.title} · {shortEstimateText(retry.same.estimate)}</button>}
+          {redo && !retry && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'storyboards', frame.index)}>Regenerate storyboard {frame.index + 1} · {price}</button>}
           {redo && <label><span>Revise storyboard {frame.index + 1}</span><textarea aria-label={`${name} feedback`} value={boardFeedback[frame.index] ?? ''} maxLength={2000} rows={2} disabled={!canGenerate} onChange={event => setBoardFeedback(current => ({ ...current, [frame.index]: event.target.value }))} /></label>}
           {redo && <button type="button" className="goal-panel-button" disabled={!canGenerate || !boardFeedback[frame.index]?.trim()} onClick={() => generate('revise', 'storyboards', frame.index, boardFeedback[frame.index]?.trim())}>Revise storyboard {frame.index + 1} · {price}</button>}
         </li>

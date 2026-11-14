@@ -1,6 +1,8 @@
 import type { GoalSnapshot, LegacyGoalSnapshot, ShortGoalSnapshot } from '../../server/src/tools/goal'
 import type { GoalGenerationStage } from '../../server/src/goal-store'
-import { shortStoryboardOf, type GoalShortPlan, type ShortFinishTitle } from '../../server/src/goal-short-plan'
+import {
+  SHORT_STORYBOARD_MODEL_TITLES, shortStoryboardOf, storyboardFallbackModel, type GoalShortPlan, type ShortFinishTitle, type ShortStoryboardModel,
+} from '../../server/src/goal-short-plan'
 import { lowerBoundCost } from './command-plan'
 import { lowerBoundEstimate } from './provider-payload-preview'
 
@@ -79,6 +81,17 @@ export function goalStoryboardClean(goal: ShortGoalSnapshot): boolean {
 
 function goalStoryboardFailures(goal: ShortGoalSnapshot): number {
   return (goal.storyboard?.frames ?? []).filter(frame => frame.failure?.kind === 'failed').length
+}
+
+export function goalStoryboardRetry(goal: ShortGoalSnapshot, index: number) {
+  const storyboard = goal.storyboard
+  const failure = storyboard?.frames.find(frame => frame.index === index)?.failure
+  if (!storyboard || failure?.kind !== 'failed') return null
+  const choice = (model: ShortStoryboardModel) => ({
+    model, title: SHORT_STORYBOARD_MODEL_TITLES[model],
+    estimate: model === storyboard.model ? goal.estimate.storyboardFrames?.[index] : goal.estimate.storyboardFallbackFrames?.[index],
+  })
+  return { other: choice(storyboardFallbackModel(failure.model)), same: choice(failure.model) }
 }
 
 function storyboardFailureText(goal: ShortGoalSnapshot): string {

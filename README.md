@@ -111,7 +111,10 @@ own approval with its estimate:
    version. When one frame's clean-up fails, for example because the model
    refuses it, the other frames are still cleaned. The failed frame shows its
    error and can be regenerated or revised on its own, and the goal stays on
-   this tab until every frame is clean.
+   this tab until every frame is clean. Its card offers **Clean with** the
+   other clean-up model (Nano Banana 2.1 Edit on fal for a Seedream frame,
+   Seedream 5.5 Edit for a storyboard saved on Nano Banana) with its own
+   estimate, and **Try again with** the same model.
 2. **Frame:** the opening still, made with GPT Image 2.6 from the source
    images and, for a short made from a video, clean storyboard frame 1. That
    frame gives the camera angle, framing, pose and action; the people and

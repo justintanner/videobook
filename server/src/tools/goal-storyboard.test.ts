@@ -337,7 +337,7 @@ describe("video_goal storyboard stage", () => {
     const refused = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: restored.revision, stage: "storyboards", index: 0 }));
     expect(refused).toMatchObject({ status: "review", stage: "videos", error: null, resumeStage: null, resumeOutputs: null, finish: { status: "review" } });
     expect(refused.stages.storyboards!.outputs[0]!.artifactId).toBe(cleanOne);
-    expect(refused.storyboard!.frames[0]!.failure).toEqual({ kind: "failed", message: expect.stringContaining(SHORT_STUB_REFUSAL) });
+    expect(refused.storyboard!.frames[0]!.failure).toEqual({ kind: "failed", message: expect.stringContaining(SHORT_STUB_REFUSAL), model: CLEANUP_MODEL });
     expect(refused.stages.frame!.outputs[0]!.stale).toBeNull();
     const recovered = await invoke({ action: "select", goal_id: goal.goalId, stage: "storyboards", index: 0, artifact_id: restaled.stages.storyboards!.outputs[0]!.artifactId });
     expect(recovered).toMatchObject({ stage: "videos", status: "review", error: null, resumeStage: null, resumeOutputs: null, finish: { status: "review" } });
@@ -364,7 +364,7 @@ describe("video_goal storyboard stage", () => {
     expect(value(await engine.metadata.artifacts.read(artifactId, "provider-refusal")))
       .toMatchObject({ failCode: "content_policy_violation", categories: ["model_moderated"] });
     expect(refused).toMatchObject({ status: "review", stage: "storyboards", error: null });
-    expect(refused.storyboard!.frames[0]!.failure).toEqual({ kind: "failed", message: expect.stringContaining(failure!.message) });
+    expect(refused.storyboard!.frames[0]!.failure).toEqual({ kind: "failed", message: expect.stringContaining(failure!.message), model: LEGACY_CLEANUP_MODEL });
     const notebook = value(engine.notebooks.read(notebookId));
     expect(Object.values(notebook.execution ?? {}).some((state) => state.error === failure!.message)).toBe(true);
     expect(stub.unexpected).toEqual([]);
@@ -410,6 +410,7 @@ describe("video_goal storyboard stage", () => {
     delete process.env.KIE_API_KEY;
     expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: goal.revision })).toBe("Set KIE_API_KEY in Settings before generating this stage");
     expect(stub.submissions).toEqual([]);
+    process.env.KIE_API_KEY = "local-kie-key";
 
     const legacy = await onNanoBanana(goal);
     expect(storyboardOf(legacy).model).toBe(LEGACY_CLEANUP_MODEL);
@@ -430,6 +431,48 @@ describe("video_goal storyboard stage", () => {
     expect(regenerated).toMatchObject({ stage: "frame", status: "review", error: null });
     expect(regenerated.stages.storyboards!.outputs[1]!.versions).toHaveLength(2);
     expect(mediaJobs(CLEANUP_MODEL)).toEqual([]);
+
+    stub.failNext = true;
+    const refused = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: regenerated.revision, stage: "storyboards", index: 2 }));
+    expect(refused.storyboard!.frames[2]!.failure).toEqual({ kind: "failed", message: expect.stringContaining(SHORT_STUB_REFUSAL), model: LEGACY_CLEANUP_MODEL });
+    expect(refused.estimate.storyboardFallbackFrames?.map((estimate) => estimate.usd)).toEqual(Array.from({ length: 4 }, () => expect.closeTo(0.0387)));
+    const beforeSeedream = stub.submissions.length;
+    const onSeedream = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: refused.revision, stage: "storyboards", index: 2, model: CLEANUP_MODEL }));
+    expect(stub.submissions.slice(beforeSeedream).map((submission) => submission.path)).toEqual([CLEANUP]);
+    expect(stub.submissions.at(-1)!.body).toMatchObject({ model: "seedream/5-5-image-to-image", input: { size: "2K", aspect_ratio: "9:16", output_format: "jpeg" } });
+    expect(onSeedream.stages.storyboards!.outputs[2]!.versions[0]).toMatchObject({ model: CLEANUP_MODEL, current: true });
+    expect(onSeedream.storyboard!.frames[2]!.failure).toBeNull();
+    expect(stub.unexpected).toEqual([]);
+  });
+
+  it("offers the other clean-up model for a frame whose clean-up failed, cleans that frame alone on it, and keeps versions and the frame's freshness across models", async () => {
+    const goal = await short(`based on @b1 with @a2, ${AUTHORED}`);
+    expect(goal.estimate.storyboardFallbackFrames?.map((estimate) => estimate.usd)).toEqual([0.21, 0.21, 0.21, 0.21]);
+    stub.failNext = true;
+    const partial = await approved(goal);
+    expect(partial.storyboard!.frames[0]!.failure).toEqual({ kind: "failed", message: expect.stringContaining(SHORT_STUB_REFUSAL), model: CLEANUP_MODEL });
+    expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: partial.revision, model: LEGACY_CLEANUP_MODEL }))
+      .toBe("Choose a clean-up model only when you regenerate or revise one storyboard frame.");
+    const before = stub.submissions.length;
+    const fallback = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: partial.revision, stage: "storyboards", index: 0, model: LEGACY_CLEANUP_MODEL }));
+    expect(stub.submissions.slice(before).map((submission) => submission.path)).toEqual([LEGACY_CLEANUP]);
+    expect(stub.submissions.at(-1)!.body).toMatchObject({ aspect_ratio: "9:16", output_format: "jpeg" });
+    expect(fallback).toMatchObject({ stage: "frame", status: "review", error: null });
+    const nano = fallback.stages.storyboards!.outputs[0]!;
+    expect(nano.versions.map((version) => [version.model, version.status, version.current])).toEqual([[LEGACY_CLEANUP_MODEL, "completed", true], [CLEANUP_MODEL, "failed", false]]);
+    expect(fallback.storyboard!.frames.map((frame) => frame.failure)).toEqual([null, null, null, null]);
+
+    const frame = await settled(await invoke({ action: "approve", goal_id: goal.goalId, revision: fallback.revision, stage: "frame" }));
+    expect(frame).toMatchObject({ stage: "videos", status: "review" });
+    expect(frame.stages.frame!.outputs[0]!.stale).toBeNull();
+    const seedream = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: frame.revision, stage: "storyboards", index: 0 }));
+    expect(seedream.stages.storyboards!.outputs[0]!.versions.map((version) => version.model)).toEqual([CLEANUP_MODEL, LEGACY_CLEANUP_MODEL, CLEANUP_MODEL]);
+    expect(seedream.stages.frame!.outputs[0]!.stale).toBe(FRAME_STALE);
+    const restored = await invoke({ action: "select", goal_id: goal.goalId, stage: "storyboards", index: 0, artifact_id: nano.artifactId });
+    expect(restored.stages.storyboards!.outputs[0]!.artifactId).toBe(nano.artifactId);
+    expect(restored.stages.frame!.outputs[0]!.stale).toBeNull();
+    expect(await refusal({ action: "regenerate", goal_id: goal.goalId, revision: restored.revision, stage: "frame", model: LEGACY_CLEANUP_MODEL }))
+      .toBe("Choose a clean-up model only when you regenerate or revise one storyboard frame.");
     expect(stub.unexpected).toEqual([]);
   });
 

@@ -31,6 +31,10 @@ export const SHORT_STORYBOARD_MODEL_TITLES: Record<ShortStoryboardModel, string>
   "fal:google/nano-banana-2.1/edit": "Nano Banana 2.1",
 };
 
+export function storyboardFallbackModel(model: ShortStoryboardModel): ShortStoryboardModel {
+  return model === "kie:seedream/5-5-image-to-image" ? "fal:google/nano-banana-2.1/edit" : "kie:seedream/5-5-image-to-image";
+}
+
 export const GOAL_SHORT_DEFAULTS = {
   aspectRatio: "9:16",
   totalSeconds: 12,
@@ -537,22 +541,22 @@ function frameStep(plan: GoalShortPlan, prompt: string, images: readonly string[
   };
 }
 
-function storyboardOptions(storyboard: ShortStoryboard, aspectRatio: ShortStoryboardAspectRatio): Record<string, string> {
-  if (storyboard.model === "fal:google/nano-banana-2.1/edit") return { aspect_ratio: aspectRatio, output_format: "jpeg" };
-  return { aspect_ratio: SEEDREAM_ASPECT_RATIOS.includes(aspectRatio) ? aspectRatio : "auto", size: storyboard.size ?? "2K", output_format: "jpeg" };
+function storyboardOptions(model: ShortStoryboardModel, size: ShortStoryboardSize | undefined, aspectRatio: ShortStoryboardAspectRatio): Record<string, string> {
+  if (model === "fal:google/nano-banana-2.1/edit") return { aspect_ratio: aspectRatio, output_format: "jpeg" };
+  return { aspect_ratio: SEEDREAM_ASPECT_RATIOS.includes(aspectRatio) ? aspectRatio : "auto", size: size ?? "2K", output_format: "jpeg" };
 }
 
-export function compileShortStoryboardStep(storyboard: ShortStoryboard, index: number): ChainStep {
+export function compileShortStoryboardStep(storyboard: ShortStoryboard, index: number, model: ShortStoryboardModel = storyboard.model): ChainStep {
   const frame = storyboard.frames[index];
   if (!frame) throw new RangeError(`The storyboard has ${storyboard.frames.length} frames.`);
   return {
     id: `storyboard${index + 1}`,
     tool: "generate_image",
     params: {
-      model: storyboard.model,
+      model,
       prompt: frame.prompt,
       refs: { image: [frame.address] },
-      options: storyboardOptions(storyboard, frame.aspectRatio),
+      options: storyboardOptions(model, storyboard.size, frame.aspectRatio),
     },
   };
 }
