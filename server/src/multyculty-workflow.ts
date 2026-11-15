@@ -39,7 +39,7 @@ import {
   INTELLIGENCE_MODEL,
 } from "./openai-intelligence.js";
 
-const MULTYCULTY_FIXTURE_VERSION = 27;
+export const MULTYCULTY_FIXTURE_VERSION = 27;
 
 const MULTYCULTY_FIXTURE_ANALYSIS: NotebookLiveAnalysis["rawOutput"] = {
   shots: [
