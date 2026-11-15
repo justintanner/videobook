@@ -5,7 +5,7 @@ import type { Engine } from "videobook-engine";
 import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";
 import { fitVideoUnderByteCap } from "./video-fit.js";
 
-const FREE_HOST_UPLOAD_TIMEOUT_MS = 5 * 60_000;
+export const FREE_HOST_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
 interface UploadOptions {
   signal?: AbortSignal;

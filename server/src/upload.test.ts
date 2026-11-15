@@ -9,7 +9,7 @@ import { runGenerateMedia, type GenerateMediaJob } from "./jobs/generate-media.j
 import { configureProviderEndpoints } from "./media/endpoints.js";
 import type { JobHandlerContext, LeaseToken } from "./queue.js";
 import { testBudget } from "./test-budget.js";
-import { contentHash, uploadBytesToFreeHost } from "./upload.js";
+import { contentHash, FREE_HOST_UPLOAD_TIMEOUT_MS, uploadBytesToFreeHost } from "./upload.js";
 import { fitVideoUnderByteCap } from "./video-fit.js";
 
 const UPLOAD_HOSTS = new Set(["litterbox.catbox.moe", "uguu.se", "tmpfile.link"]);
@@ -206,8 +206,9 @@ describe("free-host media uploads", () => {
     };
   }
 
-  it("submits a MachGen reference video after uploading beyond the former 30-second deadline", async () => {
-    delayMs = testBudget(31_000);
+  it("submits a MachGen reference video after a host upload and keeps the default upload deadline above the former 30 seconds", async () => {
+    expect(FREE_HOST_UPLOAD_TIMEOUT_MS).toBeGreaterThan(30_000);
+    delayMs = 50;
     const { job, context, sourceId } = await generation(new AbortController().signal);
     await expect(runGenerateMedia(engine, job, context)).resolves.toMatchObject({ status: "pending", taskId: TASK_ID });
     expect(uploads).toHaveLength(1);
@@ -217,7 +218,7 @@ describe("free-host media uploads", () => {
     expect(source.ok && Buffer.from(source.value)).toEqual(video);
     const task = engine.jobs.pending.read(job.assetId);
     expect(task.ok && task.value).toMatchObject({ taskId: TASK_ID, taskType: "machgen_media" });
-  }, testBudget(70_000));
+  });
 
   it("re-encodes a source video over the model's byte cap before uploading it to Fal", async () => {
     const path = join(fixtures, "oversized.mp4");
