@@ -205,6 +205,7 @@ export default defineConfig({
       'server/src/time-parse.test.ts',
       'server/src/scene-cuts.test.ts',
       'server/src/timewarp.test.ts',
+      'server/src/zoom.test.ts',
       'server/src/tools/**/*.test.ts',
       'server/src/media/**/*.test.ts',
       'server/src/scheduled-posts.test.ts',
