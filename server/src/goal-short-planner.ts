@@ -5,14 +5,14 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { replaceNotebookMentions } from "videobook-engine/notebook-mentions";
 import { getApiKey } from "./api-key.js";
 import {
-  grownShortSegments, isLegacyShortDraft, shortStoryboardOf, SHORT_STORYBOARD_MODEL_TITLES, SHORT_STORYBOARD_MODELS, SHORT_WORD_CEILINGS,
+  grownShortSegments, isLegacyShortDraft, shortRemixOf, shortRemixSourceOf, shortStoryboardOf, SHORT_STORYBOARD_MODEL_TITLES, SHORT_STORYBOARD_MODELS, SHORT_WORD_CEILINGS,
   type GoalShortDraft, type GoalShortPlan, type ShortAspectRatio,
 } from "./goal-short-plan.js";
 import type { GoalGenerationStage } from "./goal-store.js";
 import { SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES, shortBannedWords, shortMentionsPhone } from "./goal-short-rules.js";
 import { loadGuide } from "./tools/rewrite-prompt.js";
 
-const LABELLED = /(?<![\p{L}\p{N}])(frame|video|beat\s*(\d+))\s*:\s*["“]([^"”]*)["”]/giu;
+const LABELLED = /(?<![\p{L}\p{N}])(replace|replacement|twist|frame|video|beat\s*(\d+))\s*:\s*["“]([^"”]*)["”]/giu;
 const CAMERA_LINE = "Call it the camera, never the phone: someone off screen holds it.";
 const POSITIVE_LINE = 'Say what is there rather than what is not, such as "both hands hang empty at the sides" rather than "no phone in hand": the models tend to show any object a prompt names, even after "no" or "not".';
 const QUOTED = /["“]([^"”]*)["”]/gu;
@@ -23,15 +23,16 @@ const DROP_CONTRADICTED = "Remove or rewrite every sentence the feedback contrad
 const OVERLAYS = "captions, titles, stickers, emoji, logos, usernames, icons, borders, bars or shade";
 
 export type ShortAuthoredCopy = {
+  replacement?: string | null;
   frame: string | null;
   beats: (string | null)[];
   segmentSeconds: number[];
   note: string | null;
 };
 
-type ShortBriefPlan = { frame: string; beats: string[]; note: string | null };
+type ShortBriefPlan = { replacement?: string; frame: string; beats: string[]; note: string | null };
 
-export type ShortPlannerResponse = { title: string; frame: string; beats: string[] };
+export type ShortPlannerResponse = { title: string; replacement?: string; frame: string; beats: string[] };
 
 export type ShortPlannerIssue = { kind: "count" | "empty" | "ceiling" | "banned" | "phone"; message: string };
 
@@ -48,7 +49,8 @@ function foldedBeatsNote(numbers: readonly number[]): string {
   return `The brief quotes ${labels.slice(0, -1).join(", ")} and ${last}, so those lines are part of the last beat.`;
 }
 
-export function shortAuthoredCopy(brief: string, segmentSeconds: readonly number[]): ShortAuthoredCopy {
+export function shortAuthoredCopy(brief: string, segmentSeconds: readonly number[], remix = false): ShortAuthoredCopy {
+  let replacement: string | null = null;
   let frame: string | null = null;
   let video: string | null = null;
   const quoted = new Map<number, string>();
@@ -56,7 +58,8 @@ export function shortAuthoredCopy(brief: string, segmentSeconds: readonly number
     const text = match[3]!.trim();
     if (!text) continue;
     const label = match[1]!.toLowerCase();
-    if (label === "frame") frame ??= text;
+    if (label === "replace" || label === "replacement") replacement ??= text;
+    else if (label === "frame" || label === "twist") frame ??= text;
     else if (label === "video") video ??= text;
     else {
       const number = Number(match[2]);
@@ -87,23 +90,25 @@ export function shortAuthoredCopy(brief: string, segmentSeconds: readonly number
     beats[last] = parts.join(" ");
     note = foldedBeatsNote(folded.map((entry) => entry.number));
   }
-  return { frame, beats, segmentSeconds: seconds, note };
+  return { ...(remix ? { replacement } : {}), frame, beats, segmentSeconds: seconds, note };
 }
 
-export function shortPlannerNeeded(brief: string, segmentSeconds: readonly number[]): boolean {
-  const authored = shortAuthoredCopy(brief, segmentSeconds);
-  const needed = authored.frame === null || authored.beats.some((beat) => beat === null);
+export function shortPlannerNeeded(brief: string, segmentSeconds: readonly number[], remix = false): boolean {
+  const authored = shortAuthoredCopy(brief, segmentSeconds, remix);
+  const needed = authored.replacement === null || authored.frame === null || authored.beats.some((beat) => beat === null);
   return needed && getApiKey("OPENAI_API_KEY") !== null;
 }
 
 export function shortBriefPlan(brief: string, authored: ShortAuthoredCopy): ShortBriefPlan {
-  const gaps = authored.frame === null || authored.beats.some((beat) => beat === null);
+  const remix = "replacement" in authored;
+  const gaps = authored.replacement === null || authored.frame === null || authored.beats.some((beat) => beat === null);
   const prose = briefProse(brief).slice(0, PROMPT_LIMIT).trim();
   const quoted = authored.frame ?? authored.beats.find((beat): beat is string => beat !== null);
   const filler = prose || quoted || "Short";
   return {
-    frame: authored.frame ?? filler,
-    beats: authored.beats.map((beat) => beat ?? filler),
+    ...(remix ? { replacement: authored.replacement ?? `Replace only the main person using the source images and this brief: ${filler}. Keep the pose, scene, animals and props unchanged; leave the funny twist for the next edit.`.slice(0, PROMPT_LIMIT) } : {}),
+    frame: authored.frame ?? (remix ? `Add one funny, physically believable visual twist to the reviewed frame. Follow this idea: ${filler}`.slice(0, PROMPT_LIMIT) : filler),
+    beats: authored.beats.map((beat) => beat ?? (remix ? "Animate the reviewed twist frame with one simple, natural action. Keep the same person, animals, props and setting. The camera gently follows the action; natural ambient sound." : filler)),
     note: gaps ? PLANNED_FROM_BRIEF : null,
   };
 }
@@ -120,10 +125,10 @@ export function shortBriefNames(content: { draft: GoalShortDraft | null }, plan:
   if (draft) {
     return isLegacyShortDraft(draft)
       ? { references: [...draft.character.references, ...draft.extraReferences], storyboard: null }
-      : { references: draft.sourceImages, storyboard: draft.storyboard?.video ?? null };
+      : { references: draft.sourceImages, storyboard: draft.remix?.video ?? draft.storyboard?.video ?? null };
   }
   return plan.version === 5
-    ? { references: plan.sourceImages, storyboard: plan.storyboard?.video ?? null }
+    ? { references: plan.sourceImages, storyboard: plan.remix?.video ?? plan.storyboard?.video ?? null }
     : { references: [...plan.character.references, ...plan.frame.references], storyboard: null };
 }
 
@@ -132,6 +137,7 @@ export function shortPlannerBrief(
   references: readonly BriefReference[],
   document: NotebookDocument | null,
   storyboardVideo: BriefReference | null = null,
+  videoName = "the storyboard",
 ): string {
   const named = (reference: BriefReference, replacement: string) => {
     const addresses = reference.address !== undefined
@@ -143,13 +149,14 @@ export function shortPlannerBrief(
   };
   return replaceNotebookMentions(brief, [
     ...references.flatMap((reference, index) => named(reference, `Source image ${index + 1}`)),
-    ...(storyboardVideo ? named(storyboardVideo, "the storyboard") : []),
+    ...(storyboardVideo ? named(storyboardVideo, videoName) : []),
   ]);
 }
 
-export function shortPlannerResponseSchema(segmentCount: number) {
+export function shortPlannerResponseSchema(segmentCount: number, remix = false) {
   return z.object({
     title: z.string().describe(`At most ${SHORT_WORD_CEILINGS.title} words`),
+    ...(remix ? { replacement: z.string().describe(`Character replacement only, at most ${SHORT_WORD_CEILINGS.frame} words`) } : {}),
     frame: z.string().describe(`The opening frame, at most ${SHORT_WORD_CEILINGS.frame} words`),
     beats: z.array(z.string().describe(`One beat, at most ${SHORT_WORD_CEILINGS.beat} words`)).min(segmentCount).max(segmentCount)
       .describe("One beat per segment, in order"),
@@ -178,6 +185,7 @@ export function shortPlannerIssues(response: ShortPlannerResponse, segmentCount:
   }
   const parts = [
     { name: "title", text: response.title, ceiling: SHORT_WORD_CEILINGS.title, fixed: false, prompt: false },
+    ...(authored && "replacement" in authored ? [{ name: "replacement", text: response.replacement ?? "", ceiling: SHORT_WORD_CEILINGS.frame, fixed: authored.replacement != null, prompt: true }] : []),
     { name: "frame", text: response.frame, ceiling: SHORT_WORD_CEILINGS.frame, fixed: authored?.frame != null, prompt: true },
     ...response.beats.map((text, index) => ({ name: `beat ${index + 1}`, text, ceiling: SHORT_WORD_CEILINGS.beat, fixed: authored?.beats[index] != null, prompt: true })),
   ];
@@ -186,13 +194,18 @@ export function shortPlannerIssues(response: ShortPlannerResponse, segmentCount:
 }
 
 export function shortRevisionPart(plan: GoalShortPlan, stage: GoalGenerationStage, index: number): ShortRevisionPart & { prompt: string } {
+  if (stage === "replacement") {
+    const remix = shortRemixOf(plan);
+    if (!remix || index !== 0) throw new RangeError("This short has no character replacement at that index.");
+    return { name: "character replacement", ceiling: SHORT_WORD_CEILINGS.frame, prompt: remix.replacement.prompt };
+  }
   if (stage === "storyboards") {
     const storyboard = shortStoryboardOf(plan);
     const frame = storyboard?.frames[index];
     if (!frame) throw new RangeError(storyboard ? `The storyboard has ${storyboard.frames.length} frames.` : "This short has no storyboard.");
     return { name: `storyboard frame ${index + 1} clean-up`, ceiling: SHORT_WORD_CEILINGS.cleanup, prompt: frame.prompt };
   }
-  if (stage === "frame") return { name: "frame", ceiling: SHORT_WORD_CEILINGS.frame, prompt: plan.frame.prompt };
+  if (stage === "frame") return { name: shortRemixOf(plan) ? "twist" : "frame", ceiling: SHORT_WORD_CEILINGS.frame, prompt: plan.frame.prompt };
   const segment = plan.segments[index];
   if (!segment) throw new RangeError(`This short has ${plan.segments.length} segments.`);
   return { name: `beat ${index + 1}`, ceiling: SHORT_WORD_CEILINGS.beat, prompt: segment.prompt };
@@ -231,6 +244,7 @@ function plannerImageLines(sourceImageCount: number, storyboardFrameCount: numbe
 
 export async function shortPlannerInstructions(input: {
   sourceImageCount: number;
+  remix?: boolean;
   storyboardFrameCount?: number;
   aspectRatio: ShortAspectRatio;
   segmentSeconds: readonly number[];
@@ -244,7 +258,14 @@ export async function shortPlannerInstructions(input: {
     "Beat 1 starts from the opening frame. Each later beat continues from where the previous one ends, in the same place, and every beat ends with that person in frame. One action per beat, in the present tense, with what the camera does and what is heard.",
     CAMERA_LINE,
     `${POSITIVE_LINE} Give that person a phone only when the brief does.`,
-    ...plannerImageLines(input.sourceImageCount, input.storyboardFrameCount ?? 0),
+    ...(input.remix ? [
+      "Plan three separate steps: replace the character in one extracted source frame, add a funny but realistic twist to that replacement, then animate the resulting frame.",
+      "Return an additional replacement prompt of at most 40 words. It only replaces the main person with the person from the source images or the brief, retaining face, hair, build and clothes. Match the original pose and scene; leave its animals and props unchanged. Overlay removal is added automatically to this step.",
+      "The frame prompt is the next edit, applied to the reviewed replacement, not the original frame. Make one simple visual joke that is already visible in this still. Follow the brief's twist when given; otherwise choose a surprising but physically plausible substitution or situation. Preserve the replaced person and surroundings, realistic anatomy, scale, support and gravity. Avoid fantasy, impossible stunts and extra story beats.",
+      "The video starts exactly from that twist frame and animates its existing situation. Keep the same character and joke without reintroducing the original person or undoing the twist.",
+      "Images are labelled Source image 1, Source image 2 and so on, then Extracted source frame with its timestamp. The source images supply the replacement identity; the extracted frame supplies the composition and scene. Describe them in plain words without @tokens or image numbers.",
+      `Ignore graphics drawn over the source frame, such as ${OVERLAYS}, including a WUT! sticker and its underline. Keep printing physically on objects.`,
+    ] : plannerImageLines(input.sourceImageCount, input.storyboardFrameCount ?? 0)),
     "Write only the parts listed under write and keep the fixed parts exactly as given.",
     "These lines are added to the prompts after you write them. Do not repeat them and do not contradict them:",
     `Frame: ${SHORT_RULES.frame}`,
@@ -274,17 +295,24 @@ function storyboardRevisionInstructions(plan: GoalShortPlan, index: number): str
 
 export async function shortRevisionInstructions(plan: GoalShortPlan, stage: GoalGenerationStage, index: number): Promise<string> {
   if (stage === "storyboards") return storyboardRevisionInstructions(plan, index);
-  const frame = stage === "frame";
+  const frame = stage === "frame" || stage === "replacement";
   const part = shortRevisionPart(plan, stage, index);
   const guide = await loadGuide(frame ? "gpt_image_26" : "minimax_h3");
   const images = plan.version === 5 ? plan.sourceImages.length : plan.character.references.length;
   return [
     `Revise one prompt of a short that looks like real phone footage filmed by someone off screen, starring ${shortStar(images)}. That person never speaks.`,
     frame
-      ? "Rewrite the opening frame prompt for GPT Image 2.6 so it follows the operator's feedback. It describes the one still picture the short opens on."
+      ? shortRemixOf(plan)
+        ? `Rewrite the ${part.name} prompt for GPT Image 2.6 so it follows the operator's feedback. It describes one still picture.`
+        : "Rewrite the opening frame prompt for GPT Image 2.6 so it follows the operator's feedback. It describes the one still picture the short opens on."
       : `Rewrite beat ${index + 1} of ${plan.segments.length} for MiniMax H3 Max, which lasts ${plan.segments[index]!.seconds} seconds, so it follows the operator's feedback. One action in the present tense, with what the camera does and what is heard. ${index === 0 ? "It starts from the opening frame" : "It continues from where the beat before it ends, in the same place,"} and ends with that person in frame.`,
     FOLLOW_FEEDBACK,
     DROP_CONTRADICTED,
+    ...(shortRemixSourceOf(plan) ? [stage === "replacement"
+      ? "This is the character replacement edit only. Keep the source pose, camera, place, animals and props; the funny twist is a separate later edit. Clear added overlays while preserving physical printing."
+      : stage === "frame"
+        ? "This edit starts from the reviewed character replacement. Change one thing into a funny but physically plausible visual joke, keeping the person's identity and the rest of the scene."
+        : "Animate the reviewed twist frame without changing its character or undoing the visual joke."] : []),
     CAMERA_LINE,
     `${POSITIVE_LINE} Give that person a phone only when the feedback or the brief does.`,
     `Write at most ${part.ceiling} words, and answer with the whole revised ${part.name}.`,

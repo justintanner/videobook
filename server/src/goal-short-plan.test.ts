@@ -24,6 +24,7 @@ import {
   compileShortClipStep,
   compileShortContinuationStep,
   compileShortFrameStep,
+  compileShortReplacementStep,
   goalShortPlanSchema,
   refreshGoalShortPlan,
   shortFinishTitleInput,
@@ -180,6 +181,27 @@ describe("shortTiming", () => {
 });
 
 describe("buildGoalShortPlan", () => {
+  it("sends each separate remix edit and the final frame to valid provider requests", () => {
+    const plan = shortPlan({
+      sourceImages: [sheet],
+      remix: {
+        video: { artifactId: umbrella.artifactId, cellId: umbrella.cellId, address: "@b1", label: "Umbrella walk" },
+        frame: { ...umbrella, atSeconds: 3 },
+      },
+      replacementPrompt: "Use the man in the source image.", framePrompt: "Put a monitor lizard beneath the umbrella.",
+    });
+    expect(goalShortPlanSchema.parse(saved(plan))).toEqual(plan);
+    const replacement = expectAccepted(compileShortReplacementStep(plan));
+    expect(replacement.image_urls).toEqual(["https://example.com/a1.jpg", "https://example.com/a4.jpg"]);
+    const twist = expectAccepted(compileShortFrameStep(plan, "@c1"));
+    expect(twist.image_urls).toEqual(["https://example.com/c1.jpg"]);
+    const clip = compileShortClipStep(plan, "@d1");
+    expect(clip.params).toMatchObject({ refs: { first_frame: ["@d1"] } });
+    expect((clip.params as StepParams).refs).not.toHaveProperty("image");
+    expectAccepted(clip);
+    expect(() => compileShortFrameStep(plan)).toThrow(/Replace the character/u);
+  });
+
   it("builds a version-5 plan the schema accepts, with the rules and defaults copied in", () => {
     const plan = shortPlan();
     expect(goalShortPlanSchema.parse(saved(plan))).toEqual(plan);

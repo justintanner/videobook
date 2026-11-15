@@ -70,63 +70,47 @@ and clothes) and whatever else the brief takes from the picture. The first 12
 usable images are kept. A brief with no image plans the person from its own
 words; there is no main character to set up and no character sheet to make.
 
-**Storyboard.** The first video the brief mentions becomes the short's
-storyboard. Its frames are captured into image cells when the goal is
-created, at no cost: one per shot when the video has cuts, otherwise the
-middle of each quarter, 4 by default and fewer for a very short video,
-starting at a time such as `@a1 at 3s` when you give one. A further video is
-skipped with a note, and the note names the storyboard frames' cells and
-times. The planner reads the source images and then the storyboard frames in
-order, follows the storyboard's action, camera and order with the brief's
-changes, and never describes what is drawn on top of the picture. For
-example, `/goal make a 12s viral TikTok clip based on @a1 but with @a2 holding
-the umbrella for a monitor lizard, realistic` follows the video in @a1 with
-the man from the photo in @a2 and a monitor lizard in place of the video's
-animal.
+**From a video.** The default is **extract one frame → replace character →
+funny, realistic twist → video**. The first video mentioned supplies one frame
+from the middle of its longest shot, captured locally at no cost. Give an
+exact time with `@a1 at 3s`. Further videos are skipped with a note. The source
+images supply the replacement person; the extracted frame supplies the pose,
+camera and scene. For example, `/goal make a 12s clip based on @a1 but with @a2
+holding the umbrella for a monitor lizard, realistic` first replaces the man,
+then replaces the dog with a monitor lizard in a separate image edit, then
+animates that reviewed picture.
 
 **Starting a short.** Enter an idea such as `/goal he waits for a bus in the
 rain`; no @mention is needed. Name a length such as `20 seconds` (5 to 60, 12
 by default), or ask for `square` or `landscape` (portrait 9:16 by default).
 Empty cells, audio, pending outputs and unreadable media are skipped, and
-notes above the plan name each skipped mention and the storyboard.
+notes above the plan name each skipped mention and the extracted frame.
 
 Lengths outside 5–60 seconds are clamped to that range. Extra quoted beats get
 segments where they fit, or are folded into the last beat. The planner writes
-the title, the frame prompt and one beat per clip. Quote them as `frame: "…"`
-and `beat 1: "…"` to write them yourself and skip planning. Without an OpenAI
+the title, a replacement prompt, a twist prompt and one beat per clip for a
+video source. Quote `replace: "…"`, `twist: "…"` and `video: "…"` to write the
+three steps yourself and skip planning. `frame: "…"` is an alias for the twist;
+`beat 1: "…"` and later beat numbers specify individual clips. Without an OpenAI
 key, the brief itself supplies a reviewable plan, with a note explaining how
 to enable the planner.
 
 **Review.** The goal panel has a tab per stage, and every paid step has its
 own approval with its estimate:
 
-1. **Storyboard** (only for a short made from a video): the video's frames in
-   order with their times, each before and after its clean-up. **Remove
-   on-screen graphics** runs one Seedream 5.5 Edit per frame on Kie that removes
-   what was drawn on top of the picture: captions, titles, stickers, emoji,
-   platform logos and watermarks, creator credits with their icons, progress
-   bars, borders, black or blurred bars and shade gradients. Printing that is
-   physically in the scene, such as a logo on an umbrella, stays. Regenerate a
-   frame, revise its clean-up with a short instruction, or choose an earlier
-   version. When one frame's clean-up fails, for example because the model
-   refuses it, the other frames are still cleaned. The failed frame shows its
-   error and can be regenerated or revised on its own, and the goal stays on
-   this tab until every frame is clean. Its card offers **Clean with** the
-   other clean-up model (Nano Banana 2.1 Edit on fal for a Seedream frame,
-   Seedream 5.5 Edit for a storyboard saved on Nano Banana) with its own
-   estimate, and **Try again with** the same model.
-2. **Frame:** the opening still, made with GPT Image 2.6 from the source
-   images and, for a short made from a video, clean storyboard frame 1. That
-   frame gives the camera angle, framing, pose and action; the people and
-   animals come from the source images and the brief. **Generate frame** stays
-   disabled until the whole storyboard is clean. Regenerate the frame, revise
-   it with a short instruction, or choose an earlier version. A new version of
-   clean storyboard frame 1 marks the frame out of date.
-3. **Video:** the base clip, made with MiniMax H3 Max from the frame and the
-   source images, then each continuation. The storyboard frames never go to
-   the clips, since they still show the video's own people and animals.
-   Regenerate any generated clip, revise it with clip feedback, or choose an
-   earlier version.
+1. **Replace character:** GPT Image 2.6 replaces the main person in the
+   extracted frame using the source images or brief. This same edit clears
+   added captions, stickers, underlines, credits, watermarks and shade while
+   keeping printing physically on objects. The pose, scene, animals and props
+   stay in place. Review this result before the next edit.
+2. **Twist:** a separate GPT Image 2.6 edit takes only the reviewed replacement
+   and makes one funny, physically believable change. The person's identity
+   and the surrounding scene stay consistent. Review this still before video.
+3. **Video:** MiniMax H3 Max animates the reviewed twist as its first frame.
+   The original video and source images are not sent again, so they do not
+   reintroduce the old character or undo the joke. Regenerate a result, revise
+   it with feedback, or select an earlier version. Changing an earlier edit
+   marks dependent results out of date and requires regeneration.
 4. **Finish:** keeps the reviewed take and burns the saved
    watermark into the finished short, with its burned title when it has one:
    a big Thai headline and an English line under it, in the watermark's title
@@ -138,15 +122,20 @@ own approval with its estimate:
    burns the handle alone. To add a cold open, use `/edit-cold-open` on the
    finished video.
 
+A brief without a video keeps the simpler **Frame → Video → Finish** flow.
+Saved storyboard shorts keep their **Storyboard → Frame → Video → Finish**
+flow, cleanup models, prompts and versions. Their cleanup still removes
+on-screen graphics from every saved frame and offers the other cleanup model
+when a frame fails.
+
 Shorts saved before source images keep their main character on a read-only
 **Character** tab and keep their stored prompts; they still continue and
 finish.
 
 **Revising.** A revision is an instruction of up to 2000 characters for a
-storyboard frame, the frame or a clip. You can include @mentions: they become
+replacement, twist, saved storyboard frame or clip. You can include @mentions: they become
 cell labels (or bare addresses when unresolved) before the planner reads them.
-Before the paid step, the planner's model rewrites that storyboard frame's
-clean-up prompt, the frame prompt or the beat to follow it, replacing any
+Before the paid step, the planner's model rewrites that step's prompt or beat to follow it, replacing any
 sentence the instruction contradicts instead of adding the instruction beside
 it, and the short keeps the rewritten prompt. Revising uses `OPENAI_API_KEY`
 and is billed like planning.
@@ -172,31 +161,27 @@ garbled text, waxy skin, warped objects, drift from the source image, or mouth
 movement that reads as speech. It is billed like planning and never blocks a
 step.
 
-**Models and keys.** The storyboard clean-up uses Seedream 5.5 Edit through
-Kie with `KIE_API_KEY`, so a short made from a video needs a Kie key. Each
-frame is sent at its own aspect ratio (or `auto` when Seedream lacks it) at
-the smallest size, 1K, 1.5K or 2K, that keeps the frame's resolution. A
-storyboard saved before this keeps cleaning with Nano Banana 2.1 through fal.
-The frames and clips use GPT Image 2.6 and MiniMax H3 Max through fal with
-`FAL_API_KEY`.
+**Models and keys.** Replacement and twist use GPT Image 2.6, and clips use
+MiniMax H3 Max, through fal with `FAL_API_KEY`. The new single-frame flow does
+not require Kie. Saved storyboards retain their Seedream 5.5 Edit cleanup on
+Kie (`KIE_API_KEY`) or Nano Banana 2.1 cleanup on fal, with the option to switch
+one failed frame to the other model.
 Planning, revising and the AI-tell check use `OPENAI_API_KEY`; a brief that
-quotes the frame and every beat needs no planning, and without that key an
-unquoted brief uses the plain plan described above. A short's clips and
-finished video skip the speech-to-text pass that imported videos get, so no
-transcription provider is called. H3 Max is billed per requested second, so
-its estimates are lower bounds and read "at least". Seedream 5.5 is priced
-per frame from Kie's rate for its size. GPT Image 2.6, and Nano Banana 2.1 for
-an earlier storyboard, are priced from fal's historical average, which needs
-`FAL_ADMIN_API_KEY`; without it they show their estimate as unavailable.
+quotes every step needs no planning. Without that key an unquoted brief uses
+the reviewable plain plan described above. A short's clips and finished video
+skip transcription. H3 Max is billed per requested second, so its estimates
+are lower bounds and read "at least". GPT Image 2.6 and Nano Banana 2.1 use
+fal's historical average, which needs `FAL_ADMIN_API_KEY`; without it they show
+their estimate as unavailable. Saved Seedream cleanup uses Kie's per-frame rate.
 
 **Earlier goals.** Goals saved by earlier versions of `/goal` stay in their
 notebooks as read-only tiles. Their panel lists their images and videos by
 address, opens a cell when you click its address, and plays the finished video
 when there is one. They can be dismissed but not generated again.
 
-Goal notebooks keep separate rows for references (source images and storyboard
-frames), the goal tile and its generators, image versions (clean storyboard
-frames and frames), and clip versions. **Stop goal** stops the remaining work;
+Goal notebooks keep separate rows for references (source images and extracted
+frames), the goal tile and its generators, image versions (replacement, twist and saved storyboard
+frames), and clip versions. **Stop goal** stops the remaining work;
 requests already submitted may still finish.
 
 ## On-screen graphics

@@ -6,10 +6,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { v7 as uuidv7 } from "uuid";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
-import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { getChainRun, waitForChainRun } from "../chain-executor.js";
 import { createEngineForTest } from "../engine.js";
-import { formatShortSeconds } from "../goal-short-plan.js";
+import { buildGoalShortPlan, formatShortSeconds } from "../goal-short-plan.js";
+import { captureStoryboardFrames, shortStoryboard, videoStoryboardMoments } from "../goal-short-storyboard.js";
+import { briefMention } from "../goal-short-references.js";
 import { estimateShort, shortFingerprint } from "../goal-short-runtime.js";
 import { readGoal, requireGoalShortContent, writeGoalShortContent } from "../goal-store.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
@@ -34,6 +35,7 @@ const UMBRELLA = "make a 12s viral TikTok clip based on @b1 but with @a2 holding
 const AUTHORED = 'frame: "He holds a red umbrella over a monitor lizard on a wet lane." beat 1: "He walks beside the lizard, keeping the umbrella over it."';
 const PLAN = {
   title: "Umbrella for a lizard",
+  replacement: "Replace the man with the man in the source image, keeping the dog and umbrella unchanged.",
   frame: "A man holds a red umbrella over a monitor lizard on a wet lane.",
   beats: ["He walks beside the lizard, keeping the umbrella over it as rain falls."],
 };
@@ -141,7 +143,17 @@ describe("video_goal storyboard stage", () => {
   const status = (goalId: string) => invoke({ action: "status", goal_id: goalId });
 
   async function short(brief: string): Promise<ShortGoalSnapshot> {
-    return status((await invoke({ action: "create", brief, request_id: uuidv7() })).goalId);
+    if (!brief.includes("@b1")) return status((await invoke({ action: "create", brief, request_id: uuidv7() })).goalId);
+    const reference = await briefMention(engine, notebookId, "@a2", {});
+    if (reference.kind !== "image") throw new Error("expected an image");
+    const video = { artifactId: videoId, cellId: videoCellId, address: "@b1", label: "Umbrella walk" };
+    const frames = await captureStoryboardFrames(engine, notebookId, video, await videoStoryboardMoments(engine, bookId, videoId));
+    const plan = buildGoalShortPlan({
+      title: PLAN.title, aspectRatio: "9:16", sourceImages: [reference.image], storyboard: shortStoryboard(video, frames),
+      framePrompt: "He holds a red umbrella over a monitor lizard on a wet lane.",
+      beats: ["He walks beside the lizard, keeping the umbrella over it."], segmentSeconds: [12],
+    });
+    return status((await invoke({ action: "create", brief, plan, request_id: uuidv7() })).goalId);
   }
 
   async function settled(goal: ShortGoalSnapshot): Promise<ShortGoalSnapshot> {
@@ -187,77 +199,92 @@ describe("video_goal storyboard stage", () => {
       .sort((left, right) => Number(left.inputs!.storyboardIndex) - Number(right.inputs!.storyboardIndex));
   }
 
-  function storyboardNote(mention: string, frames: readonly { address: string; atSeconds: number }[]): string {
-    const listed = frames.map((frame) => `${frame.address} at ${formatShortSeconds(frame.atSeconds)} s`);
-    return `${mention} is a video, so the short follows its storyboard of ${frames.length} frames: ${listed.slice(0, -1).join(", ")} and ${listed.at(-1)}. Their on-screen graphics are removed before the frame is made.`;
-  }
-
-  it("captures a 4-frame storyboard of the first video, plans from it in order, and opens at the storyboard stage with its estimate", async () => {
+  it("extracts one source frame and plans separate replacement and realistic twist edits", async () => {
     await addVideo("Second video", { row: 1, column: 1 });
     stub.plannerAnswers = [PLAN];
     const planning = await invoke({ action: "create", brief: `${UMBRELLA}, cut like @b2` });
-    expect(planning).toMatchObject({ planVersion: 5, status: "planning", stage: "storyboards", legacy: false });
-    const cells = rawFrameCells();
-    expect(cells.map((cell) => cell.inputs?.storyboardIndex)).toEqual([0, 1, 2, 3]);
-    for (const cell of cells) {
-      expect(cell).toMatchObject({ type: "image", inputs: { mediaRole: "extract-frame-output", sourceArtifactId: videoId, sourceCellId: videoCellId, frameMode: "time" } });
-    }
-    const times = cells.map((cell) => Number(cell.inputs?.atSeconds));
-    [0.75, 2.25, 3.75, 5.25].forEach((seconds, index) => expect(times[index]).toBeCloseTo(seconds, 1));
-    const addresses = cells.map((cell, index) => ({ address: notebookGridTag(cell.slot), atSeconds: times[index]! }));
-    expect(planning.notes).toEqual([
-      storyboardNote("@b1", addresses),
-      "@b2 is another video and was skipped: the storyboard comes from the first video the brief mentions.",
-    ]);
-
+    expect(planning).toMatchObject({ planVersion: 5, status: "planning", stage: "replacement", legacy: false });
+    const [cell] = rawFrameCells();
+    expect(rawFrameCells()).toHaveLength(1);
+    expect(cell).toMatchObject({ type: "image", inputs: { sourceArtifactId: videoId, sourceCellId: videoCellId, frameMode: "time", atSeconds: 3 } });
     await expect.poll(() => readGoal(engine, planning.goalId).status, { timeout: testBudget(30_000) }).toBe("review");
     const goal = await status(planning.goalId);
-    expect(goal).toMatchObject({ stage: "storyboards", status: "review", error: null });
-    const storyboard = storyboardOf(goal);
-    expect(storyboard).toMatchObject({ video: { artifactId: videoId, cellId: videoCellId, label: "Umbrella walk" }, model: CLEANUP_MODEL, size: "1K" });
-    expect(storyboard.frames.map((frame) => [frame.index, frame.artifactId, frame.cellId])).toEqual(cells.map((cell, index) => [index, cell.outputArtifactId, cell.id]));
-    for (const frame of storyboard.frames) expect(frame.prompt).toMatch(/^Remove every on-screen graphic that was added on top of the camera picture/u);
+    expect(goal).toMatchObject({ stage: "replacement", status: "review", error: null, storyboard: null });
+    const plan = goal.shortPlan!;
+    if (plan.version !== 5 || !plan.remix) throw new Error("expected a remix");
+    expect(plan.remix).toMatchObject({ video: { artifactId: videoId }, frame: { artifactId: cell!.outputArtifactId, atSeconds: 3 }, replacement: { prompt: PLAN.replacement, model: FRAME_MODEL } });
+    expect(plan).not.toHaveProperty("storyboard");
     expect(sourceImagesOf(goal)).toEqual([expect.objectContaining({ artifactId: imageIds[1], slot: "@image1" })]);
-    expect(goal.shortPlan).not.toHaveProperty("character");
-    expect(JSON.stringify(goal)).not.toMatch(/Main character|a man in a green shirt/u);
-
-    expect(goal.estimate.storyboards).toEqual({ usd: expect.closeTo(0.1008), warnings: [] });
-    expect(goal.estimate.storyboardFrames?.map((estimate) => estimate.usd)).toEqual(Array.from({ length: 4 }, () => expect.closeTo(0.0252)));
-    expect(goal.estimate.total.usd).toBeCloseTo(0.1008 + goal.estimate.frame.usd! + goal.estimate.videos.usd!);
-    expect(goal.storyboard).toMatchObject({
-      video: { artifactId: videoId },
-      model: CLEANUP_MODEL,
-      estimate: { usd: expect.closeTo(0.1008) },
-      frames: storyboard.frames.map((frame) => ({
-        index: frame.index, atSeconds: frame.atSeconds,
-        raw: { artifactId: frame.artifactId, cellId: frame.cellId, address: frame.address }, clean: null, estimate: { usd: expect.closeTo(0.0252) },
-      })),
-    });
-
-    expect(stub.plannerRequests).toHaveLength(1);
+    expect(goal.estimate.replacement?.usd).toBe(0.21);
+    expect(goal.estimate.storyboards.usd).toBe(0);
+    expect(goal.estimate.total.usd).toBeCloseTo(0.42 + goal.estimate.videos.usd!);
+    expect(goal.notes.join(" ")).toContain("one source frame");
+    expect(goal.notes.join(" ")).toContain("source frame comes from the first video");
     const request = stub.plannerRequests[0] as PlannerRequest;
     const content = request.input[0]!.content;
-    expect(content.filter((part) => part.type === "input_text").slice(1).map((part) => part.text)).toEqual([
-      "Source image 1: Character 2",
-      ...storyboard.frames.map((frame, index) => `Storyboard frame ${index + 1} of 4 at ${formatShortSeconds(frame.atSeconds)} s`),
+    expect(content.filter(part => part.type === "input_image")).toHaveLength(2);
+    expect(content.filter(part => part.type === "input_text").slice(1).map(part => part.text)).toEqual([
+      "Source image 1: Character 2", `Extracted source frame at ${formatShortSeconds(plan.remix.frame.atSeconds)} s`,
     ]);
-    expect(content.filter((part) => part.type === "input_image")).toHaveLength(5);
-    expect(JSON.parse(content[0]!.text!)).toMatchObject({
-      brief: "make a 12s viral TikTok clip based on the storyboard but with Source image 1 holding the umbrella for a monitor lizard, realistic, cut like @b2",
-    });
-    expect(request.instructions).toContain("then the 4 storyboard frames, labelled Storyboard frame 1 of 4 and so on");
-    expect(request.instructions).toContain("Follow the storyboard's action, camera and order across the opening frame and the beats, and apply the brief's changes to it");
-    expect(request.instructions).toContain("Never describe anything drawn on top of the picture in the storyboard frames");
-    expect(JSON.stringify(stub.plannerRequests)).not.toMatch(/Main character|a man in a green shirt/u);
-
-    const runs = chainRuns();
-    expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: goal.revision, stage: "frame" })).toBe(STORYBOARD_FIRST);
-    expect(await refusal({ action: "check", goal_id: goal.goalId, stage: "storyboards", index: 0 }))
-      .toBe("Check the frame or a clip for AI tells. Storyboard frames come from the video and are not checked.");
-    expect(chainRuns()).toBe(runs);
+    expect(request.instructions).toContain("physically plausible");
+    expect(request.instructions).toContain("WUT!");
+    expect(JSON.parse(content[0]!.text!)).toMatchObject({ write: ["title", "replacement", "frame", "beat 1"] });
+    expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: goal.revision, stage: "frame" })).toContain("Replace the character first");
+    expect(chainRuns()).toBe(0);
     expect(stub.submissions).toEqual([]);
     expect(stub.unexpected).toEqual([]);
   });
+
+  it("reviews replacement, twist and video separately, pins each input and invalidates later results when an earlier edit changes", async () => {
+    const brief = 'based on @b1 at 1.5s with @a2. replace: "Use the man in the source image." twist: "Replace the dog with a monitor lizard under the umbrella." video: "The lizard walks and the man follows with the umbrella."';
+    let goal = await invoke({ action: "create", brief });
+    expect(rawFrameCells()).toHaveLength(1);
+    expect(rawFrameCells()[0]!.inputs?.atSeconds).toBe(1.5);
+    expect(goal.shortPlan!.segments.map(segment => segment.seconds)).toEqual([12]);
+    expect(stub.plannerRequests).toEqual([]);
+    const rawId = rawFrameCells()[0]!.outputArtifactId;
+    goal = await approved(goal);
+    expect(goal).toMatchObject({ stage: "frame", status: "review" });
+    const replacement = goal.stages.replacement!.outputs[0]!;
+    expect(mediaJobs(FRAME_MODEL)[0]!.payload).toMatchObject({ refs: { image: [imageIds[1], rawId] } });
+    expect(stepPrompt(goal.chainId, "replacement")).toContain("Remove all graphics added");
+    expect(stub.submissions).toHaveLength(1);
+    goal = await approved(goal);
+    expect(goal).toMatchObject({ stage: "videos", status: "review" });
+    const twist = goal.stages.frame!.outputs[0]!;
+    expect(mediaJobs(FRAME_MODEL).find(job => (job.payload.refs as { image: string[] }).image.length === 1)?.payload).toMatchObject({ refs: { image: [replacement.artifactId] } });
+    expect(stub.submissions).toHaveLength(2);
+    goal = await approved(goal);
+    expect(goal.finish?.status).toBe("review");
+    expect(mediaJobs(CLIP_MODEL)[0]!.payload.refs).toEqual({ first_frame: [twist.artifactId] });
+    expect(stub.submissions.map(submission => submission.path)).toEqual([FRAME_EDIT, FRAME_EDIT, "/minimax/h3-max/reference-to-video"]);
+
+    goal = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: goal.revision, stage: "replacement" }));
+    expect(goal).toMatchObject({ stage: "frame", status: "review", finish: null });
+    expect(goal.stages.frame!.outputs[0]!.stale).toContain("character replacement changed");
+    expect(goal.stages.videos!.outputs[0]!.stale).toBeTruthy();
+    expect(await refusal({ action: "finish", goal_id: goal.goalId })).toContain("Generate every segment");
+    const count = stub.submissions.length;
+    expect(await refusal({ action: "regenerate", stage: "videos", goal_id: goal.goalId, revision: goal.revision })).toContain("Regenerate the twist");
+    expect(stub.submissions).toHaveLength(count);
+    goal = await invoke({ action: "select", stage: "replacement", index: 0, artifact_id: replacement.artifactId, goal_id: goal.goalId });
+    expect(goal.stages.frame!.outputs[0]!.stale).toBeNull();
+    expect(goal.stages.videos!.outputs[0]!.stale).toBeNull();
+    const plan = goal.shortPlan!;
+    if (plan.version !== 5 || !plan.remix) throw new Error("expected a remix");
+    goal = await invoke({ action: "update", goal_id: goal.goalId, revision: goal.revision, plan: { ...plan, remix: { ...plan.remix, replacement: { ...plan.remix.replacement, prompt: "Use the source man's red shirt." } } } });
+    expect(goal.stages.replacement!.outputs[0]!.stale).toContain("prompt changed");
+    expect(await refusal({ action: "finish", goal_id: goal.goalId })).toContain("Regenerate the replacement");
+    expect(await refusal({ action: "regenerate", stage: "frame", goal_id: goal.goalId, revision: goal.revision })).toContain("Regenerate the replacement");
+    stub.plannerAnswers = [{ prompt: "Use the man from the source image, matching his hair and shirt exactly." }];
+    goal = await settled(await invoke({ action: "revise", stage: "replacement", index: 0, feedback: "Match the source man's hair and shirt exactly.", goal_id: goal.goalId, revision: goal.revision }));
+    expect((stub.plannerRequests[0] as RewriteRequest).instructions).toContain("character replacement edit only");
+    expect(goal.stages.replacement!.outputs[0]!.versions[0]!.basePrompt).toBe("Use the man from the source image, matching his hair and shirt exactly.");
+    goal = await settled(await invoke({ action: "regenerate", stage: "frame", goal_id: goal.goalId, revision: goal.revision }));
+    expect(goal.stage).toBe("videos");
+    expect(goal.stages.frame!.outputs[0]!.stale).toBeNull();
+    expect(stub.unexpected).toEqual([]);
+  }, testBudget(90_000));
 
   it("cleans every storyboard frame in one approval, regenerates and selects one, and makes the frame from the source image and clean frame 1", async () => {
     const goal = await short(`based on @b1 with @a2, ${AUTHORED}`);
@@ -326,7 +353,7 @@ describe("video_goal storyboard stage", () => {
     const restaled = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: clip.revision, stage: "storyboards", index: 0 }));
     expect(restaled).toMatchObject({ stage: "videos", status: "review", finish: { status: "review" } });
     expect(restaled.stages.frame!.outputs[0]!.stale).toBe(FRAME_STALE);
-    expect(restaled.stages.videos!.outputs[0]!.stale).toBeNull();
+    expect(restaled.stages.videos!.outputs[0]!.stale).toBeTruthy();
     expect(await refusal({ action: "regenerate", goal_id: goal.goalId, revision: restaled.revision, stage: "videos", index: 0 }))
       .toBe("The frame prompt, references or storyboard changed after this frame was made. Regenerate the frame before continuing.");
     const restored = await invoke({ action: "select", goal_id: goal.goalId, stage: "storyboards", index: 0, artifact_id: cleanOne });

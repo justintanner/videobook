@@ -20,10 +20,12 @@ function goalReferenceCellIds(goal: NotebookCell): string[] {
   return [
     ...cellIdsOf(characters),
     ...cellIdsOf(field(plan, "sourceImages")),
+    ...cellIdsOf([field(field(plan, "remix"), "frame")]),
     ...cellIdsOf(field(field(plan, "storyboard"), "frames")),
     ...cellIdsOf(field(field(plan, "character"), "references")),
     ...cellIdsOf(field(field(plan, "frame"), "references")),
     ...cellIdsOf(field(draft, "sourceImages")),
+    ...cellIdsOf([field(field(draft, "remix"), "frame")]),
     ...cellIdsOf(field(field(draft, "storyboard"), "frames")),
     ...cellIdsOf(field(field(draft, "character"), "references")),
     ...cellIdsOf(field(draft, "extraReferences")),

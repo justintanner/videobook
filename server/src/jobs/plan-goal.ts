@@ -5,7 +5,7 @@ import { requireApiKey } from "../api-key.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } from "../openai-intelligence.js";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
 import { isCurrentShort, readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent, type GoalRecord } from "../goal-store.js";
-import { buildGoalShortPlan, buildLegacyGoalShortPlan, isLegacyShortDraft, shortStoryboardOf, type GoalShortDraft } from "../goal-short-plan.js";
+import { buildGoalShortPlan, buildLegacyGoalShortPlan, isLegacyShortDraft, shortRemixSourceOf, shortStoryboardOf, type GoalShortDraft } from "../goal-short-plan.js";
 import { shortWantsPhone, stripShortBannedWords, withoutShortPhoneSentences } from "../goal-short-rules.js";
 import { estimateShort } from "../goal-short-runtime.js";
 import {
@@ -15,7 +15,7 @@ import {
 import { withNotebookMutation } from "../notebook-mutations.js";
 import { goalPlannerImages } from "../goal-reference-images.js";
 
-const shortPlannerAnswerSchema = z.object({ title: z.string(), frame: z.string(), beats: z.array(z.string()) });
+const shortPlannerAnswerSchema = z.object({ title: z.string(), replacement: z.string().optional(), frame: z.string(), beats: z.array(z.string()) });
 
 function shortPlannerAnswer(text: string): ShortPlannerResponse | null {
   try {
@@ -30,6 +30,7 @@ function cleanedAnswer(answer: ShortPlannerResponse, authored: ShortAuthoredCopy
   const cleaned = (text: string) => phones ? stripShortBannedWords(text) : withoutShortPhoneSentences(stripShortBannedWords(text));
   return {
     title: stripShortBannedWords(answer.title),
+    ...(answer.replacement !== undefined ? { replacement: authored.replacement == null ? cleaned(answer.replacement) : answer.replacement } : {}),
     frame: authored.frame === null ? cleaned(answer.frame) : answer.frame,
     beats: answer.beats.map((beat, index) => authored.beats[index] == null ? cleaned(beat) : beat),
   };
@@ -40,6 +41,7 @@ async function askShortPlanner(engine: Engine, goal: GoalRecord, brief: string, 
   if (!notebook.ok) throw new Error(notebook.error.message);
   const references = isLegacyShortDraft(draft) ? [...draft.character.references, ...draft.extraReferences] : [...draft.sourceImages];
   const storyboard = shortStoryboardOf(draft);
+  const remix = shortRemixSourceOf(draft);
   const count = draft.segmentSeconds.length;
   const options = chatIntelligenceRequestOptions();
   const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"), options);
@@ -47,19 +49,19 @@ async function askShortPlanner(engine: Engine, goal: GoalRecord, brief: string, 
   const phones = shortWantsPhone(brief);
   const request = {
     instructions: await shortPlannerInstructions({
-      sourceImageCount: references.length, storyboardFrameCount: storyboard?.frames.length ?? 0, aspectRatio: draft.aspectRatio, segmentSeconds: draft.segmentSeconds,
+      sourceImageCount: references.length, remix: Boolean(remix), storyboardFrameCount: storyboard?.frames.length ?? 0, aspectRatio: draft.aspectRatio, segmentSeconds: draft.segmentSeconds,
     }),
     input: [{ role: "user" as const, content: [
       { type: "input_text" as const, text: JSON.stringify({
-        brief: shortPlannerBrief(brief, references, notebook.value, storyboard?.video ?? null),
+        brief: shortPlannerBrief(brief, references, notebook.value, remix?.video ?? storyboard?.video ?? null, remix ? "the source video" : "the storyboard"),
         aspectRatio: draft.aspectRatio,
         segments: draft.segmentSeconds.map((seconds, index) => ({ beat: index + 1, seconds })),
-        fixed: Object.fromEntries([...(authored.frame === null ? [] : [["frame", authored.frame] as const]), ...fixedBeats]),
-        write: ["title", ...(authored.frame === null ? ["frame"] : []), ...authored.beats.flatMap((beat, index) => beat === null ? [`beat ${index + 1}`] : [])],
+        fixed: Object.fromEntries([...(authored.replacement ? [["replacement", authored.replacement] as const] : []), ...(authored.frame === null ? [] : [["frame", authored.frame] as const]), ...fixedBeats]),
+        write: ["title", ...(authored.replacement === null ? ["replacement"] : []), ...(authored.frame === null ? ["frame"] : []), ...authored.beats.flatMap((beat, index) => beat === null ? [`beat ${index + 1}`] : [])],
       }) },
-      ...await goalPlannerImages(engine, references, storyboard?.frames ?? []),
+      ...await goalPlannerImages(engine, references, storyboard?.frames ?? [], remix?.frame),
     ] }],
-    text: { format: { type: "json_schema" as const, name: "short_plan", strict: true, schema: z.toJSONSchema(shortPlannerResponseSchema(count)) } },
+    text: { format: { type: "json_schema" as const, name: "short_plan", strict: true, schema: z.toJSONSchema(shortPlannerResponseSchema(count, Boolean(remix))) } },
     max_output_tokens: 2000,
   };
   const first = shortPlannerAnswer(firstResponseText(await responses(intelligenceRequest(request, options), signal)));
@@ -91,9 +93,10 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
     const content = requireGoalShortContent(engine, goal);
     const { draft } = content;
     if (!draft) throw new Error("This short has nothing to plan. Start a new /goal.");
-    const authored = shortAuthoredCopy(content.brief, draft.segmentSeconds);
+    const remix = shortRemixSourceOf(draft);
+    const authored = shortAuthoredCopy(content.brief, draft.segmentSeconds, Boolean(remix));
     const plannedDraft = { ...draft, segmentSeconds: authored.segmentSeconds };
-    const written = shortPlannerNeeded(content.brief, plannedDraft.segmentSeconds)
+    const written = shortPlannerNeeded(content.brief, plannedDraft.segmentSeconds, Boolean(remix))
       ? await askShortPlanner(engine, goal, content.brief, plannedDraft, authored, signal)
       : null;
     const offline = written ? null : shortBriefPlan(content.brief, authored);
@@ -107,6 +110,7 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
       })
       : buildGoalShortPlan({
         title, aspectRatio: plannedDraft.aspectRatio, sourceImages: plannedDraft.sourceImages, storyboard: shortStoryboardOf(plannedDraft),
+        remix, replacementPrompt: authored.replacement ?? written?.replacement ?? offline?.replacement,
         framePrompt, beats, segmentSeconds: plannedDraft.segmentSeconds,
       });
     const estimate = await estimateShort(engine, plan, content);
@@ -120,7 +124,7 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
         if (!notes.includes(note)) notes.push(note);
       }
       await writeGoalShortContent(engine, current, { ...latest, draft: plannedDraft, plan, estimate, notes, revision: latest.revision + 1 });
-      saveGoal(engine, { ...current, stage: shortStoryboardOf(plan) ? "storyboards" : "frame", status: "review", error: null });
+      saveGoal(engine, { ...current, stage: shortRemixSourceOf(plan) ? "replacement" : shortStoryboardOf(plan) ? "storyboards" : "frame", status: "review", error: null });
     });
     return { goalId };
   } catch (error) {

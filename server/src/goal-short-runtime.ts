@@ -10,13 +10,13 @@ import { getChainRun, preflightAndAccept, retryChainRun, type ChainRunRecord } f
 import type { ChainStep } from "./chain-plan.js";
 import { probeVideo } from "./ffmpeg.js";
 import {
-  buildGoalShortPlan, compileShortClipStep, compileShortContinuationStep, compileShortFrameStep, compileShortStoryboardStep, formatShortSeconds,
-  goalShortPlanSchema, refreshGoalShortPlan, SHORT_STORYBOARD_MODELS, shortPlanTitleInput, shortStoryboardOf, shortTiming, storyboardFallbackModel,
-  type GoalShortDraft, type GoalShortImageRef, type GoalShortPlan, type ShortStoryboard, type ShortStoryboardModel, type ShortStoryboardVideo,
+  buildGoalShortPlan, compileShortClipStep, compileShortContinuationStep, compileShortFrameStep, compileShortReplacementStep, compileShortStoryboardStep, formatShortSeconds,
+  goalShortPlanSchema, refreshGoalShortPlan, SHORT_STORYBOARD_MODELS, shortPlanTitleInput, shortRemixOf, shortRemixSourceOf, shortStoryboardOf, shortTiming, storyboardFallbackModel,
+  type GoalShortDraft, type GoalShortImageRef, type GoalShortPlan, type ShortRemixSource, type ShortStoryboard, type ShortStoryboardModel, type ShortStoryboardVideo,
 } from "./goal-short-plan.js";
 import { shortAuthoredCopy, shortBriefPlan, shortPlannerNeeded, shortTitle } from "./goal-short-planner.js";
 import { briefMention, renderReferenceNotes, type ReferenceNote } from "./goal-short-references.js";
-import { captureStoryboardFrames, shortStoryboard, videoStoryboardMoments } from "./goal-short-storyboard.js";
+import { captureStoryboardFrames, videoGoalFrameMoment } from "./goal-short-storyboard.js";
 import { goalReferenceHashes } from "./goal-reference-images.js";
 import { goalStageAttempts } from "./goal-stills.js";
 import {
@@ -34,7 +34,7 @@ import { queue } from "./queue.js";
 type GoalArgs = Record<string, unknown>;
 type ShortReference = Omit<GoalShortImageRef, "slot">;
 type ShortTarget = { stage: GoalGenerationStage; indexes: number[] };
-type BriefReferences = { references: ShortReference[]; storyboard: ShortStoryboard | null; notes: ReferenceNote[] };
+type BriefReferences = { references: ShortReference[]; remix: ShortRemixSource | null; notes: ReferenceNote[] };
 export type StoryboardFrameFailure = { kind: "failed" | "not-run"; message: string; model?: ShortStoryboardModel };
 
 const EXTRA_REFERENCE_LIMIT = 12;
@@ -44,13 +44,14 @@ const SETTINGS_LOCKED = "Models, resolution, aspect ratio and rules stay with th
 const REFERENCES_LOCKED = "The source images stay with this short. Start a new /goal to change them.";
 const STORYBOARD_LOCKED = "The storyboard's video and frames stay with this short. Start a new /goal to change them.";
 const STORYBOARD_FIRST = "Clean the storyboard first: approve the storyboard stage to remove its on-screen graphics before the frame is made.";
+const REPLACEMENT_FIRST = "Replace the character first, then review the twist before making the video.";
 const SEGMENT_LOCKED = "A generated segment keeps its place and seconds. Regenerate it, or start a new /goal to change them.";
 const TITLE_WHILE_FINISHING = "Wait until finishing stops before changing the burned title.";
 const STALE_RETRY = "The references or selected versions changed after this attempt. Regenerate using the current selection instead of retrying the older request.";
 const EXTEND_SOURCE_SECONDS = { minimum: 1.625, maximum: 60 };
 const PLACEHOLDER_FRAME = "https://videobook.invalid/short-frame.jpg";
 const PLACEHOLDER_CLIP = "https://videobook.invalid/short-clip.mp4";
-const stageSchema = z.enum(["storyboards", "frame", "videos"]);
+const stageSchema = z.enum(["storyboards", "replacement", "frame", "videos"]);
 export const shortFeedbackSchema = z.string().trim().min(1).max(2000);
 
 function feedbackLabel(engine: Engine, document: NotebookDocument, mention: NotebookMention): string {
@@ -85,31 +86,32 @@ function mentionTimestamp(brief: string, mention: NotebookMention): number | nul
   return Number.isFinite(seconds) ? seconds : null;
 }
 
-async function mentionedStoryboard(
+async function mentionedSourceFrame(
   engine: Engine,
   bookId: string,
   notebookId: string,
   video: ShortStoryboardVideo,
   mention: string,
-  fromSeconds: number | null,
-): Promise<{ storyboard: ShortStoryboard | null; note: ReferenceNote }> {
-  const skipped = (text: string) => ({ storyboard: null, note: { kind: "text" as const, text } });
-  let moments: number[];
+  atSeconds: number | null,
+): Promise<{ remix: ShortRemixSource | null; note: ReferenceNote }> {
+  const skipped = (text: string) => ({ remix: null, note: { kind: "text" as const, text } });
+  let moment: number | null;
   try {
-    moments = await videoStoryboardMoments(engine, bookId, video.artifactId, fromSeconds === null ? {} : { fromSeconds });
+    moment = await videoGoalFrameMoment(engine, bookId, video.artifactId, atSeconds);
   } catch {
     return skipped(`${mention} is a video, but its frames could not be read, so it was skipped.`);
   }
-  if (moments.length === 0) {
-    return skipped(fromSeconds === null
-      ? `${mention} is a video, but it is too short for a storyboard, so it was skipped.`
-      : `${mention} is a video, but it has no frames to storyboard after ${formatShortSeconds(fromSeconds)} s, so it was skipped.`);
+  if (moment === null) {
+    return skipped(atSeconds === null
+      ? `${mention} is a video, but no usable source frame was found, so it was skipped.`
+      : `${mention} is a video, but it has no frame at ${formatShortSeconds(atSeconds)} s, so it was skipped.`);
   }
   try {
-    const frames = await captureStoryboardFrames(engine, notebookId, { artifactId: video.artifactId, ...(video.cellId ? { cellId: video.cellId } : {}) }, moments);
+    const frames = await captureStoryboardFrames(engine, notebookId, { artifactId: video.artifactId, ...(video.cellId ? { cellId: video.cellId } : {}) }, [moment], true);
+    const { index: _index, requestedSeconds: _requested, aspectRatio: _aspect, width: _width, height: _height, ...frame } = frames[0]!;
     return {
-      storyboard: shortStoryboard(video, frames),
-      note: { kind: "storyboard", mention, frames: frames.map((frame) => ({ cellId: frame.cellId, atSeconds: frame.atSeconds })) },
+      remix: { video, frame },
+      note: { kind: "source-frame", mention, frames: [{ cellId: frame.cellId, atSeconds: frame.atSeconds }] },
     };
   } catch (error) {
     return skipped(`${mention} is a video, but it was skipped. ${error instanceof Error ? error.message : String(error)}`);
@@ -139,14 +141,14 @@ async function briefReferences(engine: Engine, bookId: string, notebookId: strin
     }
     ignored.add(found.video.artifactId);
     if (video) {
-      notes.push({ kind: "text", text: `${mention.raw} is another video and was skipped: the storyboard comes from the first video the brief mentions.` });
+      notes.push({ kind: "text", text: `${mention.raw} is another video and was skipped: the source frame comes from the first video the brief mentions.` });
       continue;
     }
     video = { found: found.video, mention };
     notes.push(null);
   }
-  const made = video ? await mentionedStoryboard(engine, bookId, notebookId, video.found, video.mention.raw, mentionTimestamp(brief, video.mention)) : null;
-  return { references, storyboard: made?.storyboard ?? null, notes: notes.map((note) => note ?? made!.note) };
+  const made = video ? await mentionedSourceFrame(engine, bookId, notebookId, video.found, video.mention.raw, mentionTimestamp(brief, video.mention)) : null;
+  return { references, remix: made?.remix ?? null, notes: notes.map((note) => note ?? made!.note) };
 }
 
 async function priced(engine: Engine, step: ChainStep, refs: Record<string, string[]>): Promise<GoalEstimate> {
@@ -162,11 +164,13 @@ function summed(parts: readonly GoalEstimate[]): GoalEstimate {
 }
 
 function shortImageIds(plan: GoalShortPlan, clip: boolean): string[] {
+  if (clip && shortRemixOf(plan)) return [];
   if (plan.version === 5) return plan.sourceImages.map((reference) => reference.artifactId);
   return (clip ? plan.character.references : [...plan.character.references, ...plan.frame.references]).map((reference) => reference.artifactId);
 }
 
 export async function estimateShort(engine: Engine, plan: GoalShortPlan, short: GoalTitleShort): Promise<GoalEstimates> {
+  const remix = shortRemixOf(plan);
   const storyboard = shortStoryboardOf(plan);
   const firstFrame = storyboard?.frames[0] ?? null;
   const frameIds = [...shortImageIds(plan, false), ...(firstFrame ? [firstFrame.artifactId] : [])];
@@ -178,20 +182,26 @@ export async function estimateShort(engine: Engine, plan: GoalShortPlan, short: 
   const storyboardFallbackFrames = storyboard && fallback
     ? await Promise.all(storyboard.frames.map((frame) => priced(engine, compileShortStoryboardStep(storyboard, frame.index, fallback), { image: [frame.artifactId] })))
     : [];
-  const frame = await priced(engine, compileShortFrameStep(plan, firstFrame?.address ?? null), frameIds.length > 0 ? { image: frameIds } : {});
+  const replacement = remix ? await priced(engine, compileShortReplacementStep(plan), { image: [...shortImageIds(plan, false), remix.frame.artifactId] }) : null;
+  const frame = await priced(engine, compileShortFrameStep(plan, remix ? PLACEHOLDER_FRAME : firstFrame?.address ?? null), remix ? { image: [PLACEHOLDER_FRAME] } : frameIds.length > 0 ? { image: frameIds } : {});
   const segments = await Promise.all(plan.segments.map((_, index) => index === 0
     ? priced(engine, compileShortClipStep(plan, PLACEHOLDER_FRAME), { first_frame: [PLACEHOLDER_FRAME], ...(clipIds.length > 0 ? { image: clipIds } : {}) })
     : priced(engine, compileShortContinuationStep(plan, index, PLACEHOLDER_CLIP), { video: [PLACEHOLDER_CLIP] })));
   const storyboards = summed(storyboardFrames);
   const videos = summed(segments);
   const title = goalTitleEstimate({ brief: short.brief, draft: short.draft, plan });
-  return { frame, storyboards, videos, total: summed([storyboards, frame, videos]), segments, ...(storyboard ? { storyboardFrames, storyboardFallbackFrames } : {}), title };
+  return { frame, storyboards, videos, total: summed([storyboards, ...(replacement ? [replacement] : []), frame, videos]), segments, ...(replacement ? { replacement } : {}), ...(storyboard ? { storyboardFrames, storyboardFallbackFrames } : {}), title };
 }
 
 export async function shortFingerprint(
   engine: Engine, plan: GoalShortPlan, stage: GoalGenerationStage, index: number, sourceArtifactId: string | null, model?: ShortStoryboardModel,
 ): Promise<string> {
   const storyboard = shortStoryboardOf(plan);
+  const remix = shortRemixOf(plan);
+  if (stage === "replacement") {
+    if (!remix) throw new Error("This short has no character replacement step.");
+    return JSON.stringify({ settings: remix.replacement, references: await goalReferenceHashes(engine, [...shortImageIds(plan, false), remix.frame.artifactId]) });
+  }
   if (stage === "storyboards") {
     const frame = storyboard?.frames[index];
     return JSON.stringify({
@@ -209,7 +219,8 @@ export async function shortFingerprint(
       settings: plan.version === 5
         ? { ...settings, aspectRatio: plan.aspectRatio }
         : { ...settings, references: undefined, aspectRatio: plan.aspectRatio },
-      references: await goalReferenceHashes(engine, shortImageIds(plan, false)),
+      references: await goalReferenceHashes(engine, remix ? [sourceArtifactId ?? remix.frame.artifactId] : shortImageIds(plan, false)),
+      ...(remix ? { replacement: sourceArtifactId } : {}),
       ...(storyboard ? { storyboardFrame: sourceArtifactId } : {}),
     });
   }
@@ -228,8 +239,8 @@ function selectedOutput(goal: GoalRecord, stage: GoalGenerationStage, index: num
 }
 
 function stageSource(goal: GoalRecord, stage: GoalGenerationStage, index: number): string | null {
-  if (stage === "storyboards") return null;
-  if (stage === "frame") return selectedOutput(goal, "storyboards", 0)?.artifactId ?? null;
+  if (stage === "storyboards" || stage === "replacement") return null;
+  if (stage === "frame") return selectedOutput(goal, "replacement", 0)?.artifactId ?? selectedOutput(goal, "storyboards", 0)?.artifactId ?? null;
   return (index === 0 ? selectedOutput(goal, "frame", 0) : selectedOutput(goal, "videos", index - 1))?.artifactId ?? null;
 }
 
@@ -246,6 +257,7 @@ export function shortFrameStale(goal: GoalRecord): boolean {
 
 export function shortSegmentStale(goal: GoalRecord, index: number): boolean {
   if (!selectedOutput(goal, "videos", index)) return false;
+  if (shortFrameStale(goal)) return true;
   if (index > 0 && shortSegmentStale(goal, index - 1)) return true;
   return madeFromStaleSource(goal, "videos", index);
 }
@@ -366,15 +378,15 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
     content = { brief, revision: 1, draft: null, plan, estimate: await estimateShort(engine, plan, { brief, draft: null }), notes: [] };
   } else {
     const timing = shortTiming(brief);
-    const authored = shortAuthoredCopy(brief, timing.segmentSeconds);
-    const planning = shortPlannerNeeded(brief, authored.segmentSeconds);
     const mentioned = await briefReferences(engine, bookId, notebookId, brief);
+    const authored = shortAuthoredCopy(brief, timing.segmentSeconds, Boolean(mentioned.remix));
+    const planning = shortPlannerNeeded(brief, authored.segmentSeconds, Boolean(mentioned.remix));
     referenceNotes = mentioned.notes;
     const draft: GoalShortDraft = {
       aspectRatio: timing.aspectRatio,
       segmentSeconds: authored.segmentSeconds,
       sourceImages: mentioned.references,
-      ...(mentioned.storyboard ? { storyboard: mentioned.storyboard } : {}),
+      ...(mentioned.remix ? { remix: mentioned.remix } : {}),
     };
     const notes = [timing.note, authored.note].filter((note): note is string => note !== null);
     if (planning) {
@@ -386,7 +398,8 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
         aspectRatio: draft.aspectRatio,
         segmentSeconds: draft.segmentSeconds,
         sourceImages: draft.sourceImages,
-        storyboard: mentioned.storyboard,
+        remix: mentioned.remix,
+        replacementPrompt: written.replacement,
         title: shortTitle(brief, written.frame),
         framePrompt: written.frame,
         beats: written.beats,
@@ -399,7 +412,7 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
   const timestamp = new Date().toISOString();
   const goal: GoalRecord = {
     goalId, bookId, notebookId, cellId: cell.id, requestId: input.requestId, status: content.plan ? "review" : "planning", planVersion: content.plan?.version ?? 5,
-    stage: shortStoryboardOf(content.plan ?? content.draft) ? "storyboards" : "frame", stages: {}, chainId: null, planningJobId: null, clipIds: [], trackId: null,
+    stage: shortRemixSourceOf(content.plan ?? content.draft) ? "replacement" : shortStoryboardOf(content.plan ?? content.draft) ? "storyboards" : "frame", stages: {}, chainId: null, planningJobId: null, clipIds: [], trackId: null,
     assembly: null, error: null, dismissedAt: null, createdAt: timestamp, updatedAt: timestamp,
   };
   if (referenceNotes.length > 0) {
@@ -424,6 +437,7 @@ async function rewrittenShortPrompt(goal: GoalRecord, stage: GoalGenerationStage
 }
 
 function withStagePrompt(plan: GoalShortPlan, stage: GoalGenerationStage, index: number, prompt: string): unknown {
+  if (stage === "replacement" && plan.version === 5 && plan.remix) return { ...plan, remix: { ...plan.remix, replacement: { ...plan.remix.replacement, prompt } } };
   if (stage === "frame") return { ...plan, frame: { ...plan.frame, prompt } };
   if (stage === "videos") return { ...plan, segments: plan.segments.map((segment, position) => position === index ? { ...segment, prompt } : segment) };
   const storyboard = shortStoryboardOf(plan);
@@ -457,11 +471,30 @@ async function continuationSource(engine: Engine, goal: GoalRecord, index: numbe
   return previous;
 }
 
-export function shortFinishSource(engine: Engine, goal: GoalRecord): string {
+export async function shortFinishSource(engine: Engine, goal: GoalRecord): Promise<string> {
   const plan = requireGoalShortContent(engine, goal).plan;
   const clip = currentShortClip(goal);
   if (!plan || !clip || nextShortSegment(goal, plan) !== null) throw new Error("Generate every segment of the short before finishing it.");
+  if (shortRemixOf(plan)) await assertShortUpstream(engine, goal, plan, "videos");
   return clip.artifactId;
+}
+
+async function assertShortUpstream(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, stage: GoalGenerationStage): Promise<void> {
+  if ((stage === "frame" || stage === "videos") && shortRemixOf(plan)) {
+    const replacement = selectedOutput(goal, "replacement", 0);
+    const attempt = goal.stages.replacement?.attempts?.find(candidate => candidate.artifactId === replacement?.artifactId && candidate.fingerprint);
+    if (!replacement || (attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, "replacement", 0, null))) {
+      throw new Error("The character replacement prompt or references changed. Regenerate the replacement before continuing.");
+    }
+  }
+  if (stage !== "videos") return;
+  const frame = selectedOutput(goal, "frame", 0);
+  const attempt = goal.stages.frame?.attempts?.find(candidate => candidate.artifactId === frame?.artifactId && candidate.fingerprint);
+  if (!frame || (attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, "frame", 0, stageSource(goal, "frame", 0)))) {
+    throw new Error(shortRemixOf(plan)
+      ? "The twist prompt or character replacement changed. Regenerate the twist before continuing."
+      : "The frame prompt, references or storyboard changed after this frame was made. Regenerate the frame before continuing.");
+  }
 }
 
 async function ensureShortSpace(engine: Engine, goal: GoalRecord, stage: GoalGenerationStage, count: number): Promise<void> {
@@ -475,6 +508,8 @@ async function ensureShortSpace(engine: Engine, goal: GoalRecord, stage: GoalGen
 }
 
 function approveOutOfOrder(goal: GoalRecord, plan: GoalShortPlan, active: GoalGenerationStage, requested: GoalGenerationStage): string {
+  if (active === "replacement") return REPLACEMENT_FIRST;
+  if (requested === "replacement") return "The character is replaced. Regenerate or revise the replacement instead.";
   if (active === "storyboards") return STORYBOARD_FIRST;
   if (requested === "storyboards") {
     return shortStoryboardOf(plan) ? "The storyboard is clean. Regenerate, revise or select a storyboard frame instead." : "This short has no storyboard.";
@@ -494,7 +529,7 @@ function approvedTarget(goal: GoalRecord, plan: GoalShortPlan, args: GoalArgs): 
     const missing = shortStoryboardOf(plan)!.frames.filter((frame) => !selectedOutput(goal, "storyboards", frame.index)).map((frame) => frame.index);
     return { stage: "storyboards", indexes: missing };
   }
-  if (current === "frame") return { stage: "frame", indexes: [0] };
+  if (current === "frame" || current === "replacement") return { stage: current, indexes: [0] };
   const index = nextShortSegment(goal, plan);
   if (index === null) throw new Error("Every segment of this short is generated. Finish it, regenerate a segment or add a beat.");
   return { stage: "videos", indexes: [index] };
@@ -505,6 +540,7 @@ function shortTarget(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, args
   const stage = args.stage !== undefined || args.action === "revise" ? stageSchema.parse(args.stage) : goal.stage === "videos" ? "frame" : null;
   if (!stage) throw new Error("There are no stage outputs to regenerate yet");
   const index = args.index === undefined ? 0 : z.number().int().nonnegative().parse(args.index);
+  if (stage === "replacement" && (!shortRemixOf(plan) || index !== 0)) throw new Error("This short has no character replacement at that index.");
   if (stage === "frame" && index !== 0) throw new Error("A short has one frame");
   if (stage === "videos" && index >= plan.segments.length) throw new Error(`This short has ${plan.segments.length} segments.`);
   if (stage === "storyboards") {
@@ -519,6 +555,7 @@ function shortTarget(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, args
 }
 
 function stagePrompt(plan: GoalShortPlan, stage: GoalGenerationStage, index: number): string {
+  if (stage === "replacement") return shortRemixOf(plan)!.replacement.prompt;
   if (stage === "videos") return plan.segments[index]!.prompt;
   if (stage === "frame") return plan.frame.prompt;
   return shortStoryboardOf(plan)!.frames[index]!.prompt;
@@ -528,9 +565,11 @@ function stageSteps(
   goal: GoalRecord, plan: GoalShortPlan, document: NotebookDocument, target: ShortTarget, sourceClip: GoalStageOutput | null, model?: ShortStoryboardModel,
 ): { index: number; step: ChainStep }[] {
   const storyboard = shortStoryboardOf(plan);
+  const remix = shortRemixOf(plan);
+  if (target.stage === "replacement") return [{ index: 0, step: compileShortReplacementStep(plan) }];
   if (target.stage === "storyboards") return target.indexes.map((index) => ({ index, step: compileShortStoryboardStep(storyboard!, index, model) }));
   const index = target.indexes[0]!;
-  if (target.stage === "frame") return [{ index, step: compileShortFrameStep(plan, storyboard ? outputAddress(document, cleanStoryboardFrame(goal)) : null) }];
+  if (target.stage === "frame") return [{ index, step: compileShortFrameStep(plan, remix ? outputAddress(document, selectedOutput(goal, "replacement", 0)) : storyboard ? outputAddress(document, cleanStoryboardFrame(goal)) : null) }];
   return [{
     index,
     step: sourceClip
@@ -540,6 +579,15 @@ function stageSteps(
 }
 
 function assertStageInputs(goal: GoalRecord, plan: GoalShortPlan, target: ShortTarget, document: NotebookDocument): void {
+  const remix = shortRemixOf(plan);
+  if (target.stage === "replacement" && remix) {
+    const cell = document.cells.find(candidate => candidate.id === remix.frame.cellId);
+    if (!cell || resolveNotebookCellArtifactId(document, cell) !== remix.frame.artifactId) throw new Error("The extracted source frame changed or was removed. Start a new /goal.");
+  }
+  if (target.stage === "frame" && remix) {
+    if (!selectedOutput(goal, "replacement", 0)) throw new Error(REPLACEMENT_FIRST);
+    outputAddress(document, selectedOutput(goal, "replacement", 0));
+  }
   const storyboard = shortStoryboardOf(plan);
   if (target.stage === "storyboards") assertRawFrames(document, storyboard!, target.indexes);
   if (target.stage === "frame" && storyboard) outputAddress(document, cleanStoryboardFrame(goal));
@@ -566,13 +614,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   if (feedback) content = await revisedShortContent(engine, goal, content, stage, index, feedback);
   const document = readNotebook(engine, goal.notebookId);
   const plan = refreshGoalShortPlan(content.plan, document);
-  if (stage === "videos" && index === 0) {
-    const frame = selectedOutput(goal, "frame", 0)!;
-    const frameAttempt = goal.stages.frame?.attempts?.find((attempt) => attempt.artifactId === frame.artifactId && attempt.fingerprint);
-    if (frameAttempt?.fingerprint && frameAttempt.fingerprint !== await shortFingerprint(engine, plan, "frame", 0, stageSource(goal, "frame", 0))) {
-      throw new Error("The frame prompt, references or storyboard changed after this frame was made. Regenerate the frame before continuing.");
-    }
-  }
+  await assertShortUpstream(engine, goal, plan, stage);
   const steps = await Promise.all(stageSteps(goal, plan, document, target, sourceClip, model).map(async ({ index: position, step }) => {
     const source = stageSource(goal, stage, position);
     return { index: position, step, source, fingerprint: await shortFingerprint(engine, plan, stage, position, source, model) };
@@ -634,6 +676,7 @@ export function selectShortVersion(engine: Engine, goal: GoalRecord, args: GoalA
   if (!changed) return saveGoal(engine, next);
   const plan = requireGoalShortContent(engine, goal).plan;
   if (stage === "storyboards") return saveGoal(engine, storyboardReview(goal, next, plan));
+  if (stage === "replacement") return saveGoal(engine, { ...next, stage: "frame", status: "review", error: null, finish: null });
   const clip = stage === "videos" && plan && nextShortSegment(next, plan) === null ? currentShortClip(next) : null;
   const finish = clip ? { status: "review" as const, sourceArtifactId: clip.artifactId, finalArtifactId: null, error: null } : null;
   return saveGoal(engine, { ...next, status: "review", error: null, finish });
@@ -642,7 +685,8 @@ export function selectShortVersion(engine: Engine, goal: GoalRecord, args: GoalA
 function lockedSettings(plan: GoalShortPlan) {
   if (plan.version === 5) {
     const { prompt: _prompt, ...frame } = plan.frame;
-    return { aspectRatio: plan.aspectRatio, video: plan.video, rules: plan.rules, frame };
+    const { prompt: _replacementPrompt, ...replacement } = plan.remix?.replacement ?? {};
+    return { aspectRatio: plan.aspectRatio, video: plan.video, rules: plan.rules, frame, ...(plan.remix ? { replacement } : {}) };
   }
   return { aspectRatio: plan.aspectRatio, video: plan.video, rules: plan.rules, frame: { ...plan.frame, prompt: "", references: [] } };
 }
@@ -650,7 +694,11 @@ function lockedSettings(plan: GoalShortPlan) {
 function lockedReferences(plan: GoalShortPlan) {
   const reference = (item: GoalShortImageRef) => ({ artifactId: item.artifactId, cellId: item.cellId, objectHash: item.objectHash, slot: item.slot });
   const { title: _title, ...finish } = plan.finish;
-  if (plan.version === 5) return { sourceImages: plan.sourceImages.map(reference), finish };
+  if (plan.version === 5) {
+    const remix = plan.remix;
+    const source = remix ? { video: { artifactId: remix.video.artifactId, cellId: remix.video.cellId }, frame: { ...remix.frame, address: undefined, label: undefined } } : null;
+    return { sourceImages: plan.sourceImages.map(reference), finish, ...(source ? { remix: source } : {}) };
+  }
   return {
     character: { ...plan.character, references: plan.character.references.map(reference) },
     frame: plan.frame.references.map(reference),
@@ -685,11 +733,13 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
   if (JSON.stringify(lockedReferences(previous)) !== JSON.stringify(lockedReferences(plan))) throw new Error(REFERENCES_LOCKED);
   if (JSON.stringify(lockedStoryboard(previous)) !== JSON.stringify(lockedStoryboard(plan))) throw new Error(STORYBOARD_LOCKED);
   const frameMade = (goal.stages.frame?.outputs.length ?? 0) > 0;
-  if (frameMade && JSON.stringify(lockedSettings(previous)) !== JSON.stringify(lockedSettings(plan))) throw new Error(SETTINGS_LOCKED);
+  const replacementMade = (goal.stages.replacement?.outputs.length ?? 0) > 0;
+  if ((frameMade || replacementMade) && JSON.stringify(lockedSettings(previous)) !== JSON.stringify(lockedSettings(plan))) throw new Error(SETTINGS_LOCKED);
   const generated = goal.stages.videos?.outputs.map((output) => output.index) ?? [];
   if (generated.some((index) => plan.segments[index]?.seconds !== previous.segments[index]?.seconds)) throw new Error(SEGMENT_LOCKED);
   if (JSON.stringify(previous) === JSON.stringify(plan)) return goal;
   const generatedPromptChanged = (frameMade && previous.frame.prompt !== plan.frame.prompt)
+    || (replacementMade && shortRemixOf(previous)?.replacement.prompt !== shortRemixOf(plan)?.replacement.prompt)
     || generated.some((index) => previous.segments[index]?.prompt !== plan.segments[index]?.prompt);
   const retitled = titleFinish(goal, previous, plan);
   await writeGoalShortContent(engine, goal, { ...content, plan, estimate: await estimateShort(engine, plan, content), revision: content.revision + 1 });

@@ -140,7 +140,7 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise
     const active = engine.jobs.queue.get(goal.finish.jobId);
     if (active && ["queued", "running", "completing"].includes(active.state)) return goal;
   }
-  const source = await coldOpenSource(engine, shortFinishSource(engine, goal));
+  const source = await coldOpenSource(engine, await shortFinishSource(engine, goal));
   const config = await readWatermarkConfig(engine, "tiktok");
   const profile = effectiveWatermarkProfile(config, "tiktok");
   const template = watermarkGraphicsTemplate(engine, "tiktok");

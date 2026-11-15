@@ -96,6 +96,12 @@ export async function videoStoryboardMoments(engine: Engine, bookId: string, art
   return storyboardMoments({ durationSeconds: scenes.durationSeconds, cutSeconds: selectSceneCuts(scenes), ...options });
 }
 
+export async function videoGoalFrameMoment(engine: Engine, bookId: string, artifactId: string, atSeconds: number | null): Promise<number | null> {
+  const scenes = await awaitScenes(engine, artifactId, bookId);
+  if (atSeconds !== null) return atSeconds >= 0 && atSeconds < scenes.durationSeconds ? atSeconds : null;
+  return storyboardMoments({ durationSeconds: scenes.durationSeconds, cutSeconds: selectSceneCuts(scenes), count: 1 })[0] ?? null;
+}
+
 function readNotebook(engine: Engine, notebookId: string): NotebookDocument {
   const notebook = engine.notebooks.read(notebookId);
   if (!notebook.ok) throw new Error(notebook.error.message);
@@ -132,14 +138,14 @@ export function storyboardCleanupSize(frames: readonly { width: number; height: 
   return SHORT_STORYBOARD_SIZES.find((size) => CLEANUP_SIZE_SIDES[size] ** 2 >= pixels) ?? "2K";
 }
 
-async function captureMissingFrames(engine: Engine, video: StoryboardVideo, moments: readonly number[], existing: readonly (NotebookCell | null)[]): Promise<(CapturedFrame | null)[]> {
+async function captureMissingFrames(engine: Engine, video: StoryboardVideo, moments: readonly number[], existing: readonly (NotebookCell | null)[], source: boolean): Promise<(CapturedFrame | null)[]> {
   const captured: (CapturedFrame | null)[] = [];
   for (const [index, seconds] of moments.entries()) {
     if (existing[index]) {
       captured.push(null);
       continue;
     }
-    const label = storyboardLabel(index, moments.length, seconds);
+    const label = source ? `Source frame · ${formatShortSeconds(seconds)} s` : storyboardLabel(index, moments.length, seconds);
     const frame = await captureFrame(engine, video.artifactId, { role: "time", timestampSeconds: seconds, title: label });
     captured.push({ ...frame, label });
   }
@@ -193,14 +199,14 @@ async function storyboardFrame(engine: Engine, document: NotebookDocument, cellI
   };
 }
 
-export async function captureStoryboardFrames(engine: Engine, notebookId: string, video: StoryboardVideo, moments: readonly number[]): Promise<StoryboardFrame[]> {
+export async function captureStoryboardFrames(engine: Engine, notebookId: string, video: StoryboardVideo, moments: readonly number[], source = false): Promise<StoryboardFrame[]> {
   const before = readNotebook(engine, notebookId);
   const existing = await Promise.all(moments.map((seconds) => existingFrameCell(engine, before, video.artifactId, video.cellId, seconds)));
   const needed = existing.filter((cell) => !cell).length;
   if (NOTEBOOK_GRID_CAPACITY - notebookOccupiedSlots(before.cells).length < needed) {
     throw new Error(`The notebook needs ${needed} empty cells for the storyboard frames.`);
   }
-  const captured = await captureMissingFrames(engine, video, moments, existing);
+  const captured = await captureMissingFrames(engine, video, moments, existing, source);
   const placed = await placeCapturedFrames(engine, notebookId, video, moments, captured);
   const document = readNotebook(engine, notebookId);
   return Promise.all(moments.map((seconds, index) => storyboardFrame(engine, document, existing[index]?.id ?? placed.get(index)!, index, seconds)));

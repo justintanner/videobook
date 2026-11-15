@@ -6,7 +6,7 @@ import {
   type GoalEstimates, type GoalGenerationStage, type GoalRecord, type GoalStageOutput, type GoalStageRun,
 } from "./goal-store.js";
 import { goalStageAttempts } from "./goal-stills.js";
-import { refreshGoalShortPlan, shortStoryboardOf, type GoalShortPlan, type ShortStoryboardModel } from "./goal-short-plan.js";
+import { refreshGoalShortPlan, shortRemixOf, shortStoryboardOf, type GoalShortPlan, type ShortStoryboardModel } from "./goal-short-plan.js";
 import {
   currentShortClip, nextShortSegment, shortFrameStale, shortSegmentStale, storyboardFrameFailure, storyboardReview, type StoryboardFrameFailure,
 } from "./goal-short-runtime.js";
@@ -47,7 +47,7 @@ function goalChainSteps(engine: Engine, document: NotebookDocument, chainId: str
 }
 
 function stageOutputIndex(stepId: string): number {
-  if (stepId === "frame") return 0;
+  if (stepId === "frame" || stepId === "replacement") return 0;
   return Number(/\d+$/u.exec(stepId)?.[0]) - 1;
 }
 
@@ -108,10 +108,11 @@ async function settledShortStage(
   }
   await writeGoalShortContent(engine, goal, { ...content, revision: content.revision + 1 });
   if (stage === "storyboards") return storyboardReview(goal, next, content.plan);
+  if (stage === "replacement") return { ...next, stage: "frame", status: "review", error: null, ...cleared, finish: null };
   const frameChanged = (previous[0]?.artifactId ?? null) !== null && previous[0]?.artifactId !== outputs[0]?.artifactId;
   const finish = frameChanged ? null : goal.finish ?? goal.resumeFinish ?? null;
   const keepCompleted = finish?.status === "completed" && Boolean(finish.finalArtifactId);
-  return { ...next, stage: goal.resumeStage ?? "videos", status: keepCompleted ? "completed" : "review", error: null, ...cleared, finish };
+  return { ...next, stage: shortRemixOf(content.plan) ? "videos" : goal.resumeStage ?? "videos", status: keepCompleted ? "completed" : "review", error: null, ...cleared, finish };
 }
 
 async function stopLegacyGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
@@ -192,7 +193,18 @@ function legacyGoalSnapshot(engine: Engine, goal: GoalRecord, document: Notebook
   };
 }
 
-function outputStale(goal: GoalRecord, stage: GoalGenerationStage, index: number): string | null {
+function outputStale(goal: GoalRecord, plan: GoalShortPlan | null, stage: GoalGenerationStage, index: number): string | null {
+  const replacement = shortRemixOf(plan);
+  if (replacement) {
+    const changed = (target: "replacement" | "frame", prompt: string) => {
+      const selected = goal.stages[target]?.outputs[0];
+      const attempt = goal.stages[target]?.attempts?.find(candidate => candidate.artifactId === selected?.artifactId);
+      return Boolean(attempt && attempt.basePrompt !== prompt);
+    };
+    if (changed("replacement", replacement.replacement.prompt)) return "The character replacement prompt changed. Regenerate the replacement before continuing.";
+    if (stage !== "replacement" && plan && changed("frame", plan.frame.prompt)) return "The twist prompt changed. Regenerate the twist before continuing.";
+    if (stage === "frame" && shortFrameStale(goal)) return "The character replacement changed. Regenerate the twist before continuing.";
+  }
   if (stage === "videos") return shortSegmentStale(goal, index) ? SHORT_STALE_MESSAGE : null;
   return stage === "frame" && shortFrameStale(goal) ? FRAME_STALE_MESSAGE : null;
 }
@@ -220,7 +232,7 @@ function storyboardView<Output extends { index: number }>(
   };
 }
 
-function stageView(engine: Engine, goal: GoalRecord, document: NotebookDocument, stage: GoalGenerationStage, run: GoalStageRun) {
+function stageView(engine: Engine, goal: GoalRecord, plan: GoalShortPlan | null, document: NotebookDocument, stage: GoalGenerationStage, run: GoalStageRun) {
   return {
     ...run,
     ...(stage === "videos" ? { attempts: goalStageAttempts(goal, "videos") } : {}),
@@ -236,7 +248,7 @@ function stageView(engine: Engine, goal: GoalRecord, document: NotebookDocument,
       });
       return {
         ...output, address: outputCell ? notebookGridTag(outputCell.slot) : null, versions,
-        stale: outputStale(goal, stage, output.index), realism: goal.realism?.[output.artifactId] ?? null,
+        stale: outputStale(goal, plan, stage, output.index), realism: goal.realism?.[output.artifactId] ?? null,
       };
     }),
     steps: goalChainSteps(engine, document, run.chainId),
@@ -255,7 +267,7 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
     : { brief: "", revision: 0, estimate, notes: [] };
   const shortPlan = short?.plan ? refreshGoalShortPlan(short.plan, document) : null;
   const runs = Object.entries(goal.stages) as [GoalGenerationStage, GoalStageRun][];
-  const stages: Partial<Record<GoalGenerationStage, ReturnType<typeof stageView>>> = Object.fromEntries(runs.map(([stage, run]) => [stage, stageView(engine, goal, document, stage, run)]));
+  const stages: Partial<Record<GoalGenerationStage, ReturnType<typeof stageView>>> = Object.fromEntries(runs.map(([stage, run]) => [stage, stageView(engine, goal, shortPlan, document, stage, run)]));
   return {
     kind: "video-goal" as const, legacy: false as const, ...goal, ...content,
     ...(shortPlan ? { shortPlan } : {}),

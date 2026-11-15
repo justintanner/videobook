@@ -13,6 +13,7 @@ export type BriefMention =
 
 export type ReferenceNote =
   | { kind: "text"; text: string }
+  | { kind: "source-frame"; mention: string; frames: { cellId: string; atSeconds: number }[] }
   | { kind: "storyboard"; mention: string; frames: { cellId: string; atSeconds: number }[] };
 
 function skipped(note: string): BriefMention {
@@ -82,6 +83,7 @@ export function renderReferenceNotes(document: NotebookDocument, notes: readonly
       return `${cell ? notebookGridTag(cell.slot) : "a new cell"} at ${formatShortSeconds(frame.atSeconds)} s`;
     });
     const count = frames.length === 1 ? "1 frame" : `${frames.length} frames`;
+    if (note.kind === "source-frame") return `Extracted one source frame from ${note.mention}: ${frameList(frames)}. Replace the character and clear on-screen graphics, then add a funny, realistic twist before making the video.`;
     return `${note.mention} is a video, so the short follows its storyboard of ${count}: ${frameList(frames)}. Their on-screen graphics are removed before the frame is made.`;
   });
 }

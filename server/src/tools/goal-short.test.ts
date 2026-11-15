@@ -120,16 +120,14 @@ describe("video_goal shorts", () => {
     return plan.sourceImages;
   }
 
-  function storyboardOf(goal: ShortGoalSnapshot) {
+  function remixOf(goal: ShortGoalSnapshot) {
     const plan = goal.shortPlan;
-    if (!plan || plan.version !== 5 || !plan.storyboard) throw new Error("expected a version 5 plan with a storyboard");
-    return plan.storyboard;
+    if (!plan || plan.version !== 5 || !plan.remix) throw new Error("expected a single-frame remix");
+    return plan.remix;
   }
 
-  function storyboardNote(mention: string, frames: readonly { address: string; atSeconds: number }[]) {
-    const listed = frames.map((frame) => `${frame.address} at ${formatShortSeconds(frame.atSeconds)} s`);
-    const list = listed.length > 1 ? `${listed.slice(0, -1).join(", ")} and ${listed.at(-1)}` : listed.join("");
-    return `${mention} is a video, so the short follows its storyboard of ${frames.length} frames: ${list}. Their on-screen graphics are removed before the frame is made.`;
+  function sourceNote(mention: string, frame: { address: string; atSeconds: number }) {
+    return `Extracted one source frame from ${mention}: ${frame.address} at ${formatShortSeconds(frame.atSeconds)} s. Replace the character and clear on-screen graphics, then add a funny, realistic twist before making the video.`;
   }
 
   function stepPrompt(chainId: string | null, stepId: string): string {
@@ -241,47 +239,56 @@ describe("video_goal shorts", () => {
     return created.value.artifactId;
   }
 
-  it("takes the storyboard from a mentioned video at its time and reuses those frame cells", async () => {
+  it("takes a single frame at the requested time and reuses its image cell", async () => {
     const videoId = await pinStairsVideo();
-    const goal = await short(`12 seconds, use @a1 at 1s and @a2, ${AUTHORED}`);
-    expect(goal).toMatchObject({ stage: "storyboards", status: "review" });
-    expect(sourceImagesOf(goal).map((reference) => reference.artifactId)).toEqual([imageIds[1]]);
-    const storyboard = storyboardOf(goal);
-    expect(storyboard.video).toMatchObject({ artifactId: videoId, label: "Stairs" });
-    expect(storyboard.frames.map((frame) => frame.index)).toEqual([0, 1]);
-    expect(storyboard.frames[0]!.atSeconds).toBeCloseTo(1.5, 1);
-    expect(storyboard.frames[1]!.atSeconds).toBeCloseTo(2.5, 1);
-    expect(goal.notes).toEqual([storyboardNote("@a1", storyboard.frames)]);
+    const authored = `replace: "Use the person in the source image." ${AUTHORED}`;
+    const goal = await short(`12 seconds, use @a1 at 1s and @a2, ${authored}`);
+    expect(goal).toMatchObject({ stage: "replacement", status: "review" });
+    expect(sourceImagesOf(goal).map(reference => reference.artifactId)).toEqual([imageIds[1]]);
+    const remix = remixOf(goal);
+    expect(remix.video).toMatchObject({ artifactId: videoId, label: "Stairs" });
+    expect(remix.frame.atSeconds).toBe(1);
+    expect(goal.notes).toEqual([sourceNote("@a1", remix.frame)]);
     const placed = engine.notebooks.read(notebookId);
     if (!placed.ok) throw new Error(placed.error.message);
-    const videoCell = placed.value.cells.find((cell) => cell.outputArtifactId === videoId);
-    if (!videoCell) throw new Error("missing stairs video");
+    const videoCell = placed.value.cells.find(cell => cell.outputArtifactId === videoId)!;
     const videoAddress = notebookGridTag(videoCell.slot);
-    const again = await short(`12 seconds, use ${videoAddress} at 1s, ${AUTHORED}`);
+    const again = await short(`12 seconds, use ${videoAddress} at 1s, ${authored}`);
     expect(sourceImagesOf(again)).toEqual([]);
-    expect(storyboardOf(again).frames.map((frame) => frame.artifactId)).toEqual(storyboard.frames.map((frame) => frame.artifactId));
+    expect(remixOf(again).frame.artifactId).toBe(remix.frame.artifactId);
     const notebook = engine.notebooks.read(notebookId);
     if (!notebook.ok) throw new Error(notebook.error.message);
-    expect(notebook.value.cells.filter((cell) => cell.inputs?.mediaRole === "extract-frame-output")).toHaveLength(2);
-    expect(again.notes).toEqual([storyboardNote(videoAddress, storyboardOf(again).frames)]);
+    expect(notebook.value.cells.filter(cell => cell.inputs?.mediaRole === "extract-frame-output")).toHaveLength(1);
+    expect(again.notes).toEqual([sourceNote(videoAddress, remixOf(again).frame)]);
   });
 
   it("makes a goal from a video mention and an image mention, including the operator's brief", async () => {
     const videoId = await pinStairsVideo();
-    stub.plannerAnswers = [{ title: "Slippery stairs", frame: "He stands at a rainy bus stop at dusk.", beats: ["He checks the road, then steps back from a splash."] }];
+    stub.plannerAnswers = [{ title: "Slippery stairs", replacement: "Replace the man with the source man.", frame: "He shelters a monitor lizard under an umbrella.", beats: ["The lizard climbs the stairs and the man follows."] }];
     const planning = await invoke({ action: "create", brief: "use @a1 and @a2 to make a funny stairs are slippery video" });
-    expect(planning).toMatchObject({ status: "planning", stage: "storyboards" });
+    expect(planning).toMatchObject({ status: "planning", stage: "replacement" });
     expect(planning.shortPlan).toBeUndefined();
-    expect(planning.notes).toEqual([expect.stringMatching(/^@a1 is a video, so the short follows its storyboard of 3 frames: @[a-z]+\d+ at 0\.5 s, @[a-z]+\d+ at 1\.5 s and @[a-z]+\d+ at 2\.5 s\. Their on-screen graphics are removed before the frame is made\.$/u)]);
+    expect(planning.notes).toEqual([expect.stringContaining("Extracted one source frame from @a1:")]);
     await expect.poll(() => readGoal(engine, planning.goalId).status, { timeout: testBudget(30_000) }).toBe("review");
     const goal = await status(planning.goalId);
-    expect(goal).toMatchObject({ stage: "storyboards", status: "review" });
-    expect(goal.notes).toEqual([storyboardNote("@a1", storyboardOf(goal).frames)]);
-    expect(storyboardOf(goal)).toMatchObject({ video: { artifactId: videoId }, model: "kie:seedream/5-5-image-to-image", size: expect.stringMatching(/^(1K|1\.5K|2K)$/u) });
-    expect(storyboardOf(goal).frames).toHaveLength(3);
+    expect(goal).toMatchObject({ stage: "replacement", status: "review" });
+    expect(goal.notes).toEqual([sourceNote("@a1", remixOf(goal).frame)]);
+    expect(remixOf(goal)).toMatchObject({ video: { artifactId: videoId }, frame: { atSeconds: 1.5 } });
     expect(stub.submissions).toEqual([]);
     expect(chainRuns()).toBe(0);
-    expect(sourceImagesOf(goal).map((reference) => [reference.artifactId, reference.label])).toEqual([[imageIds[1], "Character 2"]]);
+    expect(sourceImagesOf(goal).map(reference => [reference.artifactId, reference.label])).toEqual([[imageIds[1], "Character 2"]]);
+  });
+
+  it("keeps the separate remix edits reviewable without a planner key", async () => {
+    delete process.env.OPENAI_API_KEY;
+    await pinStairsVideo();
+    const goal = await short("use @a1 with a man in a red shirt sheltering a lizard");
+    expect(goal).toMatchObject({ stage: "replacement", status: "review" });
+    expect(remixOf(goal).replacement.prompt).toContain("man in a red shirt");
+    expect(goal.shortPlan!.frame.prompt).toContain("physically believable");
+    expect(goal.shortPlan!.segments).toHaveLength(1);
+    expect(stub.plannerRequests).toEqual([]);
+    expect(stub.submissions).toEqual([]);
   });
 
   it("clamps a 90 second brief to 60 seconds and notes the length", async () => {

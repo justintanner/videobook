@@ -67,7 +67,7 @@ describe('goal mode in the browser', () => {
   }
   const command = async (text: string) => {
     const input = page.getByLabel('Videobook command input', { exact: true })
-    await expect.poll(() => input.isEnabled(), { timeout: 30_000 }).toBe(true)
+    await expect.poll(() => input.isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
     await input.fill(text)
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
   }
@@ -135,12 +135,12 @@ describe('goal mode in the browser', () => {
     await waitForHttp(appUrl, vite, 200)
     browser = await chromium.launch({ headless: true })
     page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
-    page.setDefaultTimeout(10_000)
-    page.setDefaultNavigationTimeout(30_000)
+    page.setDefaultTimeout(testBudget(10_000))
+    page.setDefaultNavigationTimeout(testBudget(30_000))
     page.on('pageerror', error => errors.push(error.message))
     await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
     await page.goto(appUrl)
-  }, 60_000)
+  }, testBudget(60_000))
 
   afterAll(async () => {
     await browser?.close()
@@ -158,7 +158,7 @@ describe('goal mode in the browser', () => {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
     }
-  }, 30_000)
+  }, testBudget(30_000))
 
   afterEach(async context => {
     if (context.task.result?.state === 'fail') {
@@ -273,7 +273,7 @@ describe('goal mode in the browser', () => {
       const finished = panel().getByLabel('Finished short', { exact: true })
       await finished.waitFor({ state: 'visible', timeout: testBudget(30_000) })
       await expect.poll(() => finished.evaluate(node => (node as HTMLVideoElement).readyState), { timeout: testBudget(30_000) }).toBeGreaterThan(0)
-      expect(stub.submissions.map(submission => submission.path)).toEqual(['/openai/gpt-image-2.6/sunburst/edit', '/minimax/h3-max/reference-to-video', '/minimax/h3-max/extend-video'])
+      expect(stub.submissions.map(submission => submission.path)).toEqual(['/openai/gpt-image-2.6/sunburst/text-to-image', '/minimax/h3-max/reference-to-video', '/minimax/h3-max/extend-video'])
       expect(stub.unexpected).toEqual([])
       expect(errors).toEqual([])
     } finally {
@@ -292,7 +292,7 @@ describe('goal mode in the browser', () => {
   }, testBudget(600_000))
 
 
-  scenario('makes a short from a video: storyboard clean-up, frame, clip and finish, with the storyboard step on the tile', async () => {
+  scenario('makes a short from one frame with separate character replacement, twist, video and finish', async () => {
     for (const goal of (await goals()).goals) {
       if (goal.status !== 'cancelled' && !goal.dismissedAt) await call('video_goal', { action: 'dismiss', goal_id: goal.goalId })
     }
@@ -328,13 +328,14 @@ describe('goal mode in the browser', () => {
       const photo = before.value.cells.find(cell => cell.type === 'image' && labelOf(cell.outputArtifactId) === 'character-2')
       if (!photo) throw new Error('missing the second character image')
       await page.reload()
-      stub.plannerAnswers = [{ title: 'Umbrella for a lizard', frame: 'A man holds a red umbrella over a monitor lizard on a wet lane.', beats: ['He walks beside the lizard, keeping the umbrella over it as rain falls.'] }]
+      stub.plannerAnswers = [{ title: 'Umbrella for a lizard', replacement: 'Replace the man with the man from the source image, preserving his clothes and the original pose.', frame: 'A man holds a red umbrella over a monitor lizard on a wet lane.', beats: ['He walks beside the lizard, keeping the umbrella over it as rain falls.'] }]
       const brief = `make a 12s clip based on ${notebookGridTag(slot)} but with ${notebookGridTag(photo.slot)} holding the umbrella for a monitor lizard`
       await command(`/goal ${brief}`)
       await expect.poll(async () => (await goals()).goals.find(goal => goal.brief === brief)?.status, { timeout: testBudget(60_000) }).toBe('review')
       const short = shortGoal((await goals()).goals.find(goal => goal.brief === brief))
-      expect(short).toMatchObject({ planVersion: 5, stage: 'storyboards', shortPlan: { version: 5, storyboard: { video: { artifactId: video.value.artifactId } } } })
-      expect(short.storyboard?.frames).toHaveLength(4)
+      expect(short).toMatchObject({ planVersion: 5, stage: 'replacement', shortPlan: { version: 5, remix: { video: { artifactId: video.value.artifactId } } } })
+      expect(short.storyboard).toBeNull()
+      expect(short.shortPlan?.version === 5 && short.shortPlan.remix?.frame.atSeconds).toBe(3)
       expect(stub.plannerRequests).toHaveLength(1)
       if (savedKeys.OPENAI_API_KEY === undefined) delete process.env.OPENAI_API_KEY
       else process.env.OPENAI_API_KEY = savedKeys.OPENAI_API_KEY
@@ -352,26 +353,27 @@ describe('goal mode in the browser', () => {
         await tile(short).click()
         await panel().waitFor({ state: 'visible', timeout: testBudget(15_000) })
       }
-      expect(await tabs.getByRole('button').allTextContents()).toEqual(['Storyboard', 'Frame', 'Video', 'Finish'])
-      expect(await tabs.getByRole('button', { name: 'Storyboard', exact: true }).getAttribute('aria-pressed')).toBe('true')
-      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review storyboard · $0.10')
-      await expect.poll(() => tile(short).textContent(), { timeout: testBudget(15_000) }).toContain('Storyboard')
-      expect(await tile(short).locator('.goal-tile-row-title').allTextContents()).toEqual(['Storyboard', 'Frame'])
-      expect(await panel().getByRole('list', { name: 'Storyboard frames' }).getByRole('listitem').count()).toBe(4)
-      await openTab('Frame')
-      expect(await primary(/^Generate frame/).isDisabled()).toBe(true)
-      expect(await panel().getByText('Remove the on-screen graphics from the storyboard first', { exact: false }).isVisible()).toBe(true)
-      await screenshot('goal-storyboard-first')
-      await openTab('Storyboard')
-      await primary(/^Remove on-screen graphics · \$0\.10$/).click()
-      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review frame · $0.21')
-      await openTab('Storyboard')
-      for (const index of [1, 2, 3, 4]) expect(await panel().getByRole('button', { name: new RegExp(`^Open Storyboard ${index} after`) }).count()).toBe(1)
-      expect(await tile(short).locator('.goal-tile-row').first().getAttribute('data-state')).toBe('done')
-
-      await openTab('Frame')
-      await expect.poll(() => primary(/^Generate frame · \$0\.21$/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
-      await primary(/^Generate frame/).click()
+      await expect.poll(() => tabs.getByRole('button').allTextContents(), { timeout: testBudget(15_000) }).toEqual(['Replace character', 'Twist', 'Video', 'Finish'])
+      expect(await tabs.getByRole('button', { name: 'Replace character', exact: true }).getAttribute('aria-pressed')).toBe('true')
+      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review character replacement · $0.21')
+      expect(await tile(short).locator('.goal-tile-row-title').allTextContents()).toEqual(['Extract frame', 'Replace character'])
+      expect(await panel().getByRole('button', { name: /^Open Extracted source frame/ }).count()).toBe(1)
+      await openTab('Twist')
+      expect(await primary(/^Add twist/).isDisabled()).toBe(true)
+      await screenshot('goal-replace-first')
+      await openTab('Replace character')
+      await primary(/^Replace character/).click()
+      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review twist · $0.21')
+      expect(await tile(short).locator('.goal-tile-row-title').allTextContents()).toEqual(['Twist'])
+      await page.reload()
+      await tile(short).waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      await openTab('Replace character')
+      expect(await panel().getByRole('button', { name: 'Replacement v1', exact: true }).count()).toBe(1)
+      await openTab('Twist')
+      expect(await panel().getByRole('button', { name: 'Open Reviewed replacement', exact: true }).count()).toBe(1)
+      await screenshot('goal-twist-review')
+      await expect.poll(() => primary(/^Add twist/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
+      await primary(/^Add twist/).click()
       await expect.poll(() => status().textContent(), { timeout: testBudget(90_000) }).toContain('Review clip 1 of 1 · at least $')
       await openTab('Video')
       await primary(/^Generate clip · at least \$/).click()
@@ -381,8 +383,7 @@ describe('goal mode in the browser', () => {
       await primary(/^Finish$/).click()
       await expect.poll(() => status().textContent(), { timeout: testBudget(240_000) }).toContain('Short ready · 0:12')
       expect(stub.submissions.map(submission => submission.path)).toEqual([
-        '/api/v1/jobs/createTask', '/api/v1/jobs/createTask', '/api/v1/jobs/createTask', '/api/v1/jobs/createTask',
-        '/openai/gpt-image-2.6/sunburst/edit', '/minimax/h3-max/reference-to-video',
+        '/openai/gpt-image-2.6/sunburst/edit', '/openai/gpt-image-2.6/sunburst/edit', '/minimax/h3-max/reference-to-video',
       ])
       expect(stub.unexpected).toEqual([])
       expect(errors).toEqual([])

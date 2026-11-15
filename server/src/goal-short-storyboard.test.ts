@@ -12,7 +12,7 @@ import { runFfmpeg } from "./ffmpeg.js";
 import { buildGoalShortPlan, compileShortStoryboardStep, type ShortStoryboard } from "./goal-short-plan.js";
 import { estimateShort } from "./goal-short-runtime.js";
 import {
-  captureStoryboardFrames, shortStoryboard, storyboardCleanupSize, storyboardMoments, videoStoryboardMoments,
+  captureStoryboardFrames, shortStoryboard, storyboardCleanupSize, storyboardMoments, videoGoalFrameMoment, videoStoryboardMoments,
   type StoryboardVideo,
 } from "./goal-short-storyboard.js";
 import { installFalDynamicEstimator } from "./media/cost.js";
@@ -178,6 +178,14 @@ describe("goal short storyboard of a video", () => {
     const { width, height } = await sharp(value(await engine.files.read(artifactId, file.name))).metadata();
     return { width, height };
   }
+
+  it("chooses the midpoint of the longest shot for a single frame, or the exact requested time", async () => {
+    expect(await videoGoalFrameMoment(engine, bookId, video.artifactId, null)).toBe(4.2);
+    expect(await videoGoalFrameMoment(engine, bookId, video.artifactId, 0)).toBe(0);
+    expect(await videoGoalFrameMoment(engine, bookId, video.artifactId, 1.5)).toBe(1.5);
+    expect(await videoGoalFrameMoment(engine, bookId, video.artifactId, 6)).toBeNull();
+    expect(engine.jobs.queue.list({ type: "detect_scenes" })).toHaveLength(1);
+  });
 
   it("captures one frame per shot into reading-order image cells and reuses them on a second call", async () => {
     const moments = await videoStoryboardMoments(engine, bookId, video.artifactId);

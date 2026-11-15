@@ -92,13 +92,22 @@ const goalShortImageRefSchema = z.object({
 
 export type GoalShortImageRef = z.infer<typeof goalShortImageRefSchema>;
 
+const sourceVideoSchema = z.object({
+  artifactId: z.string().min(1),
+  cellId: z.string().min(1).nullable(),
+  address: z.string().min(1).nullable(),
+  label: z.string(),
+}).strict();
+
+const remixSourceSchema = z.object({
+  video: sourceVideoSchema,
+  frame: goalShortImageRefSchema.omit({ slot: true }).extend({ atSeconds: z.number().nonnegative() }).strict(),
+}).strict();
+
+export type ShortRemixSource = z.infer<typeof remixSourceSchema>;
+
 const storyboardSchema = z.object({
-  video: z.object({
-    artifactId: z.string().min(1),
-    cellId: z.string().min(1).nullable(),
-    address: z.string().min(1).nullable(),
-    label: z.string(),
-  }).strict(),
+  video: sourceVideoSchema,
   model: z.enum(SHORT_STORYBOARD_MODELS),
   size: z.enum(SHORT_STORYBOARD_SIZES).optional(),
   frames: z.array(goalShortImageRefSchema.omit({ slot: true }).extend({
@@ -226,6 +235,7 @@ const goalShortPlanV5Schema = z.object({
   title: titleSchema,
   aspectRatio: z.enum(SHORT_ASPECT_RATIOS),
   sourceImages: z.array(goalShortImageRefSchema).max(SOURCE_IMAGE_LIMIT),
+  remix: remixSourceSchema.extend({ replacement: frameSettingsSchema }).strict().optional(),
   storyboard: storyboardSchema.optional(),
   frame: frameSettingsSchema,
   segments: segmentsSchema,
@@ -233,6 +243,7 @@ const goalShortPlanV5Schema = z.object({
   rules: rulesSchema,
   finish: finishSchema,
 }).strict().superRefine((plan, context) => {
+  if (plan.remix && plan.storyboard) context.addIssue({ code: "custom", path: ["remix"], message: "Use a single source frame or a saved storyboard, not both." });
   plan.sourceImages.forEach((reference, index) => {
     const slot = `@image${index + 1}`;
     if (reference.slot !== slot) {
@@ -268,6 +279,7 @@ const goalShortDraftV5Schema = z.object({
   aspectRatio: z.enum(SHORT_ASPECT_RATIOS),
   segmentSeconds: segmentSecondsSchema,
   sourceImages: z.array(shortReferenceInputSchema).max(SOURCE_IMAGE_LIMIT),
+  remix: remixSourceSchema.optional(),
   storyboard: storyboardSchema.optional(),
 }).strict();
 
@@ -310,6 +322,14 @@ export function isLegacyShortPlan(plan: GoalShortPlan): plan is GoalShortPlanV4 
 
 export function shortStoryboardOf(plan: GoalShortPlan | GoalShortDraft | null | undefined): ShortStoryboard | null {
   return plan && "storyboard" in plan ? plan.storyboard ?? null : null;
+}
+
+export function shortRemixOf(plan: GoalShortPlan | null | undefined) {
+  return plan?.version === 5 ? plan.remix ?? null : null;
+}
+
+export function shortRemixSourceOf(plan: GoalShortPlan | GoalShortDraft | null | undefined): ShortRemixSource | null {
+  return plan && "remix" in plan ? plan.remix ?? null : null;
 }
 
 export function formatShortSeconds(seconds: number): string {
@@ -358,7 +378,7 @@ export function grownShortSegments(segmentSeconds: readonly number[], beatCount:
 }
 
 export function shortTiming(brief: string): ShortTiming {
-  const requested = briefSeconds(brief);
+  const requested = briefSeconds(brief.replace(/@[\p{L}\p{N}-]+\s+at\s+\d+(?:\.\d+)?\s*(?:seconds?|secs?|s)\b/giu, ""));
   const unclamped = requested ?? GOAL_SHORT_DEFAULTS.totalSeconds;
   const totalSeconds = Math.min(SHORT_MAX_SECONDS, Math.max(SHORT_MIN_SECONDS, unclamped));
   const note = requested !== null && requested !== totalSeconds
@@ -422,6 +442,8 @@ export function buildGoalShortPlan(input: {
   title: string;
   aspectRatio: ShortAspectRatio;
   sourceImages: readonly ShortReferenceInput[];
+  remix?: ShortRemixSource | null;
+  replacementPrompt?: string;
   storyboard?: ShortStoryboard | null;
   framePrompt: string;
   beats: readonly string[];
@@ -432,6 +454,7 @@ export function buildGoalShortPlan(input: {
     version: 5,
     ...shortPlanBody(input),
     sourceImages: slotted(input.sourceImages, 0),
+    ...(input.remix ? { remix: { ...input.remix, replacement: frameSettings(input.aspectRatio, input.replacementPrompt ?? "Replace the main person with the person in the source images, keeping the same pose and scene.") } } : {}),
     ...(input.storyboard ? { storyboard: input.storyboard } : {}),
     frame: frameSettings(input.aspectRatio, input.framePrompt),
     rules: { ...SHORT_RULES },
@@ -478,10 +501,11 @@ export function refreshGoalShortPlan(plan: GoalShortPlan, document: NotebookDocu
       frame: { ...plan.frame, references: plan.frame.references.map(live) },
     };
   }
-  const { storyboard } = plan;
+  const { storyboard, remix } = plan;
   return {
     ...plan,
     sourceImages: plan.sourceImages.map(live),
+    ...(remix ? { remix: { ...remix, video: live(remix.video), frame: live(remix.frame) } } : {}),
     ...(storyboard ? { storyboard: { ...storyboard, video: live(storyboard.video), frames: storyboard.frames.map(live) } } : {}),
   };
 }
@@ -524,9 +548,9 @@ function frameModel(plan: GoalShortPlan, images: readonly string[]): string {
   return images.length > 0 ? plan.frame.model : plan.frame.model.replace(/\/edit$/u, "/text-to-image");
 }
 
-function frameStep(plan: GoalShortPlan, prompt: string, images: readonly string[]): ChainStep {
+function frameStep(plan: GoalShortPlan, prompt: string, images: readonly string[], id = "frame"): ChainStep {
   return {
-    id: "frame",
+    id,
     tool: "generate_image",
     params: {
       model: frameModel(plan, images),
@@ -539,6 +563,20 @@ function frameStep(plan: GoalShortPlan, prompt: string, images: readonly string[
       },
     },
   };
+}
+
+export function compileShortReplacementStep(plan: GoalShortPlan): ChainStep {
+  const remix = shortRemixOf(plan);
+  if (!remix || plan.version !== 5) throw new Error("This short has no character replacement step.");
+  const images = addresses(plan.sourceImages);
+  const sourceSlot = `@image${images.length + 1}`;
+  return frameStep({ ...plan, frame: remix.replacement }, paragraphs(
+    remix.replacement.prompt,
+    sourceImageLine(images.length, "use the person as the replacement, keeping their face, hair, build and clothes exactly."),
+    `${sourceSlot} is the extracted source frame. Replace only its main person, matching their pose, position, scale and contact with objects. Keep the camera angle, framing, place, light, animals and props. Save the funny twist for the next edit.`,
+    "Remove all graphics added on top of the camera picture, including text, captions, stickers and underlines, creator credits, icons, watermarks and shade gradients. Reconstruct the scene behind them. Keep printing physically on objects.",
+    "Natural colour, realistic anatomy, contact shadows and unretouched skin. Keep the original composition.",
+  ), [...images, remix.frame.address], "replacement");
 }
 
 function storyboardOptions(model: ShortStoryboardModel, size: ShortStoryboardSize | undefined, aspectRatio: ShortStoryboardAspectRatio): Record<string, string> {
@@ -562,6 +600,14 @@ export function compileShortStoryboardStep(storyboard: ShortStoryboard, index: n
 }
 
 export function compileShortFrameStep(plan: GoalShortPlan, storyboardFrameAddress: string | null = null): ChainStep {
+  if (shortRemixOf(plan)) {
+    if (!storyboardFrameAddress) throw new Error("Replace the character before adding the twist.");
+    return frameStep(plan, paragraphs(
+      plan.frame.prompt,
+      "@image1 is the reviewed character replacement. Make one funny but physically believable visual change to this frame. Keep the person, face, hair, build and clothes, camera angle, place and light. Preserve everything outside the change. Use realistic scale, anatomy, weight, support and contact shadows.",
+      plan.rules.frame,
+    ), [storyboardFrameAddress]);
+  }
   if (plan.version === 4) {
     const { character, frame } = plan;
     const placeLine = frame.references.length === 0
@@ -607,6 +653,12 @@ function clipStep(plan: GoalShortPlan, frameAddress: string, prompt: string, ima
 
 export function compileShortClipStep(plan: GoalShortPlan, frameAddress: string): ChainStep {
   const segment = plan.segments[0];
+  if (shortRemixOf(plan)) return clipStep(plan, frameAddress, paragraphs(
+    segment.prompt,
+    "Start exactly from @firstframe, the reviewed twist. Keep its person, clothes, animals, props and setting. Animate the existing situation with natural movement; the visual joke is already in the frame.",
+    plan.rules.video,
+    plan.rules.silence,
+  ), []);
   if (plan.version === 4) {
     return clipStep(plan, frameAddress, paragraphs(
       segment.prompt,

@@ -1,10 +1,10 @@
-import { buildGoalShortPlan, buildLegacyGoalShortPlan, shortStoryboardOf, type GoalShortPlan, type ShortStoryboardModel } from '../../server/src/goal-short-plan'
+import { buildGoalShortPlan, buildLegacyGoalShortPlan, shortStoryboardOf, shortRemixOf, type GoalShortPlan, type ShortStoryboardModel } from '../../server/src/goal-short-plan'
 import type { LegacyGoalSnapshot, ShortGoalSnapshot } from '../../src/videobook/goals'
 
 type Stage = NonNullable<ShortGoalSnapshot['stages']['frame']>
 type Step = ShortGoalSnapshot['steps'][number]
 type Output = Stage['outputs'][number]
-type StageName = 'storyboards' | 'frame' | 'videos'
+type StageName = 'replacement' | 'storyboards' | 'frame' | 'videos'
 
 export const LOWER_BOUND = 'MiniMax H3 Max is priced per requested second, so this estimate is a lower bound.'
 
@@ -19,6 +19,18 @@ export function shortPlanFixture(seconds: readonly number[] = [10, 10], referenc
   return buildGoalShortPlan({
     title: 'Waiting for the bus', aspectRatio: '9:16', sourceImages: references,
     framePrompt: 'A bus stop at dusk.', beats: seconds.map((_, index) => `Beat ${index + 1}.`), segmentSeconds: seconds,
+  })
+}
+
+export function remixPlanFixture(): GoalShortPlan {
+  return buildGoalShortPlan({
+    title: 'Umbrella for a lizard', aspectRatio: '9:16', sourceImages: [shortReference(1, 'Man with umbrella')],
+    remix: {
+      video: { artifactId: 'source-video', cellId: 'source-cell', address: '@b1', label: 'Umbrella walk' },
+      frame: { ...shortReference(2, 'Source frame'), atSeconds: 3 },
+    },
+    replacementPrompt: 'Replace the man with the source man, keeping the dog.',
+    framePrompt: 'Replace the dog with a monitor lizard under the umbrella.', beats: ['The lizard walks under the umbrella.'], segmentSeconds: [12],
   })
 }
 
@@ -61,6 +73,7 @@ export function shortStep(id: string, status: Step['status'], index = 0): Step {
 }
 
 function stageStepId(stage: StageName, index: number): string {
+  if (stage === 'replacement') return 'replacement'
   if (stage === 'frame') return 'frame'
   return stage === 'storyboards' ? `storyboard${index + 1}` : `clip${index + 1}`
 }
@@ -109,6 +122,7 @@ export function withStoryboardFailures(goal: ShortGoalSnapshot, failures: Readon
 export function shortGoalFixture(extra: Partial<ShortGoalSnapshot> = {}, short: GoalShortPlan = shortPlanFixture()): ShortGoalSnapshot {
   const boards = shortStoryboardOf(short)?.frames.length ?? 0
   const estimate: ShortGoalSnapshot['estimate'] = {
+    ...(shortRemixOf(short) ? { replacement: { usd: 0.21, warnings: [] } } : {}),
     frame: { usd: 0.21, warnings: [] }, storyboards: { usd: Math.round(boards * 21) / 100, warnings: [] }, videos: { usd: 1.2, warnings: [LOWER_BOUND] },
     total: { usd: Math.round(141 + boards * 21) / 100, warnings: [LOWER_BOUND] },
     segments: short.segments.map(() => ({ usd: 0.6, warnings: [LOWER_BOUND] })),
@@ -118,7 +132,7 @@ export function shortGoalFixture(extra: Partial<ShortGoalSnapshot> = {}, short: 
     } : {}),
   }
   return {
-    kind: 'video-goal', legacy: false, planVersion: short.version, stage: 'frame', stages: {}, goalId: 'short-1', bookId: 'book', notebookId: 'notebook',
+    kind: 'video-goal', legacy: false, planVersion: short.version, stage: shortRemixOf(short) ? 'replacement' : 'frame', stages: {}, goalId: 'short-1', bookId: 'book', notebookId: 'notebook',
     cellId: 'short-tile', address: '@b1', requestId: 'request', brief: 'he waits for a bus', revision: 2, shortPlan: short,
     estimate,
     status: 'review', error: null, chainId: null, planningJobId: null, clipIds: [], trackId: null, assembly: null, dismissedAt: null,

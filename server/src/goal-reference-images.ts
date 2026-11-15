@@ -8,9 +8,11 @@ export async function goalPlannerImages(
   engine: Engine,
   references: readonly { artifactId: string; label: string }[],
   storyboard: readonly { artifactId: string; atSeconds: number }[] = [],
+  sourceFrame?: { artifactId: string; atSeconds: number },
 ) {
   const images: PlannerImage[] = [
     ...references.map((reference, index) => ({ artifactId: reference.artifactId, name: `Source image ${index + 1}`, text: `Source image ${index + 1}: ${reference.label}` })),
+    ...(sourceFrame ? [{ artifactId: sourceFrame.artifactId, name: "Extracted source frame", text: `Extracted source frame at ${formatShortSeconds(sourceFrame.atSeconds)} s` }] : []),
     ...storyboard.map((frame, index) => ({
       artifactId: frame.artifactId,
       name: `Storyboard frame ${index + 1}`,

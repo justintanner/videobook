@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireApiKey } from "../api-key.js";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
 import { readGoal, requireGoalShortContent, type GoalGenerationStage } from "../goal-store.js";
-import type { GoalShortPlan } from "../goal-short-plan.js";
+import { shortRemixOf, type GoalShortPlan } from "../goal-short-plan.js";
 import { shortBriefNames, shortPlannerBrief, shortRevisionInstructions, shortRevisionIssues, shortRevisionPart, shortRevisionResponseSchema, type ShortPlannerIssue } from "../goal-short-planner.js";
 import { shortRulesOutPhone, shortWantsPhone, stripShortBannedWords, withoutShortPhoneSentences } from "../goal-short-rules.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } from "../openai-intelligence.js";
@@ -24,7 +24,8 @@ function revisedPrompt(text: string): string | null {
 
 function revisionContext(plan: GoalShortPlan, stage: GoalGenerationStage, index: number) {
   if (stage === "storyboards") return {};
-  if (stage === "frame") return { next: plan.segments[0]?.prompt ?? null };
+  if (stage === "replacement") return { next: plan.frame.prompt };
+  if (stage === "frame") return { ...(shortRemixOf(plan) ? { previous: shortRemixOf(plan)!.replacement.prompt } : {}), next: plan.segments[0]?.prompt ?? null };
   return { previous: index === 0 ? plan.frame.prompt : plan.segments[index - 1]!.prompt, next: plan.segments[index + 1]?.prompt ?? null };
 }
 
@@ -43,7 +44,7 @@ async function reviseShortPrompt(engine: Engine, payload: RevisePayload, signal:
   const request = {
     instructions: await shortRevisionInstructions(plan, payload.stage, payload.index),
     input: [{ role: "user" as const, content: JSON.stringify({
-      brief: shortPlannerBrief(content.brief, named.references, notebook.value, named.storyboard),
+      brief: shortPlannerBrief(content.brief, named.references, notebook.value, named.storyboard, shortRemixOf(plan) ? "the source video" : "the storyboard"),
       aspectRatio: plan.aspectRatio,
       revise: part.name,
       prompt: part.prompt,

@@ -5,10 +5,11 @@ import { mutateNotebook } from "./notebook-mutations.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 
 export type GoalStatus = "planning" | "review" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
-export type GoalGenerationStage = "storyboards" | "frame" | "videos";
+export type GoalGenerationStage = "storyboards" | "replacement" | "frame" | "videos";
 
 export type GoalEstimate = { usd: number | null; warnings: string[] };
-export type GoalEstimates = Record<GoalGenerationStage | "total", GoalEstimate> & {
+export type GoalEstimates = Record<Exclude<GoalGenerationStage, "replacement"> | "total", GoalEstimate> & {
+  replacement?: GoalEstimate;
   segments?: GoalEstimate[]; storyboardFrames?: GoalEstimate[]; storyboardFallbackFrames?: GoalEstimate[]; title?: GoalEstimate;
 };
 export type GoalStageOutput = { index: number; artifactId: string; cellId: string | null; producerCellId: string | null; address: string | null };
@@ -95,7 +96,7 @@ export type GoalRecord = {
 };
 
 export function activeGoalStage(goal: GoalRecord): GoalGenerationStage {
-  return goal.stage === "storyboards" || goal.stage === "frame" ? goal.stage : "videos";
+  return goal.stage === "storyboards" || goal.stage === "replacement" || goal.stage === "frame" ? goal.stage : "videos";
 }
 
 export type GoalShortContent = {
@@ -160,6 +161,7 @@ function estimatesFrom(value: unknown): GoalEstimates {
   if (!("total" in record)) return { ...emptyGoalEstimates(), videos: estimateFrom(value), total: estimateFrom(value) };
   return {
     frame: estimateFrom(record.frame), storyboards: estimateFrom(record.storyboards), videos: estimateFrom(record.videos), total: estimateFrom(record.total),
+    ...(record.replacement ? { replacement: estimateFrom(record.replacement) } : {}),
     ...(Array.isArray(record.segments) ? { segments: record.segments.map(estimateFrom) } : {}),
     ...(Array.isArray(record.storyboardFrames) ? { storyboardFrames: record.storyboardFrames.map(estimateFrom) } : {}),
     ...(Array.isArray(record.storyboardFallbackFrames) ? { storyboardFallbackFrames: record.storyboardFallbackFrames.map(estimateFrom) } : {}),

@@ -9,10 +9,10 @@ import type { NodeProps } from '@xyflow/react'
 import { GoalCellNode } from '../../src/components/videobook/GoalCellNode'
 import { GoalTileContext } from '../../src/components/videobook/notebook-canvas-context'
 import type { CanvasNode } from '../../src/videobook/notebook-canvas'
-import { defaultShortTab, LEGACY_GOAL_NOTE, type GoalSnapshot, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
+import { defaultShortTab, goalTileView, LEGACY_GOAL_NOTE, type GoalSnapshot, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
 import { goalShortPlanSchema, withShortFinishTitle, type ShortFinishTitle } from '../../server/src/goal-short-plan'
-import { legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, storyboardPlanFixture, withStoryboardFailures } from './goal-short-fixtures'
+import { legacyGoalFixture, legacyShortPlanFixture, remixPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, storyboardPlanFixture, withStoryboardFailures } from './goal-short-fixtures'
 
 const noop = async () => shortGoalFixture()
 
@@ -38,6 +38,29 @@ function button(html: string, label: string): string {
 const withFrame = { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', versions: 2 }]) }
 
 describe('GoalShortReview', () => {
+  it('reviews the replacement and twist separately and blocks downstream steps until their inputs are ready', () => {
+    const plan = remixPlanFixture()
+    const first = shortGoalFixture({}, plan)
+    expect(goalTileView(first).rows.map(row => row.title)).toEqual(['Extract frame', 'Replace character'])
+    const replacement = render(first)
+    for (const tab of ['Replace character', 'Twist', 'Video', 'Finish']) expect(replacement).toContain(`>${tab}</button>`)
+    expect(replacement).toContain('Extracted source frame · 3.0 s')
+    expect(replacement).toContain('aria-label="Replacement prompt"')
+    expect(button(replacement, 'Replace character · $0.21')).not.toContain('disabled')
+    expect(button(render(first, 'frame'), 'Add twist')).toContain('disabled')
+    const replaced = shortGoalFixture({ stage: 'frame', stages: { replacement: shortStage('replacement', [{ index: 0, artifactId: 'photo-replaced' }]) } }, plan)
+    const twist = render(replaced)
+    expect(goalTileView(replaced).rows.map(row => row.title)).toEqual(['Twist'])
+    expect(twist).toContain('Reviewed replacement')
+    expect(twist).toContain('aria-label="Twist prompt"')
+    expect(twist).not.toContain('Extracted source frame')
+    expect(button(twist, 'Add twist')).not.toContain('disabled')
+    const outdated = shortGoalFixture({ stage: 'videos', stages: {
+      ...replaced.stages, frame: shortStage('frame', [{ index: 0, artifactId: 'photo-twist', stale: 'The replacement changed.' }]),
+    } }, plan)
+    expect(button(render(outdated, 'video'), 'Generate clip')).toContain('disabled')
+  })
+
   it('lists adaptation notes above the plan', () => {
     const note = '@a1 is a video, so its frame at 1.5 s (@c5) is the reference.'
     const html = render(shortGoalFixture({ notes: [note, '@h8 is empty and was skipped.'] }), 'frame')
