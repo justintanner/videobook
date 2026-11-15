@@ -37,7 +37,7 @@ export function discoverVoiceActions(engine: Engine, query: string) {
     .slice(0, 8)
     .map(({ action }) => {
       const definition = schemas.find((candidate) => candidate.name === action.actualTool)!;
-      const { book_id: _bookId, ...shape } = definition.schema;
+      const shape = Object.fromEntries(Object.entries(definition.schema).filter(([name]) => action.params.includes(name)));
       return {
         name: action.name,
         description: action.description,

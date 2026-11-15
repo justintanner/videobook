@@ -107,15 +107,13 @@ describe("chat routing catalog", () => {
       .toBe("set_env_secret");
   });
 
-  it("derives parameters from registered schemas without book_id", () => {
+  it("limits chat downloads to the source URL while preserving direct tool range support", () => {
     const tools = buildRoutableTools(definitions);
     const download = getRoutableTool(tools, "download_video");
     const downloadDefinition = definitions.find((definition) =>
       definition.name === "download_video");
-    expect(download?.params).toContain("url");
-    expect(download?.params).toContain("start_time");
-    expect(download?.params).toContain("end_time");
-    expect(download?.params).not.toContain("book_id");
+    expect(download?.params).toEqual(["url"]);
+    expect(download?.description).toContain("whole source clip");
     const startTime = downloadDefinition?.schema.start_time as
       { safeParse?: (value: unknown) => { success: boolean } } | undefined;
     expect(startTime?.safeParse?.(30).success).toBe(true);
@@ -188,8 +186,9 @@ describe("chat routing catalog", () => {
     expect(effectForTool("generate_image", "generation")).toBe("generation");
   });
 
-  it("marks free local extraction tools for auto-apply only", () => {
+  it("auto-applies downloads and free local extraction tools", () => {
     const tools = buildRoutableTools(definitions);
+    expect(getRoutableTool(tools, "download_video")).toMatchObject({ effect: "mutation", autoApply: true });
     expect(AUTO_APPLY_TOOL_NAMES.has("duplicate_asset")).toBe(true);
     expect(AUTO_APPLY_TOOL_NAMES.has("extract_audio")).toBe(true);
     expect(AUTO_APPLY_TOOL_NAMES.has("extract_frame")).toBe(true);
@@ -512,7 +511,7 @@ describe("chat timestamp parameters", () => {
       "cut_start",
       "cut_end",
     ]);
-    expect(TIMESTAMP_PARAMS.download_video).toEqual(["start_time", "end_time"]);
+    expect(TIMESTAMP_PARAMS).not.toHaveProperty("download_video");
     expect(TIMESTAMP_PARAMS.timewarp_video).toEqual(["start_seconds", "end_seconds"]);
   });
 

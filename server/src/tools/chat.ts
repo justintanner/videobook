@@ -209,6 +209,7 @@ export function normalizeChatRoutedParams(
   source: Record<string, unknown>,
 ): Record<string, unknown> {
   const params: Record<string, unknown> = { ...source };
+  if (tool === "download_video") return { url: source.url };
   if (tool === "plan_chat_command") {
     const context = params.media_context;
     if (Array.isArray(context)) {
@@ -484,7 +485,9 @@ function appendChatHistory(
 }
 
 function autoApplyReason(tool: string, chainPausesPerStep = false): string {
-  return tool === "duplicate_asset"
+  return tool === "download_video"
+    ? "Downloads start immediately and keep the whole source clip"
+    : tool === "duplicate_asset"
     ? "Duplication is reversible and only adds a copied asset and cell"
     : tool === "extract_audio"
     ? "Audio extraction is free, local, and only adds derived media"
@@ -509,7 +512,8 @@ async function applyChatActionPlan(
   const targetDef = getAllToolDefs(engine).find((definition) =>
     definition.name === plan.tool);
   if (!targetDef) return error(`Tool handler not found: ${plan.tool}`);
-  const params = { ...plan.params, book_id: bookId };
+  const source = plan.tool === "download_video" ? normalizeChatRoutedParams(plan.tool, plan.params) : plan.params;
+  const params = { ...source, book_id: bookId };
   if (plan.tool === "chain" && "steps" in params) {
     params.steps = ensureChainStepIds(params.steps);
   }
@@ -543,7 +547,7 @@ export { chatActionPlanSchema, duplicateDestinationReference };
 export function chatDef(engine: Engine): ToolDef {
   return {
     name: "chat",
-    description: "Route one composer request through the app's chat model: runs reads and returns reviewable plans for edits and generation. Agents should call the specific tools directly instead.",
+    description: "Route one composer request through the app's chat model: runs reads, starts full-clip URL downloads without approval, and returns reviewable plans for edits and generation. Agents should call the specific tools directly instead.",
     schema: {
       prompt: z.string().min(1).optional().describe("Natural language query with optional @asset tags"),
       book_id: z.string().uuid().describe("Book UUID"),

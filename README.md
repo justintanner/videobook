@@ -529,6 +529,10 @@ apart within a book, and retry HTTP 403, 429, 5xx and network failures up to
 three times with backoff. A failed download keeps its reason, the failure class
 and the tail of yt-dlp's message, in the artifact's `download-failure` metadata.
 
+Chat and voice URL downloads start immediately without an approval preview and
+keep the whole source clip. Chat accepts only the URL for an import; trimming
+is a separate edit after downloading.
+
 ### Voice chat
 
 The microphone beside Send enables voice input and spoken replies. Voice starts off.

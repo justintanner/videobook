@@ -22,6 +22,7 @@ type RoutableToolInfo = {
 };
 
 const AUTO_APPLY_TOOL_NAMES = new Set([
+  "download_video",
   "duplicate_asset",
   "extract_audio",
   "extract_frame",
@@ -52,7 +53,6 @@ type ZodConstraintSchema = { _def?: unknown; unwrap?: () => unknown };
 
 const TIMESTAMP_PARAMS: Record<string, string[]> = {
   trim_video: ["trim_start", "trim_end", "cut_start", "cut_end"],
-  download_video: ["start_time", "end_time"],
   extract_frame: ["timestamp"],
   timewarp_video: ["start_seconds", "end_seconds"],
   change_video_speed: ["start_seconds", "end_seconds"],
@@ -116,6 +116,7 @@ function effectForTool(
 type RoutableDefinition = Pick<ToolDef, "name" | "description" | "schema">;
 
 function paramsForTool(definition: RoutableDefinition): string[] {
+  if (definition.name === "download_video") return ["url"];
   return Object.keys(definition.schema).filter((name) => name !== "book_id");
 }
 
@@ -149,7 +150,9 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
       return {
         name: definition.name,
         actualTool: definition.name,
-        description: definition.description,
+        description: definition.name === "download_video"
+          ? "Download the whole source clip from a URL into the current book immediately, without an approval preview."
+          : definition.description,
         params: paramsForTool(definition),
         requiredParams: requiredParamsForTool(definition),
         constraints: constraintsForTool(definition),
@@ -698,6 +701,7 @@ Parameter guidelines:
 - For asset_id: use the resolved asset ID from the referenced @tag (e.g., @vid-foo → asset_id: "vid-foo")
 - Use the current notebook ID for notebook_id. Resolve notebook addresses through the supplied notebook context and use cell UUIDs for cell ID parameters
 - For duplicate_asset, use asset_id for the source, pass an explicit empty grid address as destination without @, and omit destination when the copy should go directly below the source
+- For download_video, pass only the source URL. Downloads start immediately and always keep the whole clip, including when the URL has a playback timestamp. Trimming is a separate edit after the download
 - When the user wants a first clip of a stated length plus the remaining/rest/remainder, use split_video with cut_points set to that length. Use split_video with durations for chunks of stated lengths and scenes true for one clip per scene
 - When the user asks for a cold open or an exciting highlight before the full clip, use prepare_cold_open. The user reviews its range before edit_cold_open creates the copy. Never invent source hashes or request IDs.
 - When the user wants to post, send, deliver, or save a clip or Post to the phone or iPhone, or deliver it without naming a service, use post with to icloud. Use to download for a download link or a manual upload, and to x only when the user names X or Twitter

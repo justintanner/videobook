@@ -68,6 +68,22 @@ describe("voice chat action policy", () => {
     expect(voiceWorkspaceContext(engine, notebookId)).toMatchObject({ book: "voice-actions", notebookId });
   });
 
+  it("offers immediate whole-clip downloads with only a source URL", async () => {
+    const action = discoverVoiceActions(engine, "download video")[0]!;
+    expect(action.requiresReview).toBe(false);
+    expect(Object.keys(action.parameters.properties ?? {})).toEqual(["url"]);
+    const url = "https://example.com/clip.mp4";
+    const result = await prepare(`Download ${url}`, {
+      tool: "download_video", params: { url, start_time: 10, end_time: 20, full: false, export_videos: true }, message: "Downloading video.",
+    });
+    const plan = chatActionPlanSchema.parse(value(result));
+    expect(plan).toMatchObject({
+      tool: "download_video", confirmation: { required: false }, params: { url, export_videos: false },
+    });
+    expect(plan.params).not.toHaveProperty("start_time");
+    expect(plan.params).not.toHaveProperty("end_time");
+  });
+
   it("separates the board from the conversation, and notices when it changes", async () => {
     const before = voiceWorkspaceCells(engine, notebookId);
     expect(before).not.toHaveProperty("recentConversation");
