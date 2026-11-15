@@ -95,7 +95,7 @@ describe('voice generation review in the browser', () => {
     await client?.close()
     await endpoint.close()
     for (const process of processes.reverse()) await stopProcess(process)
-    if (root) await rm(root, { recursive: true, force: true })
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 })
   }, 60_000)
 
   afterEach(async ({ task }) => {

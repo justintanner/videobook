@@ -119,7 +119,7 @@ describe('voice opens a cell fullscreen in the real browser', () => {
     await client?.close().catch(() => undefined)
     await endpoint.close()
     for (const processState of processes.reverse()) await stopProcess(processState)
-    if (root) await rm(root, { recursive: true, force: true })
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 })
   }, 60_000)
 
   afterEach(async ({ task }) => {

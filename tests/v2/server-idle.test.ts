@@ -31,6 +31,6 @@ it('keeps idle queue polls out of database transactions across several books wit
     expect(result.startupTransactions).toBeGreaterThan(0)
     expect(result.idleTransactions).toBe(0)
   } finally {
-    await rm(home, { recursive: true, force: true })
+    await rm(home, { recursive: true, force: true, maxRetries: 3 })
   }
 }, testBudget(90_000))

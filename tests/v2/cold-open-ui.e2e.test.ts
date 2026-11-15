@@ -97,7 +97,7 @@ describe('cold-open review and copy in the browser', () => {
     await client?.close()
     await stopProcess(vite)
     await stopProcess(server)
-    if (root) await rm(root, { recursive: true, force: true })
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 })
   }, 30_000)
 
   it('discovers, previews, adjusts, cancels, and creates a playable copy without repeating analysis', async () => {

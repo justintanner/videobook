@@ -270,7 +270,7 @@ describe('graphics editor in the composer', () => {
     await client?.close()
     await stopProcess(vite)
     await stopProcess(server)
-    if (root) await rm(root, { recursive: true, force: true })
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 })
   }, 30_000)
 
   it('opens the default look, previews a big Thai title over an English line, autosaves, undoes and resolves a conflict', async () => {

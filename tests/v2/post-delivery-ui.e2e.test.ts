@@ -116,7 +116,7 @@ describe('Post delivery review in the chat composer', () => {
     await client?.close()
     await stopProcess(vite)
     await stopProcess(server)
-    if (root) await rm(root, { recursive: true, force: true })
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 })
   }, 30_000)
 
   it('posts in one step to iPhone or a download from /post, switches to X and back, and reuses the clip Post', async () => {

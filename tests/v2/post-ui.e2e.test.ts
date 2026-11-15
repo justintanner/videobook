@@ -79,7 +79,7 @@ describe('Post cells from clip to publication in the browser', () => {
     await client?.close()
     await stopProcess(vite)
     await stopProcess(server)
-    if (root) await rm(root, { recursive: true, force: true })
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 })
   }, 30_000)
 
   it('creates a Post from d2, saves a manual publication, records metrics and keeps results', async () => {

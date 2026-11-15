@@ -25,7 +25,7 @@ describe('server startup', () => {
 
   afterEach(async () => {
     await Promise.all(servers.splice(0).map(stopServer))
-    if (rootDir) await rm(rootDir, { recursive: true, force: true })
+    if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3 })
   })
 
   it.each(['ready', 'failed', 'missing'])('settles a shutdown-aborted result with %s provider output on server startup', async (providerStatus) => {

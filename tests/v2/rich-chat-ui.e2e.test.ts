@@ -139,7 +139,7 @@ describe('rich chat references with real notebook media', () => {
     await client?.close()
     await stopProcess(vite)
     await stopProcess(server)
-    await rm(rootDir, { recursive: true, force: true })
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3 })
   })
 
   it('shows real image and video thumbnails, distinct shared references and non-media fallbacks', async () => {

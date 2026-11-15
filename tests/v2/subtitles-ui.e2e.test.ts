@@ -127,7 +127,7 @@ describe('subtitle editor in the composer', () => {
     await client?.close()
     await stopProcess(vite)
     await stopProcess(server)
-    if (root) await rm(root, { recursive: true, force: true })
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 })
   }, 30_000)
 
   it('opens from chat, previews with audio, edits words, timing and positions, survives reload and renders a playable cell', async () => {

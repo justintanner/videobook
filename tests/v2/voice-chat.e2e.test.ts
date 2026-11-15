@@ -171,7 +171,7 @@ describe('voice chat in the real browser', () => {
       const finished = await Promise.race([exited.then(() => true), delay(5000).then(() => false)])
       if (!finished) { child.kill('SIGKILL'); await exited }
     }
-    if (root) await rm(root, { recursive: true, force: true })
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 })
   }, 60_000)
 
   afterEach(async ({ task }) => {

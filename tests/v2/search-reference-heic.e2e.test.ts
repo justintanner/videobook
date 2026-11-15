@@ -161,7 +161,7 @@ describe.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === '1')('HEIC temporary reve
       await browser?.close()
       await client?.close()
       for (const process of processes.reverse()) await stopProcess(process)
-      if (root) await rm(root, { recursive: true, force: true })
+      if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 })
     }, 60_000)
 
     afterEach(async ({ task }) => {

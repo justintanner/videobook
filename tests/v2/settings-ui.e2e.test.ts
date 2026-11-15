@@ -76,7 +76,7 @@ describe('Settings through the real application', () => {
     await client?.close()
     await stopProcess(vite)
     await stopProcess(server)
-    await rm(rootDir, { recursive: true, force: true })
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3 })
   })
 
   it('records the full-registry desktop layout', async () => {
