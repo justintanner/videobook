@@ -1,5 +1,3 @@
-import { resolve } from "node:path";
-import { createEngine } from "videobook-engine";
 import { BookManager } from "./book-manager.js";
 import { scopedBookEngine } from "./book-context.js";
 import { contentStoreFromEnvironment } from "./content-store.js";
@@ -54,28 +52,4 @@ export const bookManager = new BookManager({
 
 export const scopedEngine = scopedBookEngine;
 
-const testEngines = new Map<string, ReturnType<typeof createEngine>>();
-
-export function createEngineForTest(rootDir: string) {
-  const normalizedRoot = resolve(rootDir);
-  const existing = testEngines.get(normalizedRoot);
-  if (existing) return existing;
-  const engine = createEngine({
-    durableWrites: false,
-    rootDir: normalizedRoot,
-    initialBookName: "test-book",
-  });
-  testEngines.set(normalizedRoot, engine);
-  return engine;
-}
-
-export function closeEngineForTest(
-  rootDir: string,
-  engine: ReturnType<typeof createEngine>,
-): void {
-  const normalizedRoot = resolve(rootDir);
-  if (testEngines.get(normalizedRoot) === engine) {
-    testEngines.delete(normalizedRoot);
-  }
-  engine.close();
-}
+export { closeEngineForTest, createEngineForTest } from "./test-engine-catalog.js";

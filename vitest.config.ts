@@ -119,6 +119,7 @@ export default defineConfig({
       'server/src/har-export.test.ts',
       'server/src/upload.test.ts',
       'server/src/engine-rename.test.ts',
+      'server/src/engine-for-test.test.ts',
       'server/src/engine-tags-contract.test.ts',
       'server/src/archive-store.test.ts',
       'server/src/test-media-fixtures.test.ts',
