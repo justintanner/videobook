@@ -30,7 +30,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "prepare_cold_open", "edit_cold_open", "trim_video", "split_video",
     "pad_video", "animate_keywords", "caption_video", "video_graphics",
     "detect_scenes", "suggest_cuts", "analyze_jokes",
-    "change_video_speed", "timewarp_video", "reverse_video", "inject_first_frame",
+    "change_video_speed", "timewarp_video", "zoom_video", "reverse_video", "inject_first_frame",
     "extract_frame",
     "extract_notebook_frame", "splice_video", "preview_splice", "smooth_scene_concat",
     "analyze_video", "analyze_editing_moments", "get_editing_moments", "render_video", "get_render_settings", "create_watermark_card",

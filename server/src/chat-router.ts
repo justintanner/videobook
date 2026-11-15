@@ -66,6 +66,9 @@ const NESTED_TIMESTAMP_PARAMS: Record<string, Record<string, string[]>> = {
   sync_video_to_audio: {
     anchors: ["video_seconds", "audio_seconds"],
   },
+  zoom_video: {
+    zooms: ["start_seconds", "end_seconds"],
+  },
 };
 
 const READ_ONLY_TOOL_NAMES = new Set([
@@ -702,6 +705,7 @@ Parameter guidelines:
 - When the user asks to trim or tighten a video for better pacing, timing or transitions without specifying cut ranges, use suggest_cuts and preserve the editing goal in instructions. It can assess visual pacing without a transcript. Never invent trim timestamps
 - For timestamps (trim_start, trim_end, cut_start, cut_end, cut_points, start_time, end_time, start_seconds, end_seconds, timestamp): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
 - For timewarp_video: stretch_factor is a duration multiplier; values above 1 slow and lengthen the selected picture, while values below 1 accelerate and shorten it
+- To zoom in on part of an existing video use zoom_video, which is local and free; never generate a new video for a zoom on existing footage. Each zooms entry is {start_seconds, end_seconds, scale, focus_x, focus_y, ramp_in_seconds, ramp_out_seconds, sound, return_sound}; omit end_seconds to stay zoomed to the end
 - For sync_video_to_audio: anchors is an ordered array. Each anchor has video_seconds plus exactly one target: audio_seconds for an explicit audio time or audio_cue for transcript words. Convert nested timestamp values to seconds and preserve audio_cue text exactly. The original audio stays fixed; only the picture is retimed
 - For every image or video generation tool, build the initial prompt from the user's requested result plus every consumed notebook cell and referenced media input
 - Write generation prompts in smart Caveman style: short, concrete, role-based fragments; drop filler, hedging, pleasantries, articles, and preambles such as "Create an image of"; preserve the user's language plus exact names, technical terms, negation, numbers, units, and @addresses

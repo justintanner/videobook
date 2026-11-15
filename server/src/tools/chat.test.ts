@@ -146,6 +146,16 @@ describe("normalizeChatTimestampParams", () => {
     });
   });
 
+  it("normalizes each zoom's start and end", () => {
+    expect(normalizeChatTimestampParams("zoom_video", {
+      asset_id: "vid-frankenstein",
+      zooms: [{ start_seconds: "0:03", end_seconds: "5s", scale: 1.5 }, { start_seconds: 8 }],
+    })).toEqual({
+      asset_id: "vid-frankenstein",
+      zooms: [{ start_seconds: 3, end_seconds: 5, scale: 1.5 }, { start_seconds: 8 }],
+    });
+  });
+
   it("normalizes extract_frame timestamp strings to seconds", () => {
     expect(normalizeChatTimestampParams("extract_frame", {
       asset_id: "vid-frankenstein",

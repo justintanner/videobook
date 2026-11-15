@@ -20,8 +20,8 @@ describe("Videobook MCP parity", () => {
     const names = getAllToolDefs(fs).map((definition) => definition.name);
     fs.close();
 
-    expect(names).toHaveLength(214);
-    expect(new Set(names).size).toBe(214);
+    expect(names).toHaveLength(215);
+    expect(new Set(names).size).toBe(215);
     expect(names).toEqual(
       expect.arrayContaining([
         "post",

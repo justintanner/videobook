@@ -5,6 +5,7 @@ import {
   normalizePostCommandArgs,
   normalizeSyncAudioCommandArgs,
   normalizeTimewarpCommandArgs,
+  normalizeZoomCommandArgs,
   selectCommandForInput,
 } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
@@ -66,6 +67,51 @@ describe("slash command parse/normalize/dispatch", () => {
       "a1 0-4.2s 1.5x extra",
     ])("rejects malformed arguments: %s", (rest) => {
       expect(() => normalizeTimewarpCommandArgs(simulateParse("/timewarp", rest))).toThrow();
+    });
+  });
+
+  describe("/zoom", () => {
+    function zoomArgs(rest: string): Record<string, unknown> {
+      const cmd = findCommand("/zoom", rest);
+      return adaptCommandArgs(cmd.mcpTool?.adapter, parseCommandArgs(rest, cmd.params));
+    }
+
+    it("zooms a range at the default scale", () => {
+      expect(zoomArgs("@a1 2.5-4")).toEqual({ asset_id: "a1", zooms: [{ start_seconds: 2.5, end_seconds: 4 }] });
+    });
+
+    it("takes a scale with or without an x", () => {
+      expect(zoomArgs("@a1 2.5-4 1.5")).toEqual({ asset_id: "a1", zooms: [{ start_seconds: 2.5, end_seconds: 4, scale: 1.5 }] });
+      expect(zoomArgs("a1 0:01-0:04.5s 1.5x")).toEqual({ asset_id: "a1", zooms: [{ start_seconds: 1, end_seconds: 4.5, scale: 1.5 }] });
+    });
+
+    it("stays zoomed to the end of the clip from a single start", () => {
+      expect(zoomArgs("@a1 2.5")).toEqual({ asset_id: "a1", zooms: [{ start_seconds: 2.5 }] });
+    });
+
+    it("adds the built-in zoom sounds, with no return sound when the zoom has no end", () => {
+      expect(zoomArgs("@a1 2.5-4 1.5 sound")).toEqual({
+        asset_id: "a1",
+        zooms: [{ start_seconds: 2.5, end_seconds: 4, scale: 1.5, sound: "zoom_in", return_sound: "zoom_out" }],
+      });
+      expect(zoomArgs("@a1 2.5-4 sound")).toEqual({
+        asset_id: "a1",
+        zooms: [{ start_seconds: 2.5, end_seconds: 4, sound: "zoom_in", return_sound: "zoom_out" }],
+      });
+      expect(zoomArgs("@a1 2.5 1.5 sound")).toEqual({ asset_id: "a1", zooms: [{ start_seconds: 2.5, scale: 1.5, sound: "zoom_in" }] });
+    });
+
+    it.each([
+      ["a1", "start time"],
+      ["a1 4-2.5", "start must be before end"],
+      ["a1 later", "Invalid /zoom timestamp"],
+      ["a1 2.5-4 big", "Invalid /zoom scale"],
+    ])("rejects %s", (rest, message) => {
+      expect(() => zoomArgs(rest)).toThrow(message);
+    });
+
+    it("requires a video", () => {
+      expect(() => normalizeZoomCommandArgs({ range: "2.5-4" })).toThrow("/zoom requires a video cell or asset");
     });
   });
 

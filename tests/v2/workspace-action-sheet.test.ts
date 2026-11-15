@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { scopedEngine } from '../../server/src/engine.js'
+import { adaptCommandArgs, parseSlashCommandArgs, type ServerCommand } from '../../src/lib/command-registry'
 import { getCanonicalCommands } from '../../server/src/tools/commands.js'
 import { getAllToolDefs } from '../../server/src/tools/index.js'
 import { buildWorkspaceActionCatalog } from '../../server/src/workspace-action-catalog.js'
@@ -157,6 +158,29 @@ describe('workspace action sheet', () => {
       expect(html).toContain(`aria-label="Preview ${sound.title}"`)
       expect(html).toContain('aria-pressed="false"')
     }
+  })
+
+  it('opens /zoom @a1 2.5-4 1.5 as one zoom of plain fields and runs it as one free entry', () => {
+    const command = getCanonicalCommands().find((entry) => entry.command === '/zoom') as ServerCommand
+    const args = adaptCommandArgs(command.mcpTool?.adapter, parseSlashCommandArgs(command, 'video-1 2.5-4 1.5'))
+    const action = catalogAction('tool.zoom_video')
+    expect(action.interaction).toBe('preview')
+    const names = workspaceActionFields(action).map(([name]) => name)
+    expect(names).toEqual(expect.arrayContaining([
+      'asset_id', 'zooms.start_seconds', 'zooms.end_seconds', 'zooms.scale', 'zooms.focus_x', 'zooms.focus_y',
+      'zooms.ramp_in_seconds', 'zooms.ramp_out_seconds', 'zooms.sound', 'zooms.return_sound',
+    ]))
+    expect(names).not.toContain('zooms')
+    expect([...workspaceActionRequired(action)]).toEqual(expect.arrayContaining(['asset_id', 'zooms.start_seconds']))
+    const draft = seedWorkspaceActionDraft(action, context, args)
+    expect(draft).toMatchObject({ asset_id: 'video-1', 'zooms.start_seconds': 2.5, 'zooms.end_seconds': 4, 'zooms.scale': 1.5 })
+    expect(effectiveWorkspaceActionValues(action, draft)).toMatchObject({ book_id: 'book-1', asset_id: 'video-1', zooms: [{ start_seconds: 2.5, end_seconds: 4, scale: 1.5 }] })
+    const html = renderActionSheet(action, { draft })
+    expect(html).toContain('>zoom_out</option>')
+    expect(html).not.toContain('May incur provider charges')
+    const edited = patchWorkspaceActionDraft(action, context, draft, 'zooms.sound', 'zoom_in')
+    expect(effectiveWorkspaceActionValues(action, edited).zooms).toEqual([{ start_seconds: 2.5, end_seconds: 4, scale: 1.5, sound: 'zoom_in' }])
+    expect(workspaceActionConfirmation(action, effectiveWorkspaceActionValues(action, edited))).toBe('none')
   })
 
   it('marks only the paid and destructive operations of video graphics and subtitles', () => {

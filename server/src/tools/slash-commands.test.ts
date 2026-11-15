@@ -156,6 +156,13 @@ describe("slash_commands tool", () => {
     expect(timewarp.mcpTool?.autoInject).toContain("book_id");
     expect(timewarp.params.map((p) => p.name)).toEqual(["asset_id", "range", "factor"]);
 
+    const zoom = commands.find((c) => c.command === "/zoom")!;
+    expect(zoom.category).toBe("context_menu");
+    expect(zoom.mcpTool).toEqual({ tool: "zoom_video", adapter: "zoom", autoInject: ["book_id"] });
+    expect(zoom.params.map((p) => [p.name, p.type, p.required])).toEqual([
+      ["asset_id", "string", true], ["range", "string", true], ["scale", "string", false], ["sound", "boolean", false],
+    ]);
+
     expect(commands.find((c) => c.command === "/delete")?.aliases).toEqual(["/clip-delete", "/remove-slot", "/unassign", "/audio-remove"]);
     expect(commands.find((c) => c.command === "/insert")?.aliases).toEqual(["/assign", "/audio-add"]);
     expect(commands.find((c) => c.command === "/clip-audio")?.aliases).toEqual(["/volume", "/audio-set"]);

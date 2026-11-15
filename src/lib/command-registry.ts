@@ -34,6 +34,19 @@ interface BuiltinSfxCommandEntry {
   timestamp: number
 }
 
+interface ZoomCommandEntry {
+  start_seconds: number
+  end_seconds?: number
+  scale?: number
+  sound?: BuiltinSoundId
+  return_sound?: BuiltinSoundId
+}
+
+type ZoomCommandArgs = {
+  asset_id: string
+  zooms: ZoomCommandEntry[]
+}
+
 interface ApplySfxCommandArgs {
   asset_id: string;
   sfx: ApplySfxCommandEntry[];
@@ -49,6 +62,7 @@ type CommandToolArgValue =
   | SyncAudioAnchor[]
   | ApplySfxCommandEntry[]
   | BuiltinSfxCommandEntry[]
+  | ZoomCommandEntry[]
   | ApplyCutEntry[]
   | undefined;
 export type CommandToolArgs = Record<string, CommandToolArgValue>;
@@ -286,6 +300,38 @@ export function normalizeTimewarpCommandArgs(
     end_seconds: endSeconds,
     stretch_factor: stretchFactor,
   };
+}
+
+function zoomScale(value: unknown): number | undefined {
+  if (value === undefined || value === '') return undefined
+  const token = String(value).trim()
+  if (!/^\d+(?:\.\d+)?x?$/i.test(token)) throw new Error(`Invalid /zoom scale: ${token}. Give a magnification such as 1.5 or 1.5x`)
+  return Number(token.replace(/x$/i, ''))
+}
+
+export function normalizeZoomCommandArgs(args: Readonly<Record<string, unknown>>): ZoomCommandArgs {
+  const assetValue = args.asset_id
+  if (typeof assetValue !== 'string' || !assetValue.trim()) throw new Error('/zoom requires a video cell or asset')
+  const rangeValue = args.range
+  if (typeof rangeValue !== 'string' && typeof rangeValue !== 'number') throw new Error('/zoom requires a start time or a <start>-<end> range')
+  const range = String(rangeValue).trim()
+  const rangeMatch = /^(.+)-(.+)$/.exec(range)
+  const startSeconds = parseCommandTimestamp(rangeMatch ? rangeMatch[1] : range, '/zoom')
+  const endSeconds = rangeMatch ? parseCommandTimestamp(rangeMatch[2], '/zoom') : undefined
+  if (endSeconds !== undefined && startSeconds >= endSeconds) throw new Error('/zoom start must be before end')
+  const scale = zoomScale(args.scale)
+  const sounds = args.sound === true
+    ? { sound: 'zoom_in' as const, ...(endSeconds === undefined ? {} : { return_sound: 'zoom_out' as const }) }
+    : {}
+  return {
+    asset_id: stripAt(assetValue.trim()),
+    zooms: [{
+      start_seconds: startSeconds,
+      ...(endSeconds === undefined ? {} : { end_seconds: endSeconds }),
+      ...(scale === undefined ? {} : { scale }),
+      ...sounds,
+    }],
+  }
 }
 
 function stripOptionalQuotes(raw: string): string {
@@ -611,6 +657,13 @@ export const COMMAND_ADAPTERS = {
     delete result.range;
     delete result.factor;
     return { ...result, ...normalized };
+  },
+  zoom: (args) => {
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) }
+    delete result.range
+    delete result.scale
+    delete result.sound
+    return { ...result, ...normalizeZoomCommandArgs(args) }
   },
   sync_audio: (args) => {
     const normalized = normalizeSyncAudioCommandArgs(args);

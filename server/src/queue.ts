@@ -278,6 +278,7 @@ function jobTypeToAssetWorkKind(
       return { kind: "trim" };
     case "crop_video":
     case "crop_image":
+    case "zoom_video":
       return { kind: "crop" };
     case "render_captions":
     case "render_graphics":

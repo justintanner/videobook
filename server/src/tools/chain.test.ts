@@ -368,6 +368,22 @@ describe("chain MCP tool", () => {
     expect(engine.jobs.queue.list({ type: "process_video", artifactId: targetId, states: ["queued", "running", "completing"] })).toHaveLength(0);
   });
 
+  it("runs a free local zoom and waits for its picture-only reprocess before the next step", async () => {
+    await setupBook("zoom");
+    const accepted = await runChain([
+      { id: "zoom", tool: "zoom_video", params: { asset_id: "@c4", zooms: [{ start_seconds: 0.2, end_seconds: 0.8, scale: 1.5 }] } },
+      { id: "inspect", tool: "asset_manifest", params: { asset_id: { $ref: { step_id: "zoom", output: "asset_id" } } } },
+    ]);
+    const settled = await waitForChainRun(engine, String(accepted.chain_id), testBudget(180_000));
+    expect(settled.status).toBe("completed");
+    expect(settled.steps[0]?.outputs?.asset_id).toBe(targetId);
+    expect(settled.steps[1]?.status).toBe("completed");
+    const reprocess = engine.jobs.queue.list({ type: "process_video", artifactId: targetId })
+      .find((job) => (job.payload.provenance as Record<string, unknown> | undefined)?.origin === "zoom");
+    expect(reprocess?.payload).toMatchObject({ force: true, skipDownstreamJobs: true });
+    expect(engine.jobs.queue.list({ type: "process_video", artifactId: targetId, states: ["queued", "running", "completing"] })).toHaveLength(0);
+  });
+
   it.each(["ready", "failed"] as const)("handles a %s generated audio result in a reviewed background and SFX chat chain", async outcome => {
     await setupBook(`audio-${outcome}`, 28);
     const actualBookId = engine.book.get().bookId;

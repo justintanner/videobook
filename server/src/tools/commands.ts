@@ -1175,6 +1175,23 @@ const CANONICAL_COMMANDS: Command[] = [
     mcpTool: { tool: "timewarp_video", adapter: "timewarp", autoInject: ["book_id"] },
   },
   {
+    command: "/zoom",
+    description: "Zoom in on part of a video, local and free: /zoom @a1 2.5-4 1.5 zooms from 2.5 s to 4 s at 1.5x, /zoom @a1 2.5 stays zoomed to the end, and adding sound plays the built-in zoom sounds",
+    example: "/zoom @a1 2.5-4 1.5",
+    category: "context_menu",
+    icon: "Eye",
+    size: "default",
+    variant: "violet",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to zoom" },
+      { name: "range", type: "string", required: true, description: "When to zoom, as start-end in seconds, or a start to stay zoomed to the end" },
+      { name: "scale", type: "string", required: false, description: "Magnification from 1.05x to 3x (default 1.3x)" },
+      { name: "sound", type: "boolean", required: false, description: "Add the built-in zoom-in sound, and zoom-out on the way back" },
+    ],
+    mcpTool: { tool: "zoom_video", adapter: "zoom", autoInject: ["book_id"] },
+  },
+  {
     command: "/sync-audio",
     description: "Smoothly retime video action to match fixed original-audio cues at multiple anchors",
     example: "/sync-audio @a1 3s=England; 6s=America",

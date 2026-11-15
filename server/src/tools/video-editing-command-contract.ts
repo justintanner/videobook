@@ -23,6 +23,7 @@ export const COMMAND_ADAPTER_NAMES = [
   "timewarp",
   "translate_subtitles",
   "trim",
+  "zoom",
 ] as const;
 
 type CommandAdapterName = typeof COMMAND_ADAPTER_NAMES[number];
@@ -201,6 +202,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "reverse_video", exposure: "direct", command: "/reverse", purpose: "Reverse video playback" },
   { tool: "change_video_speed", exposure: "direct", command: "/speed", purpose: "Change playback speed or duration" },
   { tool: "timewarp_video", exposure: "direct", command: "/timewarp", purpose: "Retime a selected scene" },
+  { tool: "zoom_video", exposure: "direct", command: "/zoom", purpose: "Zoom in on parts of a video" },
   { tool: "sync_video_to_audio", exposure: "direct", command: "/sync-audio", purpose: "Retime video to audio anchors" },
   { tool: "transcribe", exposure: "direct", command: "/transcribe", purpose: "Transcribe an asset" },
   { tool: "read_transcript", exposure: "internal", purpose: "Read an asset transcript" },

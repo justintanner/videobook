@@ -89,6 +89,14 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("- For show_graphics: use when the user asks to add, edit, style or move on-screen graphics");
   });
 
+  it("routes a zoom on existing footage to the free local zoom_video", () => {
+    const prompt = buildChatRoutingPrompt("my-book", buildRoutableTools(definitions));
+    expect(prompt).toContain("- To zoom in on part of an existing video use zoom_video, which is local and free; never generate a new video for a zoom on existing footage.");
+    expect(prompt).toContain("Each zooms entry is {start_seconds, end_seconds, scale, focus_x, focus_y, ramp_in_seconds, ramp_out_seconds, sound, return_sound}");
+    expect(prompt).toMatch(/- zoom_video: [^\n]*Local and free[^\n]*\(asset_id\*, zooms\*\)/u);
+    expect(NESTED_TIMESTAMP_PARAMS.zoom_video).toEqual({ zooms: ["start_seconds", "end_seconds"] });
+  });
+
   it("includes registered destructive and administrative tools", () => {
     const tools = buildRoutableTools(definitions);
     expect(getRoutableTool(tools, "delete_notebook")?.actualTool)
