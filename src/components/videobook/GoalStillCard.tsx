@@ -11,7 +11,7 @@ export function GoalMedia({ artifactId, cellId, label, resolveAsset, onOpen, ful
   fullResolution?: boolean
 }) {
   const asset = resolveAsset(artifactId)
-  const url = fullResolution ? asset?.mediaUrl ?? asset?.thumbnailUrl : asset?.thumbnailUrl ?? asset?.mediaUrl
+  const url = asset?.type === 'video' ? asset.thumbnailUrl : fullResolution ? asset?.mediaUrl ?? asset?.thumbnailUrl : asset?.thumbnailUrl ?? asset?.mediaUrl
   return <button type="button" className="goal-media" disabled={!cellId} onClick={() => { if (cellId) onOpen(cellId) }} aria-label={`Open ${label}`}>
     {url ? <img src={url} alt={label} /> : <span className="goal-media-pending">Preview pending</span>}
     <span>{label}</span>

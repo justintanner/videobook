@@ -376,6 +376,12 @@ describe('goal mode in the browser', () => {
       await primary(/^Add twist/).click()
       await expect.poll(() => status().textContent(), { timeout: testBudget(90_000) }).toContain('Review clip 1 of 1 · at least $')
       await openTab('Video')
+      const references = panel().getByLabel('Video references', { exact: true })
+      const sourceVideo = references.getByRole('button', { name: /^Open @video1 · Source video/ })
+      expect(await sourceVideo.textContent()).toContain('Preview pending')
+      expect(await sourceVideo.locator('img').count()).toBe(0)
+      expect(await references.getByRole('button', { name: 'Open @image1 · Reviewed twist', exact: true }).count()).toBe(1)
+      await screenshot('goal-video-references')
       await primary(/^Generate clip · at least \$/).click()
       await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review finish · 0:12')
       await openTab('Finish')
@@ -385,6 +391,8 @@ describe('goal mode in the browser', () => {
       expect(stub.submissions.map(submission => submission.path)).toEqual([
         '/openai/gpt-image-2.6/sunburst/edit', '/openai/gpt-image-2.6/sunburst/edit', '/minimax/h3-max/reference-to-video',
       ])
+      expect(stub.submissions.at(-1)!.body).toMatchObject({ reference_video_urls: [expect.any(String)], reference_image_urls: [expect.any(String)] })
+      expect(stub.submissions.at(-1)!.body).not.toHaveProperty('image_url')
       expect(stub.unexpected).toEqual([])
       expect(errors).toEqual([])
     } finally {

@@ -15,6 +15,10 @@ const FRAME_MODES: readonly ModeSpec[] = [
   { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"] },
 ];
 
+const H3_MAX_REFERENCE_MODES: readonly ModeSpec[] = [
+  { id: "default", label: "References", roles: ["image", "video", "audio", "first_frame", "last_frame"], requireAny: ["image", "video", "audio"] },
+];
+
 const FLUX_3_MAX_DEFAULTS: Record<string, unknown> = {
   aspect_ratio: "auto",
   duration: 5,
@@ -519,7 +523,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:minimax/h3/reference-to-video/lora", media: "video", operations: ["reference_to_video"], dialect: "natural" },
   { id: "fal:minimax/h3-max/text-to-video", media: "video", operations: ["text_to_video"] },
   { id: "fal:minimax/h3-max/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames", refs: { first_frame: "image_url" }, modes: FRAME_MODES },
-  { id: "fal:minimax/h3-max/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural", refs: { image: "reference_image_urls", first_frame: "image_url" } },
+  { id: "fal:minimax/h3-max/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural", refs: { image: "reference_image_urls", first_frame: "image_url" }, modes: H3_MAX_REFERENCE_MODES },
   { id: "fal:minimax/h3-max/extend-video", media: "video", operations: ["extend_video"], rules: FAL_H3_MAX_SOURCE_VIDEO },
   { id: "fal:minimax/h3-max/3d-to-video", media: "video", operations: ["edit_video"], rules: FAL_H3_MAX_SOURCE_VIDEO },
   { id: "fal:minimax/h3-max/lip-sync/image-to-video", media: "video", operations: ["lip_sync"], refs: { first_frame: "image_url" } },

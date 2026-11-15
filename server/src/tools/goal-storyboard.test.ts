@@ -6,13 +6,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { v7 as uuidv7 } from "uuid";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
-import { getChainRun, waitForChainRun } from "../chain-executor.js";
+import { getChainRun, waitForChainRun, type ChainRunRecord } from "../chain-executor.js";
 import { createEngineForTest } from "../engine.js";
 import { buildGoalShortPlan, formatShortSeconds } from "../goal-short-plan.js";
 import { captureStoryboardFrames, shortStoryboard, videoStoryboardMoments } from "../goal-short-storyboard.js";
 import { briefMention } from "../goal-short-references.js";
 import { estimateShort, shortFingerprint } from "../goal-short-runtime.js";
-import { readGoal, requireGoalShortContent, writeGoalShortContent } from "../goal-store.js";
+import { readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent } from "../goal-store.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
 import { configureProviderPollDriverForTests, resetProviderPollDriverForTests } from "../queue.js";
@@ -256,7 +256,11 @@ describe("video_goal storyboard stage", () => {
     expect(stub.submissions).toHaveLength(2);
     goal = await approved(goal);
     expect(goal.finish?.status).toBe("review");
-    expect(mediaJobs(CLIP_MODEL)[0]!.payload.refs).toEqual({ first_frame: [twist.artifactId] });
+    expect(mediaJobs(CLIP_MODEL)[0]!.payload.refs).toEqual({ video: [videoId], image: [twist.artifactId] });
+    const clipRequest = stub.submissions.at(-1)!.body;
+    expect(clipRequest.reference_video_urls).toHaveLength(1);
+    expect(clipRequest.reference_image_urls).toHaveLength(1);
+    expect(clipRequest).not.toHaveProperty("image_url");
     expect(stub.submissions.map(submission => submission.path)).toEqual([FRAME_EDIT, FRAME_EDIT, "/minimax/h3-max/reference-to-video"]);
 
     goal = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: goal.revision, stage: "replacement" }));
@@ -284,6 +288,44 @@ describe("video_goal storyboard stage", () => {
     expect(goal.stage).toBe("videos");
     expect(goal.stages.frame!.outputs[0]!.stale).toBeNull();
     expect(stub.unexpected).toEqual([]);
+  }, testBudget(90_000));
+
+  it("repairs a saved first-frame-only video retry without rerunning the reviewed image edits", async () => {
+    let goal = await invoke({ action: "create", brief: 'based on @b1 with @a2. replace: "Use the reference man." twist: "Put a lizard under the umbrella." video: "The man follows the lizard in the last two seconds."' });
+    goal = await approved(await approved(goal));
+    const replacement = goal.stages.replacement!.outputs[0]!;
+    const twist = goal.stages.frame!.outputs[0]!;
+    stub.failNext = true;
+    goal = await approved(goal);
+    expect(goal.status).toBe("failed");
+    const failedChainId = goal.chainId!;
+    const chains = engine.settings.get<{ runs: Record<string, ChainRunRecord> }>("application.chain-runs.v1")!;
+    const chain = chains.runs[failedChainId]!;
+    const first = chain.steps[0]!;
+    chains.runs[failedChainId] = { ...chain, steps: [{ ...first, params: { ...first.params, refs: { first_frame: [twist.artifactId] } } }] };
+    engine.settings.set("application.chain-runs.v1", chains);
+    const record = readGoal(engine, goal.goalId)!;
+    const videos = record.stages.videos!;
+    saveGoal(engine, { ...record, stages: { ...record.stages, videos: { ...videos, attempts: videos.attempts!.map(attempt => {
+      const { videoReferences: _videoReferences, ...fingerprint } = JSON.parse(attempt.fingerprint!) as Record<string, unknown>;
+      return { ...attempt, fingerprint: JSON.stringify(fingerprint) };
+    }) } } });
+
+    const retried = await settled(await invoke({ action: "retry", goal_id: goal.goalId }));
+    expect(retried).toMatchObject({ status: "review", stage: "videos", finish: { status: "review" } });
+    expect(retried.chainId).not.toBe(failedChainId);
+    expect(retried.stages.videos!.previousChainIds).toContain(failedChainId);
+    expect(retried.stages.replacement!.outputs[0]!.artifactId).toBe(replacement.artifactId);
+    expect(retried.stages.frame!.outputs[0]!.artifactId).toBe(twist.artifactId);
+    expect(stub.submissions.filter(submission => submission.path === FRAME_EDIT)).toHaveLength(2);
+    expect(mediaJobs(CLIP_MODEL)[0]!.payload.refs).toEqual({ video: [videoId], image: [twist.artifactId] });
+    expect(stub.submissions.at(-1)!.body).toMatchObject({ reference_video_urls: [expect.any(String)], reference_image_urls: [expect.any(String)] });
+    expect(stub.submissions.at(-1)!.body).not.toHaveProperty("image_url");
+    expect(getChainRun(engine, failedChainId)!.steps[0]!.params.refs).toEqual({ first_frame: [twist.artifactId] });
+
+    const fingerprint = await shortFingerprint(engine, retried.shortPlan!, "videos", 0, twist.artifactId);
+    value(await engine.files.writeFromPath(videoId, "original.mp4", join(fixtures, "clip.mp4")));
+    expect(await shortFingerprint(engine, retried.shortPlan!, "videos", 0, twist.artifactId)).not.toBe(fingerprint);
   }, testBudget(90_000));
 
   it("cleans every storyboard frame in one approval, regenerates and selects one, and makes the frame from the source image and clean frame 1", async () => {

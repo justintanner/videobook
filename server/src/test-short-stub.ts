@@ -93,6 +93,12 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
       return sendJson(response, { code: 200, msg: "success", data: { downloadUrl: `${stub.baseURL}/files/kie-upload-${++counter}.png` } });
     }
     if (method === "POST" && SUBMIT.test(path)) {
+      const input = JSON.parse(body.toString()) as Record<string, unknown>;
+      if (path === "/minimax/h3-max/reference-to-video" && !["reference_image_urls", "reference_video_urls", "reference_audio_urls"].some(key => Array.isArray(input[key]) && input[key].length > 0)) {
+        response.writeHead(422, { "content-type": "application/json" });
+        response.end(JSON.stringify({ detail: [{ loc: ["body"], msg: "At least one reference image, video, or audio must be provided", type: "value_error" }] }));
+        return;
+      }
       const kind = kindOf(path);
       const id = `${kind}-${++counter}`;
       if (stub.refuseNext) refused.add(id);
@@ -100,7 +106,7 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
       if (stub.failNext) failing.add(id);
       stub.failNext = false;
       served.set(id, kind === "frame" ? stub.media.frame : kind === "clip" ? stub.media.clip : stub.media.extended);
-      stub.submissions.push({ path, body: JSON.parse(body.toString()) as Record<string, unknown> });
+      stub.submissions.push({ path, body: input });
       return sendJson(response, { request_id: id, status: "IN_QUEUE" });
     }
     const poll = POLL.exec(path);

@@ -631,7 +631,7 @@ export function compileShortFrameStep(plan: GoalShortPlan, storyboardFrameAddres
   ), storyboardFrameAddress ? [...images, storyboardFrameAddress] : images);
 }
 
-function clipStep(plan: GoalShortPlan, frameAddress: string, prompt: string, images: readonly string[]): ChainStep {
+function clipStep(plan: GoalShortPlan, prompt: string, refs: Record<string, string[]>): ChainStep {
   const segment = plan.segments[0];
   return {
     id: "clip1",
@@ -639,7 +639,7 @@ function clipStep(plan: GoalShortPlan, frameAddress: string, prompt: string, ima
     params: {
       model: plan.video.model,
       prompt,
-      refs: { first_frame: [frameAddress], ...(images.length > 0 ? { image: images } : {}) },
+      refs,
       options: {
         duration: segment.seconds,
         resolution: plan.video.resolution,
@@ -653,28 +653,31 @@ function clipStep(plan: GoalShortPlan, frameAddress: string, prompt: string, ima
 
 export function compileShortClipStep(plan: GoalShortPlan, frameAddress: string): ChainStep {
   const segment = plan.segments[0];
-  if (shortRemixOf(plan)) return clipStep(plan, frameAddress, paragraphs(
+  const remix = shortRemixOf(plan);
+  if (remix) return clipStep(plan, paragraphs(
     segment.prompt,
-    "Start exactly from @firstframe, the reviewed twist. Keep its person, clothes, animals, props and setting. Animate the existing situation with natural movement; the visual joke is already in the frame.",
+    "@video1 is the source video: use its setting, camera movement and action as the reference. @image1 is the reviewed twist: keep its person, clothes, animals and changed props. Follow the beat's timing for when the person and visual joke appear; this image is a reference, not a fixed opening frame. Do not restore the original character or overlays from the video.",
     plan.rules.video,
     plan.rules.silence,
-  ), []);
+  ), { video: [remix.video.artifactId], image: [frameAddress] });
+  const images = addresses(plan.version === 4 ? plan.character.references : plan.sourceImages);
+  const refs = { first_frame: [frameAddress], image: images.length > 0 ? images : [frameAddress] };
   if (plan.version === 4) {
-    return clipStep(plan, frameAddress, paragraphs(
+    return clipStep(plan, paragraphs(
       segment.prompt,
       characterLine(plan.character.references.length, phrase(plan.character.name), "keep the same person in the same clothes."),
       plan.rules.video,
       plan.rules.silence,
-    ), addresses(plan.character.references));
+    ), refs);
   }
-  return clipStep(plan, frameAddress, paragraphs(
+  return clipStep(plan, paragraphs(
     segment.prompt,
     sourceImageLine(plan.sourceImages.length, plan.sourceImages.length > 1
       ? "keep each person exactly, in the same clothes."
       : "keep that person exactly, in the same clothes."),
     plan.rules.video,
     plan.rules.silence,
-  ), addresses(plan.sourceImages));
+  ), refs);
 }
 
 export function compileShortContinuationStep(plan: GoalShortPlan, index: number, clipAddress: string): ChainStep {

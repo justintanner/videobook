@@ -19,7 +19,7 @@ const noop = async () => shortGoalFixture()
 function asset(artifactId: string): AssetRecord | null {
   if (artifactId.startsWith('photo')) return { mediaUrl: `/media/${artifactId}.jpg`, thumbnailUrl: `/thumbs/${artifactId}.jpg` } as unknown as AssetRecord
   if (!artifactId.startsWith('clip') && !artifactId.startsWith('final') && !artifactId.startsWith('video')) return null
-  return { mediaUrl: `/media/${artifactId}.mp4`, thumbnailUrl: null, duration: 20, fps: 24, objectHash: `${artifactId}-hash` } as unknown as AssetRecord
+  return { type: 'video', mediaUrl: `/media/${artifactId}.mp4`, thumbnailUrl: null, duration: 20, fps: 24, objectHash: `${artifactId}-hash` } as unknown as AssetRecord
 }
 
 function render(goal: ShortGoalSnapshot, view: ShortTab = defaultShortTab(goal, goal.shortPlan!), titleOptions: readonly ShortFinishTitle[] = []): string {
@@ -41,7 +41,7 @@ describe('GoalShortReview', () => {
   it('reviews the replacement and twist separately and blocks downstream steps until their inputs are ready', () => {
     const plan = remixPlanFixture()
     const first = shortGoalFixture({}, plan)
-    expect(goalTileView(first).rows.map(row => row.title)).toEqual(['Extract frame', 'Replace character'])
+    expect(goalTileView(first, undefined).rows.map(row => row.title)).toEqual(['Extract frame', 'Replace character'])
     const replacement = render(first)
     for (const tab of ['Replace character', 'Twist', 'Video', 'Finish']) expect(replacement).toContain(`>${tab}</button>`)
     expect(replacement).toContain('Extracted source frame · 3.0 s')
@@ -50,7 +50,7 @@ describe('GoalShortReview', () => {
     expect(button(render(first, 'frame'), 'Add twist')).toContain('disabled')
     const replaced = shortGoalFixture({ stage: 'frame', stages: { replacement: shortStage('replacement', [{ index: 0, artifactId: 'photo-replaced' }]) } }, plan)
     const twist = render(replaced)
-    expect(goalTileView(replaced).rows.map(row => row.title)).toEqual(['Twist'])
+    expect(goalTileView(replaced, undefined).rows.map(row => row.title)).toEqual(['Twist'])
     expect(twist).toContain('Reviewed replacement')
     expect(twist).toContain('aria-label="Twist prompt"')
     expect(twist).not.toContain('Extracted source frame')
@@ -59,6 +59,12 @@ describe('GoalShortReview', () => {
       ...replaced.stages, frame: shortStage('frame', [{ index: 0, artifactId: 'photo-twist', stale: 'The replacement changed.' }]),
     } }, plan)
     expect(button(render(outdated, 'video'), 'Generate clip')).toContain('disabled')
+    const video = render(outdated, 'video')
+    expect(video).toContain('aria-label="Video references"')
+    expect(video).toContain('@video1 · Source video')
+    expect(video).toContain('@image1 · Reviewed twist')
+    expect(button(video, '@video1 · Source video')).toContain('Preview pending')
+    expect(button(video, '@video1 · Source video')).not.toContain('<img')
   })
 
   it('lists adaptation notes above the plan', () => {

@@ -175,6 +175,9 @@ export async function estimateShort(engine: Engine, plan: GoalShortPlan, short: 
   const firstFrame = storyboard?.frames[0] ?? null;
   const frameIds = [...shortImageIds(plan, false), ...(firstFrame ? [firstFrame.artifactId] : [])];
   const clipIds = shortImageIds(plan, true);
+  const clipRefs: Record<string, string[]> = remix
+    ? { video: [remix.video.artifactId], image: [PLACEHOLDER_FRAME] }
+    : { first_frame: [PLACEHOLDER_FRAME], image: clipIds.length > 0 ? clipIds : [PLACEHOLDER_FRAME] };
   const storyboardFrames = storyboard
     ? await Promise.all(storyboard.frames.map((frame) => priced(engine, compileShortStoryboardStep(storyboard, frame.index), { image: [frame.artifactId] })))
     : [];
@@ -185,7 +188,7 @@ export async function estimateShort(engine: Engine, plan: GoalShortPlan, short: 
   const replacement = remix ? await priced(engine, compileShortReplacementStep(plan), { image: [...shortImageIds(plan, false), remix.frame.artifactId] }) : null;
   const frame = await priced(engine, compileShortFrameStep(plan, remix ? PLACEHOLDER_FRAME : firstFrame?.address ?? null), remix ? { image: [PLACEHOLDER_FRAME] } : frameIds.length > 0 ? { image: frameIds } : {});
   const segments = await Promise.all(plan.segments.map((_, index) => index === 0
-    ? priced(engine, compileShortClipStep(plan, PLACEHOLDER_FRAME), { first_frame: [PLACEHOLDER_FRAME], ...(clipIds.length > 0 ? { image: clipIds } : {}) })
+    ? priced(engine, compileShortClipStep(plan, PLACEHOLDER_FRAME), clipRefs)
     : priced(engine, compileShortContinuationStep(plan, index, PLACEHOLDER_CLIP), { video: [PLACEHOLDER_CLIP] })));
   const storyboards = summed(storyboardFrames);
   const videos = summed(segments);
@@ -231,6 +234,7 @@ export async function shortFingerprint(
     settings: { ...plan.video, aspectRatio: plan.aspectRatio },
     references: await goalReferenceHashes(engine, shortImageIds(plan, true)),
     sourceArtifactId,
+    ...(remix && index === 0 ? { videoReferences: await goalReferenceHashes(engine, [remix.video.artifactId, ...(sourceArtifactId ? [sourceArtifactId] : [])]) } : {}),
   });
 }
 
@@ -777,10 +781,19 @@ export async function retryShortGoal(engine: Engine, goal: GoalRecord): Promise<
   const run = goal.stages[stage];
   if (run && run.revision !== content.revision) throw new Error("The plan changed after this attempt. Regenerate using the current plan instead of retrying the older request.");
   const plan = refreshGoalShortPlan(content.plan, readNotebook(engine, goal.notebookId));
+  const step = getChainRun(engine, goal.chainId)?.steps.find(candidate => candidate.id === "clip1");
+  const refs = z.record(z.string(), z.array(z.string())).safeParse(step?.params.refs);
+  const repairClip = stage === "videos" && run?.shotIndexes.length === 1 && run.shotIndexes[0] === 0
+    && !selectedOutput(goal, "videos", 0) && step?.tool === "generate_video" && refs.success
+    && Boolean(refs.data.first_frame?.length) && !["image", "video", "audio"].some(role => refs.data[role]?.length);
   for (const attempt of run?.attempts ?? []) {
     if (attempt.chainId !== goal.chainId || !attempt.fingerprint) continue;
-    if (attempt.fingerprint !== await shortFingerprint(engine, plan, stage, attempt.index, stageSource(goal, stage, attempt.index), attempt.model)) throw new Error(STALE_RETRY);
+    const fingerprint = await shortFingerprint(engine, plan, stage, attempt.index, stageSource(goal, stage, attempt.index), attempt.model);
+    if (attempt.fingerprint === fingerprint) continue;
+    const { videoReferences: _videoReferences, ...previous } = JSON.parse(fingerprint) as Record<string, unknown>;
+    if (!repairClip || attempt.fingerprint !== JSON.stringify(previous)) throw new Error(STALE_RETRY);
   }
+  if (repairClip) return startShortStage(engine, { ...goal, status: "review" }, { action: "approve", revision: content.revision, stage: "videos" }, false);
   assertStageKey(plan, stage, run?.attempts?.find((attempt) => attempt.chainId === goal.chainId)?.model);
   const { lookup } = await toolLookup(engine);
   retryChainRun(engine, goal.chainId, lookup, { continueOnFailure: stage === "storyboards" });

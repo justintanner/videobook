@@ -211,6 +211,13 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
       {imageOutput && <label><span>Revise the {imageName.toLowerCase()}</span><textarea aria-label={`${imageName} feedback`} value={imageFeedback} maxLength={2000} rows={2} disabled={disabled || !canGenerate} onChange={event => (replacing ? setReplacementFeedback : setFeedback)(event.target.value)} /></label>}
     </>}
     {view === 'video' && <>
+      {remix && <>
+        <div className="goal-reference-grid" aria-label="Video references">
+          <GoalMedia artifactId={remix.video.artifactId} cellId={remix.video.cellId} label={`@video1 · Source video${remix.video.address ? ` · ${remix.video.address}` : ''}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />
+          {frameOutput && <GoalMedia artifactId={frameOutput.artifactId} cellId={frameOutput.cellId} label="@image1 · Reviewed twist" resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
+        </div>
+        <p className="goal-panel-muted">Use the source video for movement and setting, and the reviewed twist for appearance. The beat controls when the character and twist appear.</p>
+      </>}
       {currentClip && clipAsset?.mediaUrl
         ? <video className="goal-video-preview" aria-label="Current clip" src={clipAsset.mediaUrl} poster={clipAsset.thumbnailUrl ?? undefined} controls preload="metadata" />
         : currentClip && <GoalMedia artifactId={currentClip.artifactId} cellId={currentClip.cellId} label="Current clip" resolveAsset={resolveAsset} onOpen={onPreviewCell} />}

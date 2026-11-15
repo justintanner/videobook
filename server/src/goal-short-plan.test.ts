@@ -181,6 +181,13 @@ describe("shortTiming", () => {
 });
 
 describe("buildGoalShortPlan", () => {
+  it("refuses H3 Max reference requests that contain only a first frame before a provider call", () => {
+    const model = resolveModel(GOAL_SHORT_DEFAULTS.video.model);
+    for (const refUrls of [{}, { first_frame: ["https://example.com/twist.jpg"] }]) {
+      expect(buildWireRequest(model, { prompt: "He bites the tree at twelve seconds.", refUrls })).toMatchObject({ ok: false, error: expect.stringContaining("needs one of: image, video, audio") });
+    }
+  });
+
   it("sends each separate remix edit and the final frame to valid provider requests", () => {
     const plan = shortPlan({
       sourceImages: [sheet],
@@ -196,9 +203,12 @@ describe("buildGoalShortPlan", () => {
     const twist = expectAccepted(compileShortFrameStep(plan, "@c1"));
     expect(twist.image_urls).toEqual(["https://example.com/c1.jpg"]);
     const clip = compileShortClipStep(plan, "@d1");
-    expect(clip.params).toMatchObject({ refs: { first_frame: ["@d1"] } });
-    expect((clip.params as StepParams).refs).not.toHaveProperty("image");
-    expectAccepted(clip);
+    expect(clip.params).toMatchObject({ refs: { video: [umbrella.artifactId], image: ["@d1"] } });
+    const clipRequest = expectAccepted(clip);
+    expect(clipRequest).toMatchObject({ reference_video_urls: [mediaUrl("video", umbrella.artifactId)], reference_image_urls: [mediaUrl("image", "@d1")] });
+    expect(clipRequest).not.toHaveProperty("image_url");
+    expect(clipRequest.prompt).toContain("the source video");
+    expect(clipRequest.prompt).toContain("reference image 1");
     expect(() => compileShortFrameStep(plan)).toThrow(/Replace the character/u);
   });
 
@@ -456,8 +466,9 @@ describe("compiled short steps", () => {
       prompt: [BEATS[0], "@image1 is a source image: keep that person exactly, in the same clothes.", SHORT_RULES.video, SHORT_RULES.silence].join("\n\n"),
       refs: { first_frame: ["@c2"], image: ["@a1"] },
     });
-    expect(compileShortClipStep(shortPlan({ sourceImages: [] }), "@c1").params).not.toHaveProperty("refs.image");
-    expect((compileShortClipStep(shortPlan({ sourceImages: [] }), "@c1").params as StepParams).refs).toEqual({ first_frame: ["@c1"] });
+    const noSourceImages = compileShortClipStep(shortPlan({ sourceImages: [] }), "@c1");
+    expect((noSourceImages.params as StepParams).refs).toEqual({ first_frame: ["@c1"], image: ["@c1"] });
+    expectAccepted(noSourceImages);
   });
 
   it("compiles a saved version-4 short with its character line and the silence line stored on the plan", () => {

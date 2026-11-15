@@ -255,14 +255,14 @@ export async function shortPlannerInstructions(input: {
     `Plan a short that looks like real phone footage filmed by someone off screen, starring ${shortStar(input.sourceImageCount)}. That person never speaks.`,
     `Return JSON with a title, one opening frame prompt for GPT Image 2.6 and ${count === 1 ? "one beat" : `${count} beats`} for MiniMax H3 Max, one per segment: ${input.segmentSeconds.map((seconds, index) => `beat ${index + 1} lasts ${seconds} seconds`).join(", ")}. The aspect ratio is ${input.aspectRatio}.`,
     `Word ceilings, not targets: title ${SHORT_WORD_CEILINGS.title}, frame ${SHORT_WORD_CEILINGS.frame}, each beat ${SHORT_WORD_CEILINGS.beat}.`,
-    "Beat 1 starts from the opening frame. Each later beat continues from where the previous one ends, in the same place, and every beat ends with that person in frame. One action per beat, in the present tense, with what the camera does and what is heard.",
+    `${input.remix ? "Beat 1 uses the source video and reviewed twist image as references; follow the brief's timing for entrances and the joke." : "Beat 1 starts from the opening frame."} Each later beat continues from where the previous one ends, in the same place, and every beat ends with that person in frame. One action per beat, in the present tense, with what the camera does and what is heard.`,
     CAMERA_LINE,
     `${POSITIVE_LINE} Give that person a phone only when the brief does.`,
     ...(input.remix ? [
       "Plan three separate steps: replace the character in one extracted source frame, add a funny but realistic twist to that replacement, then animate the resulting frame.",
       "Return an additional replacement prompt of at most 40 words. It only replaces the main person with the person from the source images or the brief, retaining face, hair, build and clothes. Match the original pose and scene; leave its animals and props unchanged. Overlay removal is added automatically to this step.",
       "The frame prompt is the next edit, applied to the reviewed replacement, not the original frame. Make one simple visual joke that is already visible in this still. Follow the brief's twist when given; otherwise choose a surprising but physically plausible substitution or situation. Preserve the replaced person and surroundings, realistic anatomy, scale, support and gravity. Avoid fantasy, impossible stunts and extra story beats.",
-      "The video starts exactly from that twist frame and animates its existing situation. Keep the same character and joke without reintroducing the original person or undoing the twist.",
+      "The video receives both the original video as a motion and setting reference and the reviewed twist image as an appearance reference. The twist image is not a fixed first frame. Preserve any requested timing, including a character arriving or a joke happening near the end. Keep the same character and joke without reintroducing the original person or undoing the twist.",
       "Images are labelled Source image 1, Source image 2 and so on, then Extracted source frame with its timestamp. The source images supply the replacement identity; the extracted frame supplies the composition and scene. Describe them in plain words without @tokens or image numbers.",
       `Ignore graphics drawn over the source frame, such as ${OVERLAYS}, including a WUT! sticker and its underline. Keep printing physically on objects.`,
     ] : plannerImageLines(input.sourceImageCount, input.storyboardFrameCount ?? 0)),
@@ -305,14 +305,14 @@ export async function shortRevisionInstructions(plan: GoalShortPlan, stage: Goal
       ? shortRemixOf(plan)
         ? `Rewrite the ${part.name} prompt for GPT Image 2.6 so it follows the operator's feedback. It describes one still picture.`
         : "Rewrite the opening frame prompt for GPT Image 2.6 so it follows the operator's feedback. It describes the one still picture the short opens on."
-      : `Rewrite beat ${index + 1} of ${plan.segments.length} for MiniMax H3 Max, which lasts ${plan.segments[index]!.seconds} seconds, so it follows the operator's feedback. One action in the present tense, with what the camera does and what is heard. ${index === 0 ? "It starts from the opening frame" : "It continues from where the beat before it ends, in the same place,"} and ends with that person in frame.`,
+      : `Rewrite beat ${index + 1} of ${plan.segments.length} for MiniMax H3 Max, which lasts ${plan.segments[index]!.seconds} seconds, so it follows the operator's feedback. One action in the present tense, with what the camera does and what is heard. ${index === 0 ? shortRemixOf(plan) ? "It follows the source video and reviewed twist references" : "It starts from the opening frame" : "It continues from where the beat before it ends, in the same place,"} and ends with that person in frame.`,
     FOLLOW_FEEDBACK,
     DROP_CONTRADICTED,
     ...(shortRemixSourceOf(plan) ? [stage === "replacement"
       ? "This is the character replacement edit only. Keep the source pose, camera, place, animals and props; the funny twist is a separate later edit. Clear added overlays while preserving physical printing."
       : stage === "frame"
         ? "This edit starts from the reviewed character replacement. Change one thing into a funny but physically plausible visual joke, keeping the person's identity and the rest of the scene."
-        : "Animate the reviewed twist frame without changing its character or undoing the visual joke."] : []),
+        : "Use the source video for movement and setting, and the reviewed twist image for the character and visual joke. Honor the requested timing; the twist image does not fix the opening frame."] : []),
     CAMERA_LINE,
     `${POSITIVE_LINE} Give that person a phone only when the feedback or the brief does.`,
     `Write at most ${part.ceiling} words, and answer with the whole revised ${part.name}.`,

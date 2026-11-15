@@ -106,9 +106,9 @@ own approval with its estimate:
 2. **Twist:** a separate GPT Image 2.6 edit takes only the reviewed replacement
    and makes one funny, physically believable change. The person's identity
    and the surrounding scene stay consistent. Review this still before video.
-3. **Video:** MiniMax H3 Max animates the reviewed twist as its first frame.
-   The original video and source images are not sent again, so they do not
-   reintroduce the old character or undo the joke. Regenerate a result, revise
+3. **Video:** MiniMax H3 Max uses the original video for motion and setting and
+   the reviewed twist image for appearance, following the beat's timing.
+   Review both references before generation. Regenerate a result, revise
    it with feedback, or select an earlier version. Changing an earlier edit
    marks dependent results out of date and requires regeneration.
 4. **Finish:** keeps the reviewed take and burns the saved
