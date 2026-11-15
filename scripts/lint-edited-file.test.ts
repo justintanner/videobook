@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { copyFile, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -13,7 +13,7 @@ afterEach(async () => {
 })
 
 async function fixture(install = true) {
-  const root = await mkdtemp(join(tmpdir(), 'vb-lint-hook-'))
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'vb-lint-hook-')))
   roots.push(root)
   await mkdir(join(root, 'scripts'))
   await copyFile(resolve('scripts/lint-edited-file.mjs'), join(root, 'scripts/lint-edited-file.mjs'))
