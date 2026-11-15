@@ -26,6 +26,7 @@ import { registerApplySfxJob } from "./apply-sfx.js";
 import { registerChangeVideoSpeedJob } from "./change-video-speed.js";
 import { registerTimewarpVideoJob } from "./timewarp-video.js";
 import { registerZoomVideoJob } from "./zoom-video.js";
+import { registerRemoveVideoGraphicsJobs } from "./remove-video-graphics.js";
 import { registerSyncVideoToAudioJob } from "./sync-video-to-audio.js";
 import { registerAudioBoostJob } from "./audio-boost.js";
 import { registerAudioMixJob } from "./audio-mix.js";
@@ -118,6 +119,7 @@ export function registerAllJobHandlers(
   registerChangeVideoSpeedJob(engine);
   registerTimewarpVideoJob(engine);
   registerZoomVideoJob(engine);
+  registerRemoveVideoGraphicsJobs(engine);
   registerSyncVideoToAudioJob(engine);
   registerAudioBoostJob(engine);
   registerAudioMixJob(engine);

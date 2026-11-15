@@ -98,6 +98,20 @@ export const VIDEO_EDITING_COMMANDS: Command[] = [
     aliases: [],
   },
   {
+    command: "/remove-graphics",
+    description: "Detect and remove burned-in titles, text and graphics locally, with editable timed regions",
+    example: "/remove-graphics @a1",
+    category: "context_menu",
+    icon: "Eraser",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [{ name: "asset_id", type: "string", required: true, description: "Video to clean" }],
+    uiAction: "open_video_cleanup",
+    exposure: "ui",
+    aliases: ["/remove-osg", "/remove-titles"],
+  },
+  {
     command: "/overlay",
     description: "Edit a video's on-screen graphics: headline, second line, credit, logo and QR layers with a live preview, then render them in",
     example: "/overlay @vid-yt-clip @img-logo",
@@ -168,6 +182,7 @@ export const VIDEO_EDITING_COMMANDS: Command[] = [
 ];
 
 export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
+  { tool: "remove_video_graphics", exposure: "ui", command: "/remove-graphics", purpose: "Detect, review and locally remove burned-in text and graphics" },
   { tool: "prepare_cold_open", exposure: "composite", command: "/edit-cold-open", purpose: "Select an AI highlight for review" },
   { tool: "edit_cold_open", exposure: "composite", command: "/edit-cold-open", purpose: "Render a reviewed cold-open copy" },
   { tool: "trim_video", exposure: "direct", command: "/trim", purpose: "Keep a range, remove ranges or shave the ends, in place or into a new cell" },

@@ -56,6 +56,7 @@ import { restoreArchiveClipsDef } from "./restore-archive-clips.js";
 import { changeVideoSpeedDef } from "./change-video-speed.js";
 import { timewarpVideoDef } from "./timewarp-video.js";
 import { zoomVideoDef } from "./zoom-video.js";
+import { removeVideoGraphicsDef } from "./remove-video-graphics.js";
 import { syncVideoToAudioDef } from "./sync-video-to-audio.js";
 import { audioBoostDef } from "./audio-boost.js";
 import { audioMixDef } from "./audio-mix.js";
@@ -154,6 +155,7 @@ export function getVideoEditingToolDefs(engine: Engine, books?: BookManager): To
     changeVideoSpeedDef(engine),
     timewarpVideoDef(engine),
     zoomVideoDef(engine),
+    removeVideoGraphicsDef(engine),
     syncVideoToAudioDef(engine),
     audioBoostDef(engine),
     audioMixDef(engine),

@@ -1,6 +1,6 @@
 export const UI_ACTION_IDS = [
   "open_upload", "open_inbox", "open_status", "copy_clipboard", "show_history",
-  "open_asset", "open_crop", "open_osg", "switch_book", "viewer_set_original",
+  "open_asset", "open_crop", "open_osg", "open_video_cleanup", "switch_book", "viewer_set_original",
   "viewer_set_landscape", "viewer_set_portrait", "viewer_toggle_info",
   "viewer_focus_file", "viewer_show_settings", "settings_landscape",
   "settings_portrait", "settings_square", "settings_subs", "settings_audio",

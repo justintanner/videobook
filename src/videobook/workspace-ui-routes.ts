@@ -8,6 +8,7 @@ type UiRoute =
   | { kind: 'special'; action: 'upload' | 'copy' | 'history' | 'open' | 'original' | 'landscape' | 'portrait' | 'close' | 'collapse' | 'expand' | 'save' | 'notebook' | 'play' | 'skeleton' }
   | { kind: 'existing' }
   | { kind: 'graphics' }
+  | { kind: 'video-cleanup' }
 
 export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   open_actions: { kind: 'existing' },
@@ -30,6 +31,7 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   open_rename_all: { kind: 'form', tool: 'rename_all' },
   open_crop: { kind: 'form', tool: 'crop_asset' },
   open_osg: { kind: 'graphics' },
+  open_video_cleanup: { kind: 'video-cleanup' },
   settings_audio: { kind: 'form', tool: 'render_video' },
   settings_subs: { kind: 'form', tool: 'render_video' },
   settings_bg: { kind: 'form', tool: 'render_video' },

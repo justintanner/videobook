@@ -1,0 +1,30 @@
+.video-cleanup-body { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, 1fr); gap: 16px; padding: 12px; min-height: 0; overflow: auto; }
+.cleanup-preview, .cleanup-controls { min-width: 0; }
+.cleanup-preview { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.cleanup-stage { position: relative; width: min(100%, calc(36vh * var(--cleanup-ratio)), calc(340px * var(--cleanup-ratio))); flex: 0 0 auto; background: #080b10; overflow: hidden; }
+.cleanup-stage video { width: 100%; height: 100%; object-fit: fill; display: block; }
+.cleanup-stage svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+.cleanup-stage rect { fill: #ef964a30; stroke: #ffb965; stroke-width: 2px; vector-effect: non-scaling-stroke; cursor: move; }
+.cleanup-stage [data-selected="true"] > rect { stroke: #fff; }
+.cleanup-stage .cleanup-handle { fill: #fff; cursor: nwse-resize; }
+.cleanup-stage text { fill: #fff; font-size: 26px; pointer-events: none; paint-order: stroke; stroke: #000; stroke-width: 2px; }
+.cleanup-transport { display: flex; align-items: center; gap: 8px; width: 100%; }
+.cleanup-transport input { min-width: 30px; flex: 1; }
+.cleanup-transport output { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 11px; }
+.video-cleanup-body p { font-size: 12px; line-height: 1.45; margin: 6px 0; opacity: .8; }
+.cleanup-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.video-cleanup-body button, .video-cleanup-body select, .video-cleanup-body input[type="number"] { color: inherit; background: #ffffff09; border: 1px solid #ffffff25; border-radius: 5px; padding: 6px 8px; font: inherit; font-size: 12px; }
+.video-cleanup-body button:disabled { opacity: .45; cursor: default; }
+.cleanup-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cleanup-fields label, .cleanup-method { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.cleanup-fields input { min-width: 0; width: 100%; box-sizing: border-box; }
+.cleanup-regions { display: flex; flex-wrap: wrap; gap: 5px; max-height: 120px; overflow: auto; margin: 10px 0; }
+.cleanup-regions button { display: flex; gap: 8px; }
+.cleanup-regions [aria-pressed="true"] { border-color: #ffb965; background: #ffb96520; }
+.cleanup-regions span { opacity: .65; }
+.cleanup-models { border: 1px solid #ffffff25; border-radius: 6px; padding: 8px; }
+.video-cleanup-body [role="alert"] { color: #ffb095; }
+@media (max-width: 700px) {
+  .video-cleanup-body { grid-template-columns: minmax(0, 1fr); }
+  .cleanup-stage { width: min(100%, calc(28vh * var(--cleanup-ratio)), calc(230px * var(--cleanup-ratio))); }
+}

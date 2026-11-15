@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (215)
+## MCP endpoints (216)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
@@ -161,6 +161,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `release_search_reference` — Release a temporary reverse-search reference
 - `remove_sequence_track` — Remove an empty canonical track while preserving required track kinds
 - `remove_sound` — Silence a described sound (e.g. a horse neigh) in a video or audio asset in place, using ElevenLabs Scribe audio-event timestamps; the picture is unchanged.
+- `remove_video_graphics` — Locally detect burned-in titles/text, review timed regions and remove OSG, logos or text into a new video copy. get reads source/model/detection state; install_models downloads 213 MB once; detect samples local text candidates (review scene text and add non-text logos manually); render uses reviewed regions. LaMa is frame-by-frame AI inpainting and may flicker; fill is fast interpolation for simple backgrounds. No media upload or API key.
 - `rename_all` — Relabel video and image assets in bulk. dry_run proposes descriptive labels from their analysis, transcript and prompts; pass edited renames with dry_run false to apply. Labels are display-only.
 - `rename_asset` — Set an asset's display label. Labels are display-only — the artifact id and all references stay unchanged.
 - `rename_book` — Rename a book. Project names are normalized to lowercase slugs with hyphens.
@@ -226,7 +227,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 - `zoom_video` — Zoom in on parts of a video toward a focus point, easing in, holding and returning, with an optional built-in sound. Local and free: one FFmpeg encode in place, with history.
 
-## Slash actions (266; 107 dedicated command routes)
+## Slash actions (268; 108 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
@@ -412,8 +413,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/register-search-manifest` — Register an immutable semantic-index model manifest; MCP: `register_search_manifest`
 - `/relayout-notebook` — Arrange cells into the Clean lanes (source videos, generators, images, generated videos, audio, work; Timeline rows stay put; goal notebooks keep the goal layout). Migrates legacy inline generate_video / generate_image artifacts into output cells.; MCP: `relayout_notebook`
 - `/release-search-reference` — Release a temporary reverse-search reference; MCP: `release_search_reference`
+- `/remove-graphics` (aliases: `/remove-osg`, `/remove-titles`) — Detect and remove burned-in titles, text and graphics locally, with editable timed regions; UI: `open_video_cleanup`
 - `/remove-sequence-track` — Remove an empty canonical track while preserving required track kinds; MCP: `remove_sequence_track`
 - `/remove-sound` — Remove a described sound from a video or audio asset in place by silencing its Scribe-tagged audio events; MCP: `remove_sound`
+- `/remove-video-graphics` — Locally detect burned-in titles/text, review timed regions and remove OSG, logos or text into a new video copy. get reads source/model/detection state; install_models downloads 213 MB once; detect samples local text candidates (review scene text and add non-text logos manually); render uses reviewed regions. LaMa is frame-by-frame AI inpainting and may flicker; fill is fast interpolation for simple backgrounds. No media upload or API key.; MCP: `remove_video_graphics`
 - `/rename` — Rename an asset; MCP: `rename_asset`
 - `/rename-all` — Bulk-rename video/image assets with an explicit dry run: GPT-5.5 proposes descriptive names from each asset's stored context, you edit them in a side-by-side preview, then confirm to apply (updates timeline slots, OSG metadata, and plan/.plan.json references).; UI: `open_rename_all`
 - `/rename-book` — Rename a book. Project names are normalized to lowercase slugs with hyphens.; MCP: `rename_book`

@@ -316,6 +316,7 @@ import { parseTrackAddCommand } from '@/videobook/track-add-command'
 import { resolvePlaySlot } from '@/videobook/play-command'
 import { useSubtitleEditor } from '@/videobook/useSubtitleEditor'
 import { useGraphicsEditor } from '@/videobook/useGraphicsEditor'
+import { useVideoCleanup } from '@/videobook/useVideoCleanup'
 import { graphicsBlockText, graphicsEditorTarget, graphicsWatermarkTarget, type GraphicsWatermarkTarget } from '@/videobook/graphics-model'
 import { subtitlesCommandTarget } from '@/videobook/subtitles-model'
 import {
@@ -332,6 +333,7 @@ import {
 } from '@/videobook/notebook-selection-generation'
 import { SubtitlesSheet } from '@/components/videobook/subtitles/SubtitlesSheet'
 import { GraphicsSheet } from '@/components/videobook/graphics/GraphicsSheet'
+import { VideoCleanupSheet } from '@/components/videobook/VideoCleanupSheet'
 import {
   changedNotebookGridNodes,
   notebookCreationPlacement,
@@ -722,6 +724,7 @@ type PendingChatAction =
     }
   | { kind: 'subtitles'; assetId: string }
   | { kind: 'graphics'; assetId: string }
+  | { kind: 'video-cleanup'; assetId: string }
   | {
       kind: 'transcribe'
       assetId: string | null
@@ -1808,6 +1811,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const subtitles = useSubtitleEditor({ bookId, ready: mcp.state === 'ready', call })
   const graphics = useGraphicsEditor({ bookId, ready: mcp.state === 'ready', call })
+  const videoCleanup = useVideoCleanup({ bookId, ready: mcp.state === 'ready', call })
   const selectCanvasCell = useCallback((cellId: string | null, chat?: ChatExecution, initialPreview?: unknown) => {
     if (chat && !chat.isCurrent()) return
     setPreviewTurnId(cellId ? chat?.id ?? null : null)
@@ -2711,10 +2715,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (pendingChatAction?.kind === 'subtitles') subtitles.close()
     if (pendingChatAction?.kind === 'graphics') graphics.close()
+    if (pendingChatAction?.kind === 'video-cleanup') videoCleanup.close()
     setPendingCommandPlan(null)
     setPendingChatAction(null)
     focusCommandComposer()
-  }, [bookId, call, cancelChatReview, focusCommandComposer, graphics, pendingChatAction, subtitles])
+  }, [bookId, call, cancelChatReview, focusCommandComposer, graphics, pendingChatAction, subtitles, videoCleanup])
   const updatePendingSpliceOverlap = useCallback((value: string) => {
     const overlap = Number(value)
     if (value.trim() === '' || !Number.isFinite(overlap) || overlap < 0) return
@@ -6021,6 +6026,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const openWatermark = (reference: string | undefined, chat?: ChatExecution, params?: Record<string, unknown>): ComposerOutcome => (
     openGraphics(reference ?? selectedNotebookCell?.outputArtifactId, undefined, chat, null, graphicsWatermarkTarget(params))
   )
+  const openVideoCleanup = (reference: string | undefined, chat?: ChatExecution): ComposerOutcome => {
+    const resolved = graphicsEditorTarget({ reference, image: undefined, assets, mentions: commandMentionAssets, notebookId: notebook?.id ?? null })
+    if (!resolved.ok) return resolved
+    presentEditorSheet({ kind: 'video-cleanup', assetId: resolved.target.artifactId }, chat)
+    videoCleanup.open(resolved.target)
+    return { ok: true, message: `Graphics remover opened for ${resolved.target.label}` }
+  }
   const openGraphicsFor = (artifactId: string) => {
     const result = openGraphics(artifactId, undefined)
     if (!result.ok) setNotice(result.message, 'error')
@@ -7155,6 +7167,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const reference = asString(plan.params.post_cell_id) ?? asString(plan.params.source_cell_id) ?? asString(plan.params.asset_id) ?? undefined
       return openSourceDeliveryReview(reference, plan.params.to === 'download' ? 'download' : 'icloud', chat, asString(plan.params.text) ?? undefined)
     }
+    if (plan.tool === 'show_video_cleanup') return openVideoCleanup(asString(plan.params.asset_id) ?? undefined, chat)
     if (plan.tool === 'show_subtitles' || plan.tool === 'show_graphics') {
       const assetId = asString(plan.params.asset_id)
       if (!assetId) return { ok: false, message: plan.tool === 'show_graphics' ? 'Name the video for the graphics.' : 'Name the video to caption.' }
@@ -7753,6 +7766,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       graphics.close()
       return { ok: true, message: outcome.message }
     }
+    if (pendingChatAction.kind === 'video-cleanup') {
+      const outcome = await videoCleanup.render(chat)
+      if (!outcome.ok) return outcome
+      reviewChat(chat, false, () => setPendingChatAction(null))
+      videoCleanup.close()
+      return outcome
+    }
     if (pendingChatAction.kind === 'post-delivery') {
       const review = pendingChatAction.review
       const post = notebookPosts.find(item => item.id === review.postId) ?? null
@@ -8110,6 +8130,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const asset = assets.find((entry) => entry.artifactId === reference)
       ?? assets.find((entry) => commandMentionAssets.some((mention) => mention.artifactId === entry.artifactId && mention.cellAddress.toLowerCase() === reference?.replace(/^@/u, '').toLowerCase()))
     if (route.kind === 'graphics') return openGraphics(asset?.artifactId ?? reference, asString(values.image) ?? undefined, chat)
+    if (route.kind === 'video-cleanup') return openVideoCleanup(asset?.artifactId ?? reference, chat)
     if (route.kind === 'search') {
       await openWorkspaceActions(undefined, undefined, route.query, undefined, chat)
       return { ok: true, message: 'Actions opened' }
@@ -9757,6 +9778,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (pendingChatAction.kind === 'graphics') {
       return <GraphicsSheet editor={graphics} assets={assets} mentions={commandMentionAssets} books={books} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} onOpenSource={openGraphicsFor} />
+    }
+    if (pendingChatAction?.kind === 'video-cleanup') {
+      return <VideoCleanupSheet editor={videoCleanup} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} />
     }
     if (pendingChatAction.kind === 'transcribe') {
       const action = pendingChatAction

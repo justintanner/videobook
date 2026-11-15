@@ -58,6 +58,42 @@ Assets carry editable tags across three automatic facets — people, places and
 editing — plus free-form custom tags, with exact filtering in the Library and
 over MCP. See [docs/asset-tags.md](docs/asset-tags.md).
 
+## Remove burned-in video graphics
+
+Open `/remove-graphics @a1` (also `/remove-osg` or `/remove-titles`) to find
+titles and text locally, review their boxes and time windows, then choose
+**Remove into copy**. Drag on the preview to add a region, move a box or resize
+its corner. Add non-text logos and graphics manually; delete detections for
+scene text you want to keep. The original video stays intact.
+
+**Download models** installs about 213 MB once from Hugging Face, with pinned
+revisions and SHA-256 verification. Detection and rendering then run locally on
+the CPU, without an API key or media upload. Models live in
+`runtime/models/video-cleanup` under the data home (the repository in a source
+checkout); `VIDEOBOOK_CLEANUP_MODEL_DIR` overrides that directory.
+
+The detector is [PaddleOCR PP-OCRv5 mobile](https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx).
+It samples every half second, increasing the interval for long clips. Very
+brief titles can be missed, and scene text can be detected too. Review the
+whole clip and adjust the start/end times before rendering. The MCP tool's
+`sample_interval` supports denser scans down to 0.25 seconds.
+
+**Local AI · LaMa** reconstructs each masked area with the
+[LaMa ONNX model](https://huggingface.co/Carve/LaMa-ONNX). It works frame by frame:
+moving or detailed backgrounds can flicker, and hidden objects cannot be
+recovered exactly. **Fast fill** uses FFmpeg interpolation and needs no models;
+it suits small overlays on simple backgrounds. Both preserve the clip length
+and sound; variable frame rates become a constant average rate, and odd display
+dimensions round to even pixels for H.264. A new notebook cell holds the result
+and subsequent renders add versions to it.
+
+For MCP/CLI use, `remove_video_graphics` has `get`, `install_models`, `detect`,
+`render` and `status` operations. `render` requires the `source_hash` from `get`,
+a UUID `request_id`, and reviewed `regions` (`id`, `x`, `y`, `width`, `height`,
+`start`, `end`; coordinates are fractions of the displayed frame and times are
+seconds). Supply `notebook_id` to place the copy. Jobs can be stopped with
+`cancel_job`; no paid provider fallback runs automatically.
+
 ## Video goals
 
 `/goal` makes a short: a real-looking phone video of 5 to 60 seconds that
