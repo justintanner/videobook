@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Server } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createEngine, LOCAL_CLIP_MANIFEST, type Engine } from "videobook-engine";
+import { LOCAL_CLIP_MANIFEST, type Engine } from "videobook-engine";
+import { closeEngineForTest, createEngineForTest } from "./engine.js";
 import sharp from "sharp";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -35,7 +36,7 @@ const runtime: TransformersRuntime = await import(new URL("./transformers-runtim
 describe("local search provider registration", () => {
   let tempDir: string;
   let environmentSnapshot: Array<[ModelEnvironmentName, string | undefined]>;
-  let engines: Engine[];
+  let engines: Array<{ root: string; engine: Engine }>;
   let server: Server;
   let originalHost: string;
   let requests: string[];
@@ -58,11 +59,11 @@ describe("local search provider registration", () => {
   });
 
   afterEach(async () => {
-    for (const engine of engines) await stopBookQueue(engine.book.get().bookId);
+    for (const { engine } of engines) await stopBookQueue(engine.book.get().bookId);
     runtime.env.remoteHost = originalHost;
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    for (const engine of engines) engine.close();
+    for (const { root, engine } of engines) closeEngineForTest(root, engine);
     for (const [name, value] of environmentSnapshot) {
       if (value === undefined) {
         delete process.env[name];
@@ -272,12 +273,9 @@ describe("local search provider registration", () => {
   }
 
   function createTestEngine(name: string): Engine {
-    const engine = createEngine({
-      durableWrites: false,
-      rootDir: join(tempDir, name),
-      initialBookName: name,
-    });
-    engines.push(engine);
+    const root = join(tempDir, name);
+    const engine = createEngineForTest(root);
+    engines.push({ root, engine });
     return engine;
   }
 

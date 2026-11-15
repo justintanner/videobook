@@ -3,12 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { v7 as uuidv7 } from "uuid";
-import {
-  createEngine,
-  type Engine,
-  type NotebookCell,
-  type NotebookDocument,
+import type {
+  Engine,
+  NotebookCell,
+  NotebookDocument,
 } from "videobook-engine";
+import { closeEngineForTest, createEngineForTest } from "../../server/src/engine.js";
 import {
   registerRunNotebookJob,
   runNotebookCell,
@@ -36,7 +36,7 @@ describe("notebook generation rows", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-generations-"));
-    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "generations" });
+    engine = createEngineForTest(rootDir);
     await engine.ready;
     bookId = engine.book.get().bookId;
     previousKieKey = process.env.KIE_API_KEY;
@@ -49,7 +49,7 @@ describe("notebook generation rows", () => {
     if (previousKieKey === undefined) delete process.env.KIE_API_KEY;
     else process.env.KIE_API_KEY = previousKieKey;
     await stopBookQueue(bookId);
-    engine.close();
+    closeEngineForTest(rootDir, engine);
     await rm(rootDir, {
       recursive: true,
       force: true,

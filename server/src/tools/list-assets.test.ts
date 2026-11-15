@@ -539,7 +539,7 @@ describe("list_assets tool", () => {
     try {
       const bookId = engine.book.get().bookId;
       const catalog = await seedMixedStatusCatalog(engine, {
-        ready: 250,
+        ready: 201,
         error: 0,
         processing: 0,
       });

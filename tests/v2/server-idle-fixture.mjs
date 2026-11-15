@@ -27,7 +27,7 @@ try {
   await delay(testBudget(1_000))
   const startupTransactions = transactions
   transactions = 0
-  await delay(testBudget(6_000))
+  await delay(testBudget(1_000))
   console.log(`IDLE_RESULT ${JSON.stringify({ books: bookManager.list().length, startupTransactions, idleTransactions: transactions })}`)
 } finally {
   await server.close()

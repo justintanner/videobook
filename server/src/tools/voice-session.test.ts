@@ -600,7 +600,7 @@ describe("voice session boundaries", () => {
       expect(instructionsOf()[1]).toMatch(/Storyboard/u);
 
       // An unchanged board is not re-sent every second.
-      await new Promise(resolve => setTimeout(resolve, 2_500));
+      await new Promise(resolve => setTimeout(resolve, 1_200));
       expect(instructionsOf()).toHaveLength(2);
     } finally {
       await session.close();

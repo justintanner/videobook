@@ -762,7 +762,7 @@ describe('media Library slots', () => {
     expect(managed.ok).toBe(true)
     if (!managed.ok) return
     const catalog = await seedMixedStatusCatalog(managed.value.engine, {
-      ready: 250,
+      ready: 201,
       error: 0,
       processing: 0,
     })

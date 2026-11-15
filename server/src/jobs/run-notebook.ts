@@ -26,6 +26,7 @@ import {
 } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { logger } from "../logger.js";
+import { currentAwaitNotebookOutputPollMs } from "../poll-intervals.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import type { NotebookRunPlanRecord, RecordedNotebookRun } from "../notebook-run-plan.js";
 import { removeCreditFailedOutput } from "../notebook-credit-retry.js";
@@ -3732,7 +3733,7 @@ async function awaitNotebookOutput(
         return;
       }
     }
-    await delay(2_000, undefined, { signal });
+    await delay(currentAwaitNotebookOutputPollMs(), undefined, { signal });
   }
   const document = await failAwaitingNotebookCell(
     engine,

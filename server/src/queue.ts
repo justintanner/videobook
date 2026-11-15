@@ -16,6 +16,7 @@ import { bookManager } from "./engine.js";
 import { ensureJobHandlersLoaded } from "./jobs/index.js";
 import { runWithJobDeadline } from "./job-deadline.js";
 import { logger } from "./logger.js";
+import { currentQueuePollIntervalMs } from "./poll-intervals.js";
 import { testQueueCleanup } from "./test-queue-cleanup.js";
 import { preserveProviderTask } from "./provider-task-record.js";
 
@@ -567,7 +568,7 @@ async function createBookRunner(bookId: string): Promise<RunnerInfo> {
   assertQueueAcceptingWork(bookId);
   const runner = engine.jobs.queue.createRunner({
     concurrency: 5,
-    pollIntervalMs: 250,
+    pollIntervalMs: currentQueuePollIntervalMs(),
     // The engine default lease is 30s. Remotion can stall the event loop
     // longer than that, and the reaper then fails the subtitle render.
     leaseMs: 10 * 60_000,
@@ -576,7 +577,7 @@ async function createBookRunner(bookId: string): Promise<RunnerInfo> {
   });
   const searchRunner = engine.jobs.queue.createRunner({
     concurrency: 1,
-    pollIntervalMs: 250,
+    pollIntervalMs: currentQueuePollIntervalMs(),
     jobTypes: SEARCH_REFERENCE_JOB_TYPES,
     resolveHandler: makeWrappedResolver(bookId, engine),
   });

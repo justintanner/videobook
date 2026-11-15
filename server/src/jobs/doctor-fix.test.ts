@@ -114,10 +114,10 @@ describe("doctor tool", () => {
     const lease = await fs.jobs.artifactWork.begin(stuck, {
       kind: "generate",
       ownerKind: "job",
-      durationMs: 500,
+      durationMs: 1,
     });
     expect(lease).toBeTruthy();
-    await sleep(1200);
+    await sleep(20);
 
     const res = await client.callTool({ name: "doctor", arguments: { book_id: bookId } });
     expect(res.isError).toBeFalsy();

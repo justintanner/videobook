@@ -8,8 +8,8 @@ import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { computeEstimate } from "@apicity/cost";
-import { createEngine } from "videobook-engine";
 import type { Engine } from "videobook-engine";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { createOpenAi, createFal, createElevenLabs } from "../usage-providers.js";
 import { withBookContext, scopedBookEngine } from "../book-context.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
@@ -48,7 +48,7 @@ describe("provider usage through real HTTP and engine storage", () => {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "vb-book-usage-"));
-    engine = createEngine({ rootDir: root, initialBookName: "usage", durableWrites: false });
+    engine = createEngineForTest(root);
     await engine.ready;
     responseId = "response-one";
     mode = "normal";
@@ -97,7 +97,7 @@ describe("provider usage through real HTTP and engine storage", () => {
   afterEach(async () => {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    engine.close();
+    closeEngineForTest(root, engine);
     await rm(root, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -687,14 +687,15 @@ describe("provider usage through real HTTP and engine storage", () => {
     mode = "disconnect";
     await expect(scoped(() => provider.post.v1.responses({ model: "gpt-4o", input: "test" }))).rejects.toThrow();
     expect(engine.usage.summary().totals).toMatchObject({ count: 2, unpriced: 1 });
-    const other = createEngine({ rootDir: join(root, "other"), initialBookName: "other", durableWrites: false });
+    const otherRoot = join(root, "other");
+    const other = createEngineForTest(otherRoot);
     try {
       mode = "normal";
       responseId = "isolated";
       await scoped(() => provider.post.v1.responses({ model: "gpt-4o", input: "test" }), other);
       expect(other.usage.summary().totals.count).toBe(1);
       expect(engine.usage.summary().totals.count).toBe(2);
-    } finally { other.close(); }
+    } finally { closeEngineForTest(otherRoot, other); }
   });
 
   it("counts a finished Seedance generation once the video is ready", async () => {
