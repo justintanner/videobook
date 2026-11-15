@@ -6,9 +6,12 @@ import { createEngine, type Engine } from "videobook-engine";
 import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../../server/src/test-media-fixtures.js";
 import { registerExtractNotebookAudioJob } from "../../server/src/jobs/extract-notebook-audio.js";
 import { setEngineRoot, stopBookQueue, waitForJob } from "../../server/src/queue.js";
-import { extractNotebookAudioDef } from "../../server/src/tools/extract-notebook-audio.js";
+import { withBookContext } from "../../server/src/book-context.js";
+import { probeVideo } from "../../server/src/ffmpeg.js";
+import { chatActionPlanSchema, chatDef, prepareVoiceChatAction } from "../../server/src/tools/chat.js";
 import type { ToolDef } from "../../server/src/tools/tool-def.js";
 import { testBudget } from "../../server/src/test-budget.js";
+import { discoverVoiceActions } from "../../server/src/voice-actions.js";
 
 function resultJson(result: Awaited<ReturnType<ToolDef["handler"]>>): Record<string, unknown> {
   if (result.isError) throw new Error(result.content[0]?.text ?? "Tool failed");
@@ -38,7 +41,7 @@ describe("extract_audio action", () => {
     }
   });
 
-  it("records source and range provenance on the audio it extracts", async () => {
+  it("extracts audio through chat without approval and records its source and range", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-extract-audio-action-"));
     engine = createEngine({ durableWrites: false, rootDir, initialBookName: "extract-audio" });
     await engine.ready;
@@ -74,14 +77,27 @@ describe("extract_audio action", () => {
     });
     expect(written.ok).toBe(true);
 
-    const tool = extractNotebookAudioDef(engine);
-    const created = resultJson(await tool.handler({
-      book_id: bookId,
+    for (const name of ["extract_audio", "extract_notebook_audio"]) {
+      expect(discoverVoiceActions(engine, name.replaceAll("_", " "))).toContainEqual(
+        expect.objectContaining({ name, requiresReview: false }),
+      );
+    }
+    const context = { bookId, engine };
+    const routed = await withBookContext(context, () => prepareVoiceChatAction(context.engine, {
+      book_id: context.bookId,
       notebook_id: notebook.value.id,
-      source_cell_id: source.id,
-      start_seconds: 0.2,
-      duration_seconds: 0.8,
+      prompt: "Extract audio from @a1 starting at 0.2 seconds for 0.8 seconds",
+    }, {
+      tool: "extract_notebook_audio",
+      params: { source_cell_id: source.id, start_seconds: 0.2, duration_seconds: 0.8 },
+      message: "Extracting audio.",
     }));
+    const plan = chatActionPlanSchema.parse(resultJson(routed));
+    expect(plan.confirmation).toMatchObject({ required: false, reason: expect.stringContaining("Audio extraction") });
+    const created = resultJson(await withBookContext(context, () => chatDef(context.engine).handler({
+      book_id: context.bookId,
+      action_plan: plan,
+    })));
     expect(typeof created.cell_id).toBe("string");
     expect(typeof created.job_id).toBe("string");
     await waitForJob(String(created.job_id));
@@ -101,6 +117,12 @@ describe("extract_audio action", () => {
       }),
     });
     expect(produced?.outputArtifactId).toEqual(expect.any(String));
+    expect(after.value.edges).toContainEqual(expect.objectContaining({ source: source.id, target: produced!.id }));
+    const manifest = await engine.files.manifest(produced!.outputArtifactId!);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    const probe = await probeVideo(join(manifest.value.path, "original.m4a"));
+    expect(probe.hasAudio).toBe(true);
+    expect(probe.audioDuration ?? probe.duration).toBeCloseTo(0.8, 1);
     const meta = await engine.metadata.artifacts.read(produced!.outputArtifactId!, "original");
     expect(meta.ok).toBe(true);
     if (meta.ok) {

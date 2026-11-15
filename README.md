@@ -531,7 +531,8 @@ and the tail of yt-dlp's message, in the artifact's `download-failure` metadata.
 
 Chat and voice URL downloads start immediately without an approval preview and
 keep the whole source clip. Chat accepts only the URL for an import; trimming
-is a separate edit after downloading.
+is a separate edit after downloading. Audio extraction also starts immediately
+without an approval preview, including extraction from notebook video cells.
 
 ### Voice chat
 

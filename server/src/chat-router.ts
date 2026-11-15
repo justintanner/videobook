@@ -25,6 +25,7 @@ const AUTO_APPLY_TOOL_NAMES = new Set([
   "download_video",
   "duplicate_asset",
   "extract_audio",
+  "extract_notebook_audio",
   "extract_frame",
 ]);
 

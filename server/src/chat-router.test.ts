@@ -200,6 +200,10 @@ describe("chat routing catalog", () => {
       effect: "mutation",
       autoApply: true,
     });
+    expect(getRoutableTool(tools, "extract_notebook_audio")).toMatchObject({
+      effect: "mutation",
+      autoApply: true,
+    });
     expect(getRoutableTool(tools, "duplicate_asset")).toMatchObject({
       effect: "mutation",
       autoApply: true,

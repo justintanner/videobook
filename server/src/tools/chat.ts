@@ -489,7 +489,7 @@ function autoApplyReason(tool: string, chainPausesPerStep = false): string {
     ? "Downloads start immediately and keep the whole source clip"
     : tool === "duplicate_asset"
     ? "Duplication is reversible and only adds a copied asset and cell"
-    : tool === "extract_audio"
+    : tool === "extract_audio" || tool === "extract_notebook_audio"
     ? "Audio extraction is free, local, and only adds derived media"
     : tool === "chain"
     ? chainPausesPerStep
@@ -547,7 +547,7 @@ export { chatActionPlanSchema, duplicateDestinationReference };
 export function chatDef(engine: Engine): ToolDef {
   return {
     name: "chat",
-    description: "Route one composer request through the app's chat model: runs reads, starts full-clip URL downloads without approval, and returns reviewable plans for edits and generation. Agents should call the specific tools directly instead.",
+    description: "Route one composer request through the app's chat model: runs reads, starts full-clip URL downloads and audio extraction without approval, and returns reviewable plans for edits and generation. Agents should call the specific tools directly instead.",
     schema: {
       prompt: z.string().min(1).optional().describe("Natural language query with optional @asset tags"),
       book_id: z.string().uuid().describe("Book UUID"),
