@@ -265,106 +265,6 @@ describe("image subject tools", () => {
     };
   }
 
-  it("parses Seedream layers and normalizes documented 0-1000 boxes", () => {
-    const result = parseSeedreamLayerResult(JSON.stringify({
-      layers_data: [
-        { url: "https://example.test/base.png", z_index: 0 },
-        {
-          url: "https://example.test/person.png",
-          z_index: 2,
-          name: "Person",
-          description: "A person",
-          bounding_box: { normalized: [100, 200, 500, 800] },
-        },
-      ],
-    }));
-    expect(result.baseUrl).toBe("https://example.test/base.png");
-    expect(result.layers).toHaveLength(1);
-    expect(result.layers[0]).toMatchObject({
-      url: "https://example.test/person.png",
-      zIndex: 2,
-      name: "Person",
-      description: "A person",
-    });
-    expect(result.layers[0]!.normalizedBox?.x).toBeCloseTo(0.1);
-    expect(result.layers[0]!.normalizedBox?.y).toBeCloseTo(0.2);
-    expect(result.layers[0]!.normalizedBox?.width).toBeCloseTo(0.4);
-    expect(result.layers[0]!.normalizedBox?.height).toBeCloseTo(0.6);
-    expect(() => parseSeedreamLayerResult(JSON.stringify({
-      resultObject: {
-        layers_data: [{
-          url: "https://example.test/person.png",
-          z_index: 1,
-          name: "Person",
-          bounding_box: { normalized: [100, 200, 500, 800] },
-        }],
-      },
-    }))).toThrow("no identifiable base layer");
-  });
-
-  it("preserves zero-based Grok segment indexes for exact edit", () => {
-    expect(grokMaskIndex(0)).toBe(0);
-    expect(grokMaskIndex(1)).toBe(1);
-    expect(grokMaskIndex(-1)).toBeUndefined();
-    const segments = parseGrokSegmentMapResult(JSON.stringify({
-      resultObject: {
-        segments: [
-          { index: 0, name: "Person", normalizedBox: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 } },
-          { index: 1, name: "Green object", normalizedBox: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 } },
-          { index: 2, name: "Hat", normalizedBox: { x: 0.2, y: 0.05, width: 0.1, height: 0.1 } },
-        ],
-      },
-    }));
-    expect(segments.map((segment) => segment.index)).toEqual([0, 1, 2]);
-    const subjects = applyGrokSegmentsToSubjects([
-      {
-        id: "person",
-        label: "Person",
-        description: "Standing person",
-        color: "#ef4444",
-        normalizedBox: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 },
-        layerFile: "person.png",
-        thumbnailFile: "person.png",
-        zIndex: 1,
-        exactEdit: false,
-      },
-      {
-        id: "object",
-        label: "Green object",
-        description: "Object on the right",
-        color: "#3b82f6",
-        normalizedBox: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 },
-        layerFile: "object.png",
-        thumbnailFile: "object.png",
-        zIndex: 2,
-        exactEdit: false,
-      },
-    ], segments);
-    expect(subjects).toEqual([
-      expect.objectContaining({ id: "person", exactEdit: true, maskIndex: 0 }),
-      expect.objectContaining({ id: "object", exactEdit: true, maskIndex: 1 }),
-    ]);
-    expect(exactEditMaskIndexes(subjects, ["person", "object"])).toEqual([0, 1]);
-    expect(exactEditMaskIndexes(
-      subjects.map((subject) => ({ ...subject, exactEdit: true, maskIndex: undefined })),
-      ["person"],
-    )).toBeNull();
-    expect(grokImagineImage2EditRequest("src-task", "Give the cat a bow", [0, 1, 2]).input)
-      .toEqual({
-        prompt: "Give the cat a bow",
-        task_id: "src-task",
-        mask_indexs: [0, 1, 2],
-      });
-    expect(grokImagineImage2EditRequest("src-task", "no masks", [0]).input)
-      .toEqual({
-        prompt: "no masks",
-        task_id: "src-task",
-        mask_indexs: [0],
-      });
-    expect(() => grokImagineImage2EditRequest("src-task", "no masks", [-1]))
-      .toThrow("nonnegative mask indexes");
-  });
-
   it("routes selected exact_edit subjects to Grok image-edit and otherwise Seedream", async () => {
     const source = await createSource();
     expect(imageSubjectEditRoute(source.map, ["person"])).toBe("semantic");
@@ -430,67 +330,6 @@ describe("image subject tools", () => {
       expect(Buffer.from(second.value).equals(extraA)).toBe(true);
       expect(Buffer.from(third.value).equals(extraB)).toBe(true);
     }
-  });
-
-  it("uses the JPEG layer request and a persisted absolute analysis deadline", () => {
-    const startedAt = "2026-08-17T07:00:00.000Z";
-    const request = seedreamLayerDecompositionRequest(
-      "https://example.test/source.jpg",
-      1920,
-      1080,
-    );
-    expect(request.input.output_format).toBe("jpeg");
-    expect(imageSubjectAnalysisDeadline(startedAt)).toBe(
-      Date.parse(startedAt) + 25 * 60_000,
-    );
-    expect(subjectAnalysisProviderFailureMessage("Internal Error")).toBe(
-      "Subject analysis provider failed: Internal Error. Retry in a moment.",
-    );
-  });
-
-  it("retries with an element-selection prompt on Seedream too-complex rejections", () => {
-    // Exact failMsg observed from Seedream (surfaced via
-    // subjectAnalysisProviderFailureMessage) for busy scenes under automatic
-    // element detection.
-    const providerMessage = subjectAnalysisProviderFailureMessage(
-      "The parameter `image` specified in the request are not valid: "
-        + "the image content is too complex to decompose into layers.",
-      "400",
-    );
-    expect(SEEDREAM_TOO_COMPLEX_PATTERN.test(providerMessage)).toBe(true);
-    expect(SEEDREAM_TOO_COMPLEX_PATTERN.test(
-      subjectAnalysisProviderFailureMessage("Internal Error"),
-    )).toBe(false);
-
-    const automatic = seedreamLayerDecompositionRequest(
-      "https://example.test/source.jpg",
-      1920,
-      1080,
-    );
-    expect(automatic.input.prompt).toBeUndefined();
-    const constrained = seedreamLayerDecompositionRequest(
-      "https://example.test/source.jpg",
-      1920,
-      1080,
-      SEEDREAM_LAYER_FALLBACK_PROMPT,
-    );
-    expect(constrained.input.prompt).toBe(SEEDREAM_LAYER_FALLBACK_PROMPT);
-    expect(constrained.input.size).toBe("2K");
-  });
-
-  it("selects an explicit paygate-priced size tier from source dimensions", () => {
-    // "auto" has no paygate rate; the request must always carry a priced tier.
-    expect(seedreamLayerDecompositionSize(1024, 768)).toBe("1K");
-    expect(seedreamLayerDecompositionSize(1280, 1280)).toBe("1K");
-    expect(seedreamLayerDecompositionSize(768, 1536)).toBe("1.5K");
-    expect(seedreamLayerDecompositionSize(1792, 1024)).toBe("1.5K");
-    expect(seedreamLayerDecompositionSize(1920, 1080)).toBe("2K");
-    expect(seedreamLayerDecompositionSize(4096, 4096)).toBe("2K");
-    expect(seedreamLayerDecompositionRequest(
-      "https://example.test/source.jpg",
-      640,
-      480,
-    ).input.size).toBe("1K");
   });
 
   it("rejects cropped layers that have no valid placement box", async () => {
@@ -1319,47 +1158,6 @@ describe("image subject tools", () => {
     );
   });
 
-  it("builds a Seedream 5 Pro replacement request with the base image first", () => {
-    const request = seedreamRegionReplacementRequest({
-      imageUrls: [
-        "https://example.test/base.png",
-        "https://example.test/actor-a.png",
-        "https://example.test/actor-b.png",
-      ],
-      prompt: regionReplacementPrompt(
-        null,
-        [
-          {
-            box: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 },
-            replacementArtifactId: "actor-a",
-          },
-          {
-            box: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 },
-            replacementArtifactId: "actor-b",
-          },
-        ],
-        [
-          { role: "base", artifactId: "base" },
-          { role: "replacement", artifactId: "actor-a" },
-          { role: "replacement", artifactId: "actor-b" },
-        ],
-        "Replace the two actors",
-      ),
-      width: 1920,
-      height: 1080,
-    });
-    expect(request.model).toBe("seedream/5-pro-image-to-image");
-    expect(request.input.image_urls).toEqual([
-      "https://example.test/base.png",
-      "https://example.test/actor-a.png",
-      "https://example.test/actor-b.png",
-    ]);
-    expect(request.input.prompt).toContain("Replace the two actors");
-    expect(request.input.prompt).toContain("reference image 2");
-    expect(request.input.prompt).toContain("reference image 3");
-    expect(request.input.aspect_ratio).toBe("16:9");
-  });
-
   it("replaces two regions with two reference artifacts via Nano Banana 2.1", async () => {
     await pauseBookQueueForTests(bookId);
     const originalKey = process.env.KIE_API_KEY;
@@ -1985,5 +1783,211 @@ describe("image subject tools", () => {
       if (originalFalKey) process.env.FAL_API_KEY = originalFalKey;
       else delete process.env.FAL_API_KEY;
     }
+  });
+});
+
+
+describe("image subject request and parsing helpers", () => {
+
+  it("parses Seedream layers and normalizes documented 0-1000 boxes", () => {
+    const result = parseSeedreamLayerResult(JSON.stringify({
+      layers_data: [
+        { url: "https://example.test/base.png", z_index: 0 },
+        {
+          url: "https://example.test/person.png",
+          z_index: 2,
+          name: "Person",
+          description: "A person",
+          bounding_box: { normalized: [100, 200, 500, 800] },
+        },
+      ],
+    }));
+    expect(result.baseUrl).toBe("https://example.test/base.png");
+    expect(result.layers).toHaveLength(1);
+    expect(result.layers[0]).toMatchObject({
+      url: "https://example.test/person.png",
+      zIndex: 2,
+      name: "Person",
+      description: "A person",
+    });
+    expect(result.layers[0]!.normalizedBox?.x).toBeCloseTo(0.1);
+    expect(result.layers[0]!.normalizedBox?.y).toBeCloseTo(0.2);
+    expect(result.layers[0]!.normalizedBox?.width).toBeCloseTo(0.4);
+    expect(result.layers[0]!.normalizedBox?.height).toBeCloseTo(0.6);
+    expect(() => parseSeedreamLayerResult(JSON.stringify({
+      resultObject: {
+        layers_data: [{
+          url: "https://example.test/person.png",
+          z_index: 1,
+          name: "Person",
+          bounding_box: { normalized: [100, 200, 500, 800] },
+        }],
+      },
+    }))).toThrow("no identifiable base layer");
+  });
+
+  it("preserves zero-based Grok segment indexes for exact edit", () => {
+    expect(grokMaskIndex(0)).toBe(0);
+    expect(grokMaskIndex(1)).toBe(1);
+    expect(grokMaskIndex(-1)).toBeUndefined();
+    const segments = parseGrokSegmentMapResult(JSON.stringify({
+      resultObject: {
+        segments: [
+          { index: 0, name: "Person", normalizedBox: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 } },
+          { index: 1, name: "Green object", normalizedBox: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 } },
+          { index: 2, name: "Hat", normalizedBox: { x: 0.2, y: 0.05, width: 0.1, height: 0.1 } },
+        ],
+      },
+    }));
+    expect(segments.map((segment) => segment.index)).toEqual([0, 1, 2]);
+    const subjects = applyGrokSegmentsToSubjects([
+      {
+        id: "person",
+        label: "Person",
+        description: "Standing person",
+        color: "#ef4444",
+        normalizedBox: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 },
+        layerFile: "person.png",
+        thumbnailFile: "person.png",
+        zIndex: 1,
+        exactEdit: false,
+      },
+      {
+        id: "object",
+        label: "Green object",
+        description: "Object on the right",
+        color: "#3b82f6",
+        normalizedBox: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 },
+        layerFile: "object.png",
+        thumbnailFile: "object.png",
+        zIndex: 2,
+        exactEdit: false,
+      },
+    ], segments);
+    expect(subjects).toEqual([
+      expect.objectContaining({ id: "person", exactEdit: true, maskIndex: 0 }),
+      expect.objectContaining({ id: "object", exactEdit: true, maskIndex: 1 }),
+    ]);
+    expect(exactEditMaskIndexes(subjects, ["person", "object"])).toEqual([0, 1]);
+    expect(exactEditMaskIndexes(
+      subjects.map((subject) => ({ ...subject, exactEdit: true, maskIndex: undefined })),
+      ["person"],
+    )).toBeNull();
+    expect(grokImagineImage2EditRequest("src-task", "Give the cat a bow", [0, 1, 2]).input)
+      .toEqual({
+        prompt: "Give the cat a bow",
+        task_id: "src-task",
+        mask_indexs: [0, 1, 2],
+      });
+    expect(grokImagineImage2EditRequest("src-task", "no masks", [0]).input)
+      .toEqual({
+        prompt: "no masks",
+        task_id: "src-task",
+        mask_indexs: [0],
+      });
+    expect(() => grokImagineImage2EditRequest("src-task", "no masks", [-1]))
+      .toThrow("nonnegative mask indexes");
+  });
+
+  it("uses the JPEG layer request and a persisted absolute analysis deadline", () => {
+    const startedAt = "2026-08-17T07:00:00.000Z";
+    const request = seedreamLayerDecompositionRequest(
+      "https://example.test/source.jpg",
+      1920,
+      1080,
+    );
+    expect(request.input.output_format).toBe("jpeg");
+    expect(imageSubjectAnalysisDeadline(startedAt)).toBe(
+      Date.parse(startedAt) + 25 * 60_000,
+    );
+    expect(subjectAnalysisProviderFailureMessage("Internal Error")).toBe(
+      "Subject analysis provider failed: Internal Error. Retry in a moment.",
+    );
+  });
+
+  it("retries with an element-selection prompt on Seedream too-complex rejections", () => {
+    // Exact failMsg observed from Seedream (surfaced via
+    // subjectAnalysisProviderFailureMessage) for busy scenes under automatic
+    // element detection.
+    const providerMessage = subjectAnalysisProviderFailureMessage(
+      "The parameter `image` specified in the request are not valid: "
+        + "the image content is too complex to decompose into layers.",
+      "400",
+    );
+    expect(SEEDREAM_TOO_COMPLEX_PATTERN.test(providerMessage)).toBe(true);
+    expect(SEEDREAM_TOO_COMPLEX_PATTERN.test(
+      subjectAnalysisProviderFailureMessage("Internal Error"),
+    )).toBe(false);
+
+    const automatic = seedreamLayerDecompositionRequest(
+      "https://example.test/source.jpg",
+      1920,
+      1080,
+    );
+    expect(automatic.input.prompt).toBeUndefined();
+    const constrained = seedreamLayerDecompositionRequest(
+      "https://example.test/source.jpg",
+      1920,
+      1080,
+      SEEDREAM_LAYER_FALLBACK_PROMPT,
+    );
+    expect(constrained.input.prompt).toBe(SEEDREAM_LAYER_FALLBACK_PROMPT);
+    expect(constrained.input.size).toBe("2K");
+  });
+
+  it("selects an explicit paygate-priced size tier from source dimensions", () => {
+    // "auto" has no paygate rate; the request must always carry a priced tier.
+    expect(seedreamLayerDecompositionSize(1024, 768)).toBe("1K");
+    expect(seedreamLayerDecompositionSize(1280, 1280)).toBe("1K");
+    expect(seedreamLayerDecompositionSize(768, 1536)).toBe("1.5K");
+    expect(seedreamLayerDecompositionSize(1792, 1024)).toBe("1.5K");
+    expect(seedreamLayerDecompositionSize(1920, 1080)).toBe("2K");
+    expect(seedreamLayerDecompositionSize(4096, 4096)).toBe("2K");
+    expect(seedreamLayerDecompositionRequest(
+      "https://example.test/source.jpg",
+      640,
+      480,
+    ).input.size).toBe("1K");
+  });
+
+  it("builds a Seedream 5 Pro replacement request with the base image first", () => {
+    const request = seedreamRegionReplacementRequest({
+      imageUrls: [
+        "https://example.test/base.png",
+        "https://example.test/actor-a.png",
+        "https://example.test/actor-b.png",
+      ],
+      prompt: regionReplacementPrompt(
+        null,
+        [
+          {
+            box: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 },
+            replacementArtifactId: "actor-a",
+          },
+          {
+            box: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 },
+            replacementArtifactId: "actor-b",
+          },
+        ],
+        [
+          { role: "base", artifactId: "base" },
+          { role: "replacement", artifactId: "actor-a" },
+          { role: "replacement", artifactId: "actor-b" },
+        ],
+        "Replace the two actors",
+      ),
+      width: 1920,
+      height: 1080,
+    });
+    expect(request.model).toBe("seedream/5-pro-image-to-image");
+    expect(request.input.image_urls).toEqual([
+      "https://example.test/base.png",
+      "https://example.test/actor-a.png",
+      "https://example.test/actor-b.png",
+    ]);
+    expect(request.input.prompt).toContain("Replace the two actors");
+    expect(request.input.prompt).toContain("reference image 2");
+    expect(request.input.prompt).toContain("reference image 3");
+    expect(request.input.aspect_ratio).toBe("16:9");
   });
 });

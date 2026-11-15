@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { cp, mkdtemp, rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
@@ -17,6 +17,24 @@ import { previewGeneration } from "../media/preview.js";
 import { testBudget } from "../test-budget.js";
 
 type TextContent = Array<{ type: string; text: string }>;
+
+function artifactCatalogRows(engine: Engine, artifactId: string): Record<string, unknown> {
+  type Row = Record<string, unknown>;
+  type Database = { prepare(sql: string): { all(...params: unknown[]): Row[] } };
+  const { db } = (engine as unknown as { context: { store: { db: Database } } }).context.store;
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'dolt_%'").all();
+  const records: Record<string, unknown> = {};
+  for (const { name } of tables) {
+    if (typeof name !== "string" || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      throw new Error("Unexpected test catalog table name");
+    }
+    const columns = db.prepare(`PRAGMA table_info("${name}")`).all();
+    if (columns.some((column) => column.name === "artifact_id")) {
+      records[name] = db.prepare(`SELECT * FROM "${name}" WHERE artifact_id = ?`).all(artifactId);
+    }
+  }
+  return records;
+}
 
 function parseText(result: { content: unknown; isError?: boolean }): Record<string, unknown> {
   const text = (result.content as TextContent)[0]?.text ?? "";
@@ -128,6 +146,12 @@ describe("chain MCP tool", () => {
   let sourceId: string;
   let targetId: string;
   const originalElevenLabsKey = process.env.ELEVENLABS_API_KEY;
+  const templates = new Map<number, {
+    root: string;
+    notebookId: string;
+    sourceId: string;
+    targetId: string;
+  }>();
 
   beforeAll(async () => {
     await queue.start();
@@ -135,6 +159,8 @@ describe("chain MCP tool", () => {
 
   afterAll(async () => {
     await queue.stop();
+    await Promise.all([...templates.values()].map(({ root }) =>
+      rm(root, { recursive: true, force: true, maxRetries: 3 })));
   });
 
   afterEach(async () => {
@@ -144,7 +170,7 @@ describe("chain MCP tool", () => {
     if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  async function setupBook(label: string, targetDuration = 1): Promise<void> {
+  async function buildBook(label: string, targetDuration = 1): Promise<void> {
     tempDir = await mkdtemp(join(tmpdir(), `videobook-chain-${label}-`));
     engine = createEngineForTest(tempDir);
     client = await createTestClient(tempDir);
@@ -197,6 +223,69 @@ describe("chain MCP tool", () => {
       },
     });
   }
+
+  async function setupBook(label: string, targetDuration = 1): Promise<void> {
+    // IDs repeat within this file because each isolated engine opens a complete copy of the processed template book.
+    let template = templates.get(targetDuration);
+    if (!template) {
+      await buildBook(`template-${targetDuration}`, targetDuration);
+      await waitForBookQueuesIdleForTests();
+      await client.close();
+      template = { root: tempDir, notebookId, sourceId, targetId };
+      templates.set(targetDuration, template);
+    }
+    tempDir = await mkdtemp(join(tmpdir(), `videobook-chain-${label}-`));
+    await cp(template.root, tempDir, { recursive: true });
+    engine = createEngineForTest(tempDir);
+    client = await createTestClient(tempDir);
+    await client.callTool({ name: "create_project", arguments: { book_id: "chain-proj" } });
+    bookId = "chain-proj";
+    notebookId = template.notebookId;
+    sourceId = template.sourceId;
+    targetId = template.targetId;
+  }
+
+  function comparableRecord(value: unknown, key = ""): unknown {
+    if (value === null) return value;
+    if (key === "id") return "<id>";
+    if (/(?:_at|At)$/.test(key)) return "<timestamp>";
+    if (typeof value === "string") {
+      try {
+        return comparableRecord(JSON.parse(value));
+      } catch {
+        let normalized = value;
+        for (const root of [tempDir, ...[...templates.values()].map((template) => template.root)]) {
+          normalized = normalized.replaceAll(root, "<root>");
+        }
+        return normalized
+          .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<id>")
+          .replace(/(?<=<id>-)\d{13}/g, "<timestamp>");
+      }
+    }
+    if (Array.isArray(value)) return value.map((entry) => comparableRecord(entry));
+    if (typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([name, entry]) =>
+        [name, comparableRecord(entry, name)]));
+    }
+    return value;
+  }
+
+  it("copies every cached video file and artifact record from the real upload pipeline", async () => {
+    await setupBook("fixture-equivalence");
+    const freshId = await uploadVideo(client, bookId, join(tempDir, "source-440.mp4"), "source.mp4");
+    await waitForBookQueuesIdleForTests();
+    const cached = await engine.files.manifest(sourceId);
+    const fresh = await engine.files.manifest(freshId);
+    expect(cached.ok).toBe(true);
+    expect(fresh.ok).toBe(true);
+    if (!cached.ok || !fresh.ok) return;
+    expect(fresh.value.files).toEqual(cached.value.files);
+    for (const file of cached.value.files) {
+      expect(await engine.files.read(freshId, file.name)).toEqual(await engine.files.read(sourceId, file.name));
+    }
+    expect(comparableRecord(artifactCatalogRows(engine, freshId)))
+      .toEqual(comparableRecord(artifactCatalogRows(engine, sourceId)));
+  });
 
   async function runChain(
     steps: unknown[],

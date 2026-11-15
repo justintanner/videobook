@@ -35,6 +35,7 @@ interface CatalogTable {
 }
 
 let testBookTemplateRoot: string | undefined;
+let testBookTemplateTables: CatalogTable[] | undefined;
 
 function quoteIdent(name: string): string {
   if (!IDENTIFIER.test(name)) {
@@ -90,6 +91,13 @@ function catalogTables(db: CatalogDb): CatalogTable[] {
   });
 }
 
+function templateIdentityTables(db: CatalogDb): CatalogTable[] {
+  testBookTemplateTables ??= catalogTables(db).filter(({ table, columns }) =>
+    ["book_id", "sequence_id", "track_id"].some((column) => columns.has(column))
+    && db.prepare(`SELECT 1 AS present FROM ${quoteIdent(table)} LIMIT 1`).get() !== undefined);
+  return testBookTemplateTables;
+}
+
 function replaceColumn(
   db: CatalogDb,
   tables: readonly CatalogTable[],
@@ -137,11 +145,12 @@ function amendClonedBookIdentity(db: CatalogDb): void {
       throw new Error(`Unexpected catalog identifier ${entry.table_name}`);
     }
     staged.add(entry.table_name);
-    db.prepare("SELECT dolt_add(?) AS result").get(entry.table_name);
   }
   if (staged.size === 0) {
     throw new Error("Test catalog clone did not change its book identity");
   }
+  db.prepare(`SELECT dolt_add(${[...staged].map(() => "?").join(", ")}) AS result`)
+    .get(...staged);
   const amended = db
     .prepare("SELECT dolt_commit('--amend', '-m', ?, '--author', ?) AS hash")
     .get(TEST_BOOK_COMMIT_MESSAGE, TEST_BOOK_COMMIT_AUTHOR);
@@ -159,15 +168,20 @@ function amendClonedBookIdentity(db: CatalogDb): void {
 
 function assignFreshBookIdentity(engine: ReturnType<typeof createEngine>): void {
   const db = catalogDatabase(engine);
-  const tables = catalogTables(db);
+  const tables = templateIdentityTables(db);
   const createdAt = Date.now();
   db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN");
   try {
     rewriteTrackIds(db, tables);
     rewriteSingleId(db, tables, "sequences", "sequence_id");
     rewriteSingleId(db, tables, "book", "book_id");
     db.prepare("UPDATE book SET created_at = ?").run(createdAt);
     db.prepare("UPDATE sequences SET created_at = ?").run(createdAt);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
   } finally {
     db.exec("PRAGMA foreign_keys = ON");
   }
