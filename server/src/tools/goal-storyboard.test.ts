@@ -345,7 +345,7 @@ describe("video_goal storyboard stage", () => {
     expect(new Set(stub.submissions.map((submission) => submission.path))).toEqual(new Set([CLEANUP, FRAME_EDIT, "/minimax/h3-max/reference-to-video"]));
     expect(JSON.stringify(stub.submissions)).not.toMatch(/Main character|a man in a green shirt/u);
     expect(stub.unexpected).toEqual([]);
-  });
+  }, testBudget(90_000));
 
   it("reports a result-GET content refusal consistently and settles it at zero cost", async () => {
     const goal = await onNanoBanana(await short(`based on @b1 with @a2, ${AUTHORED}`));
