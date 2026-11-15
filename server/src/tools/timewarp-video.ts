@@ -72,6 +72,9 @@ export function timewarpVideoDef(engine: Engine): ToolDef {
         return errorResult(error instanceof Error ? error.message : String(error));
       }
 
+      const cleared = await engine.jobs.failures.clear(asset_id);
+      if (!cleared.ok) return errorResult(cleared.error.message);
+
       const now = Date.now();
       const jobId = `timewarp-${asset_id}-${now}`;
       const outputPath = join(manifestResult.value.path, `.timewarp-${now}.mp4`);

@@ -78,6 +78,14 @@ export function cropVideoDef(engine: Engine): ToolDef {
       } catch (error) {
         return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
       }
+      const cleared = await engine.jobs.failures.clear(asset_id);
+      if (!cleared.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: cleared.error.message }],
+        };
+      }
+
       const tempPath = join(assetDir, "original_cropped.mp4");
       const jobId = `crop-${asset_id}-${Date.now()}`;
 
