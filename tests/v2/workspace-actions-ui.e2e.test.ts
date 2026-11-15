@@ -874,3 +874,143 @@ describe('built-in sound preview and apply without provider credentials', () => 
     }
   }, testBudget(180_000))
 })
+
+describe('local zoom picked on the Actions sheet preview', () => {
+  it('previews /zoom @a1 1-2.5 1.5, takes a dragged focus and renders it without a provider', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'videobook-zoom-ui-'))
+    let localServer: StartedProcess | undefined
+    let localVite: StartedProcess | undefined
+    let localBrowser: Browser | undefined
+    let localClient: Client | undefined
+    const exec = promisify(execFile)
+    const width = 324
+    const height = 576
+    try {
+      const port = await availablePort()
+      const vitePort = await availablePort()
+      const origin = `http://127.0.0.1:${port}`
+      const appUrl = `http://127.0.0.1:${vitePort}`
+      const env = {
+        ...process.env,
+        ...Object.fromEntries(Object.keys(process.env).filter(key => key.endsWith('_API_KEY')).map(key => [key, ''])),
+        PORT: String(port), OPENAI_API_KEY: '', KIE_API_KEY: '', FAL_API_KEY: '', ELEVENLABS_API_KEY: '',
+        KIMI_CODING_API_KEY: '', DASHSCOPE_API_KEY: '', XAI_API_KEY: '',
+        VIDEOBOOK_LIBRARY_DIR: join(root, 'books'), VIDEOBOOK_APP_STATE_PATH: join(root, 'runtime/app-state.json'),
+      }
+      localServer = startProcess(['--import', 'tsx', 'server/src/index.ts'], env)
+      await waitForHttp(`${origin}/healthz`, localServer, 200)
+      const client = new Client({ name: 'zoom-ui', version: '1.0.0' }, {
+        capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+      })
+      localClient = client
+      await client.connect(new StreamableHTTPClientTransport(new URL(`${origin}/mcp`)))
+      const book = record(resultValue(await client.callTool({ name: 'create_book', arguments: { name: 'zoom-ui' } })))!
+      const bookId = String(book.bookId)
+      const call = async (name: string, args: Record<string, unknown> = {}) => resultValue(await client.callTool({ name, arguments: { book_id: bookId, ...args } }))
+      const notebooks = await call('list_notebooks') as Array<{ id: string }>
+      const fixture = join(root, 'source.mp4')
+      await exec(FFMPEG, ['-y', '-f', 'lavfi', '-i', `testsrc2=size=${width}x${height}:rate=30:duration=4`,
+        '-f', 'lavfi', '-i', 'anoisesrc=color=pink:amplitude=0.05:seed=1:duration=4:sample_rate=48000',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '12', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', fixture], { timeout: testBudget(30_000) })
+      const upload = record(await call('upload_file', { filename: 'zoom-target.mp4', data: (await readFile(fixture)).toString('base64') }))!
+      const assetId = String(upload.assetId)
+      await call('create_notebook_cell', { notebook_id: notebooks[0]!.id, cell: { type: 'video', slot: { row: 0, column: 0 }, output_artifact_id: assetId } })
+      const status = async () => {
+        const assets = record(await call('list_assets'))?.assets as Array<{ artifact_id: string; status: string }>
+        return assets.find(asset => asset.artifact_id === assetId)?.status
+      }
+      await expect.poll(status, { timeout: testBudget(60_000) }).toBe('ready')
+      localVite = startProcess(['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(vitePort), '--strictPort'], {
+        ...env, VIDEOBOOK_SERVER_URL: origin, VIDEOBOOK_VITE_CACHE_DIR: join(root, 'vite-cache'), VIDEOBOOK_VITE_HMR: '0',
+      })
+      await waitForHttp(appUrl, localVite, 200)
+      localBrowser = await chromium.launch({ headless: true })
+      const page = await localBrowser.newPage({ viewport: { width: 1440, height: 1000 } })
+      page.setDefaultTimeout(testBudget(15_000))
+      const remoteRequests: string[] = []
+      const errors: string[] = []
+      page.on('request', request => {
+        const url = new URL(request.url())
+        if (['http:', 'https:'].includes(url.protocol) && ![origin, appUrl].includes(url.origin)) remoteRequests.push(request.url())
+      })
+      page.on('pageerror', error => errors.push(error.message))
+      await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
+      await page.goto(appUrl)
+      await expect.poll(() => page.getByLabel('Open actions', { exact: true }).isEnabled(), { timeout: testBudget(15_000) }).toBe(true)
+      const input = page.getByLabel('Videobook command input', { exact: true })
+      await input.fill('/zoom @a1 1-2.5 1.5')
+      if (await page.locator('.command-suggestions').isVisible()) await input.press('Escape')
+      await input.press('Enter')
+      const sheet = page.locator('form[data-action-id="tool.zoom_video"]')
+      await sheet.waitFor()
+      const preview = sheet.getByRole('region', { name: 'Zoom preview', exact: true })
+      const frame = preview.getByRole('group', { name: 'Zoom focus point', exact: true })
+      const video = frame.locator('video')
+      const marker = frame.locator('.workspace-zoom-focus')
+      const field = (name: RegExp) => sheet.getByRole('spinbutton', { name })
+      expect(await field(/^Start seconds/u).inputValue()).toBe('1')
+      expect(await field(/^End seconds/u).inputValue()).toBe('2.5')
+      expect(await field(/^Scale/u).inputValue()).toBe('1.5')
+      expect(await marker.evaluate((element: HTMLElement) => [element.style.left, element.style.top])).toEqual(['50%', '50%'])
+      await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.readyState), { timeout: testBudget(15_000) }).toBeGreaterThanOrEqual(1)
+
+      await page.setViewportSize({ width: 390, height: 844 })
+      await expect.poll(() => preview.getByRole('button', { name: 'Play zoom', exact: true }).isVisible()).toBe(true)
+      const phoneFrame = await frame.boundingBox()
+      expect(phoneFrame!.x).toBeGreaterThanOrEqual(0)
+      expect(phoneFrame!.x + phoneFrame!.width).toBeLessThanOrEqual(390)
+      expect(await sheet.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+      await page.screenshot({ path: '/tmp/videobook-zoom-phone.png' })
+      await page.setViewportSize({ width: 1440, height: 1000 })
+
+      await preview.getByRole('button', { name: 'Play zoom', exact: true }).click()
+      const transform = () => video.evaluate((element: HTMLVideoElement) => element.style.transform)
+      await expect.poll(transform, { timeout: testBudget(5_000), interval: 50 }).toBe('scale(1.5)')
+      await expect.poll(transform, { timeout: testBudget(5_000), interval: 50 }).toBe('scale(1)')
+
+      await frame.scrollIntoViewIfNeeded()
+      const box = (await frame.boundingBox())!
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(box.x + box.width / 4, box.y + box.height / 4, { steps: 8 })
+      await page.mouse.up()
+      const focusX = Number(await field(/^Focus x/u).inputValue())
+      const focusY = Number(await field(/^Focus y/u).inputValue())
+      expect(focusX).toBeCloseTo(0.25, 1)
+      expect(focusY).toBeCloseTo(0.25, 1)
+      expect(Number(await preview.getByRole('slider', { name: 'Horizontal zoom focus', exact: true }).inputValue())).toBeCloseTo(focusX, 2)
+      await expect.poll(async () => {
+        const [originX, originY] = (await video.evaluate((element: HTMLVideoElement) => element.style.transformOrigin)).split(' ').map(parseFloat)
+        return Math.abs(originX! - focusX * 100) < 0.1 && Math.abs(originY! - focusY * 100) < 0.1
+      }).toBe(true)
+      await page.screenshot({ path: '/tmp/videobook-zoom-desktop.png' })
+
+      await page.locator('.command-composer .confirm-sheet-apply').click()
+      await expect.poll(() => sheet.locator('.workspace-action-result').textContent(), { timeout: testBudget(120_000) }).toContain('completed')
+      await expect.poll(status, { timeout: testBudget(60_000) }).toBe('ready')
+      const response = await fetch(`${origin}/files/${bookId}/${assetId}/original.mp4`)
+      expect(response.status).toBe(200)
+      const zoomed = join(root, 'zoomed.mp4')
+      await writeFile(zoomed, Buffer.from(await response.arrayBuffer()))
+      const scale = 1.5
+      const crop = `crop=${Math.round(width / scale)}:${Math.round(height / scale)}:${Math.round(focusX * width * (1 - 1 / scale))}:${Math.round(focusY * height * (1 - 1 / scale))},scale=${width}:${height}:flags=bicubic`
+      const ssim = async (frameIndex: number, reference: string) => {
+        const pick = `select='eq(n,${frameIndex})',format=gray,setpts=PTS-STARTPTS`
+        const { stdout } = await exec(FFMPEG, ['-hide_banner', '-v', 'error', '-i', zoomed, '-i', fixture,
+          '-filter_complex', `[0:v]${pick}[rendered];[1:v]${pick}${reference}[reference];[rendered][reference]ssim=stats_file=-`,
+          '-f', 'null', '-'], { timeout: testBudget(30_000) })
+        return Number(/All:([\d.]+)/u.exec(stdout)?.[1])
+      }
+      expect(await ssim(52, `,${crop}`)).toBeGreaterThanOrEqual(0.95)
+      expect(await ssim(15, '')).toBeGreaterThanOrEqual(0.97)
+      expect(remoteRequests).toEqual([])
+      expect(errors).toEqual([])
+    } finally {
+      await localBrowser?.close()
+      await localClient?.close()
+      await stopProcess(localVite)
+      await stopProcess(localServer)
+      await rm(root, { recursive: true, force: true, maxRetries: 3 })
+    }
+  }, testBudget(240_000))
+})

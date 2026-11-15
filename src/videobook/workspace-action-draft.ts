@@ -21,7 +21,9 @@ const HIDDEN_FIELDS = ['book_id', 'actor', 'source_surface']
 
 const SINGLE_ENTRY_ARRAYS: Readonly<Record<string, string>> = { apply_sfx: 'sfx', apply_builtin_sfx: 'sfx', zoom_video: 'zooms' }
 
-const BUILTIN_SOUND_FIELDS: Readonly<Record<string, readonly string[]>> = { apply_builtin_sfx: ['sfx.sound'] }
+const BUILTIN_SOUND_FIELDS: Readonly<Record<string, readonly string[]>> = { apply_builtin_sfx: ['sfx.sound'], zoom_video: ['zooms.sound', 'zooms.return_sound'] }
+
+const ZOOM_MEDIA_TYPES = new Set(['video', 'final'])
 
 export function workspaceActionBuiltinSoundField(action: WorkspaceAction, name: string): boolean {
   return action.handler.kind === 'tool' && Boolean(BUILTIN_SOUND_FIELDS[action.handler.tool]?.includes(name))
@@ -132,6 +134,16 @@ export function workspaceActionReview(action: WorkspaceAction, confirmation: Act
     cost: workspaceEstimateCost(usd, warnings),
     message: [GENERATION_REVIEW, ...warnings.filter((warning) => !MISSING_COST_ADAPTER.test(warning))].join(' '),
   }
+}
+
+export function workspaceActionZoomMedia(
+  action: WorkspaceAction,
+  context: WorkspaceActionContext,
+  draft: WorkspaceActionDraft,
+): WorkspaceActionMedia | undefined {
+  if (action.handler.kind !== 'tool' || action.handler.tool !== 'zoom_video' || typeof draft.asset_id !== 'string') return undefined
+  const media = context.media?.[draft.asset_id]
+  return media && ZOOM_MEDIA_TYPES.has(media.type) ? media : undefined
 }
 
 export function workspaceActionCropMedia(

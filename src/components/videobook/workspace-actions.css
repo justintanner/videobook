@@ -188,7 +188,8 @@
 }
 
 .workspace-action-fields > .workspace-action-wide,
-.workspace-action-fields > .workspace-crop-preview {
+.workspace-action-fields > .workspace-crop-preview,
+.workspace-action-fields > .workspace-zoom-preview {
   grid-column: 1 / -1;
 }
 
@@ -415,6 +416,60 @@
   box-shadow: 0 0 0 999px #0009;
   border: 2px solid var(--green);
   pointer-events: none;
+}
+
+.workspace-zoom-preview {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workspace-zoom-frame {
+  position: relative;
+  overflow: hidden;
+  max-width: 100%;
+  margin: auto;
+  background: #000;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.workspace-zoom-frame > video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.workspace-zoom-focus {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #0009;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.workspace-zoom-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-zoom-slider {
+  display: grid;
+  gap: 4px;
+}
+
+.workspace-zoom-slider input {
+  width: 100%;
+}
+
+.workspace-zoom-message {
+  margin: 0;
 }
 
 .workspace-action-variants label {

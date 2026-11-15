@@ -40,7 +40,7 @@ export type WorkspaceActionContext = {
   cellIds?: readonly string[]
   choices: Record<string, readonly ActionChoice[]>
   entities?: Record<string, Record<string, unknown>>
-  media?: Record<string, { url: string | null; type: string; width: number | null; height: number | null; objectHash: string | null }>
+  media?: Record<string, { url: string | null; type: string; width: number | null; height: number | null; objectHash: string | null; duration?: number | null; fps?: number | null }>
 }
 
 function record(value: unknown): Record<string, unknown> | null {

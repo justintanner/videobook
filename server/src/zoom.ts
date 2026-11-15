@@ -1,3 +1,5 @@
+import { builtinSound, type BuiltinSoundId } from "./sound-effects/catalog.js";
+
 const DEFAULT_SCALE = 1.3;
 const MIN_SCALE = 1.05;
 const MAX_SCALE = 3;
@@ -8,6 +10,7 @@ const MAX_ZOOMS = 8;
 const MIN_ZOOM_FRAMES = 2;
 const FRAME_EPSILON = 1e-6;
 const FRAME_INDEX = "(in-1)";
+const LATE_CUE_SECONDS = 0.05;
 
 export type ZoomInput = {
   start_seconds: number;
@@ -17,6 +20,13 @@ export type ZoomInput = {
   focus_y?: number;
   ramp_in_seconds?: number;
   ramp_out_seconds?: number;
+  sound?: BuiltinSoundId;
+  return_sound?: BuiltinSoundId;
+};
+
+export type ZoomSoundCue = {
+  sound: BuiltinSoundId;
+  startSeconds: number;
 };
 
 export type ResolvedZoom = {
@@ -52,7 +62,7 @@ type ZoomPlanInput = {
 };
 
 type ZoomLimit = {
-  field: keyof ZoomInput;
+  field: "scale" | "focus_x" | "focus_y" | "ramp_in_seconds" | "ramp_out_seconds";
   fallback: number;
   min: number;
   max: number;
@@ -121,6 +131,9 @@ function endFrameOf(zoom: ZoomInput, index: number, fps: number, frameCount: num
 }
 
 function resolveZoom(zoom: ZoomInput, index: number, fps: number, frameCount: number): ResolvedZoom {
+  if (zoom.return_sound !== undefined && zoom.end_seconds === undefined) {
+    throw new Error(`${zoomName(index)} has a return_sound but no end_seconds, so it never returns. Give it an end_seconds, or leave return_sound out.`);
+  }
   const startFrame = startFrameOf(zoom, index, fps, frameCount);
   const endFrame = endFrameOf(zoom, index, fps, frameCount);
   const frames = (endFrame ?? frameCount) - startFrame;
@@ -225,6 +238,24 @@ export function zoomWindowAt(plan: ZoomPlan, seconds: number): ZoomWindow {
 
 export function zoomScaleAt(plan: ZoomPlan, seconds: number): number {
   return zoomWindowAt(plan, seconds).scale;
+}
+
+function zoomCues(zoom: ResolvedZoom, input: ZoomInput): ZoomSoundCue[] {
+  const wayIn = input.sound === undefined ? [] : [{
+    sound: input.sound,
+    startSeconds: Math.max(0, zoom.startSeconds + zoom.rampInSeconds - builtinSound(input.sound).accentSeconds),
+  }];
+  const wayBack = input.return_sound === undefined || zoom.endSeconds === null ? [] : [{
+    sound: input.return_sound,
+    startSeconds: zoom.endSeconds - zoom.rampOutSeconds,
+  }];
+  return [...wayIn, ...wayBack];
+}
+
+export function zoomSoundCues(plan: ZoomPlan, zooms: readonly ZoomInput[]): ZoomSoundCue[] {
+  return plan.zooms
+    .flatMap((zoom) => zoomCues(zoom, zooms[zoom.index]!))
+    .filter((cue) => cue.startSeconds < plan.sourceDuration - LATE_CUE_SECONDS);
 }
 
 function filterNumber(value: number): string {

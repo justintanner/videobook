@@ -8,11 +8,13 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG, FFPROBE, probeVideo } from "./ffmpeg.js";
+import { builtinSound } from "./sound-effects/catalog.js";
 import { testBudget } from "./test-budget.js";
 import {
   buildZoomVideoFilter,
   createZoomPlan,
   zoomScaleAt,
+  zoomSoundCues,
   zoomWindowAt,
   type ZoomInput,
   type ZoomPlan,
@@ -81,6 +83,7 @@ describe("createZoomPlan", () => {
     { name: "a start that is not a number", zoom: { start_seconds: Number.NaN }, message: "Zoom 1 start_seconds must be a number" },
     { name: "an end that is not a number", zoom: { start_seconds: 1, end_seconds: Number.POSITIVE_INFINITY }, message: "Zoom 1 end_seconds must be a number" },
     { name: "a scale that is not a number", zoom: { start_seconds: 1, scale: Number.NaN }, message: "Zoom 1 scale must be a number" },
+    { name: "a return sound on a zoom with no end", zoom: { start_seconds: 1, return_sound: "zoom_out" as const }, message: "Zoom 1 has a return_sound but no end_seconds, so it never returns. Give it an end_seconds, or leave return_sound out." },
   ])("rejects $name", ({ zoom, message }) => {
     expect(() => plan([zoom])).toThrow(message);
   });
@@ -145,6 +148,29 @@ describe("createZoomPlan", () => {
   it("lets zooms that overlap by less than a frame touch once snapped", () => {
     const zooms = plan([{ start_seconds: 1, end_seconds: 2.04 }, { start_seconds: 2.03, end_seconds: 3 }]).zooms;
     expect(zooms.map((zoom) => [zoom.startSeconds, zoom.endSeconds])).toEqual([[1, 61 / 30], [61 / 30, 3]]);
+  });
+});
+
+describe("zoomSoundCues", () => {
+  it("lands the way-in sound's accent at full scale and starts the return sound as the way back begins", () => {
+    const zooms: ZoomInput[] = [{ start_seconds: 1, end_seconds: 2.5, scale: 1.5, sound: "zoom_in", return_sound: "zoom_out" }];
+    const [wayIn, wayBack] = zoomSoundCues(plan(zooms), zooms);
+    expect(wayIn!.sound).toBe("zoom_in");
+    expect(wayIn!.startSeconds + builtinSound("zoom_in").accentSeconds).toBeCloseTo(1.3, 9);
+    expect(wayBack).toEqual({ sound: "zoom_out", startSeconds: 2.2 });
+  });
+
+  it("starts an early cue at 0, follows each zoom's place in the request and drops a cue at the end", () => {
+    const zooms: ZoomInput[] = [
+      { start_seconds: 3, end_seconds: 4, ramp_out_seconds: 0, return_sound: "pop" },
+      { start_seconds: 0, end_seconds: 1, ramp_in_seconds: 0.1, sound: "zoom_in" },
+    ];
+    expect(zoomSoundCues(plan(zooms), zooms)).toEqual([{ sound: "zoom_in", startSeconds: 0 }]);
+  });
+
+  it("has no cues without sounds", () => {
+    const zooms: ZoomInput[] = [{ start_seconds: 1, end_seconds: 2 }];
+    expect(zoomSoundCues(plan(zooms), zooms)).toEqual([]);
   });
 });
 

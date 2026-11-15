@@ -5,18 +5,9 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG, FFPROBE, probeVideo, type ProbeResult } from "../ffmpeg.js";
-import { builtinSound } from "../sound-effects/catalog.js";
 import { testBudget } from "../test-budget.js";
-import { zoomWindowAt, type ZoomPlan, type ZoomWindow } from "../zoom.js";
-import {
-  checkZoomSounds,
-  hasVariableFrameRate,
-  renderZoomedVideo,
-  validateZoomOutput,
-  zoomPlanFor,
-  zoomSoundCues,
-  type ZoomRequest,
-} from "./zoom-video.js";
+import { zoomWindowAt, type ZoomInput, type ZoomPlan, type ZoomWindow } from "../zoom.js";
+import { hasVariableFrameRate, renderZoomedVideo, validateZoomOutput, zoomMixCues, zoomPlanFor } from "./zoom-video.js";
 
 const execFileAsync = promisify(execFile);
 const WIDTH = 324;
@@ -120,37 +111,10 @@ async function truncateToHeader(from: string, to: string): Promise<void> {
   await writeFile(to, bytes.subarray(0, offset + 72));
 }
 
-describe("zoom plan sounds", () => {
-  const plan = (zooms: ZoomRequest[]): ZoomPlan => zoomPlanFor(source({}), zooms);
-
-  it("lands the way-in sound's accent at full scale and starts the return sound as the way back begins", () => {
-    const zooms: ZoomRequest[] = [{ start_seconds: 1, end_seconds: 2.5, scale: 1.5, sound: "zoom_in", return_sound: "zoom_out" }];
-    const cues = zoomSoundCues(plan(zooms), zooms);
-    expect(cues).toHaveLength(2);
-    expect(cues[0]).toMatchObject({ sound: "zoom_in", gain: 0.7 });
-    expect(cues[0]!.startSeconds + builtinSound("zoom_in").accentSeconds).toBeCloseTo(1.3, 9);
-    expect(cues[1]).toMatchObject({ sound: "zoom_out", gain: 0.7 });
-    expect(cues[1]!.startSeconds).toBeCloseTo(2.2, 9);
-  });
-
-  it("starts an early cue at 0, keeps request order after sorting, and drops cues at the end", () => {
-    const zooms: ZoomRequest[] = [
-      { start_seconds: 3, end_seconds: 4, ramp_out_seconds: 0, return_sound: "pop" },
-      { start_seconds: 0, end_seconds: 1, ramp_in_seconds: 0.1, sound: "zoom_in" },
-    ];
-    const cues = zoomSoundCues(plan(zooms), zooms);
-    expect(cues).toEqual([{ sound: "zoom_in", startSeconds: 0, gain: 0.7 }]);
-  });
-
-  it("plays no return sound for a zoom that stays to the end", () => {
-    const zooms: ZoomRequest[] = [{ start_seconds: 1, sound: "whoosh", return_sound: "zoom_out" }];
-    expect(zoomSoundCues(plan(zooms), zooms).map((cue) => cue.sound)).toEqual(["whoosh"]);
-  });
-
-  it("rejects a return sound on a zoom with no end and says what to change", () => {
-    expect(() => checkZoomSounds([{ start_seconds: 0, end_seconds: 1 }, { start_seconds: 2, return_sound: "zoom_out" }]))
-      .toThrow(/Zoom 2 has a return_sound but no end_seconds.*Give it an end_seconds, or leave return_sound out/u);
-    expect(() => checkZoomSounds([{ start_seconds: 0, end_seconds: 1, return_sound: "zoom_out" }])).not.toThrow();
+describe("zoom job planning", () => {
+  it("mixes each zoom sound at 70% volume", () => {
+    const zooms: ZoomInput[] = [{ start_seconds: 1, end_seconds: 2.5, sound: "zoom_in", return_sound: "zoom_out" }];
+    expect(zoomMixCues(zoomPlanFor(source({}), zooms), zooms).map((cue) => [cue.sound, cue.gain])).toEqual([["zoom_in", 0.7], ["zoom_out", 0.7]]);
   });
 
   it("treats a source as variable frame rate when its average rate is more than 1% off", () => {
@@ -166,10 +130,10 @@ describe("zoom video rendering", () => {
   let silent = "";
   let pcm = "";
 
-  async function render(input: string, zooms: ZoomRequest[], name: string): Promise<{ output: string; plan: ZoomPlan; mode: string }> {
+  async function render(input: string, zooms: ZoomInput[], name: string): Promise<{ output: string; plan: ZoomPlan; mode: string }> {
     const probe = await probeVideo(input);
     const plan = zoomPlanFor(probe, zooms);
-    const cues = zoomSoundCues(plan, zooms);
+    const cues = zoomMixCues(plan, zooms);
     const output = join(dir, `${name}.mp4`);
     const mode = await renderZoomedVideo({ inputPath: input, outputPath: output, scratchDir: dir, source: probe, plan, cues });
     await validateZoomOutput({ source: probe, inputPath: input, outputPath: output, plan, audio: mode });
@@ -289,7 +253,7 @@ describe("zoom video rendering", () => {
     await ffmpeg(["-i", pattern, "-c", "copy", "-movflags", "+faststart", faststart]);
     await truncateToHeader(faststart, damaged);
     const probe = await probeVideo(damaged);
-    const zooms: ZoomRequest[] = [{ start_seconds: 1, end_seconds: 2 }];
+    const zooms: ZoomInput[] = [{ start_seconds: 1, end_seconds: 2 }];
     const plan = zoomPlanFor(probe, zooms);
     await expect(renderZoomedVideo({ inputPath: damaged, outputPath: join(dir, "damaged-zoom.mp4"), scratchDir: dir, source: probe, plan, cues: [] }))
       .rejects.toThrow(/ffmpeg failed/u);

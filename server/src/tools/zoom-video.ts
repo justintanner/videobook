@@ -3,9 +3,10 @@ import type { Engine } from "videobook-engine";
 import { findVideoFile } from "videobook-engine";
 import { z } from "zod";
 import { probeVideo } from "../ffmpeg.js";
-import { checkZoomSounds, zoomPlanFor, type ZoomRequest, type ZoomVideoResult } from "../jobs/zoom-video.js";
+import { zoomPlanFor, type ZoomVideoResult } from "../jobs/zoom-video.js";
 import { queue } from "../queue.js";
 import { BUILTIN_SOUND_IDS } from "../sound-effects/catalog.js";
+import type { ZoomInput } from "../zoom.js";
 import type { ToolDef } from "./tool-def.js";
 
 const JOB_TIMEOUT_MS = 1_800_000;
@@ -41,7 +42,7 @@ export function zoomVideoDef(engine: Engine): ToolDef {
     },
     handler: async (args) => {
       const assetId = String(args.asset_id).replace(/^@/u, "");
-      const zooms = args.zooms as ZoomRequest[];
+      const zooms = args.zooms as ZoomInput[];
       const manifest = await engine.files.manifest(assetId);
       if (!manifest.ok) return errorResult(manifest.error.message);
       const videoFile = findVideoFile(manifest.value.files);
@@ -50,7 +51,6 @@ export function zoomVideoDef(engine: Engine): ToolDef {
       try {
         const source = await probeVideo(inputPath);
         if (source.videoCodec === null) return errorResult(`No usable video stream found in asset ${assetId}`);
-        checkZoomSounds(zooms);
         zoomPlanFor(source, zooms);
       } catch (error) {
         return errorResult(messageOf(error));

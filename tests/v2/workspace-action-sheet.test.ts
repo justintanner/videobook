@@ -54,11 +54,12 @@ function renderActionSheet(action: WorkspaceAction, overrides: {
   review?: WorkspaceActionReview
   result?: WorkspaceActionResult
   loading?: boolean
+  context?: WorkspaceActionContext
 } = {}): string {
   return renderToStaticMarkup(createElement(WorkspaceActionSheet, {
     action,
     variants: workspaceActionVariants(catalog.actions, action),
-    context,
+    context: overrides.context ?? context,
     draft: overrides.draft === undefined ? seedWorkspaceActionDraft(action, context) : overrides.draft,
     review: overrides.review ?? null,
     result: overrides.result ?? null,
@@ -176,11 +177,37 @@ describe('workspace action sheet', () => {
     expect(draft).toMatchObject({ asset_id: 'video-1', 'zooms.start_seconds': 2.5, 'zooms.end_seconds': 4, 'zooms.scale': 1.5 })
     expect(effectiveWorkspaceActionValues(action, draft)).toMatchObject({ book_id: 'book-1', asset_id: 'video-1', zooms: [{ start_seconds: 2.5, end_seconds: 4, scale: 1.5 }] })
     const html = renderActionSheet(action, { draft })
-    expect(html).toContain('>zoom_out</option>')
+    expect(html.match(/>Zoom out<\/option>/gu)).toHaveLength(2)
+    expect(html.match(/aria-label="Preview sound"/gu)).toHaveLength(2)
     expect(html).not.toContain('May incur provider charges')
     const edited = patchWorkspaceActionDraft(action, context, draft, 'zooms.sound', 'zoom_in')
     expect(effectiveWorkspaceActionValues(action, edited).zooms).toEqual([{ start_seconds: 2.5, end_seconds: 4, scale: 1.5, sound: 'zoom_in' }])
     expect(workspaceActionConfirmation(action, effectiveWorkspaceActionValues(action, edited))).toBe('none')
+  })
+
+  it('previews a zoom over its video with the focus marker, sliders and play controls', () => {
+    const zoom = catalogAction('tool.zoom_video')
+    const zoomContext: WorkspaceActionContext = {
+      ...context,
+      media: { ...context.media, 'video-1': { url: '/files/book-1/video-1/proxy.mp4', type: 'video', width: 324, height: 576, objectHash: 'hash-video-1', duration: 4, fps: 30 } },
+    }
+    const draft = seedWorkspaceActionDraft(zoom, zoomContext, { asset_id: 'video-1', zooms: [{ start_seconds: 1, end_seconds: 2.5, scale: 1.5, focus_x: 0.25, focus_y: 0.75 }] })
+    const html = renderActionSheet(zoom, { draft, context: zoomContext })
+    expect(html).toContain('aria-label="Zoom preview"')
+    expect(html).toContain('aria-label="Zoom focus point"')
+    expect(html).toContain('<video src="/files/book-1/video-1/proxy.mp4"')
+    expect(html).toMatch(/class="workspace-zoom-focus" aria-hidden="true" style="left:25%;top:75%"/u)
+    for (const name of ['Horizontal zoom focus', 'Vertical zoom focus', 'Preview time']) expect(html).toContain(`aria-label="${name}"`)
+    for (const name of ['Play zoom', 'Set start', 'Set end']) expect(html).toMatch(new RegExp(`<button type="button"[^>]*>${name}</button>`, 'u'))
+    expect(html).not.toContain('class="workspace-zoom-message"')
+
+    const invalid = renderActionSheet(zoom, { draft: { ...draft, 'zooms.scale': 5 }, context: zoomContext })
+    expect(invalid).toContain('Zoom 1 scale must be from 1.05 to 3; got 5')
+    expect(invalid).toMatch(/<button type="button" disabled="">Play zoom<\/button>/u)
+
+    const crop = catalogAction('tool.crop_asset')
+    expect(renderActionSheet(crop, { draft: seedWorkspaceActionDraft(crop, zoomContext, { asset_id: 'video-1' }), context: zoomContext })).not.toContain('Zoom preview')
+    expect(renderActionSheet(zoom, { draft: seedWorkspaceActionDraft(zoom, zoomContext, { asset_id: 'image-1' }), context: zoomContext })).not.toContain('Zoom preview')
   })
 
   it('marks only the paid and destructive operations of video graphics and subtitles', () => {

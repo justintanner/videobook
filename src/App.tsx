@@ -10227,7 +10227,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       cellId: selectedNotebookCell?.id, assetId: selectedNotebookCell?.outputArtifactId, choices,
       cellIds: selectedNotebookCells.map((cell) => cell.id),
       assetIds: selectedNotebookCells.flatMap((cell) => cell.outputArtifactId ? [cell.outputArtifactId] : []),
-      media: Object.fromEntries(assets.map((asset) => [asset.artifactId, { url: asset.mediaUrl, type: asset.type, width: asset.width, height: asset.height, objectHash: asset.objectHash }])),
+      media: Object.fromEntries(assets.map((asset) => [asset.artifactId, { url: asset.mediaUrl, type: asset.type, width: asset.width, height: asset.height, objectHash: asset.objectHash, duration: asset.duration, fps: asset.fps }])),
     }
     return context
   }, [assets, bookId, books, notebook, selectedNotebookCell, selectedNotebookCells, sequence])

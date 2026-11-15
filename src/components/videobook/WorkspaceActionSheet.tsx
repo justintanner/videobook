@@ -20,6 +20,7 @@ import {
   workspaceActionFrameAspectRatio,
   workspaceActionSeedanceEdit,
   workspaceActionValidation,
+  workspaceActionZoomMedia,
   type WorkspaceActionDraft,
   type WorkspaceActionResult,
   type WorkspaceActionReview,
@@ -32,6 +33,7 @@ import { BuiltinSoundField } from './BuiltinSoundField'
 import { WorkspaceActionField } from './WorkspaceActionField'
 import { WorkspaceActionResultLinks } from './WorkspaceActionResultLinks'
 import { WorkspaceCropPreview } from './WorkspaceCropPreview'
+import { WorkspaceZoomPreview } from './WorkspaceZoomPreview'
 import './workspace-actions.css'
 
 const graphicsBatchResultSchema = z.object({ results: z.array(z.object({
@@ -168,6 +170,7 @@ function WorkspaceActionBody({ action, variants, context, draft, review, result,
   const entityId = values.entity && typeof values.entity === 'object' && 'id' in values.entity ? String(values.entity.id) : ''
   const soundPreview = useVoicePreviewPlayer()
   const cropMedia = workspaceActionCropMedia(action, context, values)
+  const zoomMedia = workspaceActionZoomMedia(action, context, values)
   const choices = workspaceActionChoices(action, context, values)
   const hasDependentChoices = DEPENDENT_CHOICE_FIELDS.some((name) => name in (action.inputSchema.properties ?? {}))
 
@@ -186,6 +189,7 @@ function WorkspaceActionBody({ action, variants, context, draft, review, result,
     <WorkspaceActionVariants action={action} variants={variants} values={values} busy={busy} onOpenAction={onOpenAction} />
     <div className="workspace-action-fields">
       {cropMedia && <WorkspaceCropPreview media={cropMedia} values={values} disabled={busy} onChange={onPatch} />}
+      {zoomMedia && <WorkspaceZoomPreview media={zoomMedia} values={values} disabled={busy} sounds={soundPreview} onChange={onPatch} />}
       {entityEditor && <WorkspaceEntityPicker context={context} entityId={entityId} busy={busy} onPatch={onPatch} />}
       {workspaceActionFields(action).map(([name, schema]) => {
         if (workspaceActionBuiltinSoundField(action, name)) return <BuiltinSoundField key={name} name={name}

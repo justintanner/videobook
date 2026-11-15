@@ -6,10 +6,10 @@ import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { AUDIO_OPTS, FFPROBE, H264_MEDIUM, probeVideo, runFfmpeg, type ProbeResult } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
-import { builtinSound, type BuiltinSoundId } from "../sound-effects/catalog.js";
+import type { BuiltinSoundId } from "../sound-effects/catalog.js";
 import { buildBuiltinSfxFilter, writeBuiltinSfxFiles, type BuiltinSfxCue } from "../sound-effects/mix.js";
 import { PICTURE_SIDECARS, SOUND_SIDECARS } from "../stale-sidecars.js";
-import { buildZoomVideoFilter, createZoomPlan, type ResolvedZoom, type ZoomInput, type ZoomPlan } from "../zoom.js";
+import { buildZoomVideoFilter, createZoomPlan, zoomSoundCues, type ResolvedZoom, type ZoomInput, type ZoomPlan } from "../zoom.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
@@ -19,14 +19,8 @@ const LOCK_DURATION_MS = 1_800_000;
 const FRAME_COUNT_TIMEOUT_MS = 600_000;
 const SCRATCH_PREFIX = "videobook-zoom-render-";
 const SOUND_GAIN = 0.7;
-const LATE_CUE_SECONDS = 0.05;
 const VARIABLE_RATE_TOLERANCE = 0.01;
 const VARIABLE_RATE_FRAMES = 2;
-
-export type ZoomRequest = ZoomInput & {
-  sound?: BuiltinSoundId;
-  return_sound?: BuiltinSoundId;
-};
 
 type ZoomRecord = {
   start_seconds: number;
@@ -55,7 +49,7 @@ type ZoomAudioMode = "copy" | "aac" | "mix" | "none";
 type ZoomVideoPayload = {
   type: "zoom_video";
   inputPath: string;
-  zooms: ZoomRequest[];
+  zooms: ZoomInput[];
   assetId: string;
   assetDir: string;
   bookId: string;
@@ -96,35 +90,11 @@ export function zoomPlanFor(source: ProbeResult, zooms: readonly ZoomInput[]): Z
   return createZoomPlan({ sourceDuration: videoDurationOf(source), sourceFps: source.fps, zooms: [...zooms] });
 }
 
-export function checkZoomSounds(zooms: readonly ZoomRequest[]): void {
-  zooms.forEach((zoom, index) => {
-    if (zoom.return_sound !== undefined && zoom.end_seconds === undefined) {
-      throw new Error(`Zoom ${index + 1} has a return_sound but no end_seconds, so it never returns. Give it an end_seconds, or leave return_sound out.`);
-    }
-  });
+export function zoomMixCues(plan: ZoomPlan, zooms: readonly ZoomInput[]): BuiltinSfxCue[] {
+  return zoomSoundCues(plan, zooms).map((cue) => ({ ...cue, gain: SOUND_GAIN }));
 }
 
-function zoomCues(zoom: ResolvedZoom, request: ZoomRequest): BuiltinSfxCue[] {
-  const wayIn = request.sound === undefined ? [] : [{
-    sound: request.sound,
-    startSeconds: Math.max(0, zoom.startSeconds + zoom.rampInSeconds - builtinSound(request.sound).accentSeconds),
-    gain: SOUND_GAIN,
-  }];
-  const wayBack = request.return_sound === undefined || zoom.endSeconds === null ? [] : [{
-    sound: request.return_sound,
-    startSeconds: zoom.endSeconds - zoom.rampOutSeconds,
-    gain: SOUND_GAIN,
-  }];
-  return [...wayIn, ...wayBack];
-}
-
-export function zoomSoundCues(plan: ZoomPlan, zooms: readonly ZoomRequest[]): BuiltinSfxCue[] {
-  return plan.zooms
-    .flatMap((zoom) => zoomCues(zoom, zooms[zoom.index]!))
-    .filter((cue) => cue.startSeconds < plan.sourceDuration - LATE_CUE_SECONDS);
-}
-
-function zoomRecord(zoom: ResolvedZoom, request: ZoomRequest): ZoomRecord {
+function zoomRecord(zoom: ResolvedZoom, request: ZoomInput): ZoomRecord {
   return {
     start_seconds: rounded(zoom.startSeconds),
     end_seconds: zoom.endSeconds === null ? null : rounded(zoom.endSeconds),
@@ -138,7 +108,7 @@ function zoomRecord(zoom: ResolvedZoom, request: ZoomRequest): ZoomRecord {
   };
 }
 
-function zoomResult(plan: ZoomPlan, zooms: readonly ZoomRequest[], cues: readonly BuiltinSfxCue[]): ZoomVideoResult {
+function zoomResult(plan: ZoomPlan, zooms: readonly ZoomInput[], cues: readonly BuiltinSfxCue[]): ZoomVideoResult {
   return {
     zooms: plan.zooms.map((zoom) => zoomRecord(zoom, zooms[zoom.index]!)),
     sounds: cues.map((cue) => ({ sound: cue.sound, start_seconds: rounded(cue.startSeconds) })),
@@ -274,7 +244,7 @@ async function replaceInPlace(
 async function zoomInPlace(engine: Engine, job: ZoomVideoPayload, signal: AbortSignal): Promise<ZoomVideoResult> {
   const source = await probeVideo(job.inputPath, { signal });
   const plan = zoomPlanFor(source, job.zooms);
-  const cues = zoomSoundCues(plan, job.zooms);
+  const cues = zoomMixCues(plan, job.zooms);
   const scratchDir = await mkdtemp(join(tmpdir(), SCRATCH_PREFIX));
   try {
     const outputPath = join(scratchDir, "zoomed.mp4");
