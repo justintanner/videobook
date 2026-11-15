@@ -291,15 +291,17 @@ async function frameTimes(path: string): Promise<number[]> {
   const { stdout } = await execFileAsync(FFPROBE, [
     "-v", "error",
     "-select_streams", "v:0",
-    "-show_entries", "frame=pts_time",
-    "-of", "csv=p=0",
+    "-show_entries", "frame=best_effort_timestamp_time",
+    "-of", "json",
     path,
   ]);
-  return stdout.trim().split("\n").map(Number);
+  const { frames } = JSON.parse(stdout) as { frames: { best_effort_timestamp_time: string }[] };
+  return frames.map((frame) => Number(frame.best_effort_timestamp_time));
 }
 
 async function firstZoomedTime(path: string): Promise<number> {
   const [profiles, times] = await Promise.all([rowProfiles(path), frameTimes(path)]);
+  expect(times).toHaveLength(profiles.length);
   const frame = profiles.findIndex((profile) => barWidth(profile) > BAR_WIDTH * 1.25);
   expect(frame).toBeGreaterThan(0);
   return times[frame];
