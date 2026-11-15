@@ -1,3 +1,4 @@
+import { BUILTIN_SOUNDS } from '../../server/src/sound-effects/catalog'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -138,11 +139,24 @@ describe('workspace action sheet', () => {
     expect(fields.map(([name]) => name)).not.toContain('sfx')
     const draft = seedWorkspaceActionDraft(action, context, { asset_id: 'video-1', sfx: [{ sound: 'zoom_in', timestamp: 2.5 }] })
     const html = renderActionSheet(action, { draft })
-    for (const sound of ['zoom_in', 'zoom_out', 'whoosh', 'swish', 'pop', 'click', 'ding', 'impact', 'riser', 'glitch']) expect(html).toContain(`>${sound}</option>`)
+    for (const sound of BUILTIN_SOUNDS) expect(html).toContain(`>${sound.title}</option>`)
+    expect(html).toContain('aria-label="Preview Zoom in"')
+    expect(html).toContain(BUILTIN_SOUNDS[0]!.description)
     expect(html).toContain('<select')
     expect(html).not.toContain('May incur provider charges')
     const edited = patchWorkspaceActionDraft(action, context, draft, 'sfx.volume', 35)
     expect(effectiveWorkspaceActionValues(action, edited).sfx).toEqual([{ sound: 'zoom_in', timestamp: 2.5, volume: 35 }])
+  })
+
+  it('describes the selected built-in sound and leaves preview idle on render', () => {
+    const action = catalogAction('tool.apply_builtin_sfx')
+    for (const sound of BUILTIN_SOUNDS) {
+      const draft = seedWorkspaceActionDraft(action, context, { asset_id: 'video-1', sfx: [{ sound: sound.id, timestamp: 1 }] })
+      const html = renderActionSheet(action, { draft })
+      expect(html).toContain(sound.description)
+      expect(html).toContain(`aria-label="Preview ${sound.title}"`)
+      expect(html).toContain('aria-pressed="false"')
+    }
   })
 
   it('marks only the paid and destructive operations of video graphics and subtitles', () => {

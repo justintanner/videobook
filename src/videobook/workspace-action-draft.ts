@@ -21,6 +21,12 @@ const HIDDEN_FIELDS = ['book_id', 'actor', 'source_surface']
 
 const SINGLE_ENTRY_ARRAYS: Readonly<Record<string, string>> = { apply_sfx: 'sfx', apply_builtin_sfx: 'sfx' }
 
+const BUILTIN_SOUND_FIELDS: Readonly<Record<string, readonly string[]>> = { apply_builtin_sfx: ['sfx.sound'] }
+
+export function workspaceActionBuiltinSoundField(action: WorkspaceAction, name: string): boolean {
+  return action.handler.kind === 'tool' && Boolean(BUILTIN_SOUND_FIELDS[action.handler.tool]?.includes(name))
+}
+
 const GENERATION_REVIEW = 'Running this sends your prompt and selected media to a generation provider and may incur charges.'
 
 const MISSING_COST_ADAPTER = /^no cost adapter registered for tool\b/u

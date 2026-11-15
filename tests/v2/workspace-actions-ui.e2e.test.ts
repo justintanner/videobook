@@ -11,7 +11,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { availablePort, record, resultValue, startProcess, stopProcess, waitForHttp } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
 import type { WorkspaceActionCatalog } from '../../server/src/workspace-action-contract.js'
-import { FFMPEG } from '../../server/src/ffmpeg.js'
+import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const MCP_ROUNDTRIP_MS = 15_000
 
@@ -764,4 +765,112 @@ describe('workspace action launcher with real endpoints', () => {
     await expect.poll(async () => JSON.stringify(await call('list_assets')), { timeout: MCP_ROUNDTRIP_MS }).not.toContain(String(duplicate.assetId))
     expect(JSON.stringify(await call('list_assets'))).toContain(imageId)
   }, 120_000)
+})
+
+
+describe('built-in sound preview and apply without provider credentials', () => {
+  it('previews and mixes /sfx @a1 1 zoom-in entirely locally', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'videobook-builtin-sfx-ui-'))
+    let localServer: StartedProcess | undefined
+    let localVite: StartedProcess | undefined
+    let localBrowser: Browser | undefined
+    let localClient: Client | undefined
+    const exec = promisify(execFile)
+    try {
+      const port = await availablePort()
+      const vitePort = await availablePort()
+      const origin = `http://127.0.0.1:${port}`
+      const appUrl = `http://127.0.0.1:${vitePort}`
+      const env = {
+        ...process.env,
+        ...Object.fromEntries(Object.keys(process.env).filter(key => key.endsWith('_API_KEY')).map(key => [key, ''])),
+        PORT: String(port), OPENAI_API_KEY: '', KIE_API_KEY: '', FAL_API_KEY: '', ELEVENLABS_API_KEY: '',
+        KIMI_CODING_API_KEY: '', DASHSCOPE_API_KEY: '', XAI_API_KEY: '',
+        VIDEOBOOK_LIBRARY_DIR: join(root, 'books'), VIDEOBOOK_APP_STATE_PATH: join(root, 'runtime/app-state.json'),
+      }
+      localServer = startProcess(['--import', 'tsx', 'server/src/index.ts'], env)
+      await waitForHttp(`${origin}/healthz`, localServer, 200)
+      const client = new Client({ name: 'builtin-sfx-ui', version: '1.0.0' }, {
+        capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+      })
+      localClient = client
+      await client.connect(new StreamableHTTPClientTransport(new URL(`${origin}/mcp`)))
+      const book = record(resultValue(await client.callTool({ name: 'create_book', arguments: { name: 'builtin-sfx-ui' } })))!
+      const bookId = String(book.bookId)
+      const call = async (name: string, args: Record<string, unknown> = {}) => resultValue(await client.callTool({ name, arguments: { book_id: bookId, ...args } }))
+      const notebooks = await call('list_notebooks') as Array<{ id: string }>
+      const fixture = join(root, 'source.mp4')
+      await exec(FFMPEG, ['-y', '-f', 'lavfi', '-i', 'color=black:size=160x90:rate=24:duration=3',
+        '-f', 'lavfi', '-i', 'anoisesrc=color=pink:amplitude=0.05:seed=1:duration=3:sample_rate=48000',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-shortest', fixture], { timeout: testBudget(30_000) })
+      const upload = record(await call('upload_file', { filename: 'sound-target.mp4', data: (await readFile(fixture)).toString('base64') }))!
+      const assetId = String(upload.assetId)
+      await call('create_notebook_cell', { notebook_id: notebooks[0]!.id, cell: { type: 'video', slot: { row: 0, column: 0 }, output_artifact_id: assetId } })
+      const status = async () => {
+        const assets = record(await call('list_assets'))?.assets as Array<{ artifact_id: string; status: string }>
+        return assets.find(asset => asset.artifact_id === assetId)?.status
+      }
+      await expect.poll(status, { timeout: testBudget(60_000) }).toBe('ready')
+      localVite = startProcess(['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(vitePort), '--strictPort'], {
+        ...env, VIDEOBOOK_SERVER_URL: origin, VIDEOBOOK_VITE_CACHE_DIR: join(root, 'vite-cache'), VIDEOBOOK_VITE_HMR: '0',
+      })
+      await waitForHttp(appUrl, localVite, 200)
+      localBrowser = await chromium.launch({ headless: true })
+      const page = await localBrowser.newPage({ viewport: { width: 1440, height: 1000 } })
+      page.setDefaultTimeout(testBudget(15_000))
+      const remoteRequests: string[] = []
+      const errors: string[] = []
+      page.on('request', request => {
+        const url = new URL(request.url())
+        if (['http:', 'https:'].includes(url.protocol) && ![origin, appUrl].includes(url.origin)) remoteRequests.push(request.url())
+      })
+      page.on('pageerror', error => errors.push(error.message))
+      await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
+      await page.goto(appUrl)
+      await expect.poll(() => page.getByLabel('Open actions', { exact: true }).isEnabled(), { timeout: testBudget(15_000) }).toBe(true)
+      const input = page.getByLabel('Videobook command input', { exact: true })
+      await input.fill('/sfx @a1 1 zoom-in')
+      if (await page.locator('.command-suggestions').isVisible()) await input.press('Escape')
+      await input.press('Enter')
+      const sheet = page.locator('form[data-action-id="tool.apply_builtin_sfx"]')
+      await sheet.waitFor()
+      const sounds = sheet.getByRole('combobox', { name: /^Sound/u })
+      expect(await sounds.inputValue()).toBe('zoom_in')
+      expect(await sounds.locator('option:checked').textContent()).toBe('Zoom in')
+      expect(await sheet.getByRole('spinbutton', { name: /^Timestamp/u }).inputValue()).toBe('1')
+      await sheet.getByRole('button', { name: 'Preview Zoom in', exact: true }).click()
+      await expect.poll(() => sheet.getByRole('button', { name: 'Stop Zoom in', exact: true }).count(), { timeout: testBudget(5_000) }).toBe(1)
+      await expect.poll(() => sheet.getByRole('button', { name: 'Preview Zoom in', exact: true }).count(), { timeout: testBudget(5_000) }).toBe(1)
+      await sounds.selectOption('riser')
+      await sheet.getByRole('button', { name: 'Preview Riser', exact: true }).click()
+      await sheet.getByRole('button', { name: 'Stop Riser', exact: true }).click()
+      expect(await sheet.getByRole('button', { name: 'Preview Riser', exact: true }).count()).toBe(1)
+      await sounds.selectOption('zoom_in')
+      await page.locator('.command-composer .confirm-sheet-apply').click()
+      await expect.poll(() => sheet.locator('.workspace-action-result').textContent(), { timeout: testBudget(60_000) }).toContain('completed')
+      await expect.poll(status, { timeout: testBudget(60_000) }).toBe('ready')
+      const response = await fetch(`${origin}/files/${bookId}/${assetId}/original.mp4`)
+      expect(response.status).toBe(200)
+      const mixed = join(root, 'mixed.mp4')
+      await writeFile(mixed, Buffer.from(await response.arrayBuffer()))
+      const windowRms = async (path: string) => {
+        const { stdout } = await exec(FFMPEG, ['-v', 'error', '-ss', '1', '-t', '0.5', '-i', path, '-map', '0:a', '-ac', '1', '-ar', '48000', '-f', 'f32le', 'pipe:1'], {
+          encoding: 'buffer', maxBuffer: 1_000_000, timeout: testBudget(30_000),
+        })
+        let sum = 0
+        for (let offset = 0; offset < stdout.length; offset += 4) sum += stdout.readFloatLE(offset) ** 2
+        return Math.sqrt(sum / (stdout.length / 4))
+      }
+      expect(20 * Math.log10(await windowRms(mixed) / await windowRms(fixture))).toBeGreaterThanOrEqual(6)
+      expect(Math.abs((await probeVideo(mixed)).duration - (await probeVideo(fixture)).duration)).toBeLessThanOrEqual(0.05)
+      expect(remoteRequests).toEqual([])
+      expect(errors).toEqual([])
+    } finally {
+      await localBrowser?.close()
+      await localClient?.close()
+      await stopProcess(localVite)
+      await stopProcess(localServer)
+      await rm(root, { recursive: true, force: true, maxRetries: 3 })
+    }
+  }, testBudget(180_000))
 })

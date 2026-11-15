@@ -12,6 +12,7 @@ import {
 import {
   effectiveWorkspaceActionValues,
   workspaceActionChoices,
+  workspaceActionBuiltinSoundField,
   workspaceActionConfirmation,
   workspaceActionCropMedia,
   workspaceActionFields,
@@ -26,6 +27,8 @@ import {
 import { WORKSPACE_ACTION_FORM_ID } from '@/videobook/workspace-action-form'
 import { ConfirmSheet } from './confirm/ConfirmSheet'
 import type { ConfirmSheetEffect } from './confirm/ConfirmSheetHints'
+import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
+import { BuiltinSoundField } from './BuiltinSoundField'
 import { WorkspaceActionField } from './WorkspaceActionField'
 import { WorkspaceActionResultLinks } from './WorkspaceActionResultLinks'
 import { WorkspaceCropPreview } from './WorkspaceCropPreview'
@@ -163,6 +166,7 @@ function WorkspaceActionBody({ action, variants, context, draft, review, result,
   const required = workspaceActionRequired(action)
   const entityEditor = action.handler.kind === 'tool' && action.handler.tool === 'update_entity'
   const entityId = values.entity && typeof values.entity === 'object' && 'id' in values.entity ? String(values.entity.id) : ''
+  const soundPreview = useVoicePreviewPlayer()
   const cropMedia = workspaceActionCropMedia(action, context, values)
   const choices = workspaceActionChoices(action, context, values)
   const hasDependentChoices = DEPENDENT_CHOICE_FIELDS.some((name) => name in (action.inputSchema.properties ?? {}))
@@ -184,6 +188,9 @@ function WorkspaceActionBody({ action, variants, context, draft, review, result,
       {cropMedia && <WorkspaceCropPreview media={cropMedia} values={values} disabled={busy} onChange={onPatch} />}
       {entityEditor && <WorkspaceEntityPicker context={context} entityId={entityId} busy={busy} onPatch={onPatch} />}
       {workspaceActionFields(action).map(([name, schema]) => {
+        if (workspaceActionBuiltinSoundField(action, name)) return <BuiltinSoundField key={name} name={name}
+          label={schema.title ?? actionFieldLabel(name)} value={values[name]} required={required.has(name)} disabled={busy}
+          preview={soundPreview} onChange={(value) => onChange(name, value)} />
         const entityField = entityEditor && name === 'entity'
         return <WorkspaceActionField key={entityField ? `${name}:${entityId}` : name} name={name} schema={entityField ? ENTITY_EDITOR_SCHEMA : schema}
           value={values[name]} choices={choices} required={required.has(name)}

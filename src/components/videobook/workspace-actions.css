@@ -422,3 +422,27 @@
   gap: 8px;
   padding-top: 8px;
 }
+
+.workspace-action-sound {
+  display: grid;
+  gap: 4px;
+}
+
+.workspace-sound-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-sound-preview select {
+  flex: 1;
+  min-width: 0;
+}
+
+.workspace-sound-preview button {
+  flex-shrink: 0;
+}
+
+.workspace-action-sound .workspace-action-hint {
+  margin: 0;
+}
