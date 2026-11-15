@@ -37,7 +37,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "apply_watermark", "get_watermark_config",
   ],
   Audio: [
-    "trim_audio", "suggest_sfx", "apply_sfx", "sync_video_to_audio", "audio_boost",
+    "trim_audio", "suggest_sfx", "apply_sfx", "apply_builtin_sfx", "sync_video_to_audio", "audio_boost",
     "audio_mix", "extract_notebook_audio", "extract_audio", "make_cover_song",
     "extend_audio_asset", "remove_sound", "replace_video_audio", "transcribe",
     "read_transcript", "translate_subtitles", "isolate_vocals", "clean_video_audio",

@@ -355,6 +355,19 @@ describe("chain MCP tool", () => {
     expect(publicSteps(after)[1]?.status).toBe("awaiting-approval");
   });
 
+  it("runs free built-in cues and waits for reprocessing before the next step", async () => {
+    await setupBook("builtin-sounds");
+    const accepted = await runChain([
+      { id: "cue", tool: "apply_builtin_sfx", params: { asset_id: "@c4", sfx: [{ sound: "pop", timestamp: 0.2 }] } },
+      { id: "inspect", tool: "asset_manifest", params: { asset_id: { $ref: { step_id: "cue", output: "asset_id" } } } },
+    ]);
+    const settled = await waitForChainRun(engine, String(accepted.chain_id), testBudget(180_000));
+    expect(settled.status).toBe("completed");
+    expect(settled.steps[0]?.outputs?.asset_id).toBe(targetId);
+    expect(settled.steps[1]?.status).toBe("completed");
+    expect(engine.jobs.queue.list({ type: "process_video", artifactId: targetId, states: ["queued", "running", "completing"] })).toHaveLength(0);
+  });
+
   it.each(["ready", "failed"] as const)("handles a %s generated audio result in a reviewed background and SFX chat chain", async outcome => {
     await setupBook(`audio-${outcome}`, 28);
     const actualBookId = engine.book.get().bookId;

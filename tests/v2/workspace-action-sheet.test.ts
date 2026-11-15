@@ -131,6 +131,20 @@ describe('workspace action sheet', () => {
     expect(effectiveWorkspaceActionValues(apply, edited).sfx).toEqual([{ timestamp: 4, type: 'whoosh', description: 'fast transition' }])
   })
 
+  it('shows a free built-in sound as a flat cue with ten sound options', () => {
+    const action = catalogAction('tool.apply_builtin_sfx')
+    const fields = workspaceActionFields(action)
+    expect(fields.map(([name]) => name)).toEqual(expect.arrayContaining(['sfx.sound', 'sfx.timestamp', 'sfx.volume']))
+    expect(fields.map(([name]) => name)).not.toContain('sfx')
+    const draft = seedWorkspaceActionDraft(action, context, { asset_id: 'video-1', sfx: [{ sound: 'zoom_in', timestamp: 2.5 }] })
+    const html = renderActionSheet(action, { draft })
+    for (const sound of ['zoom_in', 'zoom_out', 'whoosh', 'swish', 'pop', 'click', 'ding', 'impact', 'riser', 'glitch']) expect(html).toContain(`>${sound}</option>`)
+    expect(html).toContain('<select')
+    expect(html).not.toContain('May incur provider charges')
+    const edited = patchWorkspaceActionDraft(action, context, draft, 'sfx.volume', 35)
+    expect(effectiveWorkspaceActionValues(action, edited).sfx).toEqual([{ sound: 'zoom_in', timestamp: 2.5, volume: 35 }])
+  })
+
   it('marks only the paid and destructive operations of video graphics and subtitles', () => {
     const effects = (id: string, values: WorkspaceActionDraft) => {
       const html = renderActionSheet(catalogAction(id), { draft: { book_id: 'book-1', asset_id: 'video-1', ...values } })

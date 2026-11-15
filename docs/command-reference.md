@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (213)
+## MCP endpoints (214)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
@@ -17,7 +17,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `analyze_music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.
 - `analyze_video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.
 - `animate_keywords` — Turn transcript-timed keyword titles on or off for a video's renders, placed by vision away from faces, subtitles and on-screen text. Pass keywords for exact transcript words, or omit them for automatic picks.
-- `apply_sfx` — Generate ElevenLabs sound effects and mix them into a video's audio in place, one cue per entry at its timestamp and duration. Get entries from suggest_sfx.
+- `apply_builtin_sfx` — Mix local, free sound effects into a video: zoom_in, zoom_out, whoosh, swish, pop, click, ding, impact, riser, glitch. For other sounds, use apply_sfx to generate them.
+- `apply_sfx` — Generate ElevenLabs sound effects and mix them into a video's audio in place, one cue per entry at its timestamp and duration. Get entries from suggest_sfx; use apply_builtin_sfx for free built-in sounds.
 - `apply_watermark` — Burn the X or TikTok handle and an optional positioned QR code (off by default), or the platform's saved watermark template, onto a video in place. TikTok defaults to handle_position=above-title: solid icon and text above the title, no pill, sharing the title window. Other placements retain pill opacity, padding and visibility windows. wait=false returns once the burn is queued.
 - `archive_clip` — Save a URL or a video or audio asset to the global clip archive (B2 when configured, otherwise local), deduplicated by content and transcribed; restore it with restore_archive_clips.
 - `asset_history` — Get immutable Dolt revision history for an asset
@@ -224,7 +225,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_graphics` — On-screen graphics drawn over a video: text blocks, images, QR codes and shades, each with a position, size, opacity and time window. get reads the saved layers, or the book's default look for a video without any (built in: the TikTok handle, an empty Thai title and an English line, no QR code), with the handle, profile URL and source credit to fill slots, the starter layouts, the book's saved templates, the latest render and any graphics already burned in; update saves edits or a replacement document against the revision from get; render burns the reviewed revision in the background into a new connected video cell (the source is kept) or into the source video in place; suggest (paid, one model call) offers headline options from the video's existing analysis, transcript and download text, or translations of the headline for the second line, for the operator to pick; check_placement says for free whether a layer covers a face or on-screen text already found in the video and where the clearest spot is, and detect_regions (paid when frames are unchecked) finds them first. Templates are named layouts saved per book: save_template, rename_template, delete_template, set_default_template (the look videos without graphics start from) and copy_templates (from another book, with the images they use). watermark: true edits the platform's watermark, what apply_watermark and goal finishing burn; save_watermark saves it as their watermark template and set_watermark_template picks a saved template instead. Videos only.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (264; 106 dedicated command routes)
+## Slash actions (265; 106 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
@@ -234,6 +235,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
 - `/analyze-music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.; MCP: `analyze_music`
 - `/analyze-video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.; MCP: `analyze_video`
+- `/apply-builtin-sfx` — Mix local, free sound effects into a video: zoom_in, zoom_out, whoosh, swish, pop, click, ding, impact, riser, glitch. For other sounds, use apply_sfx to generate them.; MCP: `apply_builtin_sfx`
 - `/apply-graphics-template` — Apply a saved or built-in look to selected videos. Replaces layers while keeping typed text by slot and each video's frame. Render creates a new video cell for each successful video.; MCP: `video_graphics`
 - `/apply-watermark` — Burn the X or TikTok handle and an optional positioned QR code (off by default), or the platform's saved watermark template, onto a video in place. TikTok defaults to handle_position=above-title: solid icon and text above the title, no pill, sharing the title window. Other placements retain pill opacity, padding and visibility windows. wait=false returns once the burn is queued.; MCP: `apply_watermark`
 - `/archive` — Archive a full video or audio asset to the global clip archive and transcribe it; MCP: `archive_clip`
@@ -450,7 +452,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/set-notebook-media-slot` — Attach or clear a passive notebook media slot; MCP: `set_notebook_media_slot`
 - `/set-timeline` — Replace a book's typed v2 timeline using stable artifact UUIDs; MCP: `set_timeline`
 - `/settings` (aliases: `/settings-landscape`, `/settings-portrait`, `/settings-square`, `/bg`, `/audio-settings`) — Render settings for the open media: orientation (landscape, portrait, square), background (bg blur|black) and audio (volume, fade-in, fade-out); UI: `viewer_show_settings`
-- `/sfx` (aliases: `/suggest-sfx`, `/apply-sfx`, `/sound-effects`) — Sound effects: suggest placements for a video (/sfx @a1), add one with a time, type and description (/sfx @a1 2.5 whoosh fast transition), or review suggestions for the whole sequence when run bare; MCP: `suggest_sfx`
+- `/sfx` (aliases: `/suggest-sfx`, `/apply-sfx`, `/sound-effects`) — Sound effects: add a free built-in sound (/sfx @a1 2.5 zoom-in), generate a custom sound with a type and description (/sfx @a1 2.5 whoosh fast transition), suggest placements (/sfx @a1), or review the sequence when run bare; MCP: `suggest_sfx`
 - `/skeleton` — Review an AI pose skeleton guide generated from a reference image; UI: `extract_skeleton`
 - `/smooth-scene-concat` — Join two video scenes into a new video, aligning overlapping boundary audio to avoid repeated speech and dissolving across it, otherwise crossfading briefly.; MCP: `smooth_scene_concat`
 - `/sort` — Browse project media by creation date; UI: `sidebar_sort`
@@ -467,7 +469,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/suggest-sequence-coverage` — Rank existing visual moments for a sequence range before offering generation; MCP: `suggest_sequence_coverage`
 - `/sync-audio` — Smoothly retime video action to match fixed original-audio cues at multiple anchors; MCP: `sync_video_to_audio`
 - `/timewarp` — Retime one scene while compensating the rest of the picture and preserving the original audio and duration; MCP: `timewarp_video`
-- `/tool-apply-sfx` — Generate ElevenLabs sound effects and mix them into a video's audio in place, one cue per entry at its timestamp and duration. Get entries from suggest_sfx.; MCP: `apply_sfx`
+- `/tool-apply-sfx` — Generate ElevenLabs sound effects and mix them into a video's audio in place, one cue per entry at its timestamp and duration. Get entries from suggest_sfx; use apply_builtin_sfx for free built-in sounds.; MCP: `apply_sfx`
 - `/tool-post` — Post a clip or image in one step. to: icloud saves the clip and caption.txt to iCloud Drive › Videobook for the phones; download freezes them and returns download links for a manual upload; x publishes to X now or at scheduled_for, with optional thread replies; draft only saves the Post. Pass asset_id for a new Post or post_cell_id to send an existing one.; MCP: `post`
 - `/tool-rename-all` — Relabel video and image assets in bulk. dry_run proposes descriptive labels from their analysis, transcript and prompts; pass edited renames with dry_run false to apply. Labels are display-only.; MCP: `rename_all`
 - `/tool-rewrite-script` — Rewrite a script asset's markdown in place without re-reading the source image: variant full (reproduction prompt and breakdown) or tldr (one or two sentences), with an optional platform preset and custom_prompt instruction. Asynchronous; earlier versions stay in history.; MCP: `rewrite_script`

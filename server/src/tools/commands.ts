@@ -263,8 +263,8 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/sfx",
-    description: "Sound effects: suggest placements for a video (/sfx @a1), add one with a time, type and description (/sfx @a1 2.5 whoosh fast transition), or review suggestions for the whole sequence when run bare",
-    example: "/sfx @a1",
+    description: "Sound effects: add a free built-in sound (/sfx @a1 2.5 zoom-in), generate a custom sound with a type and description (/sfx @a1 2.5 whoosh fast transition), suggest placements (/sfx @a1), or review the sequence when run bare",
+    example: "/sfx @a1 2.5 zoom-in",
     category: "context_menu",
     icon: "Volume2",
     size: "default",

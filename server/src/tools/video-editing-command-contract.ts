@@ -12,6 +12,7 @@ type CommandExposure = "direct" | "ui" | "composite" | "internal";
 
 export const COMMAND_ADAPTER_NAMES = [
   "apply_sfx",
+  "apply_builtin_sfx",
   "change_speed",
   "duplicate",
   "keywords",
@@ -181,6 +182,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "suggest_cuts", exposure: "direct", command: "/suggest-cuts", purpose: "Suggest removable video ranges" },
   { tool: "analyze_jokes", exposure: "direct", command: "/analyze-jokes", purpose: "Analyze edit points around jokes" },
   { tool: "suggest_sfx", exposure: "direct", command: "/sfx", purpose: "Suggest sound-effect placements" },
+  { tool: "apply_builtin_sfx", exposure: "internal", purpose: "Mix local built-in sound effects" },
   { tool: "apply_sfx", exposure: "internal", purpose: "Generate and mix sound effects" },
   { tool: "inject_first_frame", exposure: "direct", command: "/replace-first-frame", purpose: "Replace frame zero with an image" },
   { tool: "extract_frame", exposure: "direct", command: "/extract-frame", purpose: "Extract the first, last or a timed video frame" },

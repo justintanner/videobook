@@ -143,6 +143,12 @@ export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
     gridFields: ["asset_id"],
     inputTypes: { asset_id: "artifact", sfx: "json" },
   },
+  apply_builtin_sfx: {
+    outputs: { asset_id: "artifact", job_id: "string", status: "string", applied: "number", dropped: "number" },
+    completion: "apply_sfx",
+    gridFields: ["asset_id"],
+    inputTypes: { asset_id: "artifact", sfx: "json" },
+  },
   trim_video: {
     outputs: {
       asset_id: "artifact",

@@ -23,6 +23,12 @@ describe('merged slash commands', () => {
   it('routes each merged verb to the tool its arguments ask for', () => {
     expect(route('/sound-effects').route).toEqual({ kind: 'sound-effects' })
     expect(route('/sfx @a1').route).toBeNull()
+    expect(route('/sfx @a1 2.5 zoom-in').route).toEqual({
+      kind: 'tool', tool: 'apply_builtin_sfx', preview: true,
+      args: { asset_id: 'a1', sfx: [{ sound: 'zoom_in', timestamp: 2.5 }] },
+    })
+    expect(() => route('/sfx @a1 2.5 explosion')).toThrow('Add a description')
+    expect(() => route('/sfx @a1 2.5 explosion')).toThrow('zoom_in, zoom_out, whoosh, swish, pop, click, ding, impact, riser, glitch')
     expect(route('/apply-sfx @a1 2.5 whoosh fast transition').route).toEqual({
       kind: 'tool', tool: 'apply_sfx', preview: true,
       args: { asset_id: 'a1', sfx: [{ timestamp: 2.5, type: 'whoosh', description: 'fast transition' }] },

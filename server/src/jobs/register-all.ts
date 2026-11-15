@@ -21,6 +21,7 @@ import { registerPadVideoJob } from "./pad-video.js";
 import { registerCropVideoJob } from "./crop-video.js";
 import { registerCropImageJob } from "./crop-image.js";
 import { registerApplyCutsJob } from "./apply-cuts.js";
+import { registerApplyBuiltinSfxJob } from "./apply-builtin-sfx.js";
 import { registerApplySfxJob } from "./apply-sfx.js";
 import { registerChangeVideoSpeedJob } from "./change-video-speed.js";
 import { registerTimewarpVideoJob } from "./timewarp-video.js";
@@ -112,6 +113,7 @@ export function registerAllJobHandlers(
   registerCropImageJob(engine);
   registerApplyCutsJob(engine);
   registerApplySfxJob(engine);
+  registerApplyBuiltinSfxJob(engine);
   registerChangeVideoSpeedJob(engine);
   registerTimewarpVideoJob(engine);
   registerSyncVideoToAudioJob(engine);

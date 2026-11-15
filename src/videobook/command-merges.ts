@@ -92,6 +92,7 @@ function characterRoute(parts: readonly string[]): MergedCommandRoute | null {
 function sfxRoute(parts: readonly string[]): MergedCommandRoute | null {
   if (parts.length === 0) return { kind: 'sound-effects' }
   if (parts.length === 1) return null
+  if (parts.length === 3) return toolRoute('apply_builtin_sfx', adaptCommandArgs('apply_builtin_sfx', parseCommandArgs(parts.join(' '), APPLY_SFX_PARAMS.slice(0, 3))), true)
   return toolRoute('apply_sfx', adaptCommandArgs('apply_sfx', parseCommandArgs(parts.join(' '), APPLY_SFX_PARAMS)), true)
 }
 

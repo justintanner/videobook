@@ -19,7 +19,7 @@ type WorkspaceActionMedia = NonNullable<WorkspaceActionContext['media']>[string]
 
 const HIDDEN_FIELDS = ['book_id', 'actor', 'source_surface']
 
-const SINGLE_ENTRY_ARRAYS: Readonly<Record<string, string>> = { apply_sfx: 'sfx' }
+const SINGLE_ENTRY_ARRAYS: Readonly<Record<string, string>> = { apply_sfx: 'sfx', apply_builtin_sfx: 'sfx' }
 
 const GENERATION_REVIEW = 'Running this sends your prompt and selected media to a generation provider and may incur charges.'
 

@@ -108,9 +108,14 @@ describe("slash command parse/normalize/dispatch", () => {
 
     it.each([
       "a1 later whoosh fast transition",
-      "a1 2.5 whoosh",
+      "a1 2.5 explosion",
     ])("rejects malformed arguments: %s", (rest) => {
       expect(() => mergedArgs(`/sfx ${rest}`)).toThrow();
+    });
+
+    it("routes a built-in cue without a generation description", () => {
+      expect(mergedArgs("/sfx @a1 2.5 zoom-in")).toEqual({ asset_id: "a1", sfx: [{ sound: "zoom_in", timestamp: 2.5 }] });
+      expect(mergedArgs("/sfx a1 2.5 whoosh")).toEqual({ asset_id: "a1", sfx: [{ sound: "whoosh", timestamp: 2.5 }] });
     });
 
     it("keeps a bare asset on the suggestion tool", () => {

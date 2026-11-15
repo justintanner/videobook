@@ -113,6 +113,7 @@ import { detectScenesDef } from "./detect-scenes.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
 import { analyzeJokesDef } from "./analyze-jokes.js";
+import { applyBuiltinSfxDef } from "./apply-builtin-sfx.js";
 import { applySfxDef } from "./apply-sfx.js";
 
 import { generateMediaDefs } from "./generate-media.js";
@@ -148,6 +149,7 @@ export function getVideoEditingToolDefs(engine: Engine, books?: BookManager): To
     suggestSfxDef(engine),
     analyzeJokesDef(engine),
     applySfxDef(engine),
+    applyBuiltinSfxDef(engine),
     changeVideoSpeedDef(engine),
     timewarpVideoDef(engine),
     syncVideoToAudioDef(engine),

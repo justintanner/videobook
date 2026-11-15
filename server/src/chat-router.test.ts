@@ -306,6 +306,9 @@ describe("chat routing catalog", () => {
     "add background music and sfx to @d1",
     "add ambience using another model to @d1",
     "add ambience to @d1 and trim it",
+    "add a ding sound effect to @d1",
+    "add a zoom-in sound effect to @d1",
+    "add zoom out sfx to @d1",
   ])("does not reinterpret a status, analysis, ambiguous or existing-media request: %s", query => {
     const input = {
       query, tool: "list_jobs", params: {}, message: "Checking progress.",

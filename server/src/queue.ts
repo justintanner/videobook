@@ -298,6 +298,7 @@ function jobTypeToAssetWorkKind(
       return { kind: "replace_audio" };
     case "apply_cuts":
       return { kind: "apply_cuts" };
+    case "apply_builtin_sfx":
     case "apply_sfx":
       return { kind: "apply_sfx" };
     case "extract_frame":

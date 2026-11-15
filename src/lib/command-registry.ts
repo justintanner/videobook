@@ -1,3 +1,5 @@
+import { BUILTIN_SOUND_IDS, builtinSoundId } from '../../server/src/sound-effects/catalog.js'
+import type { BuiltinSoundId } from '../../server/src/sound-effects/catalog.js'
 import { isNotebookGridAddress, NOTEBOOK_GRID_ADDRESS_SOURCE } from 'videobook-engine/notebook-mentions'
 
 interface CommandParam {
@@ -27,6 +29,11 @@ interface ApplySfxCommandEntry {
   description: string;
 }
 
+interface BuiltinSfxCommandEntry {
+  sound: BuiltinSoundId
+  timestamp: number
+}
+
 interface ApplySfxCommandArgs {
   asset_id: string;
   sfx: ApplySfxCommandEntry[];
@@ -41,6 +48,7 @@ type CommandToolArgValue =
   | CommandArgValue
   | SyncAudioAnchor[]
   | ApplySfxCommandEntry[]
+  | BuiltinSfxCommandEntry[]
   | ApplyCutEntry[]
   | undefined;
 export type CommandToolArgs = Record<string, CommandToolArgValue>;
@@ -609,6 +617,12 @@ export const COMMAND_ADAPTERS = {
     const result: CommandToolArgs = { ...(args as CommandToolArgs) };
     delete result.mappings;
     return { ...result, ...normalized };
+  },
+  apply_builtin_sfx: (args) => {
+    const sound = builtinSoundId(String(args.type ?? ''))
+    if (!sound) throw new Error(`/sfx built-in sounds: ${BUILTIN_SOUND_IDS.join(', ')}. Add a description after the type to generate a custom sound instead.`)
+    const normalized = normalizeApplySfxCommandArgs({ ...args, description: sound })
+    return { asset_id: normalized.asset_id, sfx: [{ sound, timestamp: normalized.sfx[0]!.timestamp }] }
   },
   apply_sfx: (args) => {
     const normalized = normalizeApplySfxCommandArgs(args);
