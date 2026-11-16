@@ -6,6 +6,48 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-16
+
+### Added
+
+- Remove burned-in titles, subtitles and graphics locally with
+  `/remove-graphics` (also `/remove-osg` and `/remove-titles`). PaddleOCR
+  proposes text regions with editable boxes and time windows; non-text logos
+  can be marked manually. LaMa inpainting or fast FFmpeg fill produces a new
+  video copy with audio, leaving the original intact. The AI models download
+  once with checksum verification; processing needs no API key or media upload.
+- `/zoom` and `zoom_video` zoom toward a chosen point, ease in, hold and
+  optionally return, with up to eight timed zooms. The Actions sheet previews
+  the motion and lets you pick the focus point directly on the picture.
+- Ten free, locally synthesized sound effects, including whoosh, pop, ding,
+  impact and zoom sounds. Preview them in the Actions sheet, mix up to sixteen
+  cues into a video with `apply_builtin_sfx`, or attach sounds to a zoom.
+
+### Changed
+
+- New goals based on a video use separate Replace character, Twist, Video and
+  Finish stages. GPT Image 2.6 edits a locally extracted frame, then makes the
+  reviewed twist; MiniMax H3 Max receives both the original video for motion
+  and the twist image for appearance. Each paid stage has its own review and
+  estimate. Existing storyboard goals keep their saved workflow.
+- Chat URL downloads import the whole clip without an approval preview.
+  Direct MCP calls retain explicit range options. Audio extraction in chat
+  and voice also runs without an approval preview, with ranges still supported.
+
+### Fixed
+
+- Retrying a failed crop or timewarp clears the stale failure before claiming
+  the asset, so the retry can start.
+- Preserve source-video and reviewed twist references when generating a goal's
+  video, and show both references before generation.
+
+### Known limitations
+
+- Local AI graphics removal processes each region of each frame on the CPU.
+  It can be slow, briefly delay server responses, and flicker on moving or
+  detailed backgrounds. Frame progress and a completion estimate are not yet
+  displayed. Fast fill is available for simple backgrounds.
+
 ## [0.7.5] - 2026-11-15
 
 ### Fixed
