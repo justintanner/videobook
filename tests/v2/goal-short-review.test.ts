@@ -225,7 +225,7 @@ describe('GoalShortReview', () => {
     expect(html).not.toContain('Cold-open')
     expect(html).not.toContain('type="number"')
     const running = render({ ...goal, finish: { ...goal.finish!, status: 'running' } })
-    expect(running).toContain('Burning the saved watermark onto the reviewed take.')
+    expect(running).toContain('Rendering the saved branding.')
     expect(running).not.toContain('class="goal-panel-primary">Finish</button>')
   })
 

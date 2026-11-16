@@ -76,6 +76,9 @@ export type GoalFinish = {
   runId?: string | null;
   coldOpenArtifactId?: string | null;
   assembledArtifactId?: string | null;
+  workingArtifactId?: string | null;
+  previousArtifactIds?: string[];
+  phase?: "assembly" | "audio" | "branding" | "validation" | "completed";
   coldOpenRequestId?: string | null;
   jobId?: number | null;
 };

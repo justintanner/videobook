@@ -21,7 +21,7 @@ import { MAX_GRAPHICS_TEXT_LENGTH } from "./model.js";
 import { requireVideo } from "./service.js";
 import type { GraphicsSuggestKind, GraphicsSuggestLanguage } from "./slots.js";
 import { GRAPHICS_SUGGEST_LANGUAGE_NAMES, GRAPHICS_SUGGEST_SLOTS, graphicsSlotValues, graphicsSuggestLanguage } from "./slots.js";
-import { watermarkTitleSlots } from "./templates.js";
+import { goalFinishTitleSlots } from "../goal-finish-settings.js";
 
 export const GRAPHICS_SUGGEST_JOB = "suggest_graphics";
 
@@ -386,8 +386,8 @@ export async function suggestGoalTitles(engine: Engine, goalId: string, response
 }
 
 export async function requestGoalTitles(engine: Engine, bookId: string, goalId: string): Promise<GoalTitleOptions> {
-  goalTitleSource(engine, goalId);
-  if (!watermarkTitleSlots(engine, "tiktok").headline) throw new GraphicsServiceError("invalid", GOAL_TITLE_NO_HEADLINE);
+  const source = goalTitleSource(engine, goalId);
+  if (!goalFinishTitleSlots(engine, source.plan).headline) throw new GraphicsServiceError("invalid", GOAL_TITLE_NO_HEADLINE);
   if (!getApiKey("OPENAI_API_KEY")) {
     throw new GraphicsServiceError("not_ready", "Writing a title needs an OpenAI API key, and OPENAI_API_KEY is not set. Type the title instead.");
   }

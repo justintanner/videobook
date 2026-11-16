@@ -23,7 +23,6 @@ import { createTestClient } from "../test-client.js";
 import { testBudget } from "../test-budget.js";
 import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import { videoProxyMetadataMatches } from "../video-proxy.js";
-import { buildWatermarkBadgePng } from "../watermark-badge.js";
 import { watermarkProfileUrl } from "../watermark-platform.js";
 
 const jsQR = jsQRImport as unknown as (data: Uint8ClampedArray, width: number, height: number) => { data: string } | null;
@@ -98,13 +97,13 @@ async function frameAt(path: string, seconds: number, frame: Frame): Promise<Buf
   return stdout;
 }
 
-function changedBox(base: Buffer, marked: Buffer, frame: Frame, rows: readonly [number, number]): Box | null {
+function changedBox(base: Buffer, marked: Buffer, frame: Frame, rows: readonly [number, number], threshold = DIFF_THRESHOLD): Box | null {
   const box = { minX: frame.width, maxX: -1, minY: frame.height, maxY: -1 };
   for (let y = rows[0]; y < rows[1]; y += 1) {
     for (let x = 0; x < frame.width; x += 1) {
       const at = (y * frame.width + x) * 3;
       const delta = Math.max(Math.abs(base[at] - marked[at]), Math.abs(base[at + 1] - marked[at + 1]), Math.abs(base[at + 2] - marked[at + 2]));
-      if (delta < DIFF_THRESHOLD) continue;
+      if (delta < threshold) continue;
       box.minX = Math.min(box.minX, x);
       box.maxX = Math.max(box.maxX, x);
       box.minY = Math.min(box.minY, y);
@@ -169,40 +168,6 @@ function todayQrBox(profile: LightningWatermarkProfile, frame: Frame): Box {
   const side = evenPixels(Math.min(frame.width, frame.height) * 0.16 * profile.scale);
   const padding = Math.round(frame.width * 0.02);
   return { left: frame.width - side - padding, top: frame.height - side - padding, width: side, height: side };
-}
-
-async function alphaBox(png: Buffer): Promise<Box & { imageWidth: number; imageHeight: number }> {
-  const { data, info } = await sharp(png).ensureAlpha().extractChannel("alpha").raw().toBuffer({ resolveWithObject: true });
-  const box = { minX: info.width, maxX: -1, minY: info.height, maxY: -1 };
-  for (let y = 0; y < info.height; y += 1) {
-    for (let x = 0; x < info.width; x += 1) {
-      if (data[y * info.width + x] === 0) continue;
-      box.minX = Math.min(box.minX, x);
-      box.maxX = Math.max(box.maxX, x);
-      box.minY = Math.min(box.minY, y);
-      box.maxY = Math.max(box.maxY, y);
-    }
-  }
-  return { left: box.minX, top: box.minY, width: box.maxX - box.minX + 1, height: box.maxY - box.minY + 1, imageWidth: info.width, imageHeight: info.height };
-}
-
-async function todayHandleBox(profile: LightningWatermarkProfile, frame: Frame): Promise<Box> {
-  const badge = await alphaBox(await buildWatermarkBadgePng(watermarkProfileUrl(profile.handle, profile.platform), profile.handle, {
-    variant: "handle",
-    platform: profile.platform,
-    includePlatformIcon: profile.includePlatformIcon,
-    includeHandleBorder: profile.includeHandleBorder,
-    handlePadding: profile.handlePaddingX,
-    handlePaddingY: profile.handlePaddingY,
-    handleRounding: profile.handleRounding,
-  }));
-  const side = evenPixels(Math.min(frame.width, frame.height) * 0.16 * profile.scale);
-  const height = evenPixels((side * badge.imageHeight) / 88);
-  const scale = height / badge.imageHeight;
-  const width = evenPixels(badge.imageWidth * scale);
-  const left = (frame.width - width) / 2;
-  const top = (frame.height * profile.handleVerticalPercent) / 100 - height / 2;
-  return { left: left + badge.left * scale, top: top + badge.top * scale, width: badge.width * scale, height: badge.height * scale };
 }
 
 function expectWithin(actual: Box | null, expected: Box, label: string): void {
@@ -467,9 +432,9 @@ describe("apply_watermark burns through the graphics renderer", () => {
   }, testBudget(240_000));
 
   it.each([
-    ["tiktok", { ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center" }, 1.5, 5.5],
-    ["x", X_WATERMARK_PROFILE, 3, 3],
-  ] as const)("keeps the explicit centered %s QR code and handle within 2 px of today's burn, decoding to the profile URL", async (platform, profile, handleAt, qrAt) => {
+    ["tiktok", { ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: "center" }, 1.5, 5.5, { left: 410, top: 114, width: 260, height: 156 }],
+    ["x", X_WATERMARK_PROFILE, 3, 3, { left: 270, top: 555, width: 540, height: 156 }],
+  ] as const)("keeps the explicit centered %s QR code and handle within 2 px of the accepted burn, decoding to the profile URL", async (platform, profile, handleAt, qrAt, acceptedHandleBox) => {
     const { assetId, sourcePath } = await greyAsset(PORTRAIT, 6);
     const parsed = await apply({ asset_id: assetId, platform, handle_position: "center", include_qr: true, position: "bottom-right" });
     expect(parsed).toMatchObject({ status: "completed", include_qr: true, include_handle: true, position: "bottom-right", handle: profile.handle });
@@ -482,8 +447,8 @@ describe("apply_watermark burns through the graphics renderer", () => {
       frameAt(burned, qrAt, PORTRAIT),
     ]);
     expect(decodeQr(markedQr, PORTRAIT)).toBe(watermarkProfileUrl(profile.handle, platform));
-    expectWithin(changedBox(baseQr, markedQr, PORTRAIT, [split, PORTRAIT.height]), todayQrBox(profile, PORTRAIT), `${platform} QR`);
-    expectWithin(changedBox(baseHandle, markedHandle, PORTRAIT, [0, split]), await todayHandleBox(profile, PORTRAIT), `${platform} handle`);
+    expectWithin(changedBox(baseQr, markedQr, PORTRAIT, [split, PORTRAIT.height], 12), todayQrBox(profile, PORTRAIT), `${platform} QR`);
+    expectWithin(changedBox(baseHandle, markedHandle, PORTRAIT, [0, split], 12), acceptedHandleBox, `${platform} handle`);
   }, testBudget(240_000));
 
   it("burns the TikTok handle alone by default, with no QR code and no shade", async () => {

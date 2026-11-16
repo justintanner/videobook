@@ -20,6 +20,7 @@ import { captureStoryboardFrames, videoGoalFrameMoment } from "./goal-short-stor
 import { buildRemixAnalysis, readRemixPreferences, writeRemixPreferences } from "./goal-remix-analysis.js";
 import { prepareShortSource } from "./goal-source-preparation.js";
 import { remixPromptFindings, remixRules } from "./goal-remix-model.js";
+import { goalBrandingFindings } from "./goal-finish-model.js";
 import { goalReferenceHashes } from "./goal-reference-images.js";
 import { goalStageAttempts } from "./goal-stills.js";
 import { goalGenerationHistory, goalHistoryInputProblem, reviewedGoalOutput, type GoalHistoryEntry } from "./goal-generation-history.js";
@@ -904,25 +905,43 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
   let plan = goalShortPlanSchema.parse(shortPlanTitleInput(args.plan));
   const analyzed = previous.version === 5 ? previous.analysis : undefined;
   let analysisChanged = false;
+  let generationAnalysisChanged = false;
+  let finishSettingsChanged = false;
   if (analyzed && plan.version === 5) {
     if (!plan.analysis) throw new Error("Keep the initial analysis with this goal. Start a new goal to change workflows.");
+    const editedAnalysis = plan.analysis;
     if (JSON.stringify(plan.analysis.source) !== JSON.stringify(analyzed.source)) throw new Error("Source analysis is read-only. Analyze the goal again to refresh it.");
     for (const key of ["brief", "history", "analyzedAt", "recipe", "findings"] as const) {
       if (JSON.stringify(plan.analysis[key]) !== JSON.stringify(analyzed[key])) throw new Error("The saved analysis evidence is read-only. Edit its settings or refresh analysis.");
     }
     analysisChanged = JSON.stringify(plan.analysis.intent) !== JSON.stringify(analyzed.intent) || JSON.stringify(plan.analysis.preferences) !== JSON.stringify(analyzed.preferences)
       || plan.segments.reduce((sum, segment) => sum + segment.seconds, 0) !== analyzed.recipe.targetSeconds;
+    generationAnalysisChanged = (["structure", "character", "cleanup", "action", "actionDescription", "noDialogue"] as const).some(key =>
+      JSON.stringify(editedAnalysis.intent[key]) !== JSON.stringify(analyzed.intent[key]))
+      || plan.analysis.preferences.cleanupMethod !== analyzed.preferences.cleanupMethod
+      || plan.segments.reduce((sum, segment) => sum + segment.seconds, 0) !== analyzed.recipe.targetSeconds;
+    finishSettingsChanged = plan.analysis.intent.audio !== analyzed.intent.audio || plan.analysis.preferences.branding !== analyzed.preferences.branding;
+    if (finishSettingsChanged && goal.finish?.status === "running") throw new Error("Wait until finishing stops before changing sound or branding.");
     if (analysisChanged) {
       const intent = { ...plan.analysis.intent, origins: { ...plan.analysis.intent.origins } };
       for (const key of ["structure", "character", "audio", "cleanup", "action", "actionDescription", "noDialogue"] as const) {
         if (JSON.stringify(intent[key]) !== JSON.stringify(analyzed.intent[key])) intent.origins[key] = "edited";
       }
-      const analysis = await buildRemixAnalysis(engine, {
+      const analysis = generationAnalysisChanged ? await buildRemixAnalysis(engine, {
         brief: content.brief, totalSeconds: plan.segments.reduce((sum, segment) => sum + segment.seconds, 0), notebookId: goal.notebookId,
         preferences: plan.analysis.preferences, source: analyzed.source, intent,
         requestedFrameSeconds: content.draft && !isLegacyShortDraft(content.draft) ? content.draft.analysisRequest?.atSeconds : null,
-      });
+      }) : { ...plan.analysis, intent };
       analysis.recipe.promptBindings = analyzed.recipe.promptBindings;
+      analysis.recipe.branding = analyzed.recipe.branding;
+      analysis.recipe.templateId = analyzed.recipe.templateId;
+      analysis.recipe.templateRevision = analyzed.recipe.templateRevision;
+      analysis.recipe.soundtrack = analyzed.recipe.soundtrack;
+      analysis.findings = analysis.findings.filter(value => value.code !== "missing-audio" && value.code !== "finish-branding");
+      if (analysis.recipe.branding) analysis.findings.push(...goalBrandingFindings(analysis.recipe.branding, analysis.preferences.branding, analysis.recipe.targetSeconds));
+      if (["source", "mix"].includes(intent.audio) && !(analysis.recipe.soundtrack?.hasAudio ?? analysis.source?.hasAudio)) {
+        analysis.findings.push({ code: "missing-audio", severity: "review", text: "The selected soundtrack has no audio. Choose generated sound, mute, or another soundtrack." });
+      }
       if (analysis.recipe.sourceFrameSeconds === analyzed.recipe.sourceFrameSeconds) {
         if (analysis.intent.cleanup === analyzed.intent.cleanup) {
           for (const key of ["reference", "referenceArtifactId", "referenceMediaHash", "preparedArtifactId", "preparedMediaHash", "preparedFrameArtifactId", "preparedFrameMediaHash", "cleanupReviewedHash", "cleanupConfirmed", "cleanupRegions", "cleanupMethod"] as const) {
@@ -930,7 +949,7 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
           }
         }
       }
-      plan = { ...plan, analysis, rules: remixRules(intent) };
+      plan = { ...plan, analysis, rules: generationAnalysisChanged ? remixRules(intent) : plan.rules };
     }
   }
   if (JSON.stringify(lockedReferences(previous)) !== JSON.stringify(lockedReferences(plan))) throw new Error(REFERENCES_LOCKED);
@@ -945,7 +964,7 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
     const findings = remixPromptFindings(plan.analysis, [plan.frame.prompt, plan.remix?.replacement.prompt ?? "", ...plan.segments.map(segment => segment.prompt), ...shortGenerationSegments(plan).map(segment => segment.prompt), ...Object.values(plan.rules)]);
     plan = { ...plan, analysis: { ...plan.analysis, findings: [...plan.analysis.findings.filter(finding => !finding.code.startsWith("conflicting-")), ...findings] } };
   }
-  const generatedPromptChanged = analysisChanged || (frameMade && previous.frame.prompt !== plan.frame.prompt)
+  const generatedPromptChanged = generationAnalysisChanged || (frameMade && previous.frame.prompt !== plan.frame.prompt)
     || (replacementMade && shortRemixOf(previous)?.replacement.prompt !== shortRemixOf(plan)?.replacement.prompt)
     || generated.some((index) => previous.segments[index]?.prompt !== plan.segments[index]?.prompt);
   const retitled = titleFinish(goal, previous, plan);
@@ -959,11 +978,11 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
   } : content.draft;
   await writeGoalShortContent(engine, goal, { ...content, draft, plan, estimate: await estimateShort(engine, plan, content), revision: content.revision + 1 });
   if (sourceFrameChanged) return queueShortPlanning(engine, saveGoal(engine, { ...goal, finish: null, preparation: null }));
-  const reopened = generatedPromptChanged || retitled !== undefined || plan.segments.length !== previous.segments.length;
+  const reopened = generatedPromptChanged || finishSettingsChanged || retitled !== undefined || plan.segments.length !== previous.segments.length;
   return saveGoal(engine, {
     ...goal,
     ...(reopened ? { status: "review" as const, error: null } : {}),
-    ...(generatedPromptChanged ? { finish: null } : retitled !== undefined ? { finish: retitled } : {}),
+    ...(generatedPromptChanged || finishSettingsChanged ? { finish: null } : retitled !== undefined ? { finish: retitled } : {}),
   });
 }
 

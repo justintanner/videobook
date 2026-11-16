@@ -193,7 +193,7 @@ function idNumber(id: string): number {
   return Number(id.slice(1)) || 0;
 }
 
-const graphicsDocumentSchema = z.object({
+export const graphicsDocumentSchema = z.object({
   version: z.literal(GRAPHICS_DOCUMENT_VERSION, { error: `Graphics documents are version ${GRAPHICS_DOCUMENT_VERSION}.` }),
   layers: z.array(layerSchema).max(MAX_GRAPHICS_LAYERS, `A document holds at most ${MAX_GRAPHICS_LAYERS} layers.`),
   nextId: z.number({ error: "nextId must be a whole number above 0." }).int("nextId must be a whole number above 0.").positive("nextId must be a whole number above 0."),

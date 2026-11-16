@@ -12,7 +12,8 @@ import {
 } from "./goal-remix-model.js";
 import { storyboardMoments } from "./goal-short-storyboard.js";
 import { goalGenerationHistory, goalHistoryFailure, goalHistoryInputProblem } from "./goal-generation-history.js";
-import { readGraphicsTemplates } from "./graphics/templates.js";
+import { captureGoalBranding } from "./goal-finish-settings.js";
+import { goalBrandingFindings } from "./goal-finish-model.js";
 import { selectSceneCuts } from "./scene-cuts.js";
 import { DEFAULT_TRANSCRIPT_OPTIONS, hasCurrentElevenLabsTranscript, OPENAI_TRANSCRIPT, openAiTranscriptRecord } from "./transcript-components.js";
 import { readTranscriptSidecarText } from "./transcript-projection.js";
@@ -185,9 +186,8 @@ export async function buildRemixAnalysis(engine: Engine, input: {
     findings.push({ code: "cleanup-review", severity: "review", text: "Review the overlay regions before removal; keep physical signs and printing. Sampled detection cannot prove that every overlay was found." });
     if (!models?.lama) findings.push({ code: "cleanup-model", severity: "note", text: "Local AI removal needs its downloaded model. Fill removal or an existing cleaned copy remains available after review." });
   }
-  const templates = readGraphicsTemplates(engine);
-  const templateId = templates.watermark.tiktok ?? templates.defaultId;
-  const template = templates.templates.find(candidate => candidate.id === templateId);
+  const branding = await captureGoalBranding(engine, source?.artifactId ?? null);
+  findings.push(...goalBrandingFindings(branding, preferences.branding, totalSeconds));
   const change = localized && alignedAction ? [alignedAction] : [{ start: 0, end: totalSeconds }];
   const generatedSeconds = Math.max(0.92, Math.ceil(change.reduce((sum, range) => sum + range.end - range.start, 0) * 100) / 100);
   if (assembly && generatedSeconds > 15) findings.push({ code: "action-duration", severity: "error", text: "H3 Max supports a changed clip of 0.92–15 seconds. Shorten the changed interval or choose full regeneration with multiple beats." });
@@ -202,7 +202,10 @@ export async function buildRemixAnalysis(engine: Engine, input: {
       cleanupReviewedHash: intent.cleanup === "keep" ? source?.mediaHash ?? null : null,
       cleanupRegions, cleanupConfirmed: intent.cleanup === "keep", cleanupCandidates: candidates,
       cleanupFrames: source ? cleanupFrameCount(cleanupRegions, source.fps) : 0,
-      cleanupModelReady: models?.lama ?? false, cleanupMethod: preferences.cleanupMethod, templateId: templateId ?? null, templateRevision: template?.updatedAt ?? null, checkTimes },
+      cleanupModelReady: models?.lama ?? false, cleanupMethod: preferences.cleanupMethod, templateId: branding.template?.id ?? branding.starterId,
+      templateRevision: branding.template?.updatedAt ?? null, branding,
+      soundtrack: source ? { artifactId: source.artifactId, mediaHash: source.mediaHash, startSeconds: 0, durationSeconds: source.durationSeconds, hasAudio: source.hasAudio } : null,
+      checkTimes },
     history: await relatedHistory(engine, input.notebookId, source), findings, analyzedAt: new Date().toISOString(),
   });
 }

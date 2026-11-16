@@ -7,7 +7,10 @@ import { coldOpenDestination, coldOpenSource } from "../cold-open.js";
 import { probeVideo } from "../ffmpeg.js";
 import type { ShortFinishTitle } from "../goal-short-plan.js";
 import { isCurrentShort, readGoal, requireGoalShortContent, saveGoal, type GoalFinish, type GoalRecord } from "../goal-store.js";
-import { watermarkGraphicsTemplate, watermarkTitleSlots } from "../graphics/templates.js";
+import { watermarkGraphicsTemplate } from "../graphics/templates.js";
+import { goalBrandingDocument, goalFinishRecipeSchema, type GoalFinishRecipe } from "../goal-finish-model.js";
+import { goalFinishTitleSlots } from "../goal-finish-settings.js";
+import { assertGoalFinishRecipe, renderGoalFinishAudio, renderGoalFinishBranding } from "../goal-finish-render.js";
 import { shortFinishSource } from "../goal-short-runtime.js";
 import { assertRemixEditSources, bindGoalRemixEdit, goalRemixEditSchema, remixEditIdentity, renderGoalRemixAssembly, validateRemixAssembly, type GoalRemixEdit } from "../goal-remix-assembly.js";
 import { finishingIdentityKey, watermarkProfileFor } from "../lightning-defaults.js";
@@ -19,7 +22,7 @@ import { effectiveWatermarkProfile, readWatermarkConfig } from "../watermark-con
 
 const FINISH_MESSAGE = "Only a reviewed short can finish.";
 
-type FinishPayload = { goalId: string; identity: string; runId: string | null; title: ShortFinishTitle | null; edit: GoalRemixEdit | null };
+type FinishPayload = { goalId: string; identity: string; runId: string | null; title: ShortFinishTitle | null; edit: GoalRemixEdit | null; recipe: GoalFinishRecipe | null };
 
 function textOf(result: { isError?: boolean; content?: Array<{ type?: string; text?: string }> }): string {
   return result.content?.find(entry => entry.type === "text")?.text ?? "";
@@ -53,8 +56,9 @@ function payloadTitle(value: unknown): ShortFinishTitle | null {
 }
 
 function burnedTitle(engine: Engine, goal: GoalRecord): ShortFinishTitle | null {
-  const title = requireGoalShortContent(engine, goal).plan?.finish.title;
-  const slots = watermarkTitleSlots(engine, "tiktok");
+  const plan = requireGoalShortContent(engine, goal).plan;
+  const title = plan?.finish.title;
+  const slots = goalFinishTitleSlots(engine, plan);
   if (!title || !slots.headline) return null;
   return { headline: title.headline, secondary: slots.secondary ? title.secondary : "" };
 }
@@ -88,21 +92,49 @@ async function placeFinishedCell(engine: Engine, goal: GoalRecord, artifactId: s
   if (!placed.ok) throw new Error(placed.error.message);
 }
 
+async function finishProgress(engine: Engine, payload: FinishPayload, patch: Partial<GoalFinish>): Promise<void> {
+  await withNotebookMutation(`goal:${payload.goalId}`, async () => {
+    const goal = currentFinish(engine, payload.goalId, payload.identity, payload.runId);
+    if (!goal?.finish || goal.finish.status !== "running") throw new Error("Finishing was superseded or cancelled.");
+    saveGoal(engine, { ...goal, finish: { ...goal.finish, ...patch } });
+  });
+}
+
 async function runFinish(engine: Engine, payload: FinishPayload, signal: AbortSignal): Promise<{ finalArtifactId: string }> {
   const goal = currentFinish(engine, payload.goalId, payload.identity, payload.runId);
   if (!goal?.finish || goal.finish.status === "completed") return { finalArtifactId: goal?.finish?.finalArtifactId ?? "" };
   signal.throwIfAborted();
-  const assembled = payload.edit ? await renderGoalRemixAssembly(engine, payload.edit, signal) : null;
+  await coldOpenSource(engine, goal.finish.sourceArtifactId, goal.finish.sourceObjectHash ?? undefined);
+  if (payload.recipe) await assertGoalFinishRecipe(engine, payload.recipe);
+  const assemblyEdit = payload.edit && payload.recipe ? { ...payload.edit, audio: payload.recipe.audio === "mix" || payload.recipe.audio === "generated" ? "generated" as const : "mute" as const } : payload.edit;
+  const assembled = assemblyEdit ? await renderGoalRemixAssembly(engine, assemblyEdit, signal) : null;
   signal.throwIfAborted();
   if (!currentFinish(engine, payload.goalId, payload.identity, payload.runId)) throw new Error("Finishing was superseded or cancelled.");
   const finalArtifactId = await duplicatePlayableVideo(engine, assembled?.artifactId ?? goal.finish.sourceArtifactId, "Finished", assembled?.mediaHash ?? goal.finish.sourceObjectHash ?? undefined);
-  await burnSavedWatermark(engine, finalArtifactId, goal.finish.sourceArtifactId, payload.title);
+  await finishProgress(engine, payload, { workingArtifactId: finalArtifactId, ...(assembled ? { assembledArtifactId: assembled.artifactId } : {}), phase: "audio" });
+  if (payload.recipe) {
+    await renderGoalFinishAudio(engine, finalArtifactId, payload.recipe, signal);
+    await finishProgress(engine, payload, { phase: "branding" });
+    if (payload.recipe.branding) await renderGoalFinishBranding(engine, finalArtifactId, payload.recipe.branding, payload.title, signal);
+  } else {
+    await finishProgress(engine, payload, { phase: "branding" });
+    await burnSavedWatermark(engine, finalArtifactId, goal.finish.sourceArtifactId, payload.title);
+  }
+  await finishProgress(engine, payload, { phase: "validation" });
   const manifest = await engine.files.manifest(finalArtifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
   const file = findPrimaryMediaFile(manifest.value.files, "video");
   if (!file) throw new Error("The finished video is missing");
   const probe = await probeVideo(join(manifest.value.path, file.name));
   if (!probe.videoStream || probe.videoDuration < 0.5) throw new Error("The finished video is not playable");
+  await coldOpenSource(engine, goal.finish.sourceArtifactId, goal.finish.sourceObjectHash ?? undefined);
+  if (payload.recipe) {
+    await assertGoalFinishRecipe(engine, payload.recipe);
+    if (payload.recipe.audio === "mute" && probe.hasAudio) throw new Error("The muted finish still contains audio.");
+    if (["source", "mix"].includes(payload.recipe.audio) && (!probe.hasAudio || Math.abs((probe.audioDuration ?? 0) - probe.videoDuration) > 0.06)) throw new Error("The finished soundtrack does not cover the final video duration.");
+    const provenance = await engine.files.write(finalArtifactId, "goal-finish.json", JSON.stringify({ ...payload, sourceArtifactId: goal.finish.sourceArtifactId, sourceObjectHash: goal.finish.sourceObjectHash, ...(assembled ? { assembledArtifactId: assembled.artifactId } : {}) }));
+    if (!provenance.ok) throw new Error(provenance.error.message);
+  }
   if (payload.edit) {
     await validateRemixAssembly(join(manifest.value.path, file.name), payload.edit, signal);
     await assertRemixEditSources(engine, payload.edit);
@@ -117,7 +149,7 @@ async function runFinish(engine: Engine, payload: FinishPayload, signal: AbortSi
       ...latest,
       status: "completed",
       error: null,
-      finish: { ...latest.finish, status: "completed", finalArtifactId, ...(assembled ? { assembledArtifactId: assembled.artifactId } : {}), error: null },
+      finish: { ...latest.finish, status: "completed", phase: "completed", finalArtifactId, ...(assembled ? { assembledArtifactId: assembled.artifactId } : {}), error: null },
     });
   });
   return { finalArtifactId };
@@ -129,7 +161,8 @@ export function registerFinishGoalJob(engine: Engine): void {
     const identity = typeof input.identity === "string" ? input.identity : "";
     const runId = typeof input.runId === "string" ? input.runId : null;
     try {
-      return await runFinish(engine, { goalId, identity, runId, title: payloadTitle(input.title), edit: input.edit ? goalRemixEditSchema.parse(input.edit) : null }, context.signal);
+      return await runFinish(engine, { goalId, identity, runId, title: payloadTitle(input.title), edit: input.edit ? goalRemixEditSchema.parse(input.edit) : null,
+        recipe: input.recipe ? goalFinishRecipeSchema.parse(input.recipe) : null }, context.signal);
     } catch (error) {
       const goal = readGoal(engine, goalId);
       if (goal.finish?.identity === identity && (goal.finish.runId ?? null) === runId && goal.finish.status === "running") {
@@ -148,22 +181,25 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise
   if (!isCurrentShort(goal.planVersion)) throw new Error(FINISH_MESSAGE);
   if (goal.status === "running") throw new Error("Wait until the video is ready before finishing it");
   if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Review the video before finishing it");
-  if (goal.finish?.status === "completed") {
-    const plan = requireGoalShortContent(engine, goal).plan;
-    if (plan?.version === 5 && plan.analysis?.recipe.assembly) await bindGoalRemixEdit(engine, goal, await shortFinishSource(engine, goal));
-    return goal;
-  }
   if (goal.finish?.status === "running" && goal.finish.jobId) {
     const active = engine.jobs.queue.get(goal.finish.jobId);
     if (active && ["queued", "running", "completing"].includes(active.state)) return goal;
   }
   const source = await coldOpenSource(engine, await shortFinishSource(engine, goal));
   const edit = await bindGoalRemixEdit(engine, goal, source.artifact.artifactId);
+  const plan = requireGoalShortContent(engine, goal).plan;
+  const analysis = plan?.version === 5 ? plan.analysis : null;
+  const recipe = analysis?.recipe.branding ? goalFinishRecipeSchema.parse({
+    version: 1, branding: analysis.preferences.branding ? analysis.recipe.branding : null,
+    audio: analysis.intent.audio, soundtrack: analysis.recipe.soundtrack ?? null,
+  }) : null;
+  if (recipe) await assertGoalFinishRecipe(engine, recipe);
   const config = await readWatermarkConfig(engine, "tiktok");
   const profile = effectiveWatermarkProfile(config, "tiktok");
   const template = watermarkGraphicsTemplate(engine, "tiktok");
   const title = burnedTitle(engine, goal);
-  const identity = (edit ? "remix:" : "watermark-only:") + finishingIdentityKey({
+  if (recipe?.branding) goalBrandingDocument(recipe.branding, title, edit ? edit.assembly.totalFrames / edit.assembly.fps : source.durationSeconds, { width: 1080, height: 1920 });
+  const identity = recipe ? `finish:${createHash("sha256").update(JSON.stringify({ sourceHash: source.file.objectHash, edit, recipe, title })).digest("hex")}` : (edit ? "remix:" : "watermark-only:") + finishingIdentityKey({
     sourceObjectHash: edit ? remixEditIdentity(edit) : source.file.objectHash,
     startSeconds: 0,
     endSeconds: 0,
@@ -173,12 +209,15 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise
     watermarkTemplate: template ? createHash("sha256").update(JSON.stringify(template.document)).digest("hex") : null,
     title,
   });
+  if (goal.finish?.status === "completed" && (!recipe || goal.finish.identity === identity)) return goal;
   const finish: GoalFinish = {
     status: "running",
     sourceArtifactId: source.artifact.artifactId,
     sourceObjectHash: source.file.objectHash,
     identity,
     runId: uuidv7(),
+    phase: edit ? "assembly" : "audio",
+    previousArtifactIds: [...new Set([...(goal.finish?.previousArtifactIds ?? []), goal.finish?.workingArtifactId, goal.finish?.finalArtifactId].filter((id): id is string => Boolean(id)))],
     finalArtifactId: null,
     jobId: null,
     error: null,
@@ -191,6 +230,7 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise
     identity,
     runId: finish.runId,
     ...(edit ? { edit } : {}),
+    ...(recipe ? { recipe } : {}),
     ...(title ? { title } : {}),
   });
   const queued = readGoal(engine, goal.goalId);

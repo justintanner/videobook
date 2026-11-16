@@ -126,6 +126,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const sourceAsset = sourceId ? resolveAsset(sourceId) : null
   const clipAsset = currentClip ? resolveAsset(currentClip.artifactId) : null
   const finalAsset = goal.finalArtifactId ? resolveAsset(goal.finalArtifactId) : null
+  const workingAsset = goal.finish?.workingArtifactId ? resolveAsset(goal.finish.workingArtifactId) : null
   const actionReviewed = !assembly || Boolean(analysis && goal.actionWindow && goal.actionWindow.artifactId === currentClip?.artifactId && goal.actionWindow.mediaHash === clipAsset?.objectHash && goal.actionWindow.recipeKey === remixAssemblyReviewKey(analysis))
   const canFinish = actionReviewed && Boolean(sourceId) && Boolean(sourceAsset?.mediaUrl) && (!remix || frameReady) && !dirty && !disabled && !running && !finishing && (goal.status === 'review' || goal.status === 'completed' || finishFailed)
   const totalSeconds = goalPlanSeconds(plan)
@@ -164,7 +165,8 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
       onAdopt={entry => onRun(async () => { const current = await saved(); return onAction({ action: 'adopt', revision: current.revision, stage: entry.stage, index: entry.index, artifact_id: entry.artifactId, media_hash: entry.mediaHash, confirmed: true }) })} />
     {analysis && <GoalInitialAnalysis analysis={analysis} estimate={goal.estimate.total} disabled={disabled || running || finishing} onChange={setAnalysis}
       onSaveDefaults={() => onRun(async () => { const current = await saved(); return onAction({ action: 'save_defaults', revision: current.revision }) })}
-      onAnalyze={() => onRun(async () => { const current = await saved(); return onAction({ action: 'analyze', revision: current.revision }) })} />}
+      onAnalyze={() => onRun(async () => { const current = await saved(); return onAction({ action: 'analyze', revision: current.revision }) })}
+      onRefreshFinish={() => onRun(async () => { const current = await saved(); return onAction({ action: 'refresh_finish', revision: current.revision }) })} />}
     {analysis && <GoalSourcePreparation analysis={analysis} preparation={goal.preparation} disabled={disabled || running || finishing || goal.status === 'cancelled'} resolveAsset={resolveAsset}
       onPrepare={preparation => onRun(async () => { const current = await saved(); return onAction({ action: 'prepare', revision: current.revision, preparation }) })}
       onReview={(artifactId, mediaHash) => onRun(async () => { const current = await saved(); return onAction({ action: 'review_source', revision: current.revision, artifact_id: artifactId, media_hash: mediaHash, confirmed: true }) })} />}
@@ -277,8 +279,9 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
     </>}
     {view === 'finish' && <>
       {!sourceId && <p className="goal-panel-muted">Generate every clip before finishing the short.</p>}
-      {finishing && <p role="status">{assembly ? 'Assembling the reviewed source and action, then applying the saved finish.' : 'Burning the saved watermark onto the reviewed take.'}</p>}
+      {finishing && <p role="status">{({ assembly: 'Assembling the reviewed source and action.', audio: 'Applying the selected sound.', branding: 'Rendering the saved branding.', validation: 'Checking the finished video.', completed: 'Finished.' })[goal.finish?.phase ?? 'branding']}</p>}
       {finishFailed && <p role="alert">{goal.finish?.error ?? 'Finishing failed'}</p>}
+      {finishFailed && workingAsset?.mediaUrl && <video className="goal-video-preview" aria-label="Unfinished local render" src={workingAsset.mediaUrl} controls preload="metadata" />}
       {goal.finalArtifactId && finalAsset?.mediaUrl && <video className="goal-video-preview" aria-label="Finished short" src={finalAsset.mediaUrl} poster={finalAsset.thumbnailUrl ?? undefined} controls preload="metadata" />}
       {!finishing && !goal.finalArtifactId && sourceAsset?.mediaUrl && <video className="goal-video-preview" aria-label="Reviewed take" src={sourceAsset.mediaUrl} poster={sourceAsset.thumbnailUrl ?? undefined} controls preload="metadata" />}
       <p className="goal-panel-muted">{assembly ? 'Finish keeps the source shots outside the changed interval and inserts the reviewed action window, then applies the selected sound and saved watermark.' : 'Finish keeps the reviewed take and burns the saved watermark.'}</p>

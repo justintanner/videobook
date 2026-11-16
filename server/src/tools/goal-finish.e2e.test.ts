@@ -14,7 +14,7 @@ import { copyVideoFixture } from "../test-media-fixtures.js";
 import { testBudget } from "../test-budget.js";
 import { goalTestCharacters, settleGoalChain } from "../test-goals.js";
 import { v7 as uuidv7 } from "uuid";
-import { readGoal, saveGoal } from "../goal-store.js";
+import { readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent } from "../goal-store.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { withShortFinishTitle, type ShortFinishTitle } from "../goal-short-plan.js";
 import { createShortGoal } from "../goal-short-runtime.js";
@@ -93,12 +93,18 @@ describe("goal finishing burns the saved watermark through the graphics renderer
     return artifactId;
   };
 
-  it.each(["new", "saved-running", "saved-failed"])("finishes %s from the reviewed take with only a burned watermark", async (savedState) => {
+  it.each(["new", "saved-running", "saved-failed", "saved-legacy"])("finishes %s from the reviewed take with only a burned watermark", async (savedState) => {
     const oldFal = process.env.FAL_API_KEY;
     process.env.FAL_API_KEY = "test-goal-key";
     try {
       await pauseBookQueueForTests(bookId);
       const created = await createShortGoal(engine, bookId, notebookId, { brief: 'he waits, frame: "A bus stop at dusk." beat 1: "He checks the road."', requestId: uuidv7() });
+      if (savedState === "saved-legacy") {
+        const content = requireGoalShortContent(engine, created);
+        if (content.plan?.version !== 5) throw new Error("Expected current plan");
+        const { analysis: _analysis, ...plan } = content.plan;
+        await writeGoalShortContent(engine, created, { ...content, plan });
+      }
       const frame = await approve(await status(created.goalId));
       await settleChain(frame.chainId!, "image");
       const clip = await approve(await status(created.goalId));
@@ -145,9 +151,14 @@ describe("goal finishing burns the saved watermark through the graphics renderer
       expect(preserved.finish?.startSeconds).toBe(0);
       expect(engine.jobs.queue.list()).toHaveLength(before);
       expect(await engine.files.manifest(done!.finalArtifactId!)).toEqual(manifest);
-      expect(engine.jobs.queue.list({ type: "burn_watermark" }).length).toBeGreaterThan(0);
+      expect(engine.jobs.queue.list({ type: "burn_watermark" }).length).toBe(savedState === "saved-legacy" ? 1 : 0);
       const finalOriginal = await engine.metadata.artifacts.read<Record<string, unknown>>(done!.finalArtifactId!, "original");
-      expect(finalOriginal.ok && finalOriginal.value).toMatchObject({ origin: "watermark", transcribe: false });
+      expect(finalOriginal.ok && finalOriginal.value).toMatchObject({ ...(savedState === "saved-legacy" ? { origin: "watermark" } : {}), transcribe: false });
+      if (savedState !== "saved-legacy") {
+        const savedFinish = await engine.files.read(done!.finalArtifactId!, "goal-finish.json");
+        expect(savedFinish.ok && JSON.parse(savedFinish.value.toString())).toMatchObject({ sourceArtifactId: clipId, recipe: { audio: "generated" } });
+        expect(engine.jobs.queue.list({ type: "process_video" }).filter(job => job.payload.assetId === done!.finalArtifactId)).toHaveLength(0);
+      }
     } finally {
       await pauseBookQueueForTests(bookId);
       if (oldFal === undefined) delete process.env.FAL_API_KEY; else process.env.FAL_API_KEY = oldFal;
@@ -185,9 +196,10 @@ describe("goal finishing burns the saved watermark through the graphics renderer
       const second = await finished(created.goalId);
       expect(second).not.toBe(first);
 
-      const burns = engine.jobs.queue.list({ type: "burn_watermark" }).map(job => job.payload as { assetId: string; headline?: string; secondary?: string });
-      expect(burns.filter(burn => burn.assetId === first)).toEqual([expect.objectContaining({ headline: FIRST_TITLE.headline, secondary: FIRST_TITLE.secondary })]);
-      expect(burns.filter(burn => burn.assetId === second)).toEqual([expect.objectContaining({ headline: SECOND_TITLE.headline, secondary: SECOND_TITLE.secondary })]);
+      for (const [artifactId, title] of [[first, FIRST_TITLE], [second, SECOND_TITLE]] as const) {
+        const provenance = await engine.files.read(artifactId, "goal-finish.json");
+        expect(provenance.ok && JSON.parse(provenance.value.toString())).toMatchObject({ sourceArtifactId: clipId, title });
+      }
 
       const take = await bottomHalf(await videoPath(engine, clipId));
       const once = await bottomHalf(await videoPath(engine, first));

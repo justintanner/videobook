@@ -8,18 +8,15 @@ import { captionMediaSource } from "../captions/source.js";
 import { probeVideo } from "../ffmpeg.js";
 import { burnGraphics } from "../graphics/burn.js";
 import { deleteGraphicsDraft } from "../graphics/drafts.js";
+import { graphicsDocumentImages } from "../graphics/images.js";
 import type { GraphicsProvenance, GraphicsRenderRequest } from "../graphics/render.js";
 import {
   burnedLayers,
-  drawnImageLayers,
   GRAPHICS_RENDER_JOB,
   GRAPHICS_SOURCE_OPERATION,
-  graphicsImagePath,
-  graphicsImageSize,
   graphicsRenderDestination,
   readGraphicsRenderRequest,
 } from "../graphics/render.js";
-import type { GraphicsStillImage } from "../graphics/render-stills.js";
 import { renderGraphicsStills } from "../graphics/render-stills.js";
 import { queue, registerJobHandler } from "../queue.js";
 import type { JobHandlerContext } from "../queue.js";
@@ -52,20 +49,6 @@ async function reviewedSource(engine: Engine, request: GraphicsRenderRequest): P
   return source;
 }
 
-async function stillImage(engine: Engine, layerId: string, artifactId: string): Promise<GraphicsStillImage> {
-  const path = await graphicsImagePath(engine, artifactId);
-  if (!path) throw new Error(`Layer ${layerId} shows an image that is no longer in this book. Choose another image or remove the layer, then render again.`);
-  const size = await graphicsImageSize(path);
-  if (!size) throw new Error(`Layer ${layerId} shows an image whose size cannot be read.`);
-  return { path, ...size };
-}
-
-async function stillImages(engine: Engine, request: GraphicsRenderRequest, durationSeconds: number): Promise<Record<string, GraphicsStillImage>> {
-  const layers = drawnImageLayers(request.document, durationSeconds);
-  const entries = await Promise.all(layers.map(async (layer) => [layer.artifactId, await stillImage(engine, layer.id, layer.artifactId)] as const));
-  return Object.fromEntries(entries);
-}
-
 async function withRenderedGraphics<T>(
   engine: Engine,
   request: GraphicsRenderRequest,
@@ -77,7 +60,7 @@ async function withRenderedGraphics<T>(
   try {
     const probe = await probeVideo(source.path, { signal });
     const durationSeconds = probe.videoDuration;
-    const images = await stillImages(engine, request, durationSeconds);
+    const images = await graphicsDocumentImages(engine, request.document, durationSeconds);
     const { groups } = await renderGraphicsStills({
       fps: probe.fps,
       document: request.document,

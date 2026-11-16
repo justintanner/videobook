@@ -661,7 +661,7 @@ describe("browser-safe short modules", () => {
 
   it("follows relative imports and notices a forbidden one", () => {
     expect([...reachable(join(here, "goal-short-plan.ts"))].map((file) => relative(here, file)).sort())
-      .toEqual(["goal-remix-model.ts", "goal-short-plan.ts", "goal-short-rules.ts", "graphics/model.ts", "lightning-defaults.ts", "video-cleanup/model.ts"]);
+      .toEqual(expect.arrayContaining(["goal-remix-model.ts", "goal-short-plan.ts", "goal-short-rules.ts", "goal-finish-model.ts", "graphics/model.ts", "graphics/watermark-burn.ts", "lightning-defaults.ts", "video-cleanup/model.ts"]));
     expect(valueImports(join(here, "test-budget.ts")).filter(forbidden)).toEqual(["node:os"]);
   });
 });

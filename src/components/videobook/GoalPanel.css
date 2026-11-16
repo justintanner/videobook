@@ -502,6 +502,20 @@ span.goal-progress-address {
   border-radius: 8px;
   padding: 10px;
   margin-bottom: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.goal-initial-analysis .goal-panel-button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+.goal-initial-analysis .goal-panel-bar {
+  position: static;
+  margin: 0;
+  padding: 10px 0 0;
+  background: transparent;
 }
 
 .goal-initial-analysis > summary {
@@ -535,6 +549,11 @@ span.goal-progress-address {
 .goal-analysis-fields .goal-analysis-switch {
   flex-direction: row;
   align-items: center;
+}
+
+.goal-analysis-switch input[type="checkbox"] {
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .goal-initial-analysis [data-severity="error"] {

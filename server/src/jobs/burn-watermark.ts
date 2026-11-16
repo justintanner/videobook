@@ -5,6 +5,7 @@ import type { Engine } from "videobook-engine";
 import { probeVideo } from "../ffmpeg.js";
 import type { ProbeResult } from "../ffmpeg.js";
 import { burnGraphics, graphicsBurnFrame } from "../graphics/burn.js";
+import { graphicsDocumentImages } from "../graphics/images.js";
 import type { GraphicsDocument, GraphicsFrame } from "../graphics/model.js";
 import { definedFields, parseGraphicsDocument } from "../graphics/model.js";
 import { graphicsImagePath, graphicsImageSize } from "../graphics/render.js";
@@ -245,7 +246,7 @@ async function burnInto(
       document,
       frame,
       durationSeconds: probe.videoDuration,
-      images: card ? { [card.card.artifactId]: card.image } : {},
+      images: await graphicsDocumentImages(engine, document, probe.videoDuration),
       outputDir: scratch,
       signal,
     });

@@ -147,15 +147,24 @@ own approval with its estimate:
    Review both references before generation. Regenerate a result, revise
    it with feedback, or select an earlier version. Changing an earlier edit
    marks dependent results out of date and requires regeneration.
-4. **Finish:** keeps the reviewed take and burns the saved
-   watermark into the finished short, with its burned title when it has one:
+4. **Finish:** uses the selected take and the sound and branding saved during
+   initial analysis. A preserved-source remix assembles the kept shots and
+   reviewed action window first. Original audio follows its source timeline,
+   with excess trimmed and a short track padded with silence. Generated sound
+   is muted unless **Generated sound** or **Mix original and generated** is selected.
+   Saved branding includes the accepted template or starter, handle, image layers,
+   placement and timing. Its optional burned title has
    a big Thai headline and an English line under it, in the watermark's title
    block. Type them, or click **Write title**, which shows its estimate first
    and asks Astra for three options from the short's brief, title, beats and
    source images; pick one, edit it and save. A changed title finishes again
-   from the reviewed take, never over the earlier burn. When the saved TikTok
-   watermark template has no headline, the title stays disabled and Finish
-   burns the handle alone. To add a cold open, use `/edit-cold-open` on the
+   from the reviewed take, never over the earlier burn. When the saved look
+   has no headline, the title stays disabled. **Use current book branding**
+   adopts a newly saved look; ordinary book edits leave this goal's saved look
+   intact. Audio and branding edits keep reviewed images, takes and action
+   windows and rerun only finishing. A failed finish retains its working copy
+   and shows progress so it can be retried without video generation. Finishing
+   produces a preview, without posting or publishing. To add a cold open, use `/edit-cold-open` on the
    finished video.
 
 A brief without a video keeps the simpler **Frame → Video → Finish** flow.

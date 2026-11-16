@@ -11,7 +11,7 @@ import {
   currentShortClip, nextShortSegment, shortFrameStale, shortSegmentStale, storyboardFrameFailure, storyboardReview, type StoryboardFrameFailure,
 } from "./goal-short-runtime.js";
 import { goalTitleEstimate } from "./graphics/suggest.js";
-import { watermarkTitleSlots } from "./graphics/templates.js";
+import { goalFinishTitleSlots } from "./goal-finish-settings.js";
 import { goalPreparationStatus } from "./goal-source-preparation.js";
 import { goalGenerationHistory, reviewedGoalOutput, type GoalHistoryEntry } from "./goal-generation-history.js";
 
@@ -284,7 +284,7 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
     storyboard: storyboardView(shortPlan, stages.storyboards?.outputs ?? [], content.estimate, index => storyboardFrameFailure(engine, goal, index)),
     finish: goal.finish ?? null,
     finalArtifactId: goal.finish?.finalArtifactId ?? null,
-    titleSlots: watermarkTitleSlots(engine, "tiktok"),
+    titleSlots: goalFinishTitleSlots(engine, shortPlan),
     coldOpen: null,
     address: cell ? notebookGridTag(cell.slot) : null,
     stages,

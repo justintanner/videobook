@@ -505,6 +505,22 @@ describe('goal mode in the browser', () => {
       await screenshot('goal-action-window-mobile')
       await window.getByRole('button', { name: 'Use this action window', exact: true }).click()
       await expect.poll(async () => shortGoal(await current(goal)).actionWindow?.startFrame, { timeout: testBudget(30_000) }).toBe(12)
+      const initial = panel().locator('.goal-initial-analysis')
+      for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+        await page.setViewportSize(viewport)
+        await initial.scrollIntoViewIfNeeded()
+        const widths = await initial.evaluate(element => ({ content: element.scrollWidth, available: element.clientWidth }))
+        expect(widths.content, `${viewport.width}px: ${JSON.stringify(widths)}`).toBeLessThanOrEqual(widths.available + 1)
+      }
+      await initial.getByLabel('Apply saved branding', { exact: true }).uncheck()
+      await initial.getByLabel('Remix audio', { exact: true }).selectOption('generated')
+      await initial.getByRole('button', { name: 'Use current book branding', exact: true }).click()
+      await expect.poll(async () => {
+        goal = shortGoal(await current(goal))
+        return goal.shortPlan?.version === 5 ? goal.shortPlan.analysis?.preferences.branding : null
+      }, { timeout: testBudget(30_000) }).toBe(false)
+      expect(goal.actionWindow?.startFrame).toBe(12)
+      expect(goal.stages.videos!.outputs[0]).toMatchObject({ artifactId: manual.outputArtifactId, stale: null })
       await expect.poll(() => finish.isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
       await finish.click()
       await expect.poll(async () => shortGoal(await current(goal)).finish?.status, { timeout: testBudget(120_000) }).toBe('completed')

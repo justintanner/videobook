@@ -26,6 +26,7 @@ import { copyVideoFixture } from "../test-media-fixtures.js";
 import { redirectFalStorage, startShortStub, type ShortStub } from "../test-short-stub.js";
 import { testBudget } from "../test-budget.js";
 import { writeTaggingSettings } from "../tag-settings.js";
+import { saveWatermarkProfile } from "../watermark-config.js";
 import type { ShortGoalSnapshot } from "./goal.js";
 
 describe("initial source-goal analysis", () => {
@@ -289,13 +290,61 @@ describe("initial source-goal analysis", () => {
       return `${goal.finish?.status}:${goal.finish?.error ?? ""}`;
     }, { timeout: testBudget(120_000) }).toBe("completed:");
     const assembled = await cleanupSource(engine, goal.finish!.assembledArtifactId!);
-    expect(await probeVideo(assembled.path)).toMatchObject({ fps: 12, videoDuration: 14, hasAudio: true, width: 180, height: 320 });
+    expect(await probeVideo(assembled.path)).toMatchObject({ fps: 12, videoDuration: 14, hasAudio: false, width: 180, height: 320 });
+    const final = await cleanupSource(engine, goal.finalArtifactId!);
+    expect(await probeVideo(final.path)).toMatchObject({ videoDuration: 14, hasAudio: true });
     expect(stub.submissions).toHaveLength(4);
     expect(goal.finish?.sourceArtifactId).toBe(clip.artifactId);
     expect((await invoke({ ...review, revision: goal.revision, start_seconds: 12 })).finalArtifactId).toBe(goal.finalArtifactId);
     await waitForBookQueuesIdleForTests({ budgetMs: testBudget(60_000) });
     expect(engine.jobs.queue.list({ type: "transcribe_video_audio", limit: 100 }).filter(job =>
       [goal.finalArtifactId, goal.finish?.assembledArtifactId].includes(String(job.payload.assetId)))).toHaveLength(0);
+    const analyzedAt = analysisOf(goal).analyzedAt;
+    const sourceEvidence = analysisOf(goal).source;
+    const actionWindow = goal.actionWindow;
+    const generationRules = goal.shortPlan!.rules;
+    const firstFinalId = goal.finalArtifactId;
+    await saveWatermarkProfile({ handle: "accepted_finish" }, "tiktok", engine);
+    expect(analysisOf(await invoke({ action: "status", goal_id: goal.goalId })).recipe.branding!.profile.handle).toBe("jtbkk");
+    goal = await invoke({ action: "refresh_finish", goal_id: goal.goalId, revision: goal.revision });
+    expect(analysisOf(goal).recipe.branding!.profile.handle).toBe("accepted_finish");
+    expect(goal.finalArtifactId).toBeNull();
+    expect(goal.actionWindow).toEqual(actionWindow);
+    expect(goal.stages.videos!.outputs[0]).toMatchObject({ artifactId: manualId, stale: null });
+    const plan = goal.shortPlan!;
+    if (plan.version !== 5 || !plan.analysis) throw new Error("Expected analysis");
+    goal = await invoke({ action: "update", goal_id: goal.goalId, revision: goal.revision, plan: { ...plan,
+      analysis: { ...plan.analysis, intent: { ...plan.analysis.intent, audio: "mute" }, preferences: { ...plan.analysis.preferences, branding: false } } } });
+    expect(goal.shortPlan!.rules).toEqual(generationRules);
+    expect(goal.stages.videos!.outputs[0]).toMatchObject({ artifactId: manualId, stale: null });
+    await invoke({ action: "finish", goal_id: goal.goalId });
+    await expect.poll(async () => {
+      goal = await invoke({ action: "status", goal_id: goal.goalId });
+      return `${goal.finish?.status}:${goal.finish?.error ?? ""}`;
+    }, { timeout: testBudget(60_000) }).toBe("completed:");
+    expect(goal.finalArtifactId).not.toBe(firstFinalId);
+    expect(goal.finish?.assembledArtifactId).toBe(assembled.artifactId);
+    expect((await cleanupSource(engine, goal.finalArtifactId!)).hasAudio).toBe(false);
+    const alternate = await engine.artifacts.create("video", "Alternate soundtrack");
+    if (!alternate.ok) throw new Error(alternate.error.message);
+    const alternateId = alternate.value.artifactId;
+    await engine.files.writeFromPath(alternateId, "original.mp4", join(fixtures, "changed.mp4"));
+    goal = await invoke({ action: "refresh_finish", goal_id: goal.goalId, revision: goal.revision, audio_artifact_id: alternateId });
+    const mutedPlan = goal.shortPlan!;
+    if (mutedPlan.version !== 5 || !mutedPlan.analysis) throw new Error("Expected analysis");
+    goal = await invoke({ action: "update", goal_id: goal.goalId, revision: goal.revision, plan: { ...mutedPlan,
+      analysis: { ...mutedPlan.analysis, intent: { ...mutedPlan.analysis.intent, audio: "source" } } } });
+    expect(JSON.stringify((await call({ action: "finish", goal_id: goal.goalId })).content)).toContain("has no audio");
+    const oldAudioHash = analysisOf(goal).recipe.soundtrack!.mediaHash;
+    await engine.files.writeFromPath(alternateId, "original.mp4", join(fixtures, "source.mp4"));
+    goal = await invoke({ action: "refresh_finish", goal_id: goal.goalId, revision: goal.revision, audio_artifact_id: alternateId });
+    expect(analysisOf(goal).recipe.soundtrack!.mediaHash).not.toBe(oldAudioHash);
+    expect(analysisOf(goal).recipe.soundtrack!.hasAudio).toBe(true);
+    expect(analysisOf(goal).source).toEqual(sourceEvidence);
+    expect(analysisOf(goal).analyzedAt).toBe(analyzedAt);
+    expect(goal.stages.videos!.outputs[0]).toMatchObject({ artifactId: manualId, stale: null });
+    expect(goal.actionWindow).toEqual(actionWindow);
+    expect(stub.submissions).toHaveLength(4);
   }, testBudget(150_000));
 
   it("preflights authored prompts and refuses a contradictory paid request", async () => {

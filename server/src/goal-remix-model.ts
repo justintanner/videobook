@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { goalBrandingSchema, goalSoundtrackSchema } from "./goal-finish-model.js";
 import { cleanupRegionsSchema } from "./video-cleanup/model.js";
 
 export const remixPreferencesSchema = z.object({
@@ -123,6 +124,8 @@ export const goalRemixAnalysisSchema = z.object({
     }).strict()).max(30).default([]),
     templateId: z.string().nullable(),
     templateRevision: z.string().nullable(),
+    branding: goalBrandingSchema.optional(),
+    soundtrack: goalSoundtrackSchema.nullable().optional(),
     checkTimes: z.array(z.number().nonnegative()),
   }).strict(),
   history: z.array(z.object({

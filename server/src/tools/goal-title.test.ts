@@ -113,6 +113,7 @@ describe("video_goal burned title", () => {
   }
 
   const status = (goalId: string) => invoke({ action: "status", goal_id: goalId });
+  const refreshFinish = async (goalId: string) => invoke({ action: "refresh_finish", goal_id: goalId, revision: (await status(goalId)).revision });
   const short = async () => status((await invoke({ action: "create", brief: BRIEF, request_id: uuidv7() })).goalId);
   const writeTitle = (goal: ShortGoalSnapshot) => invoke<TitleAnswer>({ action: "title", goal_id: goal.goalId });
   const requests = () => stub.plannerRequests as TitleRequest[];
@@ -255,10 +256,13 @@ describe("video_goal burned title", () => {
     process.env.OPENAI_API_KEY = "offline-openai-key";
 
     await saveWatermarkTemplate(handleOnly());
+    expect((await status(goal.goalId)).titleSlots).toEqual({ headline: true, secondary: true });
+    await refreshFinish(goal.goalId);
     expect((await status(goal.goalId)).titleSlots).toEqual({ headline: false, secondary: false });
     expect(await refusal({ action: "title", goal_id: goal.goalId })).toBe("The saved TikTok watermark template has no headline, so Finish cannot burn a title. Add a headline to that template in the graphics editor, or finish without a title.");
 
     await saveWatermarkTemplate(headlineOnly());
+    await refreshFinish(goal.goalId);
     expect((await status(goal.goalId)).titleSlots).toEqual({ headline: true, secondary: false });
     expect(requests()).toEqual([]);
     expect(titleJobs()).toEqual([]);
@@ -290,14 +294,13 @@ describe("video_goal burned title", () => {
     const { goal, clipId } = await reviewedTake();
     const untitled = await invoke({ action: "finish", goal_id: goal.goalId });
     expect(finishJob(untitled)).not.toHaveProperty("title");
-    expect(JSON.parse(untitled.finish!.identity!.slice("watermark-only:".length))).not.toHaveProperty("title");
+    expect(untitled.finish!.identity).toMatch(/^finish:[a-f0-9]{64}$/u);
     await invoke({ action: "cancel", goal_id: goal.goalId });
 
     const titled = await retitle(await status(goal.goalId), TITLE);
     expect(titled.finish?.status).toBe("cancelled");
     const finishing = await invoke({ action: "finish", goal_id: goal.goalId });
     expect(finishJob(finishing)).toMatchObject({ goalId: goal.goalId, identity: finishing.finish?.identity, title: TITLE });
-    expect(finishing.finish?.identity).toContain(JSON.stringify({ title: TITLE }).slice(1, -1));
     expect(finishing.finish?.identity).not.toBe(untitled.finish?.identity);
     expect(await refusal({ action: "update", goal_id: goal.goalId, revision: titled.revision, plan: withShortFinishTitle(titled.shortPlan!, RETITLED) }))
       .toBe("Wait until finishing stops before changing the burned title.");
@@ -318,13 +321,15 @@ describe("video_goal burned title", () => {
     const { goal } = await reviewedTake();
     const titled = await retitle(goal, TITLE);
     await saveWatermarkTemplate(headlineOnly());
+    await refreshFinish(goal.goalId);
     const headlineOnlyFinish = await invoke({ action: "finish", goal_id: goal.goalId });
     expect(finishJob(headlineOnlyFinish).title).toEqual({ headline: TITLE.headline, secondary: "" });
     await invoke({ action: "cancel", goal_id: goal.goalId });
     await saveWatermarkTemplate(handleOnly());
+    await refreshFinish(goal.goalId);
     const handleOnlyFinish = await invoke({ action: "finish", goal_id: goal.goalId });
     expect(finishJob(handleOnlyFinish)).not.toHaveProperty("title");
-    expect(JSON.parse(handleOnlyFinish.finish!.identity!.slice("watermark-only:".length))).not.toHaveProperty("title");
+    expect(handleOnlyFinish.finish!.identity).not.toBe(headlineOnlyFinish.finish!.identity);
     expect(titled.shortPlan?.finish.title).toEqual(TITLE);
   });
 

@@ -1,5 +1,6 @@
 import type { GoalRemixAnalysis } from '../../../server/src/goal-remix-model'
 import type { GoalEstimate } from '../../../server/src/goal-store'
+import { goalBrandingTitleSlots } from '../../../server/src/goal-finish-model'
 import { shortEstimateText } from '@/videobook/goals'
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
   onChange: (analysis: GoalRemixAnalysis) => void
   onSaveDefaults: () => void
   onAnalyze: () => void
+  onRefreshFinish: () => void
 }
 
 const STRUCTURES = ['preserve-source', 'regenerate', 'single-take'] as const
@@ -23,7 +25,7 @@ function ranges(values: readonly { start: number; end: number }[]): string {
   return values.map(value => `${value.start.toFixed(2)}–${value.end.toFixed(2)}s`).join(', ') || 'None'
 }
 
-export function GoalInitialAnalysis({ analysis, estimate, disabled, onChange, onSaveDefaults, onAnalyze }: Props) {
+export function GoalInitialAnalysis({ analysis, estimate, disabled, onChange, onSaveDefaults, onAnalyze, onRefreshFinish }: Props) {
   const { intent, source, recipe, findings } = analysis
   const update = <Key extends keyof GoalRemixAnalysis['intent']>(key: Key, value: GoalRemixAnalysis['intent'][Key]) => {
     onChange({ ...analysis, intent: { ...intent, [key]: value } })
@@ -45,10 +47,13 @@ export function GoalInitialAnalysis({ analysis, estimate, disabled, onChange, on
       <label>Action starts<input aria-label="Action start seconds" type="number" min="0" max={recipe.targetSeconds} step="0.01" value={intent.action?.start ?? ''} onChange={event => setBoundary('start', event.target.value)} /></label>
       <label>Action ends<input aria-label="Action end seconds" type="number" min="0" max={recipe.targetSeconds} step="0.01" value={intent.action?.end ?? ''} onChange={event => setBoundary('end', event.target.value)} /></label>
       <label className="goal-analysis-switch"><input type="checkbox" checked={intent.noDialogue} onChange={event => update('noDialogue', event.target.checked)} />No new dialogue</label>
+      <label className="goal-analysis-switch"><input type="checkbox" checked={analysis.preferences.branding} onChange={event => onChange({ ...analysis, preferences: { ...analysis.preferences, branding: event.target.checked } })} />Apply saved branding</label>
     </fieldset>
     <p className="goal-panel-muted">Saved recipe: keep {ranges(recipe.keep)} · change {ranges(recipe.change)} · generate {recipe.generatedSeconds}s.</p>
     {recipe.assembly && <p className="goal-panel-muted">Retain {(recipe.assembly.changeEndFrame - recipe.assembly.changeStartFrame) / recipe.assembly.fps}s of the generated action after review. Assemble {recipe.assembly.totalFrames} frames at {recipe.assembly.fps.toFixed(3)} fps, {recipe.assembly.width} × {recipe.assembly.height}, with straight cuts and the selected sound policy. Generated footage fits inside the source frame. Finishing checks frame count, duration, decoding and current inputs.</p>}
     {source && <p className="goal-panel-muted">Reference: {recipe.reference ? ranges([recipe.reference]) : 'Choose a reference'} · {recipe.cleanupRegions.length} proposed removal regions · {recipe.templateId ? 'Saved branding selected' : 'Default branding'}.</p>}
+    <p className="goal-panel-muted">Sound: {audioNames[intent.audio]}.{(intent.audio === 'source' || intent.audio === 'mix') && ` Soundtrack from ${(recipe.soundtrack?.startSeconds ?? 0).toFixed(2)}s maps to the beginning of the final video; trim excess audio and pad a short track with silence.${intent.audio === 'source' ? ' Generated sound is muted.' : ''}`}</p>
+    {recipe.branding && <p className="goal-panel-muted">Branding: {analysis.preferences.branding ? `${recipe.branding.template?.name ?? recipe.branding.starterId ?? 'Book watermark'} · @${recipe.branding.profile.handle.replace(/^@/, '')}` : 'Off'}. {goalBrandingTitleSlots(recipe.branding, analysis.preferences.branding).headline ? 'A burned title is optional; type it or request priced title suggestions.' : 'This look has no burned headline.'} Use current book branding after saving a different look in the graphics editor.</p>}
     {analysis.history.length > 0 && <p className="goal-panel-muted">{analysis.history.length} related earlier attempts · {analysis.history.filter(entry => entry.reusable).length} reviewed images available for reuse. Approving a matching stage reuses its reviewed image. Other completed takes remain reviewable in Generation history.</p>}
     {analysis.history.some(entry => entry.failure === 'account') && <p className="goal-panel-muted">An earlier request failed because of account access or credits. Resolve that account issue before another paid request; earlier images are retained.</p>}
     {analysis.history.some(entry => entry.failure === 'request') && <p className="goal-panel-muted">An earlier request failed validation. Check the current request before retrying; this does not require regenerating earlier images.</p>}
@@ -57,6 +62,7 @@ export function GoalInitialAnalysis({ analysis, estimate, disabled, onChange, on
     <div className="goal-panel-bar">
       <button type="button" className="goal-panel-button" disabled={disabled} onClick={onSaveDefaults}>Use these defaults for this book</button>
       <button type="button" className="goal-panel-button" disabled={disabled} onClick={onAnalyze}>Refresh analysis</button>
+      <button type="button" className="goal-panel-button" disabled={disabled} onClick={onRefreshFinish}>Use current book branding</button>
     </div>
   </details>
 }
