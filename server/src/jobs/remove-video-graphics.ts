@@ -1,17 +1,17 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Engine } from "videobook-engine";
 import { runAnalysisComponentJob } from "../analysis-components.js";
 import { extractFrames } from "../captions/frames.js";
 import { cleanupSource } from "../video-cleanup/source.js";
-import { registerJobHandler } from "../queue.js";
+import { registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { writeRenderSetting } from "../render-requests.js";
 import { withCleanupDetector } from "../video-cleanup/detect.js";
 import { cleanupSampleTimes, trackCleanupRegions, validateCleanupRegions, type CleanupBox } from "../video-cleanup/model.js";
 import { installCleanupModels } from "../video-cleanup/models.js";
 import { renderCleanup } from "../video-cleanup/render.js";
-import { CLEANUP_DETECTION, cleanupDetectionKey, cleanupDetectionSchema, cleanupDestination, readCleanupRequest } from "../video-cleanup/service.js";
+import { CLEANUP_DETECTION, cleanupDetectionKey, cleanupDetectionSchema, cleanupDestination, readCleanupRequest, type CleanupRequest } from "../video-cleanup/service.js";
+import { CLEANUP_RENDER_VERSION, validateCleanupCopy } from "../video-cleanup/prepared.js";
 import { withLocalLease } from "./_lease.js";
 import { placeRenderedCell, processRenderedVideo, writeRenderedVideo } from "./_render-output.js";
 
@@ -51,40 +51,47 @@ export function registerRemoveVideoGraphicsJobs(engine: Engine): void {
   registerJobHandler("remove_video_graphics", async (input, ctx) => {
     const request = readCleanupRequest(engine, String(input.requestId));
     if (!request || request.outputArtifactId !== input.assetId) throw new Error("This removal request is no longer available.");
-    const reviewedSource = async () => {
-      const source = await cleanupSource(engine, request.sourceArtifactId);
-      if (source.mediaHash !== request.sourceHash) throw new Error("The video changed after review. Reopen the remover and review again.");
-      return source;
-    };
-    const result = await withLocalLease(engine, request.outputArtifactId, ctx, "render", async () => {
-      const source = await reviewedSource();
-      const regions = validateCleanupRegions(request.regions, source.durationSeconds);
-      const scratch = await mkdtemp(join(tmpdir(), "videobook-cleanup-"));
-      try {
-        const outputPath = join(scratch, "cleaned.mp4");
-        const started = Date.now();
-        const totalFrames = Math.round(source.durationSeconds * source.fps);
-        const progressKey = `video-cleanup.progress.${request.requestId}`;
-        writeRenderSetting(engine, progressKey, { completedFrames: 0, totalFrames, elapsedSeconds: 0 });
-        await renderCleanup({ source, outputPath, regions, method: request.method, signal: ctx.signal,
-          onProgress: progress => writeRenderSetting(engine, progressKey, progress),
-        });
-        writeRenderSetting(engine, progressKey, { completedFrames: totalFrames, totalFrames, elapsedSeconds: (Date.now() - started) / 1000 });
-        await reviewedSource();
-        ctx.signal.throwIfAborted();
-        await writeRenderedVideo(engine, request.outputArtifactId, outputPath, source, ctx.signal);
-        const provenance = await engine.files.write(request.outputArtifactId, "video-cleanup.json", JSON.stringify({ sourceArtifactId: request.sourceArtifactId, sourceHash: request.sourceHash, method: request.method, regions }));
-        if (!provenance.ok) throw new Error(provenance.error.message);
-        const placement = await placeRenderedCell(engine, {
-          notebookId: request.notebookId, operation: "remove_video_graphics", sourceArtifactId: request.sourceArtifactId,
-          outputArtifactId: request.outputArtifactId, fallbackLabel: "Cleaned video",
-          destination: (notebook) => cleanupDestination(notebook, request.sourceArtifactId),
-          inputs: { sourceOperation: "remove_video_graphics", sourceArtifactId: request.sourceArtifactId },
-        });
-        return { output_asset_id: request.outputArtifactId, cell_id: placement.cellId, address: placement.address };
-      } finally { await rm(scratch, { recursive: true, force: true }); }
-    });
-    await processRenderedVideo(engine, String(input.bookId), request.outputArtifactId, { origin: "video-cleanup" });
-    return result;
+    return runCleanupRequest(engine, String(input.bookId), request, ctx);
   });
+}
+
+export async function runCleanupRequest(engine: Engine, bookId: string, request: CleanupRequest, ctx: JobHandlerContext) {
+  const reviewedSource = async () => {
+    const source = await cleanupSource(engine, request.sourceArtifactId);
+    if (source.mediaHash !== request.sourceHash) throw new Error("The video changed after review. Reopen the remover and review again.");
+    return source;
+  };
+  const result = await withLocalLease(engine, request.outputArtifactId, ctx, "render", async () => {
+    const source = await reviewedSource();
+    const regions = validateCleanupRegions(request.regions, source.durationSeconds);
+    const workspace = await engine.workspaces.resolveArtifact(request.outputArtifactId);
+    if (!workspace.ok) throw new Error(workspace.error.message);
+    const outputPath = join(workspace.value, "cleanup-scratch.mp4");
+    try {
+      const started = Date.now();
+      const totalFrames = Math.round(source.durationSeconds * source.fps);
+      const progressKey = `video-cleanup.progress.${request.requestId}`;
+      writeRenderSetting(engine, progressKey, { completedFrames: 0, totalFrames, elapsedSeconds: 0 });
+      await renderCleanup({ source, outputPath, regions, method: request.method, signal: ctx.signal,
+        onProgress: progress => writeRenderSetting(engine, progressKey, progress),
+      });
+      writeRenderSetting(engine, progressKey, { completedFrames: totalFrames, totalFrames, elapsedSeconds: (Date.now() - started) / 1000 });
+      await reviewedSource();
+      ctx.signal.throwIfAborted();
+      await writeRenderedVideo(engine, request.outputArtifactId, outputPath, source, ctx.signal);
+      const verified = await validateCleanupCopy(engine, request.sourceArtifactId, request.outputArtifactId, request.sourceHash, ctx.signal);
+      const provenance = await engine.files.write(request.outputArtifactId, "video-cleanup.json", JSON.stringify({ version: CLEANUP_RENDER_VERSION, sourceArtifactId: request.sourceArtifactId, sourceHash: request.sourceHash, method: request.method, regions, outputHash: verified.mediaHash }));
+      if (!provenance.ok) throw new Error(provenance.error.message);
+      writeRenderSetting(engine, `video-cleanup.request.${request.requestId}`, { ...request, completedHash: verified.mediaHash });
+      const placement = await placeRenderedCell(engine, {
+        notebookId: request.notebookId, operation: "remove_video_graphics", sourceArtifactId: request.sourceArtifactId,
+        outputArtifactId: request.outputArtifactId, fallbackLabel: "Cleaned video",
+        destination: (notebook) => cleanupDestination(notebook, request.sourceArtifactId),
+        inputs: { sourceOperation: "remove_video_graphics", sourceArtifactId: request.sourceArtifactId },
+      });
+      return { output_asset_id: request.outputArtifactId, cell_id: placement.cellId, address: placement.address };
+    } finally { await rm(outputPath, { force: true }); }
+  });
+  await processRenderedVideo(engine, bookId, request.outputArtifactId, { origin: "video-cleanup" });
+  return result;
 }

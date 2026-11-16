@@ -274,7 +274,7 @@ export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null
   const progress = goalProgress(goal)
   const total = short?.segments.length ?? 0
   const finish = goal.finish
-  if (progress.phase === 'planning') return statusLine('Planning', 'Planning', null, 'live', true)
+  if (progress.phase === 'planning') return statusLine(goal.preparation?.status === 'running' ? 'Preparing source' : 'Planning', goal.preparation?.status === 'running' ? 'Preparing' : 'Planning', null, 'live', true)
   if (finish?.status === 'running') return statusLine('Burning the saved watermark', 'Finishing', null, 'live', true)
   if (finish?.status === 'failed') return statusLine('Finishing failed', 'Finishing failed', 'Finish', 'attention', false)
   if (progress.phase === 'review') {

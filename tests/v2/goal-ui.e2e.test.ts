@@ -16,6 +16,7 @@ import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
 import { createHttpHandler } from '../../server/src/server.js'
 import { configureProviderPollDriverForTests, queue, resetProviderPollDriverForTests, setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
+import { readGoal, requireGoalShortContent, writeGoalShortContent } from '../../server/src/goal-store.js'
 import { registerAllJobHandlers } from '../../server/src/jobs/index.js'
 import { loadLegacyGoalFixture } from '../../server/src/test-legacy-goals.js'
 import { uploadLocalStream } from '../../server/src/local-upload.js'
@@ -292,7 +293,7 @@ describe('goal mode in the browser', () => {
   }, testBudget(600_000))
 
 
-  scenario('makes a short from one frame with separate character replacement, twist, video and finish', async () => {
+  scenario('keeps a saved version 5 remix working through replacement, twist, video and finish', async () => {
     for (const goal of (await goals()).goals) {
       if (goal.status !== 'cancelled' && !goal.dismissedAt) await call('video_goal', { action: 'dismiss', goal_id: goal.goalId })
     }
@@ -332,7 +333,14 @@ describe('goal mode in the browser', () => {
       const brief = `make a 12s clip based on ${notebookGridTag(slot)} but with ${notebookGridTag(photo.slot)} holding the umbrella for a monitor lizard`
       await command(`/goal ${brief}`)
       await expect.poll(async () => (await goals()).goals.find(goal => goal.brief === brief)?.status, { timeout: testBudget(60_000) }).toBe('review')
-      const short = shortGoal((await goals()).goals.find(goal => goal.brief === brief))
+      const analyzed = shortGoal((await goals()).goals.find(goal => goal.brief === brief))
+      const stored = readGoal(engine, analyzed.goalId)
+      const content = requireGoalShortContent(engine, stored)
+      if (content.plan?.version !== 5) throw new Error('expected version 5')
+      const { analysis: _analysis, ...savedPlan } = content.plan
+      await writeGoalShortContent(engine, stored, { ...content, plan: savedPlan, draft: null })
+      const short = shortGoal(await current(analyzed))
+      await page.reload()
       expect(short).toMatchObject({ planVersion: 5, stage: 'replacement', shortPlan: { version: 5, remix: { video: { artifactId: video.value.artifactId } } } })
       expect(short.storyboard).toBeNull()
       expect(short.shortPlan?.version === 5 && short.shortPlan.remix?.frame.atSeconds).toBe(3)
@@ -409,6 +417,78 @@ describe('goal mode in the browser', () => {
       await rm(fixtures, { recursive: true, force: true })
     }
   }, testBudget(600_000))
+
+  scenario('prepares and reuses a reviewed source with the shared mask editor on desktop and mobile', async () => {
+    const fixtures = await mkdtemp(join(tmpdir(), 'videobook-goal-preparation-ui-'))
+    try {
+      for (const goal of (await goals()).goals) {
+        if (!goal.dismissedAt && ['planning', 'review', 'running'].includes(goal.status)) await call('video_goal', { action: 'cancel', goal_id: goal.goalId })
+      }
+      await copyVideoFixture({ width: 180, height: 320, durationSec: 6, fps: 12, source: 'color', color: 'green', audio: false }, join(fixtures, 'source.mp4'))
+      const video = await engine.artifacts.create('video', 'Preparation source')
+      if (!video.ok) throw new Error(video.error.message)
+      await engine.files.writeFromPath(video.value.artifactId, 'original.mp4', join(fixtures, 'source.mp4'))
+      const notebook = engine.notebooks.read(notebookId)
+      if (!notebook.ok) throw new Error(notebook.error.message)
+      const slot = firstEmptyNotebookGridSlot(notebookOccupiedSlots(notebook.value.cells))
+      await engine.notebooks.insertCell(notebookId, engine.notebooks.createCell({ type: 'video', slot, outputArtifactId: video.value.artifactId }))
+      const brief = (address: string) => `A 6s video from ${address}. Mute. Remove all source graphics. replace: "Insert the man by the display." frame: "He waits beside the display." video: "The man waves."`
+      await page.reload()
+      await command(`/goal ${brief(notebookGridTag(slot))}`)
+      await expect.poll(async () => (await goals()).goals.find(goal => goal.brief === brief(notebookGridTag(slot)))?.status, { timeout: testBudget(60_000) }).toBe('review')
+      const goal = shortGoal((await goals()).goals.find(goal => goal.brief === brief(notebookGridTag(slot))))
+      await tile(goal).waitFor({ state: 'visible', timeout: testBudget(30_000) })
+      if (!(await panel().isVisible())) await tile(goal).click()
+      const preparation = panel().locator('.goal-source-preparation')
+      await preparation.waitFor({ state: 'visible', timeout: testBudget(15_000) })
+      expect(await panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: /^Insert character/ }).isDisabled()).toBe(true)
+      await preparation.getByLabel('Goal removal method').selectOption('fill')
+      await preparation.getByRole('button', { name: 'Add region', exact: true }).click()
+      for (const size of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+        await page.setViewportSize(size)
+        await expect.poll(async () => {
+          const box = await preparation.locator('.cleanup-stage').boundingBox()
+          return box ? Math.abs(box.width / box.height - 180 / 320) : 1
+        }).toBeLessThan(0.02)
+        expect(await preparation.locator('.video-cleanup-body').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+      }
+      await screenshot('goal-source-masks-mobile')
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      await preparation.getByLabel('I reviewed the regions and kept physical scene details.').check()
+      await preparation.getByRole('button', { name: 'Prepare cleaned source', exact: true }).click()
+      await expect.poll(async () => shortGoal(await current(goal)).preparation?.status, { timeout: testBudget(60_000) }).toBe('review')
+      const recipe = shortGoal(await current(goal)).shortPlan
+      if (recipe?.version !== 5 || !recipe.analysis?.recipe.preparedArtifactId) throw new Error('Expected prepared source')
+      const preparedId = recipe.analysis.recipe.preparedArtifactId
+      expect(preparedId).not.toBe(video.value.artifactId)
+      await expect.poll(() => preparation.getByLabel('Prepared source video').getAttribute('src'), { timeout: testBudget(30_000) }).toContain(preparedId)
+      expect(await panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: /^Insert character/ }).isDisabled()).toBe(true)
+      await screenshot('goal-cleaned-source-review')
+      await preparation.getByLabel('The graphics are removed, the fill looks acceptable, and the sound is intact.').check()
+      await preparation.getByRole('button', { name: 'Use reviewed source', exact: true }).click()
+      await expect.poll(async () => shortGoal(await current(goal)).preparation?.status, { timeout: testBudget(15_000) }).toBe('ready')
+      await expect.poll(() => panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: /^Insert character/ }).isEnabled()).toBe(true)
+      await call('video_goal', { action: 'cancel', goal_id: goal.goalId })
+      const arranged = engine.notebooks.read(notebookId)
+      if (!arranged.ok) throw new Error(arranged.error.message)
+      const sourceCell = arranged.value.cells.find(cell => cell.outputArtifactId === video.value.artifactId)!
+      await command(`/goal ${brief(notebookGridTag(sourceCell.slot))}`)
+      await expect.poll(async () => (await goals()).goals.filter(candidate => candidate.goalId !== goal.goalId && candidate.status === 'review').length, { timeout: testBudget(60_000) }).toBe(1)
+      const next = shortGoal((await goals()).goals.find(candidate => candidate.goalId !== goal.goalId && candidate.status === 'review'))
+      if (!(await preparation.isVisible())) await tile(next).click()
+      await preparation.getByLabel('Existing cleaned copy').selectOption(preparedId)
+      await preparation.getByLabel('I reviewed the regions and kept physical scene details.').check()
+      await preparation.getByRole('button', { name: 'Use existing cleaned copy', exact: true }).click()
+      await expect.poll(async () => shortGoal(await current(next)).preparation?.status, { timeout: testBudget(60_000) }).toBe('ready')
+      const reused = shortGoal(await current(next)).shortPlan
+      expect(reused?.version === 5 && reused.analysis?.recipe.preparedArtifactId).toBe(preparedId)
+      await call('video_goal', { action: 'cancel', goal_id: next.goalId })
+      expect(errors).toEqual([])
+    } finally {
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      await rm(fixtures, { recursive: true, force: true })
+    }
+  }, testBudget(180_000))
 
   scenario('shows goals from an earlier /goal as read-only summaries whose outputs open their cells', async () => {
     const image = await sharp({ create: { width: 90, height: 160, channels: 3, background: '#7a6a4f' } }).png().toBuffer()

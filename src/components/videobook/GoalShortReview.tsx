@@ -13,6 +13,7 @@ import { GoalFinishTitle } from './GoalFinishTitle'
 import { GoalPromptInput } from './GoalPromptInput'
 import { GoalMedia } from './GoalStillCard'
 import { GoalInitialAnalysis } from './GoalInitialAnalysis'
+import { GoalSourcePreparation } from './GoalSourcePreparation'
 
 type GoalAction = Record<string, unknown>
 type AssetResolver = (artifactId: string) => AssetRecord | null
@@ -115,7 +116,8 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const finishing = goal.finish?.status === 'running'
   const finishFailed = goal.finish?.status === 'failed'
   const analysisErrors = analysis ? [...analysis.findings.filter(finding => finding.severity === 'error' && !finding.code.startsWith('conflicting-')), ...remixPromptFindings(analysis, [nextFrame, replacementPrompt, ...nextSegments.map(segment => segment.prompt), ...Object.values(draft.rules)])] : []
-  const canGenerate = goal.status === 'review' && promptsReady && analysisErrors.length === 0 && !disabled && !running && !finishing
+  const sourceReady = !analysis?.source || analysis.recipe.cleanupConfirmed && Boolean(analysis.recipe.preparedArtifactId) && analysis.recipe.cleanupReviewedHash === analysis.recipe.preparedMediaHash
+  const canGenerate = goal.status === 'review' && promptsReady && sourceReady && analysisErrors.length === 0 && !disabled && !running && !finishing
   const sourceId = next === null ? goal.finish?.sourceArtifactId ?? currentClip?.artifactId ?? null : null
   const sourceAsset = sourceId ? resolveAsset(sourceId) : null
   const clipAsset = currentClip ? resolveAsset(currentClip.artifactId) : null
@@ -156,6 +158,9 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
     {analysis && <GoalInitialAnalysis analysis={analysis} estimate={goal.estimate.total} disabled={disabled || running || finishing} onChange={setAnalysis}
       onSaveDefaults={() => onRun(async () => { const current = await saved(); return onAction({ action: 'save_defaults', revision: current.revision }) })}
       onAnalyze={() => onRun(async () => { const current = await saved(); return onAction({ action: 'analyze', revision: current.revision }) })} />}
+    {analysis && <GoalSourcePreparation analysis={analysis} preparation={goal.preparation} disabled={disabled || running || finishing || goal.status === 'cancelled'} resolveAsset={resolveAsset}
+      onPrepare={preparation => onRun(async () => { const current = await saved(); return onAction({ action: 'prepare', revision: current.revision, preparation }) })}
+      onReview={(artifactId, mediaHash) => onRun(async () => { const current = await saved(); return onAction({ action: 'review_source', revision: current.revision, artifact_id: artifactId, media_hash: mediaHash, confirmed: true }) })} />}
     <nav className="goal-stage-tabs" aria-label="Short stages">
       {tabs.map(([id, label]) => <button key={id} type="button" className="goal-panel-button" aria-pressed={view === id} onClick={() => onView(id)}>{label}</button>)}
     </nav>
@@ -222,7 +227,10 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
     {view === 'video' && <>
       {remix && <>
         <div className="goal-reference-grid" aria-label="Video references">
-          <GoalMedia artifactId={remix.video.artifactId} cellId={remix.video.cellId} label={`@video1 · Source video${remix.video.address ? ` · ${remix.video.address}` : ''}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />
+          {analysis?.recipe.referenceArtifactId ? <div className="goal-prepared-preview">
+            <video controls playsInline preload="metadata" src={resolveAsset(analysis.recipe.referenceArtifactId)?.mediaUrl ?? undefined} aria-label="Video generation reference" />
+            <span>@video1 · {analysis.recipe.preparedArtifactId && analysis.intent.cleanup !== 'keep' ? 'Prepared' : 'Source'} video reference</span>
+          </div> : <GoalMedia artifactId={remix.video.artifactId} cellId={remix.video.cellId} label={`@video1 · Source video${remix.video.address ? ` · ${remix.video.address}` : ''}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
           {frameOutput && <GoalMedia artifactId={frameOutput.artifactId} cellId={frameOutput.cellId} label="@image1 · Reviewed twist" resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
         </div>
         <p className="goal-panel-muted">Use the source video for movement and setting, and the reviewed twist for appearance. The beat controls when the character and twist appear.</p>

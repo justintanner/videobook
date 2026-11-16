@@ -517,3 +517,27 @@ span.goal-progress-address {
 .goal-initial-analysis [data-severity="error"] {
   color: var(--color-danger, #c33);
 }
+
+.goal-source-preparation {
+  border: 1px solid var(--color-border, #ffffff25);
+  border-radius: 8px;
+  padding: 10px;
+  min-width: 0;
+}
+
+.goal-source-preparation .video-cleanup-body {
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  padding: 0;
+}
+
+.goal-source-preparation select {
+  max-width: 100%;
+}
+
+.goal-prepared-preview video {
+  display: block;
+  width: 100%;
+  max-height: 340px;
+  object-fit: contain;
+  background: #080b10;
+}

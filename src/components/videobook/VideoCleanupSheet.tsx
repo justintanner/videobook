@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 import { cleanupPixelBox, validateCleanupRegions, type CleanupRegion } from '../../../server/src/video-cleanup/model'
 import type { VideoCleanupEditor } from '@/videobook/useVideoCleanup'
 import { ConfirmSheet } from './confirm/ConfirmSheet'
@@ -29,19 +29,26 @@ function RegionFields({ region, disabled, duration, onChange }: { region: Cleanu
   </div>
 }
 
-function CleanupBody({ editor }: { editor: VideoCleanupEditor }) {
-  const { read, target, regions, busy, error, method, jobId } = editor.state
+type CleanupSource = { width: number; height: number; fps: number; duration_seconds: number }
+
+export function CleanupRegionEditor({ source, mediaUrl, regions, disabled, onChange, controls }: {
+  source: CleanupSource | null
+  mediaUrl: string | null
+  regions: CleanupRegion[]
+  disabled: boolean
+  onChange: (regions: CleanupRegion[]) => void
+  controls?: ReactNode
+}) {
   const [selected, setSelected] = useState<string | null>(null)
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
   const video = useRef<HTMLVideoElement>(null)
   const drag = useRef<Drag | null>(null)
   const region = regions.find((r) => r.id === selected) ?? regions[0]
-  const duration = read?.source.duration_seconds ?? 0
-  const disabled = Boolean(busy)
+  const duration = source?.duration_seconds ?? 0
   const seek = (at: number) => { if (video.current) video.current.currentTime = at; setTime(at) }
   const choose = (r: CleanupRegion) => { setSelected(r.id); video.current?.pause(); seek(r.start) }
-  const replace = (next: CleanupRegion) => editor.setRegions(regions.some((r) => r.id === next.id) ? regions.map((r) => r.id === next.id ? next : r) : [...regions, next])
+  const replace = (next: CleanupRegion) => onChange(regions.some((r) => r.id === next.id) ? regions.map((r) => r.id === next.id ? next : r) : [...regions, next])
   const point = (event: PointerEvent<SVGSVGElement>): Point => {
     const box = event.currentTarget.getBoundingClientRect()
     return { x: unit((event.clientX - box.left) / box.width), y: unit((event.clientY - box.top) / box.height) }
@@ -74,8 +81,8 @@ function CleanupBody({ editor }: { editor: VideoCleanupEditor }) {
 
   return <div className="video-cleanup-body">
     <div className="cleanup-preview">
-      <div className="cleanup-stage" style={{ aspectRatio: read ? `${read.source.width}/${read.source.height}` : '16/9', '--cleanup-ratio': read ? read.source.width / read.source.height : 16 / 9 } as CSSProperties}>
-        <video ref={video} src={target?.mediaUrl ?? undefined} playsInline preload="metadata"
+      <div className="cleanup-stage" style={{ aspectRatio: source ? `${source.width}/${source.height}` : '16/9', '--cleanup-ratio': source ? source.width / source.height : 16 / 9 } as CSSProperties}>
+        <video ref={video} src={mediaUrl ?? undefined} playsInline preload="metadata"
           onTimeUpdate={() => setTime(video.current?.currentTime ?? 0)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
         <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="Draw removal regions" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={finishDrag} onPointerCancel={finishDrag}>
           {regions.map((r, index) => time >= r.start && time < r.end && <g key={r.id} data-region={r.id} data-selected={r.id === region?.id}>
@@ -86,33 +93,20 @@ function CleanupBody({ editor }: { editor: VideoCleanupEditor }) {
         </svg>
       </div>
       <div className="cleanup-transport">
-        <button type="button" disabled={!read} onClick={() => { if (video.current?.paused) void video.current.play().catch(() => {}); else video.current?.pause() }}>{playing ? 'Pause' : 'Play'}</button>
-        <input aria-label="Playback position" type="range" min={0} max={duration || 1} step={read ? 1 / read.source.fps : 0.01} value={Math.min(time, duration)} onChange={(event) => seek(Number(event.target.value))} />
+        <button type="button" disabled={!source} onClick={() => { if (video.current?.paused) void video.current.play().catch(() => {}); else video.current?.pause() }}>{playing ? 'Pause' : 'Play'}</button>
+        <input aria-label="Playback position" type="range" min={0} max={duration || 1} step={source ? 1 / source.fps : 0.01} value={Math.min(time, duration)} onChange={(event) => seek(Number(event.target.value))} />
         <output>{time.toFixed(2)} / {duration.toFixed(2)}s</output>
       </div>
       <p>Drag to draw a region. Drag a box to move it or its corner to resize. Review the whole clip before removing.</p>
     </div>
     <div className="cleanup-controls">
+      {controls}
       <div className="cleanup-toolbar">
-        <button type="button" disabled={disabled || !read?.models.detector} onClick={editor.detect}>{regions.length ? 'Replace regions with detection' : 'Detect text'}</button>
-        <button type="button" disabled={disabled || !read || regions.length >= 80} onClick={() => {
+        <button type="button" disabled={disabled || !source || regions.length >= 80} onClick={() => {
           const next = { id: crypto.randomUUID(), x: 0.25, y: 0.4, width: 0.5, height: 0.15, start: 0, end: duration }
           replace(next); choose(next)
         }}>Add region</button>
-        {jobId && <button type="button" onClick={() => void editor.cancel()}>Stop</button>}
       </div>
-      {read && (!read.models.detector || !read.models.lama) && <div className="cleanup-models">
-        <p>Download local models once ({Math.ceil(read.models.download_bytes / 1_000_000)} MB). Your video stays on this computer.</p>
-        <button type="button" disabled={disabled} onClick={() => void editor.install()}>Download models</button>
-      </div>}
-      <label className="cleanup-method">Removal method<select value={method} disabled={disabled} onChange={(event) => editor.setMethod(event.target.value === 'fill' ? 'fill' : 'lama')}>
-        <option value="lama">Local AI · LaMa</option><option value="fill">Fast fill · simple backgrounds</option>
-      </select></label>
-      <p>{method === 'lama' ? 'AI fills each frame. Moving or detailed backgrounds can flicker; large covered objects cannot be recovered exactly.' : 'Fills from surrounding pixels. Best for small overlays on plain backgrounds.'}</p>
-      {read && <p>Text sampled every {read.interval.toFixed(2)}s. Short titles may be missed. Keep scene text you want; add non-text graphics manually.</p>}
-      {busy && <p role="status">{busy}</p>}
-      {error && <p role="alert">{error}</p>}
-      {error && read?.models.detector && read.models.lama && <button type="button" disabled={disabled} onClick={() => void editor.install()}>Repair local models</button>}
       <div className="cleanup-regions" aria-label="Removal regions">
         {regions.map((r, index) => <button key={r.id} type="button" aria-pressed={r.id === region?.id} disabled={disabled} onClick={() => choose(r)}>Region {index + 1} <span>{r.start.toFixed(2)}–{r.end.toFixed(2)}s</span></button>)}
       </div>
@@ -121,12 +115,35 @@ function CleanupBody({ editor }: { editor: VideoCleanupEditor }) {
         <div className="cleanup-toolbar">
           <button type="button" disabled={disabled} onClick={() => replace({ ...region, start: time })}>Start at playhead</button>
           <button type="button" disabled={disabled} onClick={() => replace({ ...region, end: time })}>End at playhead</button>
-          <button type="button" disabled={disabled} onClick={() => editor.setRegions(regions.filter((r) => r.id !== region.id))}>Delete region</button>
+          <button type="button" disabled={disabled} onClick={() => onChange(regions.filter((r) => r.id !== region.id))}>Delete region</button>
         </div>
-        {read && <small>{cleanupPixelBox(region, read.source.width, read.source.height).width} × {cleanupPixelBox(region, read.source.width, read.source.height).height} pixels</small>}
+        {source && <small>{cleanupPixelBox(region, source.width, source.height).width} × {cleanupPixelBox(region, source.width, source.height).height} pixels</small>}
       </section>}
     </div>
   </div>
+}
+
+function CleanupBody({ editor }: { editor: VideoCleanupEditor }) {
+  const { read, target, regions, busy, error, method, jobId } = editor.state
+  const disabled = Boolean(busy)
+  return <CleanupRegionEditor source={read?.source ?? null} mediaUrl={target?.mediaUrl ?? null} regions={regions} disabled={disabled} onChange={editor.setRegions} controls={<>
+    <div className="cleanup-toolbar">
+      <button type="button" disabled={disabled || !read?.models.detector} onClick={editor.detect}>{regions.length ? 'Replace regions with detection' : 'Detect text'}</button>
+      {jobId && <button type="button" onClick={() => void editor.cancel()}>Stop</button>}
+    </div>
+    {read && (!read.models.detector || !read.models.lama) && <div className="cleanup-models">
+      <p>Download local models once ({Math.ceil(read.models.download_bytes / 1_000_000)} MB). Your video stays on this computer.</p>
+      <button type="button" disabled={disabled} onClick={() => void editor.install()}>Download models</button>
+    </div>}
+    <label className="cleanup-method">Removal method<select value={method} disabled={disabled} onChange={event => editor.setMethod(event.target.value === 'fill' ? 'fill' : 'lama')}>
+      <option value="lama">Local AI · LaMa</option><option value="fill">Fast fill · simple backgrounds</option>
+    </select></label>
+    <p>{method === 'lama' ? 'AI fills each frame. Moving or detailed backgrounds can flicker; large covered objects cannot be recovered exactly.' : 'Fills from surrounding pixels. Best for small overlays on plain backgrounds.'}</p>
+    {read && <p>Text sampled every {read.interval.toFixed(2)}s. Short titles may be missed. Keep scene text you want; add non-text graphics manually.</p>}
+    {busy && <p role="status">{busy}</p>}
+    {error && <p role="alert">{error}</p>}
+    {error && read?.models.detector && read.models.lama && <button type="button" disabled={disabled} onClick={() => void editor.install()}>Repair local models</button>}
+  </>} />
 }
 
 export function VideoCleanupSheet({ editor, applyFormId, onClose }: { editor: VideoCleanupEditor; applyFormId: string; onClose: () => void }) {

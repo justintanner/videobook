@@ -11,6 +11,7 @@ export type ShortStub = {
   plannerRequests: unknown[];
   plannerAnswers: unknown[];
   unexpected: string[];
+  uploads: Map<string, Buffer>;
   media: ShortStubMedia;
   failNext: boolean;
   refuseNext: boolean;
@@ -56,6 +57,7 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
     plannerRequests: [],
     plannerAnswers: [],
     unexpected: [],
+    uploads: new Map(),
     media,
     failNext: false,
     refuseNext: false,
@@ -64,6 +66,7 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
       stub.plannerRequests = [];
       stub.plannerAnswers = [];
       stub.unexpected = [];
+      stub.uploads.clear();
       stub.failNext = false;
       failing.clear();
       refused.clear();
@@ -133,6 +136,7 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
       return sendJson(response, { file_url: `${stub.baseURL}/files/uploaded-${name}`, upload_url: `${stub.baseURL}/fal-storage/${name}` });
     }
     if (method === "PUT" && path.startsWith("/fal-storage/")) {
+      stub.uploads.set(`${stub.baseURL}/files/uploaded-${path.slice("/fal-storage/".length)}`, body);
       response.end();
       return;
     }

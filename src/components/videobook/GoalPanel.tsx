@@ -103,7 +103,9 @@ export function GoalPanel({ goal, connected, onAction, onWriteTitle, onSelectCel
       {!connected && <p role="status" className="goal-panel-muted">Reconnecting. Your goal is saved; generation continues on the server.</p>}
       {error && <p role="alert" className="goal-panel-error">{error}</p>}
       {goal.error && (progress.phase === 'failed' || progress.phase === 'interrupted') && <p role="alert" className="goal-panel-error">{goal.error}</p>}
-      {progress.phase === 'planning' && <div className="goal-panel-planning"><p className="goal-panel-brief">{goal.brief}</p><p className="goal-panel-muted">Planning the frame and the beats of your short…</p><span className="goal-tile-placeholder" aria-hidden="true"><i /><i /><i /></span></div>}
+      {progress.phase === 'planning' && <div className="goal-panel-planning"><p className="goal-panel-brief">{goal.brief}</p><p className="goal-panel-muted" role="status">{goal.preparation?.status === 'running'
+        ? goal.preparation.progress ? `Preparing the source · ${goal.preparation.progress.completedFrames}/${goal.preparation.progress.totalFrames} frames · ${Math.round(goal.preparation.progress.elapsedSeconds)}s elapsed` : 'Preparing the source references…'
+        : 'Planning the frame and the beats of your short…'}</p><span className="goal-tile-placeholder" aria-hidden="true"><i /><i /><i /></span></div>}
       {!shortPlan && progress.phase !== 'planning' && <div className="goal-panel-planning">
         <p className="goal-panel-brief">{goal.brief}</p>
         <div className="goal-panel-bar"><div className="goal-panel-bar-copy"><span>{retry ? 'Planning writes the frame and beat prompts again. Nothing is generated until you approve it.' : 'Planning stopped before the short had a plan.'}</span></div>{retry && <button type="button" className="goal-panel-primary" disabled={disabled} onClick={() => act({ action: 'retry' })}>Retry planning</button>}</div>

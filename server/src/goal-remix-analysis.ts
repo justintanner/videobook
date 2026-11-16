@@ -19,6 +19,8 @@ import { DEFAULT_TRANSCRIPT_OPTIONS, hasCurrentElevenLabsTranscript, OPENAI_TRAN
 import { readTranscriptSidecarText } from "./transcript-projection.js";
 import { awaitScenes } from "./tools/detect-scenes.js";
 import { cleanupModelStatus } from "./video-cleanup/models.js";
+import { cleanupCandidates } from "./video-cleanup/prepared.js";
+import { cleanupFrameCount } from "./video-cleanup/model.js";
 import { readVideoAnalysisSummary } from "./video-analysis-projection.js";
 import { VIDEO_ANALYSIS, videoAnalysisInputs, videoAnalysisRecord } from "./vision-components.js";
 
@@ -181,9 +183,11 @@ export async function buildRemixAnalysis(engine: Engine, input: {
   const cleanupRegions = overlays.filter(region => region.kind === "overlay").map((region, index) => ({
     id: `overlay-${index + 1}`, x: region.x, y: region.y, width: region.width, height: region.height, start: region.start, end: region.end,
   }));
+  const models = source ? await cleanupModelStatus() : null;
+  const candidates = source ? await cleanupCandidates(engine, source.artifactId, source.mediaHash) : [];
   if (source && intent.cleanup !== "keep" && (overlays.length > 0 || intent.cleanup === "remove")) {
     findings.push({ code: "cleanup-review", severity: "review", text: "Review the overlay regions before removal; keep physical signs and printing. Sampled detection cannot prove that every overlay was found." });
-    if (!(await cleanupModelStatus()).lama) findings.push({ code: "cleanup-model", severity: "note", text: "Local AI removal needs its downloaded model. Fill removal remains available after reviewing regions." });
+    if (!models?.lama) findings.push({ code: "cleanup-model", severity: "note", text: "Local AI removal needs its downloaded model. Fill removal or an existing cleaned copy remains available after review." });
   }
   const templates = readGraphicsTemplates(engine);
   const templateId = templates.watermark.tiktok ?? templates.defaultId;
@@ -196,8 +200,12 @@ export async function buildRemixAnalysis(engine: Engine, input: {
     version: 1, brief: input.brief, preferences, source, intent,
     recipe: { targetSeconds: totalSeconds, sourceFrameSeconds: frameSeconds, keep, change, generatedSeconds,
       reference: source && frameSeconds !== null ? sourceReferenceRange(source, frameSeconds) : null,
-      preparedArtifactId: null, preparedMediaHash: null, cleanupRegions, cleanupConfirmed: intent.cleanup === "keep",
-      cleanupMethod: "lama", templateId: templateId ?? null, templateRevision: template?.updatedAt ?? null, checkTimes },
+      preparedArtifactId: intent.cleanup === "keep" ? source?.artifactId ?? null : null,
+      preparedMediaHash: intent.cleanup === "keep" ? source?.mediaHash ?? null : null,
+      cleanupReviewedHash: intent.cleanup === "keep" ? source?.mediaHash ?? null : null,
+      cleanupRegions, cleanupConfirmed: intent.cleanup === "keep", cleanupCandidates: candidates,
+      cleanupFrames: source ? cleanupFrameCount(cleanupRegions, source.fps) : 0,
+      cleanupModelReady: models?.lama ?? false, cleanupMethod: preferences.cleanupMethod, templateId: templateId ?? null, templateRevision: template?.updatedAt ?? null, checkTimes },
     history: relatedHistory(engine, input.notebookId, source?.artifactId ?? null), findings, analyzedAt: new Date().toISOString(),
   });
 }

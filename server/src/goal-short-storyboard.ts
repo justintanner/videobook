@@ -13,6 +13,7 @@ import { captureFrame } from "./notebook-media-ops.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { selectSceneCuts } from "./scene-cuts.js";
 import { awaitScenes } from "./tools/detect-scenes.js";
+import { captionMediaSource } from "./captions/source.js";
 
 const STORYBOARD_COUNT = 4;
 const CLEANUP_SIZE_SIDES: Record<ShortStoryboardSize, number> = { "1K": 1024, "1.5K": 1536, "2K": 2048 };
@@ -38,7 +39,7 @@ export type StoryboardFrame = UsableImage & {
   height: number;
 };
 
-type CapturedFrame = { artifactId: string; atSeconds: number; label: string };
+type CapturedFrame = { artifactId: string; atSeconds: number; label: string; mediaHash: string };
 
 function spanSeconds(span: Span): number {
   return span.end - span.start;
@@ -97,8 +98,11 @@ export async function videoStoryboardMoments(engine: Engine, bookId: string, art
 }
 
 export async function videoGoalFrameMoment(engine: Engine, bookId: string, artifactId: string, atSeconds: number | null): Promise<number | null> {
+  if (atSeconds !== null) {
+    const source = await captionMediaSource(engine, artifactId);
+    return atSeconds >= 0 && atSeconds < source.durationSeconds ? atSeconds : null;
+  }
   const scenes = await awaitScenes(engine, artifactId, bookId);
-  if (atSeconds !== null) return atSeconds >= 0 && atSeconds < scenes.durationSeconds ? atSeconds : null;
   return storyboardMoments({ durationSeconds: scenes.durationSeconds, cutSeconds: selectSceneCuts(scenes), count: 1 })[0] ?? null;
 }
 
@@ -147,12 +151,15 @@ async function captureMissingFrames(engine: Engine, video: StoryboardVideo, mome
     }
     const label = source ? `Source frame · ${formatShortSeconds(seconds)} s` : storyboardLabel(index, moments.length, seconds);
     const frame = await captureFrame(engine, video.artifactId, { role: "time", timestampSeconds: seconds, title: label });
-    captured.push({ ...frame, label });
+    const manifest = await engine.files.manifest(frame.artifactId);
+    const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, "image") : null;
+    if (!file) throw new Error("The captured source frame is missing.");
+    captured.push({ ...frame, label, mediaHash: file.objectHash });
   }
   return captured;
 }
 
-async function placeCapturedFrames(engine: Engine, notebookId: string, video: StoryboardVideo, moments: readonly number[], captured: readonly (CapturedFrame | null)[]): Promise<Map<number, string>> {
+async function placeCapturedFrames(engine: Engine, notebookId: string, video: StoryboardVideo, moments: readonly number[], captured: readonly (CapturedFrame | null)[], sourceMediaHash?: string): Promise<Map<number, string>> {
   const placed = new Map<number, string>();
   const missing = captured.flatMap((frame, index) => frame ? [{ frame, index }] : []);
   if (missing.length === 0) return placed;
@@ -168,6 +175,7 @@ async function placeCapturedFrames(engine: Engine, notebookId: string, video: St
         inputs: {
           mediaRole: EXTRACT_FRAME_OUTPUT_ROLE,
           sourceArtifactId: video.artifactId,
+          ...(sourceMediaHash ? { sourceMediaHash, outputMediaHash: frame.mediaHash } : {}),
           ...(video.cellId ? { sourceCellId: video.cellId } : {}),
           frameMode: "time",
           atSeconds: frame.atSeconds,
@@ -201,13 +209,15 @@ async function storyboardFrame(engine: Engine, document: NotebookDocument, cellI
 
 export async function captureStoryboardFrames(engine: Engine, notebookId: string, video: StoryboardVideo, moments: readonly number[], source = false): Promise<StoryboardFrame[]> {
   const before = readNotebook(engine, notebookId);
-  const existing = await Promise.all(moments.map((seconds) => existingFrameCell(engine, before, video.artifactId, video.cellId, seconds)));
+  const sourceMediaHash = source ? (await captionMediaSource(engine, video.artifactId)).mediaHash : undefined;
+  const existing = await Promise.all(moments.map((seconds) => existingFrameCell(engine, before, video.artifactId, video.cellId, seconds, sourceMediaHash)));
   const needed = existing.filter((cell) => !cell).length;
   if (NOTEBOOK_GRID_CAPACITY - notebookOccupiedSlots(before.cells).length < needed) {
     throw new Error(`The notebook needs ${needed} empty cells for the storyboard frames.`);
   }
   const captured = await captureMissingFrames(engine, video, moments, existing, source);
-  const placed = await placeCapturedFrames(engine, notebookId, video, moments, captured);
+  if (sourceMediaHash && (await captionMediaSource(engine, video.artifactId)).mediaHash !== sourceMediaHash) throw new Error("The source video changed while capturing its frame.");
+  const placed = await placeCapturedFrames(engine, notebookId, video, moments, captured, sourceMediaHash);
   const document = readNotebook(engine, notebookId);
   return Promise.all(moments.map((seconds, index) => storyboardFrame(engine, document, existing[index]?.id ?? placed.get(index)!, index, seconds)));
 }

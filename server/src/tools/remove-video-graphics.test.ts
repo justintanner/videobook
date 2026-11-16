@@ -126,6 +126,21 @@ describe("remove_video_graphics", () => {
     expect(notebook.ok && notebook.value.cells.find((c) => c.id === done.cell_id)?.inputs?.sourceArtifactId).toBe(assetId);
   }, testBudget(60_000));
 
+  it("reuses an equivalent reviewed recipe across request IDs and rejects a modified derivative", async () => {
+    const source = await call<Read>({ op: "get" });
+    const original = await render("fill");
+    const count = engine.jobs.queue.list({ type: "remove_video_graphics" }).length;
+    const reused = await call<Rendered>({ op: "render", request_id: randomUUID(), source_hash: source.source.source_hash, method: "fill", regions: [{ ...REGION, id: "renamed-region" }] });
+    expect(reused.status).toBe("completed");
+    expect(reused.output_asset_id).toBe(original.output_asset_id);
+    expect(reused.job_id).toBe(original.job_id);
+    expect(engine.jobs.queue.list({ type: "remove_video_graphics" })).toHaveLength(count);
+    await engine.files.writeFromPath(original.output_asset_id, "original.mp4", fixture);
+    await expect(call({ op: "render", request_id: original.request_id, source_hash: source.source.source_hash, method: "fill", regions: [REGION] })).rejects.toThrow("changed after rendering");
+    const fresh = await render("fill");
+    expect(fresh.output_asset_id).not.toBe(original.output_asset_id);
+  }, testBudget(60_000));
+
   it("leaves an overlay outside the reviewed time window", async () => {
     const done = await render("fill", [{ ...REGION, start: 0.9, end: 1.2 }]);
     expect(await whitePixels(await path(done.output_asset_id), 0.67)).toBeGreaterThan(500);
@@ -137,7 +152,7 @@ describe("remove_video_graphics", () => {
     try {
       const read = await call<Read>({ op: "get" });
       const requestId = randomUUID();
-      const queued = await call<Rendered>({ op: "render", method: "fill", source_hash: read.source.source_hash, request_id: requestId, regions: [REGION] });
+      const queued = await call<Rendered>({ op: "render", method: "fill", source_hash: read.source.source_hash, request_id: requestId, regions: [{ ...REGION, end: 1.6 }] });
       await client.callTool({ name: "cancel_job", arguments: { book_id: bookId, job_id: queued.job_id } });
       expect((await call<Rendered>({ op: "status", request_id: requestId })).status).toBe("failed");
       expect(await readFile(await path(assetId))).toEqual(await readFile(fixture));
@@ -152,7 +167,7 @@ describe("remove_video_graphics", () => {
     let outputId = "";
     try {
       const read = await call<Read>({ op: "get" });
-      const queued = await call<Rendered>({ op: "render", method: "fill", source_hash: read.source.source_hash, request_id: requestId, regions: [REGION] });
+      const queued = await call<Rendered>({ op: "render", method: "fill", source_hash: read.source.source_hash, request_id: requestId, regions: [{ ...REGION, end: 1.7 }] });
       outputId = queued.output_asset_id;
       await engine.files.writeFromPath(assetId, "original.mp4", altered);
     } finally { resumeBookQueueForTests(bookId); }
@@ -227,7 +242,7 @@ describe("remove_video_graphics", () => {
   it.runIf(MODEL_TEST)("cancels running model inference after reporting frame progress", async () => {
     const read = await call<Read>({ op: "get" });
     const requestId = randomUUID();
-    const queued = await call<Rendered>({ op: "render", method: "lama", source_hash: read.source.source_hash, request_id: requestId, regions: [REGION] });
+    const queued = await call<Rendered>({ op: "render", method: "lama", source_hash: read.source.source_hash, request_id: requestId, regions: [{ ...REGION, end: 1.8 }] });
     await expect.poll(async () => (await call<Rendered>({ op: "status", request_id: requestId })).progress?.completedFrames ?? 0,
       { timeout: testBudget(120_000) }).toBeGreaterThan(3);
     const started = performance.now();

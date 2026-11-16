@@ -172,6 +172,15 @@ describe("video_goal storyboard stage", () => {
     return settled(await invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision }));
   }
 
+  async function savedRemix(goal: ShortGoalSnapshot): Promise<ShortGoalSnapshot> {
+    const stored = readGoal(engine, goal.goalId);
+    const content = requireGoalShortContent(engine, stored);
+    if (content.plan?.version !== 5) throw new Error("Expected a version 5 remix");
+    const { analysis: _analysis, ...plan } = content.plan;
+    await writeGoalShortContent(engine, stored, { ...content, plan, draft: null });
+    return status(goal.goalId);
+  }
+
   async function onNanoBanana(goal: ShortGoalSnapshot): Promise<ShortGoalSnapshot> {
     const stored = readGoal(engine, goal.goalId);
     const content = requireGoalShortContent(engine, stored);
@@ -240,9 +249,9 @@ describe("video_goal storyboard stage", () => {
     expect(stub.unexpected).toEqual([]);
   });
 
-  it("reviews replacement, twist and video separately, pins each input and invalidates later results when an earlier edit changes", async () => {
+  it("keeps a saved version 5 remix reviewable, pins each input and invalidates later results when an earlier edit changes", async () => {
     const brief = 'based on @b1 at 1.5s with @a2. replace: "Use the man in the source image." twist: "Replace the dog with a monitor lizard under the umbrella." video: "The lizard walks and the man follows with the umbrella."';
-    let goal = await planned(await invoke({ action: "create", brief }));
+    let goal = await savedRemix(await planned(await invoke({ action: "create", brief })));
     expect(rawFrameCells()).toHaveLength(1);
     expect(rawFrameCells()[0]!.inputs?.atSeconds).toBe(1.5);
     expect(goal.shortPlan!.segments.map(segment => segment.seconds)).toEqual([12]);
@@ -296,7 +305,7 @@ describe("video_goal storyboard stage", () => {
   }, testBudget(90_000));
 
   it("repairs a saved first-frame-only video retry without rerunning the reviewed image edits", async () => {
-    let goal = await planned(await invoke({ action: "create", brief: 'based on @b1 with @a2. replace: "Use the reference man." twist: "Put a lizard under the umbrella." video: "The man follows the lizard in the last two seconds."' }));
+    let goal = await savedRemix(await planned(await invoke({ action: "create", brief: 'based on @b1 with @a2. replace: "Use the reference man." twist: "Put a lizard under the umbrella." video: "The man follows the lizard in the last two seconds."' })));
     goal = await approved(await approved(goal));
     const replacement = goal.stages.replacement!.outputs[0]!;
     const twist = goal.stages.frame!.outputs[0]!;

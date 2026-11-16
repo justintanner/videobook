@@ -41,9 +41,14 @@ function sameFrame(inputs: Record<string, unknown> | undefined, sourceArtifactId
   return typeof inputs.atSeconds === "number" && Math.abs(inputs.atSeconds - requestedSeconds) <= 0.05;
 }
 
-export async function existingFrameCell(engine: Engine, document: NotebookDocument, sourceArtifactId: string, sourceCellId: string | undefined, requestedSeconds: number): Promise<NotebookCell | null> {
+export async function existingFrameCell(engine: Engine, document: NotebookDocument, sourceArtifactId: string, sourceCellId: string | undefined, requestedSeconds: number, sourceMediaHash?: string): Promise<NotebookCell | null> {
   for (const cell of document.cells) {
     if (cell.type !== "image" || !cell.outputArtifactId) continue;
+    if (sourceMediaHash) {
+      if (cell.inputs?.sourceMediaHash !== sourceMediaHash || cell.inputs.sourceArtifactId !== sourceArtifactId) continue;
+      const image = await readableImage(engine, cell.outputArtifactId, cell);
+      if (!image || image.objectHash !== cell.inputs.outputMediaHash) continue;
+    }
     if (cell.inputs?.mediaRole === "extract-frame-output") {
       if (sameFrame(cell.inputs, sourceArtifactId, sourceCellId, requestedSeconds) && await readableImage(engine, cell.outputArtifactId, cell)) return cell;
       continue;

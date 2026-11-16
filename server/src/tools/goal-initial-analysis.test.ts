@@ -11,6 +11,10 @@ import { readRemixPreferences } from "../goal-remix-analysis.js";
 import { waitForChainRun } from "../chain-executor.js";
 import { compileShortClipStep } from "../goal-short-plan.js";
 import { cleanupSource } from "../video-cleanup/source.js";
+import { cleanupCandidate } from "../video-cleanup/prepared.js";
+import { readCleanupRequest } from "../video-cleanup/service.js";
+import { indexRenderRequest, writeRenderSetting } from "../render-requests.js";
+import { pauseBookQueueForTests, resumeBookQueueForTests, waitForBookQueuesIdleForTests } from "../queue.js";
 import { readGoal } from "../goal-store.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
@@ -86,6 +90,7 @@ describe("initial source-goal analysis", () => {
   });
 
   afterEach(async () => {
+    resumeBookQueueForTests(bookId);
     await client.close();
     restoreEndpoints();
     restoreFetch();
@@ -195,6 +200,7 @@ describe("initial source-goal analysis", () => {
     const refreshed = await settled(await invoke({ action: "analyze", goal_id: goal.goalId, revision: goal.revision }));
     expect(analysisOf(refreshed).source?.mediaHash).not.toBe(originalHash);
     expect(analysisOf(refreshed).source?.hasAudio).toBe(false);
+    expect(refreshed.shortPlan?.version === 5 && refreshed.shortPlan.remix?.frame.artifactId).not.toBe(goal.shortPlan?.version === 5 && goal.shortPlan.remix?.frame.artifactId);
     expect(analysisOf(refreshed).findings.some(finding => finding.code === "missing-audio")).toBe(true);
     await invoke({ action: "cancel", goal_id: goal.goalId });
     const stopped = await call({ action: "analyze", goal_id: goal.goalId, revision: refreshed.revision });
@@ -246,7 +252,7 @@ describe("initial source-goal analysis", () => {
   it("prepares and reuses a bounded reference for long sources and submits that reference", async () => {
     await engine.files.writeFromPath(sourceId, "original.mp4", join(fixtures, "long.mp4"));
     const original = await cleanupSource(engine, sourceId);
-    let goal = await settled(await invoke({ action: "create", brief: authored() }));
+    let goal = await settled(await invoke({ action: "create", brief: authored().replace("Remove all OSG", "Keep source graphics") }));
     const preparedId = analysisOf(goal).recipe.referenceArtifactId;
     expect(preparedId).toBeTruthy();
     expect(preparedId).not.toBe(sourceId);
@@ -256,7 +262,7 @@ describe("initial source-goal analysis", () => {
     expect(prepared.fps).toBe(12);
     expect((await cleanupSource(engine, sourceId)).mediaHash).toBe(original.mediaHash);
     expect(compileShortClipStep(goal.shortPlan!, identityId).params.refs).toMatchObject({ video: [preparedId] });
-    const again = await settled(await invoke({ action: "create", brief: authored() }));
+    const again = await settled(await invoke({ action: "create", brief: authored().replace("Remove all OSG", "Keep source graphics") }));
     expect(analysisOf(again).recipe.referenceArtifactId).toBe(preparedId);
     for (let stage = 0; stage < 3; stage++) {
       goal = await invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
@@ -279,4 +285,181 @@ describe("initial source-goal analysis", () => {
     expect(result.isError).toBe(true);
     expect(stub.submissions).toHaveLength(0);
   });
+
+  it("reviews a cleanup once, pins the actual submitted bytes through moves and retry, and reuses it for another goal", async () => {
+    queueAnswer();
+    let goal = await settled(await invoke({ action: "create", brief: brief() }));
+    const original = await cleanupSource(engine, sourceId);
+    const refused = await call({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
+    expect(refused.isError).toBe(true);
+    expect(JSON.stringify(refused.content)).toContain("Prepare and review");
+    const regions = analysisOf(goal).recipe.cleanupRegions;
+    expect(regions).toHaveLength(1);
+    goal = await settled(await invoke({ action: "prepare", goal_id: goal.goalId, revision: goal.revision,
+      preparation: { confirmed: true, method: "fill", regions } }));
+    const recipe = analysisOf(goal).recipe;
+    const preparedId = recipe.preparedArtifactId!;
+    expect(preparedId).not.toBe(sourceId);
+    expect(recipe.referenceArtifactId).toBe(preparedId);
+    expect(recipe.preparedMediaHash).not.toBe(original.mediaHash);
+    expect(goal.preparation?.status).toBe("review");
+    expect(goal.preparation?.progress?.completedFrames).toBe(168);
+    const preparedFrameId = goal.shortPlan?.version === 5 ? goal.shortPlan.remix?.frame.artifactId : null;
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    expect(notebook.value.cells.find(cell => cell.outputArtifactId === preparedFrameId)?.inputs?.sourceArtifactId).toBe(preparedId);
+    expect((await call({ action: "approve", goal_id: goal.goalId, revision: goal.revision })).isError).toBe(true);
+    expect((await call({ action: "review_source", goal_id: goal.goalId, revision: goal.revision, artifact_id: preparedId, media_hash: "stale", confirmed: true })).isError).toBe(true);
+    goal = await invoke({ action: "review_source", goal_id: goal.goalId, revision: goal.revision, artifact_id: preparedId, media_hash: recipe.preparedMediaHash, confirmed: true });
+    expect(goal.preparation?.status).toBe("ready");
+    const moved = engine.notebooks.read(notebookId);
+    if (!moved.ok) throw new Error(moved.error.message);
+    const sourceCell = moved.value.cells.find(cell => cell.outputArtifactId === sourceId)!;
+    const identityCell = moved.value.cells.find(cell => cell.outputArtifactId === identityId)!;
+    await engine.notebooks.write({ ...moved.value, cells: moved.value.cells.map(cell => cell.id === sourceCell.id ? { ...cell, slot: identityCell.slot }
+      : cell.id === identityCell.id ? { ...cell, slot: sourceCell.slot } : cell) });
+    for (let stage = 0; stage < 2; stage++) {
+      goal = await invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
+      await waitForChainRun(engine, goal.chainId!, testBudget(60_000));
+      goal = await invoke({ action: "status", goal_id: goal.goalId });
+      expect(goal.status, goal.error ?? "").toBe("review");
+    }
+    stub.failNext = true;
+    goal = await invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
+    await waitForChainRun(engine, goal.chainId!, testBudget(60_000));
+    goal = await invoke({ action: "status", goal_id: goal.goalId });
+    expect(goal.status).toBe("failed");
+    goal = await invoke({ action: "retry", goal_id: goal.goalId });
+    await waitForChainRun(engine, goal.chainId!, testBudget(60_000));
+    goal = await invoke({ action: "status", goal_id: goal.goalId });
+    expect(goal.status, goal.error ?? "").toBe("review");
+    const bytes = await engine.files.read(preparedId, "original.mp4");
+    if (!bytes.ok) throw new Error(bytes.error.message);
+    const submissions = stub.submissions.filter(submission => submission.path.includes("reference-to-video"));
+    expect(submissions).toHaveLength(2);
+    for (const submission of submissions) {
+      const url = (submission.body.reference_video_urls as string[])[0]!;
+      expect(stub.uploads.get(url)?.equals(bytes.value)).toBe(true);
+    }
+    expect(stub.submissions.filter(submission => submission.path.includes("/edit"))).toHaveLength(2);
+    expect((await cleanupSource(engine, sourceId)).mediaHash).toBe(original.mediaHash);
+    const jobs = engine.jobs.queue.list({ type: "generate_media", limit: 100 });
+    expect(jobs.filter(job => job.payload.model === "fal:minimax/h3-max/reference-to-video").every(job =>
+      JSON.stringify(job.payload.refs).includes(preparedId))).toBe(true);
+    let next = await settled(await invoke({ action: "create", brief: authored() }));
+    const candidate = analysisOf(next).recipe.cleanupCandidates.find(item => item.artifactId === preparedId)!;
+    expect(candidate.reviewed).toBe(true);
+    next = await settled(await invoke({ action: "prepare", goal_id: next.goalId, revision: next.revision,
+      preparation: { confirmed: true, method: candidate.method, regions: candidate.regions, artifactId: preparedId, mediaHash: candidate.mediaHash } }));
+    expect(next.preparation?.status).toBe("ready");
+    expect(analysisOf(next).recipe.preparedArtifactId).toBe(preparedId);
+    expect(readCleanupRequest(engine, next.preparation!.requestId)).toBeNull();
+    expect(analysisOf(next).recipe.preparedFrameArtifactId).toBe(preparedFrameId);
+    await invoke({ action: "save_defaults", goal_id: next.goalId, revision: next.revision });
+    expect(readRemixPreferences(engine).cleanupMethod).toBe("fill");
+    expect(stub.unexpected).toEqual([]);
+  }, testBudget(150_000));
+
+  it("invalidates changed masks and source bytes, retains preparation for sound edits, and rejects an invalid adopted copy", async () => {
+    queueAnswer();
+    let goal = await settled(await invoke({ action: "create", brief: brief() }));
+    const regions = analysisOf(goal).recipe.cleanupRegions;
+    goal = await settled(await invoke({ action: "prepare", goal_id: goal.goalId, revision: goal.revision, preparation: { confirmed: true, method: "fill", regions } }));
+    const first = analysisOf(goal).recipe;
+    const plan = goal.shortPlan!;
+    if (plan.version !== 5 || !plan.analysis) throw new Error("Expected analysis");
+    goal = await invoke({ action: "update", goal_id: goal.goalId, revision: goal.revision, plan: { ...plan,
+      analysis: { ...plan.analysis, intent: { ...plan.analysis.intent, audio: "mute" } } } });
+    expect(analysisOf(goal).recipe.preparedMediaHash).toBe(first.preparedMediaHash);
+    const revised = regions.map(region => ({ ...region, height: region.height + 0.05 }));
+    goal = await settled(await invoke({ action: "prepare", goal_id: goal.goalId, revision: goal.revision, preparation: { confirmed: true, method: "fill", regions: revised } }));
+    const second = analysisOf(goal).recipe;
+    expect(second.preparedArtifactId).not.toBe(first.preparedArtifactId);
+    expect(second.preparedFrameArtifactId).not.toBe(first.preparedFrameArtifactId);
+    expect((await call({ action: "prepare", goal_id: goal.goalId, revision: goal.revision,
+      preparation: { confirmed: true, method: "fill", regions: revised, artifactId: first.preparedArtifactId, mediaHash: first.preparedMediaHash } })).isError).toBe(true);
+    const invalid = await engine.artifacts.create("video", "Invalid cleaned copy");
+    if (!invalid.ok) throw new Error(invalid.error.message);
+    await engine.files.writeFromPath(invalid.value.artifactId, "original.mp4", join(fixtures, "short.mp4"));
+    await engine.files.write(invalid.value.artifactId, "video-cleanup.json", JSON.stringify({ sourceArtifactId: sourceId, sourceHash: analysisOf(goal).source!.mediaHash, method: "fill", regions: revised }));
+    const invalidCopy = await cleanupCandidate(engine, invalid.value.artifactId, analysisOf(goal).source!.mediaHash);
+    expect(invalidCopy).not.toBeNull();
+    const adopting = await invoke({ action: "prepare", goal_id: goal.goalId, revision: goal.revision,
+      preparation: { confirmed: true, method: "fill", regions: revised, artifactId: invalid.value.artifactId, mediaHash: invalidCopy!.mediaHash } });
+    await expect.poll(() => readGoal(engine, adopting.goalId).status, { timeout: testBudget(30_000) }).toBe("failed");
+    goal = await invoke({ action: "status", goal_id: goal.goalId });
+    expect(goal.error).toContain("does not preserve");
+    await engine.files.writeFromPath(sourceId, "original.mp4", join(fixtures, "changed.mp4"));
+    const stale = await call({ action: "prepare", goal_id: goal.goalId, revision: goal.revision, preparation: { confirmed: true, method: "fill", regions } });
+    expect(stale.isError).toBe(true);
+    expect(JSON.stringify(stale.content)).toContain("source changed");
+    expect(stub.submissions).toHaveLength(0);
+  }, testBudget(100_000));
+
+  it("keeps cancellation final and recovers interrupted preparation without a creative submission", async () => {
+    queueAnswer();
+    let goal = await settled(await invoke({ action: "create", brief: brief() }));
+    const regions = analysisOf(goal).recipe.cleanupRegions;
+    pauseBookQueueForTests(bookId);
+    goal = await invoke({ action: "prepare", goal_id: goal.goalId, revision: goal.revision, preparation: { confirmed: true, method: "fill", regions } });
+    const cancelled = await invoke({ action: "cancel", goal_id: goal.goalId });
+    expect(cancelled.status).toBe("cancelled");
+    resumeBookQueueForTests(bookId);
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(30_000) });
+    expect((await invoke({ action: "status", goal_id: goal.goalId })).status).toBe("cancelled");
+    expect((await call({ action: "prepare", goal_id: goal.goalId, revision: goal.revision, preparation: { confirmed: true, method: "fill", regions } })).isError).toBe(true);
+    goal = await settled(await invoke({ action: "create", brief: authored() }));
+    pauseBookQueueForTests(bookId);
+    goal = await invoke({ action: "prepare", goal_id: goal.goalId, revision: goal.revision, preparation: { confirmed: true, method: "fill", regions } });
+    await engine.jobs.queue.abort(goal.preparation!.jobId!, "Simulated restart interruption");
+    goal = await invoke({ action: "status", goal_id: goal.goalId });
+    expect(goal.preparation?.status).toBe("failed");
+    resumeBookQueueForTests(bookId);
+    goal = await settled(await invoke({ action: "retry", goal_id: goal.goalId }));
+    expect(goal.preparation?.status).toBe("review");
+    expect(stub.submissions).toHaveLength(0);
+  }, testBudget(90_000));
+
+  it("adopts an older cleaned derivative without its model and reuses its explicit review", async () => {
+    const previous = process.env.VIDEOBOOK_CLEANUP_MODEL_DIR;
+    process.env.VIDEOBOOK_CLEANUP_MODEL_DIR = join(root, "missing-models");
+    try {
+      queueAnswer();
+      let goal = await settled(await invoke({ action: "create", brief: brief() }));
+      const regions = analysisOf(goal).recipe.cleanupRegions;
+      expect(analysisOf(goal).recipe.cleanupModelReady).toBe(false);
+      const count = engine.jobs.queue.list({ type: "prepare_goal_source" }).length;
+      const missing = await call({ action: "prepare", goal_id: goal.goalId, revision: goal.revision, preparation: { confirmed: true, method: "lama", regions } });
+      expect(missing.isError).toBe(true);
+      expect(JSON.stringify(missing.content)).toContain("Download the local removal model");
+      expect(engine.jobs.queue.list({ type: "prepare_goal_source" })).toHaveLength(count);
+      goal = await settled(await invoke({ action: "prepare", goal_id: goal.goalId, revision: goal.revision, preparation: { confirmed: true, method: "fill", regions } }));
+      const rendered = analysisOf(goal).recipe;
+      const legacy = await engine.artifacts.create("video", "Earlier cleaned source");
+      if (!legacy.ok) throw new Error(legacy.error.message);
+      const media = await engine.files.read(rendered.preparedArtifactId!, "original.mp4");
+      if (!media.ok) throw new Error(media.error.message);
+      await engine.files.write(legacy.value.artifactId, "original.mp4", media.value);
+      await engine.files.write(legacy.value.artifactId, "video-cleanup.json", JSON.stringify({ sourceArtifactId: sourceId, sourceHash: analysisOf(goal).source!.mediaHash, method: "fill", regions }));
+      const request = readCleanupRequest(engine, goal.preparation!.requestId)!;
+      const { completedHash: _completed, contentKey: _key, ...old } = request;
+      writeRenderSetting(engine, "video-cleanup.request.earlier", { ...old, requestId: "earlier", outputArtifactId: legacy.value.artifactId });
+      indexRenderRequest(engine, `video-cleanup.requests.${sourceId}`, "earlier");
+      goal = await settled(await invoke({ action: "create", brief: authored() }));
+      const candidate = analysisOf(goal).recipe.cleanupCandidates.find(item => item.artifactId === legacy.value.artifactId)!;
+      expect(candidate).toMatchObject({ reviewed: false, reusable: false });
+      goal = await settled(await invoke({ action: "prepare", goal_id: goal.goalId, revision: goal.revision,
+        preparation: { confirmed: true, method: "fill", regions, artifactId: candidate.artifactId, mediaHash: candidate.mediaHash } }));
+      expect(goal.preparation?.status).toBe("review");
+      expect(readCleanupRequest(engine, goal.preparation!.requestId)).toBeNull();
+      goal = await invoke({ action: "review_source", goal_id: goal.goalId, revision: goal.revision, artifact_id: candidate.artifactId, media_hash: candidate.mediaHash, confirmed: true });
+      let another = await settled(await invoke({ action: "create", brief: authored() }));
+      another = await settled(await invoke({ action: "prepare", goal_id: another.goalId, revision: another.revision, preparation: { confirmed: true, method: "fill", regions } }));
+      expect(another.preparation).toMatchObject({ status: "ready", mediaHash: candidate.mediaHash });
+      expect(stub.submissions).toHaveLength(0);
+    } finally {
+      if (previous === undefined) delete process.env.VIDEOBOOK_CLEANUP_MODEL_DIR;
+      else process.env.VIDEOBOOK_CLEANUP_MODEL_DIR = previous;
+    }
+  }, testBudget(90_000));
 });

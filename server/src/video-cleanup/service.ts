@@ -7,6 +7,8 @@ import { queue } from "../queue.js";
 import { indexedRenderRequests, indexRenderRequest, renderDestination, renderRequestFingerprint, renderRequestRunning, renderRequestStatus, writeRenderSetting } from "../render-requests.js";
 import { cleanupMethodSchema, cleanupRegionsSchema, cleanupSampleTimes, validateCleanupRegions, type CleanupMethod, type CleanupRegion } from "./model.js";
 import { cleanupModelStatus } from "./models.js";
+import { canonicalCleanupRegions, cleanupCandidate, cleanupContentKey } from "./prepared.js";
+import { placeRenderedCell, sourceCellPlacement } from "../jobs/_render-output.js";
 
 export const CLEANUP_DETECTION = { component: "video-cleanup-detection", version: 1, jobType: "detect_video_graphics" };
 export const cleanupDetectionSchema = z.object({ regions: cleanupRegionsSchema, interval: z.number().positive(), samples: z.number().int().nonnegative() });
@@ -14,13 +16,17 @@ export const cleanupDetectionSchema = z.object({ regions: cleanupRegionsSchema, 
 const requestSchema = z.object({
   requestId: z.string(), fingerprint: z.string(), sourceArtifactId: z.string(), sourceHash: z.string(), outputArtifactId: z.string(),
   notebookId: z.string().nullable(), method: cleanupMethodSchema, regions: cleanupRegionsSchema, jobId: z.number().nullable(),
+  contentKey: z.string().optional(), progressRequestId: z.string().optional(), completedHash: z.string().optional(),
 });
 export type CleanupRequest = z.infer<typeof requestSchema>;
 const progressSchema = z.object({ completedFrames: z.number().int().nonnegative(), totalFrames: z.number().int().positive(), elapsedSeconds: z.number().nonnegative() });
 
 export function cleanupRenderStatus(engine: Engine, request: CleanupRequest) {
-  const parsed = progressSchema.safeParse(engine.settings.get<unknown>(`video-cleanup.progress.${request.requestId}`));
-  return { ...renderRequestStatus(engine, request), progress: parsed.success ? parsed.data : null };
+  const parsed = progressSchema.safeParse(engine.settings.get<unknown>(`video-cleanup.progress.${request.progressRequestId ?? request.requestId}`));
+  const status = renderRequestStatus(engine, request);
+  if (request.completedHash) { status.status = "completed"; status.error = null; }
+  const placement = sourceCellPlacement(engine, request.notebookId, request.outputArtifactId);
+  return { ...status, ...(status.status === "completed" ? { cell_id: placement.cellId, address: placement.address } : {}), progress: parsed.success ? parsed.data : null };
 }
 
 export function cleanupDetectionKey(mediaHash: string, interval: number): string {
@@ -70,12 +76,12 @@ export async function requestCleanupDetection(engine: Engine, bookId: string, as
 
 export async function requestCleanupRender(engine: Engine, bookId: string, assetId: string, input: {
   requestId: string; sourceHash: string; notebookId: string | null; method: CleanupMethod; regions: CleanupRegion[];
-}) {
-  return withNotebookMutation(`video-cleanup:${bookId}:${input.requestId}`, async () => {
+}, executionJobId?: number) {
+  const contentKey = cleanupContentKey(input.sourceHash, input.method, input.regions);
+  return withNotebookMutation(`video-cleanup-request:${bookId}:${input.requestId}`, () => withNotebookMutation(`video-cleanup:${bookId}:${contentKey}`, async () => {
     const source = await cleanupSource(engine, assetId);
     if (source.mediaHash !== input.sourceHash) throw new Error("The video changed after review. Reopen the remover and review the regions again.");
-    const regions = validateCleanupRegions(input.regions, source.durationSeconds);
-    if (input.method === "lama" && !(await cleanupModelStatus()).lama) throw new Error("Download the local models before using AI removal.");
+    const regions = canonicalCleanupRegions(validateCleanupRegions(input.regions, source.durationSeconds));
     if (input.notebookId) {
       const notebook = engine.notebooks.read(input.notebookId);
       if (!notebook.ok) throw new Error(notebook.error.message);
@@ -86,21 +92,46 @@ export async function requestCleanupRender(engine: Engine, bookId: string, asset
     if (existing) {
       if (existing.fingerprint !== fingerprint) throw new Error("This request ID belongs to a different removal. Start a new request.");
       if (!engine.artifacts.get(existing.outputArtifactId).ok) throw new Error("The cleaned copy was deleted. Start a new request.");
-      if (renderRequestRunning(engine, existing)) return cleanupRenderStatus(engine, existing);
+      if (!existing.completedHash && renderRequestRunning(engine, existing) && engine.jobs.queue.get(existing.jobId!)?.state !== "done") return cleanupRenderStatus(engine, existing);
+      if (existing.completedHash || engine.jobs.queue.get(existing.jobId!)?.state === "done") {
+        const candidate = await cleanupCandidate(engine, existing.outputArtifactId, input.sourceHash);
+        if (!candidate?.reusable) throw new Error("The cleaned copy changed after rendering. Start a new request.");
+        return cleanupRenderStatus(engine, existing);
+      }
     }
+    const cachedId = engine.settings.get<string>(`video-cleanup.content.${contentKey}`);
+    const cached = cachedId ? readCleanupRequest(engine, cachedId) : null;
+    if (cached && cached.requestId !== input.requestId && (cached.completedHash || renderRequestRunning(engine, cached))) {
+      const completed = Boolean(cached.completedHash) || engine.jobs.queue.get(cached.jobId!)?.state === "done";
+      const candidate = completed ? await cleanupCandidate(engine, cached.outputArtifactId, input.sourceHash) : null;
+      if (!completed || candidate?.reusable) {
+        const alias = { ...cached, ...input, fingerprint, sourceArtifactId: assetId, contentKey, progressRequestId: cached.progressRequestId ?? cached.requestId };
+        writeRenderSetting(engine, `video-cleanup.request.${input.requestId}`, alias);
+        indexRenderRequest(engine, `video-cleanup.requests.${assetId}`, input.requestId);
+        indexRenderRequest(engine, `video-cleanup.requests.${alias.outputArtifactId}`, input.requestId);
+        if (completed) await placeRenderedCell(engine, {
+          notebookId: input.notebookId, operation: "remove_video_graphics", sourceArtifactId: assetId,
+          outputArtifactId: alias.outputArtifactId, fallbackLabel: "Cleaned video", destination: notebook => cleanupDestination(notebook, assetId),
+          inputs: { sourceOperation: "remove_video_graphics", sourceArtifactId: assetId },
+        });
+        return cleanupRenderStatus(engine, alias);
+      }
+    }
+    if (input.method === "lama" && !(await cleanupModelStatus()).lama) throw new Error("Download the local models before using AI removal.");
     const created = existing ? null : await engine.artifacts.create({ kind: "video", label: `${source.label ?? "Video"} — Cleaned` });
     if (created && !created.ok) throw new Error(created.error.message);
     const outputArtifactId = existing?.outputArtifactId ?? (created?.ok ? created.value.artifactId : "");
-    const request: CleanupRequest = { ...input, regions, fingerprint, sourceArtifactId: assetId, outputArtifactId, jobId: null };
+    const request: CleanupRequest = { ...input, regions, fingerprint, contentKey, sourceArtifactId: assetId, outputArtifactId, jobId: null };
     writeRenderSetting(engine, `video-cleanup.request.${input.requestId}`, request);
     engine.settings.delete(`video-cleanup.progress.${input.requestId}`);
     indexRenderRequest(engine, `video-cleanup.requests.${assetId}`, input.requestId);
     indexRenderRequest(engine, `video-cleanup.requests.${outputArtifactId}`, input.requestId);
     const cleared = await engine.jobs.failures.clear(outputArtifactId);
     if (!cleared.ok) throw new Error(cleared.error.message);
-    const job = await queue.enqueue(`video-cleanup:${input.requestId}`, { type: "remove_video_graphics", bookId, assetId: outputArtifactId, requestId: input.requestId });
-    const queued = { ...request, jobId: job.id };
+    const jobId = executionJobId ?? (await queue.enqueue(`video-cleanup:${input.requestId}`, { type: "remove_video_graphics", bookId, assetId: outputArtifactId, requestId: input.requestId })).id;
+    const queued = { ...request, jobId };
     writeRenderSetting(engine, `video-cleanup.request.${input.requestId}`, queued);
+    writeRenderSetting(engine, `video-cleanup.content.${contentKey}`, input.requestId);
     return cleanupRenderStatus(engine, queued);
-  });
+  }));
 }

@@ -585,7 +585,9 @@ export function compileShortReplacementStep(plan: GoalShortPlan): ChainStep {
     remix.replacement.prompt,
     sourceImageLine(images.length, `use the person as the ${insert ? "inserted character" : "replacement"}, keeping their face, hair, build and clothes exactly.`),
     `${sourceSlot} is the extracted source frame. ${insert ? "Insert the requested person at the action location, with realistic scale and contact. Keep existing decorative figures and props." : "Replace only its main person, matching their pose, position, scale and contact with objects."} Keep the camera angle, framing, place, light, animals and props. ${plan.analysis ? "Save the requested action for the video." : "Save the funny twist for the next edit."}`,
-    plan.analysis?.intent.cleanup === "keep" ? "Preserve the source graphics and physical printing." : "Remove all graphics added on top of the camera picture, including text, captions, stickers and underlines, creator credits, icons, watermarks and shade gradients. Reconstruct the scene behind them. Keep printing physically on objects.",
+    plan.analysis ? plan.analysis.intent.cleanup === "keep" ? "Preserve the source graphics and physical printing."
+      : "Use the reviewed, prepared scene. Do not add captions, stickers, credits or watermarks. Keep printing physically on objects."
+      : "Remove all graphics added on top of the camera picture, including text, captions, stickers and underlines, creator credits, icons, watermarks and shade gradients. Reconstruct the scene behind them. Keep printing physically on objects.",
     "Natural colour, realistic anatomy, contact shadows and unretouched skin. Keep the original composition.",
   ), [...images, remix.frame.address], "replacement");
 }

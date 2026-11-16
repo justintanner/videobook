@@ -18,6 +18,7 @@ import { shortAuthoredCopy, shortBriefPlan, shortPlannerNeeded, shortTitle } fro
 import { briefMention, renderReferenceNotes, type ReferenceNote } from "./goal-short-references.js";
 import { captureStoryboardFrames, videoGoalFrameMoment } from "./goal-short-storyboard.js";
 import { buildRemixAnalysis, readRemixPreferences, writeRemixPreferences } from "./goal-remix-analysis.js";
+import { prepareShortSource } from "./goal-source-preparation.js";
 import { remixPromptFindings, remixRules } from "./goal-remix-model.js";
 import { goalReferenceHashes } from "./goal-reference-images.js";
 import { goalStageAttempts } from "./goal-stills.js";
@@ -684,6 +685,20 @@ async function assertRemixPreflight(engine: Engine, plan: GoalShortPlan): Promis
   if (references.some(reference => reference.objectHash === null)) throw new Error("An analyzed reference is missing. Restore it or analyze the goal again.");
   if (analysis.source && references.at(-1)?.objectHash !== analysis.source.mediaHash) throw new Error("The source video changed after initial analysis. Analyze the goal again before generating.");
   if (plan.sourceImages.some((reference, index) => references[index]?.objectHash !== reference.objectHash)) throw new Error("A source image changed after initial analysis. Review its current version before generating.");
+  if (analysis.source && (!analysis.recipe.cleanupConfirmed || !analysis.recipe.preparedArtifactId
+    || analysis.recipe.cleanupReviewedHash !== analysis.recipe.preparedMediaHash)) {
+    throw new Error("Prepare and review the source graphics before generating, or explicitly choose to keep them.");
+  }
+  if (analysis.recipe.preparedArtifactId) {
+    const [prepared] = await goalReferenceHashes(engine, [analysis.recipe.preparedArtifactId]);
+    if (prepared?.objectHash !== analysis.recipe.preparedMediaHash) throw new Error("The reviewed source copy changed. Prepare it again before generating.");
+  }
+  if (analysis.source) {
+    const [frame] = await goalReferenceHashes(engine, [plan.remix?.frame.artifactId ?? ""]);
+    if (frame?.artifactId !== analysis.recipe.preparedFrameArtifactId || !frame?.objectHash || frame.objectHash !== analysis.recipe.preparedFrameMediaHash) {
+      throw new Error("The source frame changed after preparation. Prepare the source again before generating.");
+    }
+  }
   if (analysis.recipe.referenceArtifactId) {
     const [reference] = await goalReferenceHashes(engine, [analysis.recipe.referenceArtifactId]);
     if (reference?.objectHash !== analysis.recipe.referenceMediaHash) throw new Error("The prepared source reference changed. Refresh analysis before generating.");
@@ -788,9 +803,11 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
         requestedFrameSeconds: content.draft && !isLegacyShortDraft(content.draft) ? content.draft.analysisRequest?.atSeconds : null,
       });
       if (analysis.recipe.sourceFrameSeconds === analyzed.recipe.sourceFrameSeconds) {
-        analysis.recipe.reference = analyzed.recipe.reference;
-        analysis.recipe.referenceArtifactId = analyzed.recipe.referenceArtifactId;
-        analysis.recipe.referenceMediaHash = analyzed.recipe.referenceMediaHash;
+        if (analysis.intent.cleanup === analyzed.intent.cleanup) {
+          for (const key of ["reference", "referenceArtifactId", "referenceMediaHash", "preparedArtifactId", "preparedMediaHash", "preparedFrameArtifactId", "preparedFrameMediaHash", "cleanupReviewedHash", "cleanupConfirmed", "cleanupRegions", "cleanupMethod"] as const) {
+            Object.assign(analysis.recipe, { [key]: analyzed.recipe[key] });
+          }
+        }
       }
       plan = { ...plan, analysis, rules: remixRules(intent) };
     }
@@ -811,7 +828,8 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
     || (replacementMade && shortRemixOf(previous)?.replacement.prompt !== shortRemixOf(plan)?.replacement.prompt)
     || generated.some((index) => previous.segments[index]?.prompt !== plan.segments[index]?.prompt);
   const retitled = titleFinish(goal, previous, plan);
-  const sourceFrameChanged = analysisChanged && plan.version === 5 && plan.remix && plan.analysis?.recipe.sourceFrameSeconds !== plan.remix.frame.atSeconds;
+  const cleanupChanged = analysisChanged && plan.version === 5 && plan.analysis?.intent.cleanup !== analyzed?.intent.cleanup;
+  const sourceFrameChanged = analysisChanged && plan.version === 5 && plan.remix && (plan.analysis?.recipe.sourceFrameSeconds !== plan.remix.frame.atSeconds || cleanupChanged);
   const draft = sourceFrameChanged && plan.version === 5 && plan.analysis ? {
     aspectRatio: plan.aspectRatio, segmentSeconds: plan.segments.map(segment => segment.seconds), sourceImages: plan.sourceImages.map(({ slot: _slot, ...reference }) => reference),
     remix: plan.remix ? { video: plan.remix.video, frame: plan.remix.frame } : undefined,
@@ -819,7 +837,7 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
       atSeconds: plan.analysis.recipe.sourceFrameSeconds, intent: plan.analysis.intent },
   } : content.draft;
   await writeGoalShortContent(engine, goal, { ...content, draft, plan, estimate: await estimateShort(engine, plan, content), revision: content.revision + 1 });
-  if (sourceFrameChanged) return queueShortPlanning(engine, saveGoal(engine, { ...goal, finish: null }));
+  if (sourceFrameChanged) return queueShortPlanning(engine, saveGoal(engine, { ...goal, finish: null, preparation: null }));
   const reopened = generatedPromptChanged || retitled !== undefined || plan.segments.length !== previous.segments.length;
   return saveGoal(engine, {
     ...goal,
@@ -847,14 +865,14 @@ export async function reanalyzeShortGoal(engine: Engine, goal: GoalRecord, revis
       atSeconds: originalRequest?.atSeconds ?? null, ...(plan.analysis ? { intent: plan.analysis.intent } : {}) },
   };
   await writeGoalShortContent(engine, goal, { ...content, draft, plan: { ...plan, sourceImages }, revision: content.revision + 1 });
-  return queueShortPlanning(engine, goal);
+  return queueShortPlanning(engine, saveGoal(engine, { ...goal, preparation: null }));
 }
 
 export function saveShortDefaults(engine: Engine, goal: GoalRecord, revision: unknown): GoalRecord {
   const { plan } = assertShortRevision(engine, goal, revision);
   if (plan.version !== 5 || !plan.analysis) throw new Error("Analyze this goal before saving its defaults.");
   const { preferences, intent } = plan.analysis;
-  writeRemixPreferences(engine, { ...preferences, structure: intent.structure, character: intent.character, audio: intent.audio, cleanup: intent.cleanup });
+  writeRemixPreferences(engine, { ...preferences, structure: intent.structure, character: intent.character, audio: intent.audio, cleanup: intent.cleanup, cleanupMethod: plan.analysis.recipe.cleanupMethod });
   return goal;
 }
 
@@ -878,6 +896,12 @@ export async function queueShortRealismCheck(engine: Engine, goal: GoalRecord, a
 export async function retryShortGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
   if (goal.status !== "failed" && goal.status !== "interrupted") throw new Error("Only a goal that failed or was interrupted can be retried");
   const content = requireGoalShortContent(engine, goal);
+  if (goal.preparation?.status === "failed" && content.plan?.version === 5 && content.plan.analysis) {
+    return prepareShortSource(engine, goal, content.revision, { confirmed: true,
+      regions: content.plan.analysis.recipe.cleanupRegions, method: content.plan.analysis.recipe.cleanupMethod,
+      ...(goal.preparation.artifactId ? { artifactId: goal.preparation.artifactId, mediaHash: goal.preparation.mediaHash } : {}),
+    });
+  }
   if (!content.plan) return queueShortPlanning(engine, goal);
   if (!goal.chainId) throw new Error("There is no generation to retry. Approve the current stage.");
   const stage = activeGoalStage(goal);
@@ -897,6 +921,7 @@ export async function retryShortGoal(engine: Engine, goal: GoalRecord): Promise<
     if (!repairClip || attempt.fingerprint !== JSON.stringify(previous)) throw new Error(STALE_RETRY);
   }
   if (repairClip) return startShortStage(engine, { ...goal, status: "review" }, { action: "approve", revision: content.revision, stage: "videos" }, false);
+  await assertRemixPreflight(engine, plan);
   assertStageKey(plan, stage, run?.attempts?.find((attempt) => attempt.chainId === goal.chainId)?.model);
   const { lookup } = await toolLookup(engine);
   retryChainRun(engine, goal.chainId, lookup, { continueOnFailure: stage === "storyboards" });

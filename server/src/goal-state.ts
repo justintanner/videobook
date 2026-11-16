@@ -12,6 +12,7 @@ import {
 } from "./goal-short-runtime.js";
 import { goalTitleEstimate } from "./graphics/suggest.js";
 import { watermarkTitleSlots } from "./graphics/templates.js";
+import { goalPreparationStatus } from "./goal-source-preparation.js";
 
 export const LEGACY_GOAL_MESSAGE = "This goal was made by an earlier /goal. Its images and videos stay in the notebook. Start a new /goal.";
 const SHORT_STALE_MESSAGE = "The frame or an earlier clip changed after this clip was made.";
@@ -140,7 +141,8 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
   if (goal.status === "planning") {
     const job = goal.planningJobId ? engine.jobs.queue.get(goal.planningJobId) : null;
     return job && ["failed", "aborted"].includes(job.state)
-      ? saveGoal(engine, { ...goal, status: "failed", error: job.error?.message ?? "Planning was interrupted" }) : goal;
+      ? saveGoal(engine, { ...goal, status: "failed", error: job.error?.message ?? "Planning was interrupted",
+        ...(goal.preparation?.status === "running" ? { preparation: { ...goal.preparation, status: "failed", error: job.error?.message ?? "Preparation was interrupted" } } : {}) }) : goal;
   }
   const stage = activeGoalStage(goal);
   const run = goal.stages[stage];
@@ -270,6 +272,7 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
   const stages: Partial<Record<GoalGenerationStage, ReturnType<typeof stageView>>> = Object.fromEntries(runs.map(([stage, run]) => [stage, stageView(engine, goal, shortPlan, document, stage, run)]));
   return {
     kind: "video-goal" as const, legacy: false as const, ...goal, ...content,
+    ...(goal.preparation ? { preparation: goalPreparationStatus(engine, goal) } : {}),
     ...(shortPlan ? { shortPlan } : {}),
     storyboard: storyboardView(shortPlan, stages.storyboards?.outputs ?? [], content.estimate, index => storyboardFrameFailure(engine, goal, index)),
     finish: goal.finish ?? null,

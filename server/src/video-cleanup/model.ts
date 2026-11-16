@@ -25,6 +25,18 @@ export function validateCleanupRegions(value: unknown, duration: number): Cleanu
   return regions;
 }
 
+export function cleanupFrameCount(regions: readonly CleanupRegion[], fps: number): number {
+  const windows = regions.map(region => ({ start: Math.ceil(region.start * fps), end: Math.ceil(region.end * fps) }))
+    .sort((left, right) => left.start - right.start);
+  let frames = 0;
+  let end = 0;
+  for (const window of windows) {
+    frames += Math.max(0, window.end - Math.max(end, window.start));
+    end = Math.max(end, window.end);
+  }
+  return frames;
+}
+
 export function cleanupSampleTimes(duration: number, interval?: number): { times: number[]; interval: number } {
   const step = interval ?? Math.max(0.5, duration / 240);
   if (!Number.isFinite(step) || step < 0.25 || step > 30) throw new Error("Sample interval must be between 0.25 and 30 seconds.");

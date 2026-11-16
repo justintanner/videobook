@@ -63,6 +63,17 @@ export type GoalFinish = {
   jobId?: number | null;
 };
 
+export type GoalPreparation = {
+  status: "running" | "review" | "ready" | "failed";
+  requestId: string;
+  identity: string;
+  jobId: number | null;
+  artifactId: string | null;
+  mediaHash: string | null;
+  error: string | null;
+  progress?: { completedFrames: number; totalFrames: number; elapsedSeconds: number } | null;
+};
+
 export function isCurrentShort(planVersion: number): planVersion is 4 | 5 {
   return planVersion === 4 || planVersion === 5;
 }
@@ -79,6 +90,7 @@ export type GoalRecord = {
   status: GoalStatus;
   chainId: string | null;
   planningJobId: number | null;
+  preparation?: GoalPreparation | null;
   clipIds: string[];
   trackId: string | null;
   assembly: GoalAssembly | null;

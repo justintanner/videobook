@@ -13,7 +13,7 @@ import {
   type ShortAuthoredCopy, type ShortPlannerIssue, type ShortPlannerResponse,
 } from "../goal-short-planner.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
-import { goalPlannerImages } from "../goal-reference-images.js";
+import { goalPlannerImages, goalReferenceHashes } from "../goal-reference-images.js";
 import { buildRemixAnalysis, collectRemixSource, rememberRemixObservations, remixPlannerFrames } from "../goal-remix-analysis.js";
 import { remixPromptFindings, remixRules, remixUnderstandingSchema, type GoalRemixAnalysis } from "../goal-remix-model.js";
 import { prepareGoalSourceReference } from "../goal-source-reference.js";
@@ -135,6 +135,10 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
       const made = await mentionedSourceFrame(engine, goal.bookId, goal.notebookId, initial.sourceVideo, initial.sourceVideo.address ?? "The source video", analysis?.recipe.sourceFrameSeconds ?? initial.atSeconds);
       if (!made.remix) throw new Error(made.note.kind === "text" ? made.note.text : "No source frame could be prepared.");
       remix = made.remix;
+      if (analysis?.intent.cleanup === "keep") {
+        const [hash] = await goalReferenceHashes(engine, [remix.frame.artifactId]);
+        analysis = { ...analysis, recipe: { ...analysis.recipe, preparedFrameArtifactId: remix.frame.artifactId, preparedFrameMediaHash: hash?.objectHash ?? null } };
+      }
     }
     const offline = written ? null : shortBriefPlan(content.brief, authored, analysis);
     const framePrompt = authored.frame ?? written?.frame ?? offline?.frame ?? "";
