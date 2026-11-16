@@ -70,6 +70,17 @@ export const remixFindingSchema = z.object({
 
 export type RemixFinding = z.infer<typeof remixFindingSchema>;
 
+export const remixAssemblySchema = z.object({
+  version: z.literal(1),
+  fps: z.number().positive(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  totalFrames: z.number().int().positive(),
+  changeStartFrame: z.number().int().nonnegative(),
+  changeEndFrame: z.number().int().positive(),
+  fit: z.literal("contain"),
+}).strict().refine(value => value.changeStartFrame < value.changeEndFrame && value.changeEndFrame <= value.totalFrames, "The changed frames must fit the final video.");
+
 export const goalRemixAnalysisSchema = z.object({
   version: z.literal(1),
   brief: z.string(),
@@ -91,6 +102,7 @@ export const goalRemixAnalysisSchema = z.object({
     keep: z.array(rangeSchema),
     change: z.array(rangeSchema),
     generatedSeconds: z.number().positive(),
+    assembly: remixAssemblySchema.nullable().default(null),
     reference: rangeSchema.nullable(),
     referenceArtifactId: z.string().nullable().default(null),
     referenceMediaHash: z.string().nullable().default(null),
@@ -122,6 +134,10 @@ export const goalRemixAnalysisSchema = z.object({
 }).strict();
 
 export type GoalRemixAnalysis = z.infer<typeof goalRemixAnalysisSchema>;
+
+export function remixAssemblyReviewKey(analysis: GoalRemixAnalysis): string {
+  return JSON.stringify([analysis.recipe.assembly, analysis.recipe.preparedArtifactId, analysis.recipe.preparedMediaHash]);
+}
 
 function numericSeconds(text: string): number {
   const words: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15 };

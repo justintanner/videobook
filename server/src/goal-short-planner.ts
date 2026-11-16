@@ -5,7 +5,7 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { replaceNotebookMentions } from "videobook-engine/notebook-mentions";
 import { getApiKey } from "./api-key.js";
 import {
-  grownShortSegments, isLegacyShortDraft, shortRemixOf, shortRemixSourceOf, shortStoryboardOf, SHORT_STORYBOARD_MODEL_TITLES, SHORT_STORYBOARD_MODELS, SHORT_WORD_CEILINGS,
+  grownShortSegments, isLegacyShortDraft, shortGenerationSegments, shortRemixOf, shortRemixSourceOf, shortStoryboardOf, SHORT_STORYBOARD_MODEL_TITLES, SHORT_STORYBOARD_MODELS, SHORT_WORD_CEILINGS,
   type GoalShortDraft, type GoalShortPlan, type ShortAspectRatio,
 } from "./goal-short-plan.js";
 import type { GoalGenerationStage } from "./goal-store.js";
@@ -210,7 +210,7 @@ export function shortRevisionPart(plan: GoalShortPlan, stage: GoalGenerationStag
     return { name: `storyboard frame ${index + 1} clean-up`, ceiling: SHORT_WORD_CEILINGS.cleanup, prompt: frame.prompt };
   }
   if (stage === "frame") return { name: shortRemixOf(plan) ? "twist" : "frame", ceiling: SHORT_WORD_CEILINGS.frame, prompt: plan.frame.prompt };
-  const segment = plan.segments[index];
+  const segment = shortGenerationSegments(plan)[index];
   if (!segment) throw new RangeError(`This short has ${plan.segments.length} segments.`);
   return { name: `beat ${index + 1}`, ceiling: SHORT_WORD_CEILINGS.beat, prompt: segment.prompt };
 }
@@ -312,16 +312,23 @@ export async function shortRevisionInstructions(plan: GoalShortPlan, stage: Goal
   const part = shortRevisionPart(plan, stage, index);
   const guide = await loadGuide(frame ? "gpt_image_26" : "minimax_h3");
   const images = plan.version === 5 ? plan.sourceImages.length : plan.character.references.length;
+  const analysis = plan.version === 5 ? plan.analysis : undefined;
   return [
-    `Revise one prompt of a short that looks like real phone footage filmed by someone off screen, starring ${shortStar(images)}. That person never speaks.`,
+    `Revise one prompt of a short that looks like real phone footage filmed by someone off screen, starring ${shortStar(images)}.${!analysis || analysis.intent.noDialogue ? " That person never speaks, but natural mouth movement for the action is allowed." : " Follow the requested dialogue."}`,
     frame
       ? shortRemixOf(plan)
         ? `Rewrite the ${part.name} prompt for GPT Image 2.6 so it follows the operator's feedback. It describes one still picture.`
         : "Rewrite the opening frame prompt for GPT Image 2.6 so it follows the operator's feedback. It describes the one still picture the short opens on."
-      : `Rewrite beat ${index + 1} of ${plan.segments.length} for MiniMax H3 Max, which lasts ${plan.segments[index]!.seconds} seconds, so it follows the operator's feedback. One action in the present tense, with what the camera does and what is heard. ${index === 0 ? shortRemixOf(plan) ? "It follows the source video and reviewed twist references" : "It starts from the opening frame" : "It continues from where the beat before it ends, in the same place,"} and ends with that person in frame.`,
+      : `Rewrite beat ${index + 1} of ${shortGenerationSegments(plan).length} for MiniMax H3 Max, which lasts ${shortGenerationSegments(plan)[index]!.seconds} seconds, so it follows the operator's feedback. One action in the present tense, with what the camera does and what is heard. ${index === 0 ? shortRemixOf(plan) ? "It follows the source video and reviewed twist references" : "It starts from the opening frame" : "It continues from where the beat before it ends, in the same place,"} and ends with that person in frame.`,
     FOLLOW_FEEDBACK,
     DROP_CONTRADICTED,
-    ...(shortRemixSourceOf(plan) ? [stage === "replacement"
+    ...(analysis && shortRemixSourceOf(plan) ? [stage === "replacement"
+      ? `${analysis.intent.character === "insert" ? "Insert" : "Replace"} the requested person in the reviewed prepared scene. Keep unrelated people, decorative figures and physical props.`
+      : stage === "frame"
+        ? "Prepare the starting pose for the requested action, keeping the reviewed identity and scene. Do not show a completed payoff in this setup image."
+        : analysis.recipe.assembly
+          ? `Write only the changed action, at local time 0–${analysis.recipe.generatedSeconds} seconds. The rest of the montage is kept by the editor. Complete the payoff within ${(analysis.recipe.assembly.changeEndFrame - analysis.recipe.assembly.changeStartFrame) / analysis.recipe.assembly.fps} seconds. Final-video timestamps in the brief are context; do not wait until them.`
+          : "Follow the saved full-video timing and scene references."] : shortRemixSourceOf(plan) ? [stage === "replacement"
       ? "This is the character replacement edit only. Keep the source pose, camera, place, animals and props; the funny twist is a separate later edit. Clear added overlays while preserving physical printing."
       : stage === "frame"
         ? "This edit starts from the reviewed character replacement. Change one thing into a funny but physically plausible visual joke, keeping the person's identity and the rest of the scene."

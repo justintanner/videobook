@@ -35,7 +35,7 @@ export const WORKFLOW_TOOLS: Readonly<Record<string, { actionId: string; reason:
   edit_cold_open: { actionId: "command.edit-cold-open", reason: "Creates the reviewed cold-open copy." },
   video_goal: {
     actionId: "command.goal",
-    reason: "Goal mode analyzes the brief and source before generation, with editable structure, character, timing, sound and graphics choices. Review source removal regions or adopt a matching cleaned copy; check the prepared video once, then reuse its image and video references. Review each creative stage with its estimate; versions stay selectable and revisable. Without a video, review the frame then the clip. Saved storyboard goals keep their cleanup workflow. Finish burns the saved watermark onto the reviewed take, with an optional typed or suggested title.",
+    reason: "Goal mode analyzes the brief and source before generation, with editable structure, character, timing, sound and graphics choices. Review source removal regions or adopt a matching cleaned copy; check the prepared video once, then reuse its image and video references. Preserved-source edits generate only the changed interval. Review the retained action window, including its complete payoff, before frame-accurate assembly with the kept source shots. Review each creative stage with its estimate; versions stay selectable and revisable. Without a video, review the frame then the clip. Saved storyboard goals keep their cleanup workflow. Finish applies the selected sound and saved watermark, with an optional typed or suggested title.",
   },
   list_workspace_actions: {
     actionId: "command.actions",

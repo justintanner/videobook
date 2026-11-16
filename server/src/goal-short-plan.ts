@@ -646,8 +646,21 @@ export function compileShortFrameStep(plan: GoalShortPlan, storyboardFrameAddres
   ), storyboardFrameAddress ? [...images, storyboardFrameAddress] : images);
 }
 
+export function shortGenerationSegments(plan: GoalShortPlan): GoalShortPlan["segments"] {
+  return plan.version === 5 && plan.analysis?.recipe.assembly
+    ? [{ prompt: plan.analysis.intent.actionDescription, seconds: plan.analysis.recipe.generatedSeconds }]
+    : plan.segments;
+}
+
+function localRemixPrompt(plan: GoalShortPlan, prompt: string): string {
+  const remix = shortRemixOf(plan);
+  if (!remix || plan.version !== 5) return prompt;
+  const references = new Map([[remix.video.address, "@video1"], ...plan.sourceImages.map(image => [image.address, "@image1"] as const)]);
+  return prompt.replace(/@[a-z]{1,2}[1-8]\b/giu, address => references.get(address) ?? address);
+}
+
 function clipStep(plan: GoalShortPlan, prompt: string, refs: Record<string, string[]>): ChainStep {
-  const segment = plan.segments[0];
+  const segment = shortGenerationSegments(plan)[0];
   return {
     id: "clip1",
     tool: "generate_video",
@@ -667,8 +680,18 @@ function clipStep(plan: GoalShortPlan, prompt: string, refs: Record<string, stri
 }
 
 export function compileShortClipStep(plan: GoalShortPlan, frameAddress: string): ChainStep {
-  const segment = plan.segments[0];
+  const segment = shortGenerationSegments(plan)[0];
   const remix = shortRemixOf(plan);
+  const analysis = plan.version === 5 ? plan.analysis : undefined;
+  const assembly = analysis?.recipe.assembly;
+  if (remix && assembly) return clipStep(plan, paragraphs(
+    `Generate only the changed action, starting at local time 0. This clip replaces final-video seconds ${formatShortSeconds(assembly.changeStartFrame / assembly.fps)}–${formatShortSeconds(assembly.changeEndFrame / assembly.fps)}. The editor keeps every other source shot. Local 0 corresponds to the start of that interval; do not wait until that final-video timestamp. Complete the action and its payoff within ${formatShortSeconds((assembly.changeEndFrame - assembly.changeStartFrame) / assembly.fps)} seconds.`,
+    localRemixPrompt(plan, segment.prompt),
+    `Full-edit context, with final-video timing (perform only the changed interval): ${localRemixPrompt(plan, plan.segments.map(item => item.prompt).join(" "))}`,
+    "@video1 provides the scene and camera context. @image1 is the reviewed identity and action setup. Preserve its people, clothes and props. Perform the action from its starting pose; do not hold a completed payoff pose. Do not repeat the preceding montage.",
+    plan.rules.video,
+    plan.rules.silence,
+  ), { video: [analysis!.recipe.referenceArtifactId ?? remix.video.artifactId], image: [frameAddress] });
   if (remix) return clipStep(plan, paragraphs(
     segment.prompt,
     "@video1 is the source video: use its setting, camera movement and action as the reference. @image1 is the reviewed twist: keep its person, clothes, animals and changed props. Follow the beat's timing for when the person and visual joke appear; this image is a reference, not a fixed opening frame. Do not restore the original character or overlays from the video.",
@@ -696,7 +719,7 @@ export function compileShortClipStep(plan: GoalShortPlan, frameAddress: string):
 }
 
 export function compileShortContinuationStep(plan: GoalShortPlan, index: number, clipAddress: string): ChainStep {
-  const segment = index >= 1 ? plan.segments[index] : undefined;
+  const segment = index >= 1 ? shortGenerationSegments(plan)[index] : undefined;
   if (!segment) {
     throw new RangeError(`Segment ${index} is not a continuation in this ${plan.segments.length}-segment short.`);
   }

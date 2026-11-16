@@ -11,7 +11,7 @@ import type { ChainStep } from "./chain-plan.js";
 import { probeVideo } from "./ffmpeg.js";
 import {
   buildGoalShortPlan, compileShortClipStep, compileShortContinuationStep, compileShortFrameStep, compileShortReplacementStep, compileShortStoryboardStep, formatShortSeconds,
-  goalShortPlanSchema, isLegacyShortDraft, refreshGoalShortPlan, SHORT_STORYBOARD_MODELS, shortPlanTitleInput, shortRemixOf, shortRemixSourceOf, shortStoryboardOf, shortTiming, storyboardFallbackModel,
+  goalShortPlanSchema, isLegacyShortDraft, refreshGoalShortPlan, SHORT_STORYBOARD_MODELS, shortPlanTitleInput, shortGenerationSegments, shortRemixOf, shortRemixSourceOf, shortStoryboardOf, shortTiming, storyboardFallbackModel,
   type GoalShortDraft, type GoalShortImageRef, type GoalShortPlan, type ShortRemixSource, type ShortStoryboard, type ShortStoryboardModel, type ShortStoryboardVideo,
 } from "./goal-short-plan.js";
 import { shortAuthoredCopy, shortBriefPlan, shortPlannerNeeded, shortTitle } from "./goal-short-planner.js";
@@ -189,7 +189,7 @@ export async function estimateShort(engine: Engine, plan: GoalShortPlan, short: 
     : [];
   const replacement = remix ? await priced(engine, compileShortReplacementStep(plan), { image: [...shortImageIds(plan, false), remix.frame.artifactId] }) : null;
   const frame = await priced(engine, compileShortFrameStep(plan, remix ? PLACEHOLDER_FRAME : firstFrame?.address ?? null), remix ? { image: [PLACEHOLDER_FRAME] } : frameIds.length > 0 ? { image: frameIds } : {});
-  const segments = await Promise.all(plan.segments.map((_, index) => index === 0
+  const segments = await Promise.all(shortGenerationSegments(plan).map((_, index) => index === 0
     ? priced(engine, compileShortClipStep(plan, PLACEHOLDER_FRAME), clipRefs)
     : priced(engine, compileShortContinuationStep(plan, index, PLACEHOLDER_CLIP), { video: [PLACEHOLDER_CLIP] })));
   const storyboards = summed(storyboardFrames);
@@ -232,8 +232,9 @@ export async function shortFingerprint(
     });
   }
   return JSON.stringify({
-    prompt: plan.segments[index]?.prompt ?? null,
-    seconds: plan.segments[index]?.seconds ?? null,
+    prompt: shortGenerationSegments(plan)[index]?.prompt ?? null,
+    seconds: shortGenerationSegments(plan)[index]?.seconds ?? null,
+    ...(plan.version === 5 && plan.analysis?.recipe.assembly ? { assembly: plan.analysis.recipe.assembly, context: plan.segments } : {}),
     rules: { video: plan.rules.video, silence: plan.rules.silence },
     settings: { ...plan.video, aspectRatio: plan.aspectRatio },
     references: await goalReferenceHashes(engine, shortImageIds(plan, true)),
@@ -324,7 +325,7 @@ export function currentShortClip(goal: GoalRecord): GoalStageOutput | null {
 }
 
 export function nextShortSegment(goal: GoalRecord, plan: GoalShortPlan): number | null {
-  for (let index = 0; index < plan.segments.length; index += 1) {
+  for (let index = 0; index < shortGenerationSegments(plan).length; index += 1) {
     if (!selectedOutput(goal, "videos", index) || shortSegmentStale(goal, index)) return index;
   }
   return null;
@@ -460,6 +461,7 @@ async function rewrittenShortPrompt(goal: GoalRecord, stage: GoalGenerationStage
 function withStagePrompt(plan: GoalShortPlan, stage: GoalGenerationStage, index: number, prompt: string): unknown {
   if (stage === "replacement" && plan.version === 5 && plan.remix) return { ...plan, remix: { ...plan.remix, replacement: { ...plan.remix.replacement, prompt } } };
   if (stage === "frame") return { ...plan, frame: { ...plan.frame, prompt } };
+  if (stage === "videos" && plan.version === 5 && plan.analysis?.recipe.assembly) return { ...plan, analysis: { ...plan.analysis, intent: { ...plan.analysis.intent, actionDescription: prompt } } };
   if (stage === "videos") return { ...plan, segments: plan.segments.map((segment, position) => position === index ? { ...segment, prompt } : segment) };
   const storyboard = shortStoryboardOf(plan);
   if (plan.version !== 5 || !storyboard) return plan;
@@ -494,9 +496,16 @@ async function continuationSource(engine: Engine, goal: GoalRecord, index: numbe
 
 export async function shortFinishSource(engine: Engine, goal: GoalRecord): Promise<string> {
   const plan = requireGoalShortContent(engine, goal).plan;
-  const clip = currentShortClip(goal);
+  const clip = plan?.version === 5 && plan.analysis?.recipe.assembly ? selectedOutput(goal, "videos", 0) : currentShortClip(goal);
   if (!plan || !clip || nextShortSegment(goal, plan) !== null) throw new Error("Generate every segment of the short before finishing it.");
   if (shortRemixOf(plan)) await assertShortUpstream(engine, goal, plan, "videos");
+  if (plan.version === 5 && plan.analysis) {
+    await assertRemixPreflight(engine, plan);
+    const attempt = goal.stages.videos?.attempts?.find(candidate => candidate.artifactId === clip.artifactId && candidate.fingerprint);
+    if (attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, "videos", clip.index, stageSource(goal, "videos", clip.index))) {
+      throw new Error("The video prompt, timing or references changed. Review a compatible take before finishing.");
+    }
+  }
   return clip.artifactId;
 }
 
@@ -563,7 +572,7 @@ function shortTarget(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, args
   const index = args.index === undefined ? 0 : z.number().int().nonnegative().parse(args.index);
   if (stage === "replacement" && (!shortRemixOf(plan) || index !== 0)) throw new Error("This short has no character replacement at that index.");
   if (stage === "frame" && index !== 0) throw new Error("A short has one frame");
-  if (stage === "videos" && index >= plan.segments.length) throw new Error(`This short has ${plan.segments.length} segments.`);
+  if (stage === "videos" && index >= shortGenerationSegments(plan).length) throw new Error(`This short has ${shortGenerationSegments(plan).length} generated clips.`);
   if (stage === "storyboards") {
     const count = shortStoryboardOf(plan)?.frames.length ?? 0;
     if (count === 0) throw new Error("This short has no storyboard.");
@@ -577,7 +586,7 @@ function shortTarget(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, args
 
 function stagePrompt(plan: GoalShortPlan, stage: GoalGenerationStage, index: number): string {
   if (stage === "replacement") return shortRemixOf(plan)!.replacement.prompt;
-  if (stage === "videos") return plan.segments[index]!.prompt;
+  if (stage === "videos") return shortGenerationSegments(plan)[index]!.prompt;
   if (stage === "frame") return plan.frame.prompt;
   return shortStoryboardOf(plan)!.frames[index]!.prompt;
 }
@@ -678,7 +687,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
 async function assertRemixPreflight(engine: Engine, plan: GoalShortPlan): Promise<void> {
   if (plan.version !== 5 || !plan.analysis) return;
   const { analysis } = plan;
-  const prompts = [plan.frame.prompt, plan.remix?.replacement.prompt ?? "", ...plan.segments.map(segment => segment.prompt), ...Object.values(plan.rules)];
+  const prompts = [plan.frame.prompt, plan.remix?.replacement.prompt ?? "", ...plan.segments.map(segment => segment.prompt), ...shortGenerationSegments(plan).map(segment => segment.prompt), ...Object.values(plan.rules)];
   const errors = [...analysis.findings.filter(finding => finding.severity === "error" && !finding.code.startsWith("conflicting-")), ...remixPromptFindings(analysis, prompts)];
   if (errors.length) throw new Error(errors.map(finding => finding.text).join(" "));
   const references = await goalReferenceHashes(engine, [...plan.sourceImages.map(reference => reference.artifactId), ...(analysis.source ? [analysis.source.artifactId] : [])]);
@@ -794,7 +803,7 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
       || plan.segments.reduce((sum, segment) => sum + segment.seconds, 0) !== analyzed.recipe.targetSeconds;
     if (analysisChanged) {
       const intent = { ...plan.analysis.intent, origins: { ...plan.analysis.intent.origins } };
-      for (const key of ["structure", "character", "audio", "cleanup", "action", "noDialogue"] as const) {
+      for (const key of ["structure", "character", "audio", "cleanup", "action", "actionDescription", "noDialogue"] as const) {
         if (JSON.stringify(intent[key]) !== JSON.stringify(analyzed.intent[key])) intent.origins[key] = "edited";
       }
       const analysis = await buildRemixAnalysis(engine, {
@@ -821,7 +830,7 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
   if (generated.some((index) => plan.segments[index]?.seconds !== previous.segments[index]?.seconds)) throw new Error(SEGMENT_LOCKED);
   if (JSON.stringify(previous) === JSON.stringify(plan)) return goal;
   if (plan.version === 5 && plan.analysis) {
-    const findings = remixPromptFindings(plan.analysis, [plan.frame.prompt, plan.remix?.replacement.prompt ?? "", ...plan.segments.map(segment => segment.prompt), ...Object.values(plan.rules)]);
+    const findings = remixPromptFindings(plan.analysis, [plan.frame.prompt, plan.remix?.replacement.prompt ?? "", ...plan.segments.map(segment => segment.prompt), ...shortGenerationSegments(plan).map(segment => segment.prompt), ...Object.values(plan.rules)]);
     plan = { ...plan, analysis: { ...plan.analysis, findings: [...plan.analysis.findings.filter(finding => !finding.code.startsWith("conflicting-")), ...findings] } };
   }
   const generatedPromptChanged = analysisChanged || (frameMade && previous.frame.prompt !== plan.frame.prompt)

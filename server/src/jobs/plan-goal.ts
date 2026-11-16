@@ -126,6 +126,11 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
       const remembered = written.sourceSampleTimes ? await rememberRemixObservations(engine, source.artifactId, source, written.understanding, written.sourceSampleTimes, chatIntelligenceRequestOptions().model) : source;
       analysis = await buildRemixAnalysis(engine, { ...analysisInput, source: { ...remembered, artifactId: source.artifactId }, understanding: written.understanding });
     }
+    if (analysis && !isLegacyShortDraft(draft)) {
+      analysis = { ...analysis, intent: { ...analysis.intent,
+        actionDescription: shortPlannerBrief(analysis.intent.actionDescription, draft.sourceImages, null, sourceVideo ?? null, "@video1").replace(/\bSource image \d+\b/gu, "@image1"),
+      } };
+    }
     signal.throwIfAborted();
     if (analysis?.source && analysis.recipe.sourceFrameSeconds !== null && !analysis.findings.some(finding => finding.severity === "error")) {
       const reference = await prepareGoalSourceReference(engine, analysis.source.artifactId, analysis.recipe.sourceFrameSeconds, goal.notebookId, signal);

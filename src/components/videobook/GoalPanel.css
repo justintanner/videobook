@@ -518,11 +518,38 @@ span.goal-progress-address {
   color: var(--color-danger, #c33);
 }
 
-.goal-source-preparation {
+.goal-source-preparation,
+.goal-action-window {
   border: 1px solid var(--color-border, #ffffff25);
   border-radius: 8px;
   padding: 10px;
   min-width: 0;
+}
+
+.goal-action-window {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.goal-action-window p {
+  margin: 0;
+}
+
+.goal-action-window input[type="number"] {
+  width: 150px;
+  max-width: 100%;
+}
+
+.goal-action-window .goal-analysis-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.goal-action-window input[type="checkbox"] {
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .goal-source-preparation .video-cleanup-body {

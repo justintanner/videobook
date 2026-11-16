@@ -7,14 +7,15 @@ import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { createEngineForTest } from "../engine.js";
-import { readRemixPreferences } from "../goal-remix-analysis.js";
+import { buildRemixAnalysis, readRemixPreferences } from "../goal-remix-analysis.js";
 import { waitForChainRun } from "../chain-executor.js";
-import { compileShortClipStep } from "../goal-short-plan.js";
+import { compileShortClipStep, shortGenerationSegments } from "../goal-short-plan.js";
+import { probeVideo } from "../ffmpeg.js";
 import { cleanupSource } from "../video-cleanup/source.js";
 import { cleanupCandidate } from "../video-cleanup/prepared.js";
 import { readCleanupRequest } from "../video-cleanup/service.js";
 import { indexRenderRequest, writeRenderSetting } from "../render-requests.js";
-import { pauseBookQueueForTests, resumeBookQueueForTests, waitForBookQueuesIdleForTests } from "../queue.js";
+import { configureProviderPollDriverForTests, pauseBookQueueForTests, resetProviderPollDriverForTests, resumeBookQueueForTests, waitForBookQueuesIdleForTests } from "../queue.js";
 import { readGoal } from "../goal-store.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
@@ -58,6 +59,7 @@ describe("initial source-goal analysis", () => {
 
   beforeEach(async () => {
     stub.reset();
+    configureProviderPollDriverForTests({ intervalMs: 200 });
     for (const [key, value] of [["FAL_API_KEY", "local-fal-key"], ["OPENAI_API_KEY", "offline-openai-key"], ["VIDEOBOOK_HAR_CAPTURE", "off"]]) {
       environment.set(key!, process.env[key!]);
       process.env[key!] = value;
@@ -81,6 +83,8 @@ describe("initial source-goal analysis", () => {
     const video = await engine.files.writeFromPath(sourceId, "original.mp4", join(fixtures, "source.mp4"));
     const image = await engine.files.write(identityId, "original.png", await sharp({ create: { width: 180, height: 320, channels: 3, background: "#637b4d" } }).png().toBuffer());
     if (!video.ok || !image.ok) throw new Error("Could not write references");
+    const metadata = await engine.metadata.artifacts.write(sourceId, "original", { transcribe: false });
+    if (!metadata.ok) throw new Error(metadata.error.message);
     const cells = [
       engine.notebooks.createCell({ type: "video", label: "Display montage", slot: { row: 0, column: 0 }, outputArtifactId: sourceId }),
       engine.notebooks.createCell({ type: "image", label: "Identity photo", slot: { row: 0, column: 1 }, outputArtifactId: identityId }),
@@ -90,7 +94,9 @@ describe("initial source-goal analysis", () => {
   });
 
   afterEach(async () => {
-    resumeBookQueueForTests(bookId);
+    await resumeBookQueueForTests(bookId);
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(60_000) });
+    resetProviderPollDriverForTests();
     await client.close();
     restoreEndpoints();
     restoreFetch();
@@ -161,6 +167,9 @@ describe("initial source-goal analysis", () => {
       recipe: { keep: [{ start: 0, end: 12 }], change: [{ start: 12, end: 14 }], generatedSeconds: 2, sourceFrameSeconds: 12 },
     });
     expect(analysis.recipe.cleanupRegions).toHaveLength(1);
+    expect(analysis.recipe.assembly).toMatchObject({ fps: 12, totalFrames: 168, changeStartFrame: 144, changeEndFrame: 168 });
+    expect(shortGenerationSegments(goal.shortPlan!)).toEqual([{ prompt: "The man bites the gingerbread display itself.", seconds: 2 }]);
+    expect(compileShortClipStep(goal.shortPlan!, "@a8").params.options).toMatchObject({ duration: 2 });
     expect(analysis.findings.some(finding => finding.code === "cleanup-review")).toBe(true);
     expect(goal.shortPlan?.rules.video).not.toMatch(/no cuts|continuous take/iu);
     expect(goal.shortPlan?.rules.silence).not.toContain("lips closed");
@@ -176,6 +185,66 @@ describe("initial source-goal analysis", () => {
     await invoke({ action: "status", goal_id: second.goalId });
     expect(stub.plannerRequests).toHaveLength(1);
   });
+
+  it("preflights retained-frame timing against the supported H3 range before submission", async () => {
+    const goal = await settled(await invoke({ action: "create", brief: authored().replace("Remove all OSG", "Keep source graphics") }));
+    const analysis = analysisOf(goal);
+    const input = { brief: analysis.brief, totalSeconds: 14, notebookId, preferences: analysis.preferences, source: analysis.source };
+    const tiny = await buildRemixAnalysis(engine, { ...input, intent: { ...analysis.intent, action: { start: 13.5, end: 14 } } });
+    expect(tiny.recipe.generatedSeconds).toBe(0.92);
+    expect(tiny.recipe.assembly).toMatchObject({ changeStartFrame: 162, changeEndFrame: 168 });
+    const tooShort = await buildRemixAnalysis(engine, { ...input, intent: { ...analysis.intent, action: { start: 13.999, end: 14 } } });
+    expect(tooShort.findings.some(finding => finding.code === "action-frames" && finding.severity === "error")).toBe(true);
+    const tooLong = await buildRemixAnalysis(engine, { ...input, totalSeconds: 30, intent: { ...analysis.intent, action: { start: 12, end: 30 } } });
+    expect(tooLong.findings.some(finding => finding.code === "action-duration" && finding.severity === "error")).toBe(true);
+    expect(stub.submissions).toHaveLength(0);
+  });
+
+  it("generates only the changed interval and requires a current reviewed action window before queued assembly", async () => {
+    let goal = await settled(await invoke({ action: "create", brief: authored().replace("Remove all OSG", "Keep source graphics") }));
+    for (let stage = 0; stage < 3; stage++) {
+      goal = await invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
+      await waitForChainRun(engine, goal.chainId!, testBudget(60_000));
+      goal = await invoke({ action: "status", goal_id: goal.goalId });
+      expect(goal.status, goal.error ?? "").toBe("review");
+    }
+    const clip = await cleanupSource(engine, goal.stages.videos!.outputs[0]!.artifactId);
+    const video = stub.submissions.filter(submission => submission.path.includes("reference-to-video"));
+    expect(video).toHaveLength(1);
+    expect(video[0]!.body.duration).toBe(2);
+    expect(video[0]!.body.prompt).toContain("starting at local time 0");
+    expect(video[0]!.body.prompt).not.toMatch(/@[a-z]{1,2}[1-8]\b/u);
+    expect(clip.durationSeconds).toBe(14);
+    const unreviewed = await call({ action: "finish", goal_id: goal.goalId });
+    expect(unreviewed.isError).toBe(true);
+    expect(JSON.stringify(unreviewed.content)).toContain("Review the retained action window");
+    const review = { action: "review_action", goal_id: goal.goalId, revision: goal.revision, artifact_id: clip.artifactId, media_hash: clip.mediaHash, confirmed: true };
+    expect((await call({ ...review, start_seconds: 13 })).isError).toBe(true);
+    expect((await call({ ...review, start_seconds: 12, media_hash: "old" })).isError).toBe(true);
+    goal = await invoke({ ...review, start_seconds: 12 });
+    expect(goal.actionWindow).toMatchObject({ startFrame: 144, endFrame: 168, mediaHash: clip.mediaHash });
+    await pauseBookQueueForTests(bookId);
+    const finishing = await invoke({ action: "finish", goal_id: goal.goalId });
+    expect(finishing.finish?.status).toBe("running");
+    expect((await invoke({ action: "finish", goal_id: goal.goalId })).finish?.jobId).toBe(finishing.finish?.jobId);
+    const cancelled = await invoke({ action: "cancel", goal_id: goal.goalId });
+    expect(cancelled.finish?.status).toBe("cancelled");
+    expect(cancelled.finalArtifactId).toBeNull();
+    await resumeBookQueueForTests(bookId);
+    goal = await invoke({ action: "finish", goal_id: goal.goalId });
+    await expect.poll(async () => {
+      goal = await invoke({ action: "status", goal_id: goal.goalId });
+      return `${goal.finish?.status}:${goal.finish?.error ?? ""}`;
+    }, { timeout: testBudget(120_000) }).toBe("completed:");
+    const assembled = await cleanupSource(engine, goal.finish!.assembledArtifactId!);
+    expect(await probeVideo(assembled.path)).toMatchObject({ fps: 12, videoDuration: 14, hasAudio: true, width: 180, height: 320 });
+    expect(stub.submissions).toHaveLength(3);
+    expect(goal.finish?.sourceArtifactId).toBe(clip.artifactId);
+    expect((await invoke({ ...review, revision: goal.revision, start_seconds: 12 })).finalArtifactId).toBe(goal.finalArtifactId);
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(60_000) });
+    expect(engine.jobs.queue.list({ type: "transcribe_video_audio", limit: 100 }).filter(job =>
+      [goal.finalArtifactId, goal.finish?.assembledArtifactId].includes(String(job.payload.assetId)))).toHaveLength(0);
+  }, testBudget(150_000));
 
   it("preflights authored prompts and refuses a contradictory paid request", async () => {
     const text = authored().replace("The empty display montage runs twelve seconds.", "One continuous take with no cuts.");

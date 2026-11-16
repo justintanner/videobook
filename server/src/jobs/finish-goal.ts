@@ -9,8 +9,9 @@ import type { ShortFinishTitle } from "../goal-short-plan.js";
 import { isCurrentShort, readGoal, requireGoalShortContent, saveGoal, type GoalFinish, type GoalRecord } from "../goal-store.js";
 import { watermarkGraphicsTemplate, watermarkTitleSlots } from "../graphics/templates.js";
 import { shortFinishSource } from "../goal-short-runtime.js";
+import { assertRemixEditSources, bindGoalRemixEdit, goalRemixEditSchema, remixEditIdentity, renderGoalRemixAssembly, validateRemixAssembly, type GoalRemixEdit } from "../goal-remix-assembly.js";
 import { finishingIdentityKey, watermarkProfileFor } from "../lightning-defaults.js";
-import { mutateNotebook } from "../notebook-mutations.js";
+import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { applyWatermarkDef } from "../tools/apply-watermark.js";
@@ -18,15 +19,15 @@ import { effectiveWatermarkProfile, readWatermarkConfig } from "../watermark-con
 
 const FINISH_MESSAGE = "Only a reviewed short can finish.";
 
-type FinishPayload = { goalId: string; identity: string; title: ShortFinishTitle | null };
+type FinishPayload = { goalId: string; identity: string; runId: string | null; title: ShortFinishTitle | null; edit: GoalRemixEdit | null };
 
 function textOf(result: { isError?: boolean; content?: Array<{ type?: string; text?: string }> }): string {
   return result.content?.find(entry => entry.type === "text")?.text ?? "";
 }
 
-function currentFinish(engine: Engine, goalId: string, identity: string): GoalRecord | null {
+function currentFinish(engine: Engine, goalId: string, identity: string, runId: string | null): GoalRecord | null {
   const goal = readGoal(engine, goalId);
-  if (goal.finish?.identity !== identity || goal.finish.status === "cancelled") return null;
+  if (goal.finish?.identity !== identity || (goal.finish.runId ?? null) !== runId || goal.finish.status === "cancelled" || goal.status === "cancelled") return null;
   return goal;
 }
 
@@ -40,7 +41,7 @@ async function duplicatePlayableVideo(engine: Engine, sourceArtifactId: string, 
   const manifest = await engine.files.manifest(artifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
   const probe = await probeVideo(join(manifest.value.path, "original.mp4"));
-  await registerMediaProbe(engine, artifactId, "original.mp4", probe);
+  await registerMediaProbe(engine, artifactId, "original.mp4", probe, { transcribe: false });
   return artifactId;
 }
 
@@ -88,10 +89,13 @@ async function placeFinishedCell(engine: Engine, goal: GoalRecord, artifactId: s
 }
 
 async function runFinish(engine: Engine, payload: FinishPayload, signal: AbortSignal): Promise<{ finalArtifactId: string }> {
-  const goal = currentFinish(engine, payload.goalId, payload.identity);
+  const goal = currentFinish(engine, payload.goalId, payload.identity, payload.runId);
   if (!goal?.finish || goal.finish.status === "completed") return { finalArtifactId: goal?.finish?.finalArtifactId ?? "" };
   signal.throwIfAborted();
-  const finalArtifactId = await duplicatePlayableVideo(engine, goal.finish.sourceArtifactId, "Finished", goal.finish.sourceObjectHash ?? undefined);
+  const assembled = payload.edit ? await renderGoalRemixAssembly(engine, payload.edit, signal) : null;
+  signal.throwIfAborted();
+  if (!currentFinish(engine, payload.goalId, payload.identity, payload.runId)) throw new Error("Finishing was superseded or cancelled.");
+  const finalArtifactId = await duplicatePlayableVideo(engine, assembled?.artifactId ?? goal.finish.sourceArtifactId, "Finished", assembled?.mediaHash ?? goal.finish.sourceObjectHash ?? undefined);
   await burnSavedWatermark(engine, finalArtifactId, goal.finish.sourceArtifactId, payload.title);
   const manifest = await engine.files.manifest(finalArtifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
@@ -99,14 +103,22 @@ async function runFinish(engine: Engine, payload: FinishPayload, signal: AbortSi
   if (!file) throw new Error("The finished video is missing");
   const probe = await probeVideo(join(manifest.value.path, file.name));
   if (!probe.videoStream || probe.videoDuration < 0.5) throw new Error("The finished video is not playable");
-  await placeFinishedCell(engine, goal, finalArtifactId, goal.finish.sourceArtifactId);
-  const latest = currentFinish(engine, payload.goalId, payload.identity);
-  if (!latest?.finish) return { finalArtifactId };
-  saveGoal(engine, {
-    ...latest,
-    status: "completed",
-    error: null,
-    finish: { ...latest.finish, status: "completed", finalArtifactId, error: null },
+  if (payload.edit) {
+    await validateRemixAssembly(join(manifest.value.path, file.name), payload.edit, signal);
+    await assertRemixEditSources(engine, payload.edit);
+  }
+  await withNotebookMutation(`goal:${payload.goalId}`, async () => {
+    signal.throwIfAborted();
+    const latest = currentFinish(engine, payload.goalId, payload.identity, payload.runId);
+    if (!latest?.finish) return;
+    requireGoalShortContent(engine, latest);
+    await placeFinishedCell(engine, latest, finalArtifactId, latest.finish.sourceArtifactId);
+    saveGoal(engine, {
+      ...latest,
+      status: "completed",
+      error: null,
+      finish: { ...latest.finish, status: "completed", finalArtifactId, ...(assembled ? { assembledArtifactId: assembled.artifactId } : {}), error: null },
+    });
   });
   return { finalArtifactId };
 }
@@ -115,11 +127,12 @@ export function registerFinishGoalJob(engine: Engine): void {
   registerJobHandler("finish_goal", async (input, context) => {
     const goalId = typeof input.goalId === "string" ? input.goalId : "";
     const identity = typeof input.identity === "string" ? input.identity : "";
+    const runId = typeof input.runId === "string" ? input.runId : null;
     try {
-      return await runFinish(engine, { goalId, identity, title: payloadTitle(input.title) }, context.signal);
+      return await runFinish(engine, { goalId, identity, runId, title: payloadTitle(input.title), edit: input.edit ? goalRemixEditSchema.parse(input.edit) : null }, context.signal);
     } catch (error) {
       const goal = readGoal(engine, goalId);
-      if (goal.finish?.identity === identity && goal.finish.status === "running") {
+      if (goal.finish?.identity === identity && (goal.finish.runId ?? null) === runId && goal.finish.status === "running") {
         saveGoal(engine, {
           ...goal,
           status: "review",
@@ -135,18 +148,23 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise
   if (!isCurrentShort(goal.planVersion)) throw new Error(FINISH_MESSAGE);
   if (goal.status === "running") throw new Error("Wait until the video is ready before finishing it");
   if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Review the video before finishing it");
-  if (goal.finish?.status === "completed") return goal;
+  if (goal.finish?.status === "completed") {
+    const plan = requireGoalShortContent(engine, goal).plan;
+    if (plan?.version === 5 && plan.analysis?.recipe.assembly) await bindGoalRemixEdit(engine, goal, await shortFinishSource(engine, goal));
+    return goal;
+  }
   if (goal.finish?.status === "running" && goal.finish.jobId) {
     const active = engine.jobs.queue.get(goal.finish.jobId);
     if (active && ["queued", "running", "completing"].includes(active.state)) return goal;
   }
   const source = await coldOpenSource(engine, await shortFinishSource(engine, goal));
+  const edit = await bindGoalRemixEdit(engine, goal, source.artifact.artifactId);
   const config = await readWatermarkConfig(engine, "tiktok");
   const profile = effectiveWatermarkProfile(config, "tiktok");
   const template = watermarkGraphicsTemplate(engine, "tiktok");
   const title = burnedTitle(engine, goal);
-  const identity = "watermark-only:" + finishingIdentityKey({
-    sourceObjectHash: source.file.objectHash,
+  const identity = (edit ? "remix:" : "watermark-only:") + finishingIdentityKey({
+    sourceObjectHash: edit ? remixEditIdentity(edit) : source.file.objectHash,
     startSeconds: 0,
     endSeconds: 0,
     profile: watermarkProfileFor(profile.platform, profile),
@@ -160,6 +178,7 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise
     sourceArtifactId: source.artifact.artifactId,
     sourceObjectHash: source.file.objectHash,
     identity,
+    runId: uuidv7(),
     finalArtifactId: null,
     jobId: null,
     error: null,
@@ -170,6 +189,8 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord): Promise
     bookId: goal.bookId,
     goalId: goal.goalId,
     identity,
+    runId: finish.runId,
+    ...(edit ? { edit } : {}),
     ...(title ? { title } : {}),
   });
   const queued = readGoal(engine, goal.goalId);

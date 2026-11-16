@@ -58,7 +58,9 @@ export type GoalFinish = {
   startSeconds?: number | null;
   endSeconds?: number | null;
   identity?: string | null;
+  runId?: string | null;
   coldOpenArtifactId?: string | null;
+  assembledArtifactId?: string | null;
   coldOpenRequestId?: string | null;
   jobId?: number | null;
 };
@@ -72,6 +74,16 @@ export type GoalPreparation = {
   mediaHash: string | null;
   error: string | null;
   progress?: { completedFrames: number; totalFrames: number; elapsedSeconds: number } | null;
+};
+
+export type GoalActionWindow = {
+  artifactId: string;
+  mediaHash: string;
+  recipeKey: string;
+  startFrame: number;
+  endFrame: number;
+  durationSeconds: number;
+  reviewedAt: string;
 };
 
 export function isCurrentShort(planVersion: number): planVersion is 4 | 5 {
@@ -91,6 +103,7 @@ export type GoalRecord = {
   chainId: string | null;
   planningJobId: number | null;
   preparation?: GoalPreparation | null;
+  actionWindow?: GoalActionWindow | null;
   clipIds: string[];
   trackId: string | null;
   assembly: GoalAssembly | null;

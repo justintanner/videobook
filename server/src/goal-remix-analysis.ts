@@ -168,12 +168,23 @@ export async function buildRemixAnalysis(engine: Engine, input: {
   if (source && chosen !== null && chosen >= source.durationSeconds) findings.push({ code: "source-frame", severity: "error", text: "The requested source frame is outside the video." });
   const frameSeconds = source && chosen !== null ? Math.min(chosen, source.durationSeconds - 1 / source.fps) : null;
   const localized = Boolean(source && intent.structure === "preserve-source" && action && action.end <= totalSeconds);
-  const keep = localized && action ? [
-    ...(action.start > 0 ? [{ start: 0, end: action.start }] : []),
-    ...(action.end < totalSeconds ? [{ start: action.end, end: totalSeconds }] : []),
+  const startFrame = source && action ? Math.round(action.start * source.fps) : 0;
+  const endFrame = source && action ? Math.round(action.end * source.fps) : 0;
+  const totalFrames = source ? Math.round(totalSeconds * source.fps) : 0;
+  const assembly = localized && source && endFrame > startFrame && endFrame <= totalFrames ? {
+    version: 1 as const, fps: source.fps, width: source.width, height: source.height, totalFrames,
+    changeStartFrame: startFrame, changeEndFrame: endFrame, fit: "contain" as const,
+  } : null;
+  const alignedAction = assembly ? { start: startFrame / assembly.fps, end: endFrame / assembly.fps } : action;
+  const alignedEnd = assembly ? totalFrames / assembly.fps : totalSeconds;
+  const keep = localized && alignedAction ? [
+    ...(alignedAction.start > 0 ? [{ start: 0, end: alignedAction.start }] : []),
+    ...(alignedAction.end < alignedEnd ? [{ start: alignedAction.end, end: alignedEnd }] : []),
   ] : [];
+  if (localized && !assembly) findings.push({ code: "action-frames", severity: "error", text: "The changed interval must contain at least one source frame and fit the final video." });
+  if (assembly && (assembly.width % 2 !== 0 || assembly.height % 2 !== 0)) findings.push({ code: "source-geometry", severity: "error", text: "This source has odd pixel dimensions. Prepare an even-sized source before preserving its shots." });
   if (source && keep.some(range => range.end > source.durationSeconds + 1 / source.fps)) findings.push({ code: "short-source", severity: "error", text: "The source is shorter than a range the plan needs to preserve." });
-  if (source && intent.structure === "preserve-source" && !action) findings.push({ code: "change-range", severity: "review", text: "Choose which interval changes so the remaining source shots can be preserved." });
+  if (source && intent.structure === "preserve-source" && !action) findings.push({ code: "change-range", severity: "error", text: "Choose which interval changes so the remaining source shots can be preserved." });
   if (source && source.durationSeconds < 2) findings.push({ code: "short-reference", severity: "error", text: "H3 Max needs a reference video of at least two seconds. Select a longer source or use image references." });
   if (source && (intent.audio === "source" || intent.audio === "mix") && !source.hasAudio) findings.push({ code: "missing-audio", severity: "review", text: "The source has no audio. Choose generated ambience or mute." });
   if (source && source.semanticStatus !== "sampled") findings.push({ code: "unverified-source", severity: "review", text: "Source action and overlays have not been verified in the sampled frames. Review them before continuing automatically." });
@@ -192,13 +203,14 @@ export async function buildRemixAnalysis(engine: Engine, input: {
   const templates = readGraphicsTemplates(engine);
   const templateId = templates.watermark.tiktok ?? templates.defaultId;
   const template = templates.templates.find(candidate => candidate.id === templateId);
-  const change = localized && action ? [action] : [{ start: 0, end: totalSeconds }];
+  const change = localized && alignedAction ? [alignedAction] : [{ start: 0, end: totalSeconds }];
   const generatedSeconds = Math.max(0.92, Math.ceil(change.reduce((sum, range) => sum + range.end - range.start, 0) * 100) / 100);
+  if (assembly && generatedSeconds > 15) findings.push({ code: "action-duration", severity: "error", text: "H3 Max supports a changed clip of 0.92–15 seconds. Shorten the changed interval or choose full regeneration with multiple beats." });
   const checkTimes = [...new Set([0, ...source?.cuts ?? [], ...(action ? [Math.max(0, action.start - 0.1), action.start + 0.1, (action.start + action.end) / 2, action.end - 0.1] : [totalSeconds / 2]), totalSeconds - 0.1])]
     .filter(time => time >= 0 && time < totalSeconds).sort((left, right) => left - right);
   return goalRemixAnalysisSchema.parse({
     version: 1, brief: input.brief, preferences, source, intent,
-    recipe: { targetSeconds: totalSeconds, sourceFrameSeconds: frameSeconds, keep, change, generatedSeconds,
+    recipe: { targetSeconds: totalSeconds, sourceFrameSeconds: frameSeconds, keep, change, generatedSeconds, assembly,
       reference: source && frameSeconds !== null ? sourceReferenceRange(source, frameSeconds) : null,
       preparedArtifactId: intent.cleanup === "keep" ? source?.artifactId ?? null : null,
       preparedMediaHash: intent.cleanup === "keep" ? source?.mediaHash ?? null : null,

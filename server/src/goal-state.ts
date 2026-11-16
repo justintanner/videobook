@@ -6,7 +6,7 @@ import {
   type GoalEstimates, type GoalGenerationStage, type GoalRecord, type GoalStageOutput, type GoalStageRun,
 } from "./goal-store.js";
 import { goalStageAttempts } from "./goal-stills.js";
-import { refreshGoalShortPlan, shortRemixOf, shortStoryboardOf, type GoalShortPlan, type ShortStoryboardModel } from "./goal-short-plan.js";
+import { refreshGoalShortPlan, shortGenerationSegments, shortRemixOf, shortStoryboardOf, type GoalShortPlan, type ShortStoryboardModel } from "./goal-short-plan.js";
 import {
   currentShortClip, nextShortSegment, shortFrameStale, shortSegmentStale, storyboardFrameFailure, storyboardReview, type StoryboardFrameFailure,
 } from "./goal-short-runtime.js";
@@ -206,6 +206,11 @@ function outputStale(goal: GoalRecord, plan: GoalShortPlan | null, stage: GoalGe
     if (changed("replacement", replacement.replacement.prompt)) return "The character replacement prompt changed. Regenerate the replacement before continuing.";
     if (stage !== "replacement" && plan && changed("frame", plan.frame.prompt)) return "The twist prompt changed. Regenerate the twist before continuing.";
     if (stage === "frame" && shortFrameStale(goal)) return "The character replacement changed. Regenerate the twist before continuing.";
+  }
+  if (stage === "videos" && plan?.version === 5 && plan.analysis) {
+    const selected = goal.stages.videos?.outputs.find(output => output.index === index);
+    const attempt = goal.stages.videos?.attempts?.find(value => value.artifactId === selected?.artifactId);
+    if (attempt && attempt.basePrompt !== shortGenerationSegments(plan)[index]?.prompt) return "The action prompt changed. Review a compatible take before continuing.";
   }
   if (stage === "videos") return shortSegmentStale(goal, index) ? SHORT_STALE_MESSAGE : null;
   return stage === "frame" && shortFrameStale(goal) ? FRAME_STALE_MESSAGE : null;

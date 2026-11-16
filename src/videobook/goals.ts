@@ -1,7 +1,7 @@
 import type { GoalSnapshot, LegacyGoalSnapshot, ShortGoalSnapshot } from '../../server/src/tools/goal'
 import type { GoalGenerationStage } from '../../server/src/goal-store'
 import {
-  SHORT_STORYBOARD_MODEL_TITLES, shortRemixOf, shortStoryboardOf, storyboardFallbackModel, type GoalShortPlan, type ShortFinishTitle, type ShortStoryboardModel,
+  SHORT_STORYBOARD_MODEL_TITLES, shortGenerationSegments, shortRemixOf, shortStoryboardOf, storyboardFallbackModel, type GoalShortPlan, type ShortFinishTitle, type ShortStoryboardModel,
 } from '../../server/src/goal-short-plan'
 import { lowerBoundCost } from './command-plan'
 import { lowerBoundEstimate } from './provider-payload-preview'
@@ -64,7 +64,7 @@ export function goalStillStale(goal: ShortGoalSnapshot, stage: GoalGenerationSta
 }
 
 export function goalNextSegment(goal: ShortGoalSnapshot, plan: GoalShortPlan): number | null {
-  const index = plan.segments.findIndex((_, position) => !goal.stages.videos?.outputs.some(output => output.index === position) || goalStillStale(goal, 'videos', position))
+  const index = shortGenerationSegments(plan).findIndex((_, position) => !goal.stages.videos?.outputs.some(output => output.index === position) || goalStillStale(goal, 'videos', position))
   return index < 0 ? null : index
 }
 
@@ -202,13 +202,14 @@ function rowNumber(index: number): string {
 
 function shortRows(short: GoalShortPlan | null, stage: GoalGenerationStage) {
   if (!short) return []
-  if (stage === 'replacement') return shortRemixOf(short) ? [{ index: 0, number: '01', title: 'Replace character', prompt: shortRemixOf(short)!.replacement.prompt, seconds: 0 }] : []
+  const analysis = short.version === 5 ? short.analysis : undefined
+  if (stage === 'replacement') return shortRemixOf(short) ? [{ index: 0, number: '01', title: analysis?.intent.character === 'insert' ? 'Insert character' : 'Replace character', prompt: shortRemixOf(short)!.replacement.prompt, seconds: 0 }] : []
   if (stage === 'storyboards') {
     return (shortStoryboardOf(short)?.frames ?? []).map(frame => ({ index: frame.index, number: rowNumber(frame.index), title: `Storyboard ${frame.index + 1}`, prompt: frame.prompt, seconds: 0 }))
   }
   return stage === 'frame'
-    ? [{ index: 0, number: '01', title: shortRemixOf(short) ? 'Twist' : 'Frame', prompt: short.frame.prompt, seconds: 0 }]
-    : short.segments.map((segment, index) => ({ index, number: rowNumber(index), title: `Clip ${index + 1}`, prompt: segment.prompt, seconds: segment.seconds }))
+    ? [{ index: 0, number: '01', title: shortRemixOf(short) ? analysis ? 'Action setup' : 'Twist' : 'Frame', prompt: short.frame.prompt, seconds: 0 }]
+    : shortGenerationSegments(short).map((segment, index) => ({ index, number: rowNumber(index), title: `Clip ${index + 1}`, prompt: segment.prompt, seconds: segment.seconds }))
 }
 
 function stageStepId(stage: GoalGenerationStage, index: number): string {
@@ -270,17 +271,19 @@ function legacyStatusLine(goal: LegacyGoalSnapshot): GoalStatusLine {
 export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null = null): GoalStatusLine {
   if (goal.legacy) return legacyStatusLine(goal)
   const short = shortPlanOf(goal)
-  const frameName = shortRemixOf(short) ? 'twist' : 'frame'
+  const analysis = short?.version === 5 ? short.analysis : undefined
+  const frameName = shortRemixOf(short) ? analysis ? 'action setup' : 'twist' : 'frame'
+  const characterName = analysis?.intent.character === 'insert' ? 'character insertion' : 'character replacement'
   const progress = goalProgress(goal)
-  const total = short?.segments.length ?? 0
+  const total = short ? shortGenerationSegments(short).length : 0
   const finish = goal.finish
   if (progress.phase === 'planning') return statusLine(goal.preparation?.status === 'running' ? 'Preparing source' : 'Planning', goal.preparation?.status === 'running' ? 'Preparing' : 'Planning', null, 'live', true)
-  if (finish?.status === 'running') return statusLine('Burning the saved watermark', 'Finishing', null, 'live', true)
+  if (finish?.status === 'running') return statusLine(analysis?.recipe.assembly ? 'Assembling and finishing the reviewed edit' : 'Burning the saved watermark', 'Finishing', null, 'live', true)
   if (finish?.status === 'failed') return statusLine('Finishing failed', 'Finishing failed', 'Finish', 'attention', false)
   if (progress.phase === 'review') {
     if (goal.stage === 'storyboards' && goalStoryboardFailures(goal) > 0) return statusLine(storyboardFailureText(goal), 'Review', 'Review', 'attention', false)
     if (goal.stage === 'storyboards') return statusLine(`Review storyboard · ${shortEstimateText(goalStoryboardEstimate(goal))}`, 'Review', 'Review', 'review', false)
-    if (goal.stage === 'replacement') return statusLine(`Review character replacement · ${shortEstimateText(goal.estimate.replacement)}`, 'Review', 'Review', 'review', false)
+    if (goal.stage === 'replacement') return statusLine(`Review ${characterName} · ${shortEstimateText(goal.estimate.replacement)}`, 'Review', 'Review', 'review', false)
     if (goal.stage !== 'videos') return statusLine(`Review ${frameName} · ${shortEstimateText(goal.estimate.frame)}`, 'Review', 'Review', 'review', false)
     const next = progress.shots.find(shot => shot.state !== 'done' || goalStillStale(goal, 'videos', shot.index))?.index
     if (next === undefined) return statusLine(`Review finish · ${formatGoalClock(goalPlanSeconds(short))}`, 'Review', 'Review', 'review', false)
@@ -290,15 +293,15 @@ export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null
     const activity = progress.active?.state === 'generating' ? `Generating${elapsedSeconds === null ? '' : ` ${formatGoalClock(elapsedSeconds)}`}` : 'Submitting'
     const revised = revisionLabel(goal)
     const number = (progress.active?.index ?? 0) + 1
-    const name = progress.phase === 'replacement' ? 'Replace character' : progress.phase === 'frame' ? capitalized(frameName) : progress.phase === 'storyboards' ? `Storyboard ${number} of ${progress.total}` : `Clip ${number} of ${total}`
-    const compact = progress.phase === 'replacement' ? 'Replace' : progress.phase === 'frame' ? capitalized(frameName) : progress.phase === 'storyboards' ? 'Storyboard' : `${number}/${total}`
+    const name = progress.phase === 'replacement' ? capitalized(characterName) : progress.phase === 'frame' ? capitalized(frameName) : progress.phase === 'storyboards' ? `Storyboard ${number} of ${progress.total}` : `Clip ${number} of ${total}`
+    const compact = progress.phase === 'replacement' ? analysis?.intent.character === 'insert' ? 'Insert' : 'Replace' : progress.phase === 'frame' ? capitalized(frameName) : progress.phase === 'storyboards' ? 'Storyboard' : `${number}/${total}`
     return statusLine(`${revised ? `Revising ${revised}` : name} · ${activity}`, compact, null, 'live', true)
   }
   if (progress.phase === 'failed' || progress.phase === 'interrupted') {
     const word = progress.phase === 'failed' ? 'failed' : 'interrupted'
     const number = (progress.active?.index ?? 0) + 1
     const board = progress.phase === 'failed' && goalStoryboardFailures(goal) > 0 ? storyboardFailureText(goal) : `Storyboard ${number} ${word}`
-    const text = !goal.chainId ? `Planning ${word}` : progress.stage === 'videos' ? `Clip ${number} ${word}` : progress.stage === 'storyboards' ? board : progress.stage === 'replacement' ? `Character replacement ${word}` : `${capitalized(frameName)} ${word}`
+    const text = !goal.chainId ? `Planning ${word}` : progress.stage === 'videos' ? `Clip ${number} ${word}` : progress.stage === 'storyboards' ? board : progress.stage === 'replacement' ? `${capitalized(characterName)} ${word}` : `${capitalized(frameName)} ${word}`
     return statusLine(text, progress.phase === 'failed' ? 'Failed' : 'Interrupted', 'Retry', 'attention', false)
   }
   if (progress.phase === 'complete') return statusLine(`Short ready · ${formatGoalClock(goalPlanSeconds(short))}`, 'Done', 'Preview', 'done', false)
@@ -344,7 +347,7 @@ export function goalGenerationMarks(goals: readonly GoalSnapshot[]): ReadonlyMap
   for (const goal of goals) {
     if (goal.legacy) continue
     const plan = shortPlanOf(goal)
-    const segments = plan?.segments.length ?? 1
+    const segments = plan ? shortGenerationSegments(plan).length : 1
     const boards = shortStoryboardOf(plan)?.frames.length ?? 1
     for (const step of Object.values(goal.stages).flatMap(run => run.allSteps)) {
       const clip = /^clip(\d+)$/.exec(step.id)
@@ -413,7 +416,7 @@ function overallProgress(goal: ShortGoalSnapshot): number {
   const storyboard = goal.storyboard ? 1 : 0
   const remix = shortRemixOf(short) ? 1 : 0
   const done = remix + (goal.stages.replacement?.outputs.length ? 1 : 0) + (storyboard && goalStoryboardClean(goal) ? 1 : 0) + (goal.stages.frame?.outputs.length ? 1 : 0) + (goal.stages.videos?.outputs.length ?? 0)
-  return Math.round(done / (storyboard + remix * 2 + 1 + short.segments.length) * 100)
+  return Math.round(done / (storyboard + remix * 2 + 1 + shortGenerationSegments(short).length) * 100)
 }
 
 function remixTileShots(goal: ShortGoalSnapshot): GoalShotView[] | null {
@@ -484,7 +487,7 @@ export function goalTileView(goal: GoalSnapshot | null, label: string | undefine
     noteTone: progress.phase === 'review' && goal.stage === 'storyboards' && goalStoryboardFailures(goal) > 0 ? 'attention' : tileChips[progress.phase].tone,
     chip: goal.finish?.status === 'running' ? { label: 'Finishing', tone: 'live' } : tileChips[progress.phase],
     progressPercent: overallProgress(goal),
-    shotsLabel: short.segments.length === 1 ? `1 × ${seconds}s` : `${short.segments.length} clips · ${seconds}s`,
+    shotsLabel: short.version === 5 && short.analysis?.recipe.assembly ? `${short.analysis.recipe.generatedSeconds}s action · ${seconds}s final` : shortGenerationSegments(short).length === 1 ? `1 × ${seconds}s` : `${shortGenerationSegments(short).length} clips · ${seconds}s`,
     aspectRatio: short.aspectRatio,
     thumbnails: (goal.stages.frame?.outputs ?? []).map(output => ({ artifactId: output.artifactId, cellId: output.cellId, label: 'Frame' })),
   }

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireApiKey } from "../api-key.js";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
 import { readGoal, requireGoalShortContent, type GoalGenerationStage } from "../goal-store.js";
-import { shortRemixOf, type GoalShortPlan } from "../goal-short-plan.js";
+import { shortGenerationSegments, shortRemixOf, type GoalShortPlan } from "../goal-short-plan.js";
 import { shortBriefNames, shortPlannerBrief, shortRevisionInstructions, shortRevisionIssues, shortRevisionPart, shortRevisionResponseSchema, type ShortPlannerIssue } from "../goal-short-planner.js";
 import { shortRulesOutPhone, shortWantsPhone, stripShortBannedWords, withoutShortPhoneSentences } from "../goal-short-rules.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } from "../openai-intelligence.js";
@@ -25,8 +25,8 @@ function revisedPrompt(text: string): string | null {
 function revisionContext(plan: GoalShortPlan, stage: GoalGenerationStage, index: number) {
   if (stage === "storyboards") return {};
   if (stage === "replacement") return { next: plan.frame.prompt };
-  if (stage === "frame") return { ...(shortRemixOf(plan) ? { previous: shortRemixOf(plan)!.replacement.prompt } : {}), next: plan.segments[0]?.prompt ?? null };
-  return { previous: index === 0 ? plan.frame.prompt : plan.segments[index - 1]!.prompt, next: plan.segments[index + 1]?.prompt ?? null };
+  if (stage === "frame") return { ...(shortRemixOf(plan) ? { previous: shortRemixOf(plan)!.replacement.prompt } : {}), next: shortGenerationSegments(plan)[0]?.prompt ?? null };
+  return { previous: index === 0 ? plan.frame.prompt : shortGenerationSegments(plan)[index - 1]!.prompt, next: shortGenerationSegments(plan)[index + 1]?.prompt ?? null };
 }
 
 async function reviseShortPrompt(engine: Engine, payload: RevisePayload, signal: AbortSignal): Promise<{ prompt: string }> {

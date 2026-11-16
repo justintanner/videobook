@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import {
-  formatShortSeconds, shortFinishTitleInput, shortFinishTitleIssue, shortRemixOf, SHORT_STORYBOARD_MODEL_TITLES, SHORT_WORD_CEILINGS, withShortFinishTitle, type GoalShortPlan, type ShortFinishTitle,
+  formatShortSeconds, shortGenerationSegments, shortFinishTitleInput, shortFinishTitleIssue, shortRemixOf, SHORT_STORYBOARD_MODEL_TITLES, SHORT_WORD_CEILINGS, withShortFinishTitle, type GoalShortPlan, type ShortFinishTitle,
 } from '../../../server/src/goal-short-plan'
 import type { GoalGenerationStage } from '../../../server/src/goal-store'
-import { remixPromptFindings } from '../../../server/src/goal-remix-model'
+import { remixAssemblyReviewKey, remixPromptFindings } from '../../../server/src/goal-remix-model'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
   goalCanRetry, goalNextSegment, goalPlanSeconds, goalStillStale, goalStillVersions, goalStoryboardClean, goalStoryboardEstimate, goalStoryboardRetry, shortEstimateText,
@@ -14,6 +14,7 @@ import { GoalPromptInput } from './GoalPromptInput'
 import { GoalMedia } from './GoalStillCard'
 import { GoalInitialAnalysis } from './GoalInitialAnalysis'
 import { GoalSourcePreparation } from './GoalSourcePreparation'
+import { GoalActionWindow } from './GoalActionWindow'
 
 type GoalAction = Record<string, unknown>
 type AssetResolver = (artifactId: string) => AssetRecord | null
@@ -96,8 +97,10 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
     ? { ...plan, title: nextTitle, frame: { ...plan.frame, prompt: nextFrame }, segments: nextSegments }
     : { ...plan, title: nextTitle, ...(plan.remix ? { remix: { ...plan.remix, replacement: { ...plan.remix.replacement, prompt: replacementPrompt.trim() } } } : {}), frame: { ...plan.frame, prompt: nextFrame }, segments: nextSegments, ...(analysis ? { analysis } : {}) }
   const draft = withShortFinishTitle(edited, typedTitle)
+  const generationSegments = shortGenerationSegments(draft)
+  const assembly = analysis?.recipe.assembly
   const dirty = JSON.stringify(draft) !== JSON.stringify(plan)
-  const promptsReady = Boolean(draft.title && draft.frame.prompt && (!remix || replacementPrompt.trim()) && draft.segments.every(segment => segment.prompt)) && titleIssue === null
+  const promptsReady = Boolean(draft.title && draft.frame.prompt && (!remix || replacementPrompt.trim()) && draft.segments.every(segment => segment.prompt) && generationSegments.every(segment => segment.prompt)) && titleIssue === null
   const frameOutput = goal.stages.frame?.outputs[0]
   const replacementOutput = goal.stages.replacement?.outputs[0]
   const replacing = view === 'replacement'
@@ -110,7 +113,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const replacementReady = !remix || Boolean(replacementOutput && !replacementOutput.stale)
   const frameReady = Boolean(frameOutput && !frameOutput.stale) && replacementReady
   const clips = [...(goal.stages.videos?.outputs ?? [])].sort((left, right) => left.index - right.index)
-  const currentClip = clips.at(-1) ?? null
+  const currentClip = assembly ? clips.find(clip => clip.index === 0) ?? null : clips.at(-1) ?? null
   const next = goalNextSegment(goal, plan)
   const running = goal.status === 'running'
   const finishing = goal.finish?.status === 'running'
@@ -122,11 +125,12 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const sourceAsset = sourceId ? resolveAsset(sourceId) : null
   const clipAsset = currentClip ? resolveAsset(currentClip.artifactId) : null
   const finalAsset = goal.finalArtifactId ? resolveAsset(goal.finalArtifactId) : null
-  const canFinish = Boolean(sourceId) && Boolean(sourceAsset?.mediaUrl) && (!remix || frameReady) && !dirty && !disabled && !running && !finishing && (goal.status === 'review' || goal.status === 'completed' || finishFailed)
+  const actionReviewed = !assembly || Boolean(analysis && goal.actionWindow && goal.actionWindow.artifactId === currentClip?.artifactId && goal.actionWindow.mediaHash === clipAsset?.objectHash && goal.actionWindow.recipeKey === remixAssemblyReviewKey(analysis))
+  const canFinish = actionReviewed && Boolean(sourceId) && Boolean(sourceAsset?.mediaUrl) && (!remix || frameReady) && !dirty && !disabled && !running && !finishing && (goal.status === 'review' || goal.status === 'completed' || finishFailed)
   const totalSeconds = goalPlanSeconds(plan)
   const notes = goal.notes ?? []
   const beatLimit = Math.min(15, 60 - totalSeconds)
-  const canAddBeat = plan.segments.length < 4 && beatLimit >= 2
+  const canAddBeat = !assembly && plan.segments.length < 4 && beatLimit >= 2
   const saved = async () => dirty ? shortSnapshot(await onAction({ action: 'update', revision: goal.revision, plan: draft })) : goal
   const revisingName = (stage: GoalGenerationStage, index: number) => ({ storyboards: `the clean-up of storyboard ${index + 1}`, replacement: 'the character replacement', frame: remix ? 'the twist' : 'the frame prompt', videos: `beat ${index + 1}` })[stage]
   const generate = (action: 'approve' | 'regenerate' | 'revise', stage: GoalGenerationStage, index = 0, note?: string, model?: string) => onRun(async () => {
@@ -165,7 +169,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
       {tabs.map(([id, label]) => <button key={id} type="button" className="goal-panel-button" aria-pressed={view === id} onClick={() => onView(id)}>{label}</button>)}
     </nav>
     {remix && <p className="goal-panel-muted">{analysis ? 'Source analysis → character reference → action setup → video. The saved plan controls the entrance and action timing.' : 'One source frame → replace character → funny, realistic twist → video. Review each edit before continuing.'}</p>}
-    <p className="goal-panel-muted">{plan.segments.length === 1 ? '1 clip' : `${plan.segments.length} clips`} · {totalSeconds}s · {plan.aspectRatio} · {storyboard ? `${SHORT_STORYBOARD_MODEL_TITLES[storyboard.model]} storyboard clean-up · ` : ''}GPT Image 2.6 frame · H3 Max video</p>
+    <p className="goal-panel-muted">{generationSegments.length === 1 ? '1 generated clip' : `${generationSegments.length} clips`} · {totalSeconds}s · {plan.aspectRatio} · {storyboard ? `${SHORT_STORYBOARD_MODEL_TITLES[storyboard.model]} storyboard clean-up · ` : ''}GPT Image 2.6 frame · H3 Max video</p>
     {notes.length > 0 && <ul className="goal-short-notes" aria-label="Notes">{notes.map((note, index) => <li key={`${index}:${note}`}>{note}</li>)}</ul>}
     {running && <p role="status">{analysis && remix ? `Generating the ${goal.stage === 'replacement' ? 'character image' : goal.stage === 'frame' ? 'action setup' : 'video'}.` : remix && goal.stage === 'frame' ? 'Adding the twist to the reviewed replacement.' : RUNNING[goal.stage === 'assembly' ? 'videos' : goal.stage]}</p>}
     {revising && <p role="status">Writing your feedback into {revising}, then generating…</p>}
@@ -235,16 +239,16 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
         </div>
         <p className="goal-panel-muted">Use the source video for movement and setting, and the reviewed twist for appearance. The beat controls when the character and twist appear.</p>
       </>}
-      {currentClip && clipAsset?.mediaUrl
+      {!assembly && currentClip && clipAsset?.mediaUrl
         ? <video className="goal-video-preview" aria-label="Current clip" src={clipAsset.mediaUrl} poster={clipAsset.thumbnailUrl ?? undefined} controls preload="metadata" />
-        : currentClip && <GoalMedia artifactId={currentClip.artifactId} cellId={currentClip.cellId} label="Current clip" resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
-      <ol className="goal-short-segments" aria-label="Clips">{plan.segments.map((segment, index) => {
+        : !assembly && currentClip && <GoalMedia artifactId={currentClip.artifactId} cellId={currentClip.cellId} label="Current clip" resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
+      <ol className="goal-short-segments" aria-label="Clips">{generationSegments.map((segment, index) => {
         const output = clips.find(clip => clip.index === index)
         const stale = goalStillStale(goal, 'videos', index)
         const state = stale ? 'Out of date' : output ? 'Ready' : running && goal.stage === 'videos' ? 'Waiting' : 'Not generated'
         return <li key={index} className="goal-short-segment" data-state={stale ? 'stale' : output ? 'done' : 'pending'}>
           <div className="goal-short-segment-head"><strong>Clip {index + 1}</strong><span>{segment.seconds}s</span><span>{state}</span><span>{shortEstimateText(goal.estimate.segments?.[index])}</span></div>
-          <GoalPromptInput label={`Beat ${index + 1}`} value={beats[index] ?? ''} wordLimit={SHORT_WORD_CEILINGS.beat} disabled={disabled || finishing} onChange={value => setBeats(current => current.map((item, position) => position === index ? value : item))} />
+          <GoalPromptInput label={assembly ? 'Changed action prompt' : `Beat ${index + 1}`} value={assembly ? analysis?.intent.actionDescription ?? '' : beats[index] ?? ''} wordLimit={SHORT_WORD_CEILINGS.beat} disabled={disabled || finishing} onChange={value => assembly && analysis ? setAnalysis({ ...analysis, intent: { ...analysis.intent, actionDescription: value } }) : setBeats(current => current.map((item, position) => position === index ? value : item))} />
           {stale && <p role="status" className="goal-panel-warning">{stale}</p>}
           {output && <div className="goal-versions" aria-label={`Clip ${index + 1} versions`}>{versions('videos', index, `Clip ${index + 1}`)}</div>}
           {output && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'videos', index)}>Regenerate clip {index + 1}</button>}
@@ -256,6 +260,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
       {clips.length > 0 && <p className="goal-panel-muted">{REALISM_NOTE}</p>}
       <AlwaysAdded lines={[plan.rules.video, plan.rules.silence]} />
       {!frameOutput && <p className="goal-panel-muted">{remix ? 'Review the twist before making the video.' : 'Generate the frame before the clip.'}</p>}
+      {assembly && <details><summary>Full-video context</summary>{plan.segments.map((segment, index) => <p key={index}>{segment.prompt}</p>)}</details>}
       {canAddBeat && <fieldset className="goal-short-add">
         <legend>Add a beat</legend>
         <GoalPromptInput label="New beat" value={beat.prompt} wordLimit={SHORT_WORD_CEILINGS.beat} disabled={disabled || running} onChange={prompt => setBeat({ ...beat, prompt })} />
@@ -269,17 +274,23 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
     </>}
     {view === 'finish' && <>
       {!sourceId && <p className="goal-panel-muted">Generate every clip before finishing the short.</p>}
-      {finishing && <p role="status">Burning the saved watermark onto the reviewed take.</p>}
+      {finishing && <p role="status">{assembly ? 'Assembling the reviewed source and action, then applying the saved finish.' : 'Burning the saved watermark onto the reviewed take.'}</p>}
       {finishFailed && <p role="alert">{goal.finish?.error ?? 'Finishing failed'}</p>}
       {goal.finalArtifactId && finalAsset?.mediaUrl && <video className="goal-video-preview" aria-label="Finished short" src={finalAsset.mediaUrl} poster={finalAsset.thumbnailUrl ?? undefined} controls preload="metadata" />}
       {!finishing && !goal.finalArtifactId && sourceAsset?.mediaUrl && <video className="goal-video-preview" aria-label="Reviewed take" src={sourceAsset.mediaUrl} poster={sourceAsset.thumbnailUrl ?? undefined} controls preload="metadata" />}
-      <p className="goal-panel-muted">Finish keeps the reviewed take and burns the saved watermark.</p>
+      <p className="goal-panel-muted">{assembly ? 'Finish keeps the source shots outside the changed interval and inserts the reviewed action window, then applies the selected sound and saved watermark.' : 'Finish keeps the reviewed take and burns the saved watermark.'}</p>
       {!finishing && sourceId && !sourceAsset?.mediaUrl && <p role="status">The short is not playable yet.</p>}
       <GoalFinishTitle
         headline={burnedTitle} secondary={englishLine} slots={goal.titleSlots} estimate={goal.estimate.title} options={titleOptions} issue={titleIssue}
         disabled={disabled || finishing} onHeadline={setBurnedTitle} onSecondary={setEnglishLine} onWrite={() => onRun(onWriteTitle)}
       />
     </>}
+    {(view === 'video' || view === 'finish') && assembly && analysis && currentClip && clipAsset && <GoalActionWindow
+      key={`${currentClip.artifactId}:${goal.actionWindow?.reviewedAt ?? ''}`} analysis={analysis} asset={clipAsset} window={goal.actionWindow ?? null} reviewed={actionReviewed}
+      disabled={disabled || running || finishing || goal.status === 'cancelled'} onReview={startSeconds => onRun(async () => {
+        const current = await saved()
+        return onAction({ action: 'review_action', revision: current.revision, artifact_id: currentClip.artifactId, media_hash: clipAsset.objectHash, start_seconds: startSeconds, confirmed: true })
+      })} />}
     <div className="goal-panel-bar">
       <div className="goal-panel-bar-copy"><span>{dirty ? 'Saving keeps the settings with this short.' : 'Each paid step needs its own approval.'}</span></div>
       {dirty && <button type="button" className="goal-panel-button" disabled={disabled || !promptsReady || finishing} onClick={() => onRun(() => onAction({ action: 'update', revision: goal.revision, plan: draft }))}>Save</button>}

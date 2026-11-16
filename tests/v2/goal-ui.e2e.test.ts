@@ -418,6 +418,86 @@ describe('goal mode in the browser', () => {
     }
   }, testBudget(600_000))
 
+  scenario('reviews the retained action on desktop and mobile before assembling the source montage', async () => {
+    const fixtures = await mkdtemp(join(tmpdir(), 'videobook-goal-action-ui-'))
+    await copyVideoFixture({ width: 180, height: 320, durationSec: 6, fps: 12, source: 'color', color: 'green', audio: false }, join(fixtures, 'source.mp4'))
+    await copyVideoFixture({ width: 180, height: 320, durationSec: 3, fps: 12, source: 'color', color: 'yellow', audio: false }, join(fixtures, 'clip.mp4'))
+    const clip = await readFile(join(fixtures, 'clip.mp4'))
+    const stub = await startShortStub({ frame: await sharp({ create: { width: 180, height: 320, channels: 3, background: '#7c9a4f' } }).png().toBuffer(), clip, extended: clip })
+    const savedKeys = { FAL_API_KEY: process.env.FAL_API_KEY, OPENAI_API_KEY: process.env.OPENAI_API_KEY }
+    const savedTagging = readTaggingSettings(engine)
+    writeTaggingSettings(engine, { analysisOnNewAssets: false })
+    process.env.FAL_API_KEY = 'local-fal-key'
+    delete process.env.OPENAI_API_KEY
+    const restoreFetch = redirectFalStorage(stub.baseURL)
+    const restoreEndpoints = configureProviderEndpoints({ falQueueBaseURL: stub.baseURL, openaiBaseURL: stub.baseURL })
+    const restoreEstimator = installFalDynamicEstimator(async () => ({ total_cost: 0.21, currency: 'USD' }))
+    configureProviderPollDriverForTests({ intervalMs: 200 })
+    try {
+      for (const goal of (await goals()).goals) {
+        if (['planning', 'review', 'running'].includes(goal.status)) await call('video_goal', { action: 'cancel', goal_id: goal.goalId })
+      }
+      const source = await engine.artifacts.create('video', 'Action source')
+      if (!source.ok) throw new Error(source.error.message)
+      await engine.files.writeFromPath(source.value.artifactId, 'original.mp4', join(fixtures, 'source.mp4'))
+      const notebook = engine.notebooks.read(notebookId)
+      if (!notebook.ok) throw new Error(notebook.error.message)
+      const slot = firstEmptyNotebookGridSlot(notebookOccupiedSlots(notebook.value.cells))
+      await engine.notebooks.insertCell(notebookId, engine.notebooks.createCell({ type: 'video', slot, outputArtifactId: source.value.artifactId }))
+      const brief = `A 6 second montage from ${notebookGridTag(slot)}. The man is absent for the first 4 seconds and appears in the final two seconds. Mute. Keep source graphics. replace: "Insert the man beside the display." frame: "He is ready to wave." video: "Keep the montage. The man waves in the final two seconds."`
+      await page.reload()
+      await command(`/goal ${brief}`)
+      await expect.poll(async () => (await goals()).goals.find(goal => goal.brief === brief)?.status, { timeout: testBudget(60_000) }).toBe('review')
+      let goal = shortGoal((await goals()).goals.find(candidate => candidate.brief === brief))
+      for (let stage = 0; stage < 3; stage++) {
+        goal = shortGoal(await call<GoalSnapshot>('video_goal', { action: 'approve', goal_id: goal.goalId, revision: goal.revision }))
+        await expect.poll(async () => { goal = shortGoal(await current(goal)); return goal.status }, { timeout: testBudget(90_000) }).toBe('review')
+      }
+      await page.reload()
+      await tile(goal).waitFor({ state: 'visible', timeout: testBudget(30_000) })
+      if (!(await panel().isVisible())) await tile(goal).click()
+      const tabs = panel().getByRole('navigation', { name: 'Short stages' })
+      await tabs.getByRole('button', { name: 'Video', exact: true }).click()
+      expect(await panel().getByLabel('Changed action prompt', { exact: true }).isVisible()).toBe(true)
+      expect(await panel().getByRole('button', { name: 'Add beat', exact: true }).count()).toBe(0)
+      await tabs.getByRole('button', { name: 'Finish', exact: true }).click()
+      const finish = panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: /^Finish$/ })
+      expect(await finish.isDisabled()).toBe(true)
+      const window = panel().getByRole('group', { name: 'Retained action window' })
+      for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+        await page.setViewportSize(viewport)
+        await window.scrollIntoViewIfNeeded()
+        expect(await window.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+      }
+      await window.getByLabel('Retained action start seconds').fill('1')
+      await window.getByLabel('The whole action and payoff are inside this window').check()
+      await screenshot('goal-action-window-mobile')
+      await window.getByRole('button', { name: 'Use this action window', exact: true }).click()
+      await expect.poll(async () => shortGoal(await current(goal)).actionWindow?.startFrame, { timeout: testBudget(30_000) }).toBe(12)
+      await expect.poll(() => finish.isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
+      await finish.click()
+      await expect.poll(async () => shortGoal(await current(goal)).finish?.status, { timeout: testBudget(120_000) }).toBe('completed')
+      expect(stub.submissions).toHaveLength(3)
+      expect(stub.submissions.at(-1)!.body.duration).toBe(2)
+      expect(stub.unexpected).toEqual([])
+      expect(errors).toEqual([])
+    } finally {
+      await stopBookQueue(bookId)
+      resetProviderPollDriverForTests()
+      restoreEstimator()
+      restoreEndpoints()
+      restoreFetch()
+      await stub.close()
+      for (const [key, value] of Object.entries(savedKeys)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+      writeTaggingSettings(engine, savedTagging)
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      await rm(fixtures, { recursive: true, force: true })
+    }
+  }, testBudget(240_000))
+
   scenario('prepares and reuses a reviewed source with the shared mask editor on desktop and mobile', async () => {
     const fixtures = await mkdtemp(join(tmpdir(), 'videobook-goal-preparation-ui-'))
     try {
