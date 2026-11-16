@@ -106,11 +106,12 @@ and clothes) and whatever else the brief takes from the picture. The first 12
 usable images are kept. A brief with no image plans the person from its own
 words; there is no main character to set up and no character sheet to make.
 
-**From a video.** The default is **extract one frame → replace character →
-funny, realistic twist → video**. The first video mentioned supplies one frame
-from the middle of its longest shot, captured locally at no cost. Give an
-exact time with `@a1 at 3s`. Further videos are skipped with a note. The source
-images supply the replacement person; the extracted frame supplies the pose,
+**From a video.** Initial analysis resolves the brief against this book's saved
+defaults, preserving source shots when requested and identifying the interval
+that changes. It chooses an action-relevant frame, with the middle of the
+longest shot as a fallback, captured locally at no cost. Give an exact time
+with `@a1 at 3s`. Further videos are skipped with a note. The source
+images supply the person's identity; the extracted frame supplies the pose,
 camera and scene. For example, `/goal make a 12s clip based on @a1 but with @a2
 holding the umbrella for a monitor lizard, realistic` first replaces the man,
 then replaces the dog with a monitor lizard in a separate image edit, then
@@ -126,13 +127,24 @@ Lengths outside 5–60 seconds are clamped to that range. Extra quoted beats get
 segments where they fit, or are folded into the last beat. The planner writes
 the title, a replacement prompt, a twist prompt and one beat per clip for a
 video source. Quote `replace: "…"`, `twist: "…"` and `video: "…"` to write the
-three steps yourself and skip planning. `frame: "…"` is an alias for the twist;
+three steps yourself and skip paid prompt writing. Local initial analysis still
+checks the recipe. `frame: "…"` is an alias for the twist;
 `beat 1: "…"` and later beat numbers specify individual clips. Without an OpenAI
 key, the brief itself supplies a reviewable plan, with a note explaining how
 to enable the planner.
 
-**Review.** The goal panel has a tab per stage, and every paid step has its
-own approval with its estimate:
+**Initial analysis.** Before creative generation, the plan saves source hashes,
+cached scene and sample evidence, explicit action/reveal timing, source preparation,
+reference limits, reusable reviewed images, sound and branding, estimates and
+unresolved decisions. Explicit brief instructions override book defaults. Source
+remixes default to original sound; natural mouth movement for eating is allowed
+without new dialogue. Prepare and review the proposed overlay removal while
+retaining physical signs and printing. Warm analysis and later stages reuse
+unchanged evidence. **Use these defaults for this book** saves preferences for
+future goals; it does not start a paid run.
+
+**Review.** The goal panel has a tab per stage. Manual mode retains each paid
+step's approval and estimate:
 
 1. **Replace character:** GPT Image 2.6 replaces the main person in the
    extracted frame using the source images or brief. This same edit clears
@@ -211,6 +223,24 @@ The complete image-input price is unavailable, so the review is labelled
 unknown and requires an explicit paid request. Unchanged media and constraints
 reuse the saved review, including refusals, without another paid submission.
 Missing credentials preserve local checks and manual review.
+
+**Automatic continuation.** Enable **Offer automatic continuation for this recipe**,
+set a USD allowance, then **Run reviewed recipe**. This approves the saved recipe
+and currently selected images. New images stop for review by default. The runner
+reuses compatible reviewed work, checks each result, and continues eligible
+steps through local assembly, sound and branding to a final preview. It retains
+reservations, recorded spend and remaining allowance across reloads and resumes.
+Pause stops future submissions; already submitted work remains available.
+
+Changed inputs, source/action review, failed or unverified checks, account errors,
+unknown prices and insufficient allowance stop the run. Estimates are not a
+provider billing cap; actual cost can exceed them. H3's lower-bound quote currently
+requires manual video approval. Optional visual review and titles also require
+explicit requests. A no-dialogue goal using generated sound requires listening
+to that sound before automatic finishing. Restarts and download recovery use the
+saved provider task, and confirmed account failures do not rotate upload hosts.
+New analyzed goals have zero automatic creative retries, including no second
+paid corrective planning request. Explicit manual retries remain available.
 
 **Earlier AI-tell check.** On saved plans, **Check for AI tells** looks at the frame, or at
 four frames of a clip's new footage, beside the first source image when there

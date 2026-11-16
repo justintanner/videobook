@@ -7,6 +7,7 @@ import type { CostHints } from "@apicity/cost";
 import { registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { assertProviderPayload } from "../provider-prompt-transform.js";
 import { requireApiKey } from "../api-key.js";
+import { guardGoalSubmission } from "../goal-automation-guard.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { resolveModel } from "../media/descriptor.js";
 import { buildWireRequest, modeSendsNoDuration, type RefParams } from "../media/request.js";
@@ -112,6 +113,7 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
   if (sourceError) throw new Error(sourceError);
   const source = await resolveGenerationSource(engine, model, job.refs, job.options);
   if (!source.ok) throw new Error(source.error);
+  await guardGoalSubmission(engine, job, false);
   const uploaded = await uploadRefs(engine, adapter, model, source.refs, ctx.signal);
   const fieldUrls = await uploadFieldRefs(engine, adapter, model, job.fieldRefs ?? {}, uploaded, ctx.signal);
   if (lineage) await assertGoalLineageCurrent(engine, lineage);
@@ -122,6 +124,9 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
   assertProviderPayload(built.request, { toolName: model.id, wire: true });
   await engine.metadata.artifacts.write(job.assetId, "generation-payload", storedPayload(model, built.request));
   const meta = { ...generationMeta(job, model, refs), ...(await replaceAudioMeta(engine, job.replaceAudioWith)) };
+  const costHints = { ...await generationSourceCostHints(engine, refs, job), ...source.costHints };
+  await guardGoalSubmission(engine, job, true);
+  ctx.signal.throwIfAborted();
   const result = await adapter.submit(built.request, {
     engine,
     ctx,
@@ -130,10 +135,11 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
     assetId: job.assetId,
     assetDir: job.assetDir,
     meta,
-    costHints: { ...await generationSourceCostHints(engine, refs, job), ...source.costHints },
+    costHints,
+    ...(job.goalOrigin?.creativeRetries === 0 ? { creativeRetries: 0 } : {}),
   });
   if (result.kind === "done") {
-    await completeMediaGeneration({ engine, assetId: job.assetId, assetDir: job.assetDir, bookId: job.bookId, meta, outputs: result.outputs });
+    await completeMediaGeneration({ engine, assetId: job.assetId, assetDir: job.assetDir, bookId: job.bookId, meta, outputs: result.outputs, signal: ctx.signal });
   }
   return { success: true, model: model.id, taskId: result.taskId, status: result.kind };
 }

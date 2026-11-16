@@ -13,6 +13,8 @@ export const goalGenerationOriginSchema = z.object({
   frameArtifactId: z.string().nullable(),
   source: z.object({ artifactId: z.string(), mediaHash: z.string() }).strict().nullable(),
   transcribe: z.literal(false).optional(),
+  creativeRetries: z.literal(0).optional(),
+  automation: z.object({ id: z.string(), reservationId: z.string() }).strict().optional(),
 }).strict();
 
 export type GoalGenerationOrigin = z.infer<typeof goalGenerationOriginSchema>;

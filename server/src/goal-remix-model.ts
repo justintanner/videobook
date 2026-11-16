@@ -12,7 +12,7 @@ export const remixPreferencesSchema = z.object({
   cleanupMethod: z.enum(["lama", "fill"]).default("lama"),
   semanticChecks: z.boolean().default(false),
   autoContinue: z.boolean().default(false),
-  allowanceUsd: z.number().positive().nullable().default(null),
+  allowanceUsd: z.number().nonnegative().nullable().default(null),
   reviewImages: z.boolean().default(true),
   branding: z.boolean().default(true),
 }).strict();

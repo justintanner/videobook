@@ -142,6 +142,7 @@ export function registerCompleteProviderTaskJob(engine: Engine): void {
         case "media":
           await completeMediaGeneration({
             engine,
+            signal: ctx.signal,
             assetId,
             assetDir,
             bookId,

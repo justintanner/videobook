@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import type { Engine } from "videobook-engine";
 import { queue } from "../queue.js";
 import { contentHash } from "../upload.js";
@@ -16,6 +17,7 @@ export interface MediaCompletion {
   bookId: string;
   meta: Record<string, unknown>;
   outputs: ProviderOutput[];
+  signal?: AbortSignal;
 }
 
 interface Downloaded {
@@ -55,16 +57,37 @@ function extensionFromContentType(contentType: string | null, media: Media): str
   return EXTENSIONS[media].includes(normalized) ? normalized : null;
 }
 
-async function download(output: ProviderOutput, media: Media): Promise<Downloaded> {
-  if ("bytes" in output) return { bytes: output.bytes, extension: output.extension, ...(output.url ? { url: output.url } : {}) };
-  const response = await fetch(output.url);
-  if (!response.ok) throw new Error(`Failed to download generated ${media}: ${response.status} ${response.statusText}`);
+class DownloadError extends Error {
+  readonly retryable: boolean;
+  constructor(message: string, retryable: boolean) { super(message); this.retryable = retryable; }
+}
+
+async function downloadOnce(url: string, media: Media, signal?: AbortSignal): Promise<Downloaded> {
+  const timeout = AbortSignal.timeout(120_000);
+  const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new DownloadError(`Failed to download generated ${media}: ${response.status} ${response.statusText}`, response.status === 408 || response.status === 429 || response.status >= 500);
+  }
   const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length === 0) throw new Error(`Generated ${media} download was empty`);
-  const extension = extensionFromUrl(output.url, media)
+  if (bytes.length === 0) throw new DownloadError(`Generated ${media} download was empty`, true);
+  const extension = extensionFromUrl(url, media)
     ?? extensionFromContentType(response.headers.get("content-type"), media)
     ?? FALLBACK_EXTENSION[media];
-  return { bytes, extension, url: output.url };
+  return { bytes, extension, url };
+}
+
+async function download(output: ProviderOutput, media: Media, signal?: AbortSignal): Promise<Downloaded> {
+  signal?.throwIfAborted();
+  if ("bytes" in output) return { bytes: output.bytes, extension: output.extension, ...(output.url ? { url: output.url } : {}) };
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await downloadOnce(output.url, media, signal); }
+    catch (cause) {
+      signal?.throwIfAborted();
+      if (attempt >= 2 || cause instanceof DownloadError && !cause.retryable) throw cause;
+      await delay(250 * (attempt + 1), undefined, { signal });
+    }
+  }
 }
 
 function provenance(meta: Record<string, unknown>, file: Downloaded): Record<string, unknown> {
@@ -172,7 +195,8 @@ export async function completeMediaGeneration(completion: MediaCompletion): Prom
   const media = mediaOf(completion.meta);
   const output = completion.outputs[0];
   if (!output) throw new Error(`Provider returned no ${media}`);
-  const file = await download(output, media);
+  const file = await download(output, media, completion.signal);
+  completion.signal?.throwIfAborted();
   if (media === "image") return completeImage(completion, file);
   if (media === "video") return completeVideo(completion, file);
   return completeAudio(completion, file);

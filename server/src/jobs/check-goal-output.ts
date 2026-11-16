@@ -29,7 +29,7 @@ function finding(code: string, text: string, correction: string, severity: GoalQ
 
 async function media(engine: Engine, request: GoalQualityRequest) {
   const manifest = await engine.files.manifest(request.artifactId);
-  const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, request.stage === "frame" ? "image" : "video") : null;
+  const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, ["replacement", "frame"].includes(request.stage) ? "image" : "video") : null;
   if (!manifest.ok || !file || file.objectHash !== request.mediaHash) throw new Error("The output changed while it was being checked. Check the current version.");
   return { path: join(manifest.value.path, file.name), file };
 }
@@ -42,7 +42,7 @@ async function technicalCheck(engine: Engine, request: GoalQualityRequest, signa
   let frameCount: number | null = null;
   try {
     const source = await media(engine, request);
-    if (request.stage === "frame") {
+    if (["replacement", "frame"].includes(request.stage)) {
       const metadata = await sharp(source.path).metadata();
       await sharp(source.path).stats();
       if (!metadata.width || !metadata.height) throw new Error("The image has no readable dimensions.");
@@ -100,7 +100,7 @@ async function semanticImages(engine: Engine, request: GoalQualityRequest, durat
     parts.push(...await imageParts(bytes.value, "Identity reference; not a frame from the result."));
   }
   const source = await media(engine, request);
-  if (request.stage === "frame") {
+  if (["replacement", "frame"].includes(request.stage)) {
     const bytes = await engine.files.read(request.artifactId, source.file.name);
     if (!bytes.ok) throw new Error(bytes.error.message);
     parts.push(...await imageParts(bytes.value, "Selected action setup image."));

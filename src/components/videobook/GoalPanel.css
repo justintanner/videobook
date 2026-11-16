@@ -573,7 +573,8 @@ span.goal-progress-address {
   overflow-wrap: anywhere;
 }
 
-.goal-output-quality .goal-panel-bar {
+.goal-output-quality .goal-panel-bar,
+.goal-automation .goal-panel-bar {
   position: static;
   flex-wrap: wrap;
   margin: 0;
@@ -625,3 +626,10 @@ span.goal-progress-address {
   object-fit: contain;
   background: #080b10;
 }
+.goal-automation { display: grid; gap: 0.6rem; min-width: 0; padding: 0.8rem; border: 1px solid var(--color-border, #ffffff25); border-radius: 8px; overflow-wrap: anywhere; }
+.goal-automation-steps { display: grid; gap: 0.5rem; margin: 0; }
+.goal-automation-steps > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0.6rem; }
+.goal-automation-steps dt { font-weight: 600; }
+.goal-automation-steps dd { margin: 0; }
+.goal-automation-allowance { display: grid; gap: 0.35rem; }
+.goal-automation-allowance input { max-width: 100%; min-width: 0; }

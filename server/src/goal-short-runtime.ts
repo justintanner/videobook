@@ -25,6 +25,7 @@ import { goalReferenceHashes } from "./goal-reference-images.js";
 import { goalStageAttempts } from "./goal-stills.js";
 import { goalGenerationHistory, goalHistoryInputProblem, reviewedGoalOutput, type GoalHistoryEntry } from "./goal-generation-history.js";
 import { goalQualityEstimate } from "./goal-quality.js";
+import { goalPlanningEstimate } from "./goal-planning-cost.js";
 import {
   activeGoalStage, createGoalShortCell, emptyGoalEstimates, readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent,
   type GoalEstimate, type GoalEstimates, type GoalFinish, type GoalGenerationStage, type GoalRecord, type GoalShortContent, type GoalStageOutput,
@@ -32,6 +33,7 @@ import {
 import { goalTitleEstimate, type GoalTitleShort } from "./graphics/suggest.js";
 import { assessToolCallEstimate } from "./jobs/cost-estimate-assessment.js";
 import { resolveModel } from "./media/descriptor.js";
+import { adapterFor } from "./media/adapters/index.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { resolveNotebookArtifactReference } from "./notebook-reference-resolver.js";
@@ -200,7 +202,8 @@ export async function estimateShort(engine: Engine, plan: GoalShortPlan, short: 
   const title = goalTitleEstimate({ brief: short.brief, draft: short.draft, plan });
   const quality = plan.version === 5 && plan.analysis?.recipe.outputAssertions ? goalQualityEstimate(plan) : null;
   return { frame, storyboards, videos, total: summed([storyboards, ...(replacement ? [replacement] : []), frame, videos,
-    ...(quality && plan.version === 5 && plan.analysis?.preferences.semanticChecks ? [quality] : [])]), segments, ...(replacement ? { replacement } : {}), ...(quality ? { quality } : {}), ...(storyboard ? { storyboardFrames, storyboardFallbackFrames } : {}), title };
+    ...(quality && plan.version === 5 && plan.analysis?.preferences.semanticChecks ? [quality] : [])]), segments, ...(replacement ? { replacement } : {}), ...(quality ? { quality } : {}),
+    ...(plan.version === 5 && plan.analysis ? { planning: goalPlanningEstimate(short.brief, plan) } : {}), ...(storyboard ? { storyboardFrames, storyboardFallbackFrames } : {}), title };
 }
 
 export async function shortFingerprint(
@@ -634,6 +637,34 @@ function assertStageInputs(goal: GoalRecord, plan: GoalShortPlan, target: ShortT
   if (target.stage === "videos") outputAddress(document, selectedOutput(goal, "frame", 0));
 }
 
+export async function shortStageProposal(engine: Engine, goal: GoalRecord, stage: GoalGenerationStage, index: number) {
+  const content = requireGoalShortContent(engine, goal);
+  if (!content.plan) throw new Error("Wait for initial analysis before continuing.");
+  const document = readNotebook(engine, goal.notebookId);
+  const plan = refreshGoalShortPlan(content.plan, document);
+  const target = { stage, indexes: [index] };
+  await assertRemixPreflight(engine, plan);
+  assertStageKey(plan, stage);
+  assertStageInputs(goal, plan, target, document);
+  await assertShortUpstream(engine, goal, plan, stage);
+  const sourceClip = stage === "videos" && index > 0 ? await continuationSource(engine, goal, index) : null;
+  const step = stageSteps(goal, plan, document, target, sourceClip)[0]!.step;
+  const envKey = adapterFor(resolveModel(String(step.params.model))).envKey;
+  if (!getApiKey(envKey)) throw new Error(`Set a valid ${envKey} in Settings before automatic generation.`);
+  const refs: Record<string, string[]> = {};
+  for (const [role, values] of Object.entries(step.params.refs ?? {})) {
+    if (!Array.isArray(values)) throw new Error("The stage has invalid reference inputs.");
+    refs[role] = values.map((value: unknown) => {
+      if (typeof value !== "string") throw new Error("The stage has an unresolved reference.");
+      const resolved = resolveNotebookArtifactReference({ engine, documents: [document], reference: value });
+      if ("code" in resolved) throw new Error(resolved.message);
+      return resolved.artifactId;
+    });
+  }
+  return { step, estimate: await priced(engine, step, refs),
+    inputKey: await shortFingerprint(engine, plan, stage, index, stageSource(goal, stage, index)) };
+}
+
 export async function startShortStage(engine: Engine, goal: GoalRecord, args: GoalArgs, regenerate: boolean): Promise<GoalRecord> {
   const active = activeGoalStage(goal);
   if (!regenerate && goal.status === "running" && goal.stages[active]?.revision === args.revision) return goal;
@@ -662,7 +693,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   const plan = refreshGoalShortPlan(content.plan, document);
   await assertRemixPreflight(engine, plan);
   await assertShortUpstream(engine, goal, plan, stage);
-  goal = saveGoal(engine, await rememberUpstreamReviews(engine, goal, plan, stage));
+  goal = saveGoal(engine, await rememberUpstreamReviews(engine, goal, plan, stage, typeof args.automation_id === "string"));
   const steps = await Promise.all(stageSteps(goal, plan, document, target, sourceClip, model).map(async ({ index: position, step }) => {
     const source = stageSource(goal, stage, position);
     return { index: position, step, source, fingerprint: await shortFingerprint(engine, plan, stage, position, source, model) };
@@ -682,6 +713,8 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
     version: 1, goalId: goal.goalId, stage, index: position, revision: content.revision, fingerprint,
     basePrompt: stagePrompt(plan, stage, position), frameArtifactId: source,
     ...(stage === "videos" ? { transcribe: false as const } : {}),
+    ...(plan.version === 5 && plan.analysis ? { creativeRetries: 0 as const } : {}),
+    ...(typeof args.automation_id === "string" && typeof args.reservation_id === "string" ? { automation: { id: args.automation_id, reservationId: args.reservation_id } } : {}),
     source: plan.version === 5 && plan.analysis?.source ? { artifactId: plan.analysis.source.artifactId, mediaHash: plan.analysis.source.mediaHash } : null,
   }])) });
   const approvedAt = new Date().toISOString();
@@ -706,7 +739,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   });
 }
 
-async function assertRemixPreflight(engine: Engine, plan: GoalShortPlan): Promise<void> {
+export async function assertRemixPreflight(engine: Engine, plan: GoalShortPlan): Promise<void> {
   if (plan.version !== 5 || !plan.analysis) return;
   const { analysis } = plan;
   const prompts = [plan.frame.prompt, plan.remix?.replacement.prompt ?? "", ...plan.segments.map(segment => segment.prompt), ...shortGenerationSegments(plan).map(segment => segment.prompt), ...Object.values(plan.rules)];
@@ -765,14 +798,16 @@ async function rememberReviewedOutput(engine: Engine, goal: GoalRecord, plan: Go
   return { ...goal, reviewedOutputs: [...(goal.reviewedOutputs ?? []).filter(item => !(item.stage === stage && item.index === index && item.artifactId === artifactId)), review] };
 }
 
-async function rememberUpstreamReviews(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, stage: GoalGenerationStage): Promise<GoalRecord> {
+async function rememberUpstreamReviews(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, stage: GoalGenerationStage, automatic: boolean): Promise<GoalRecord> {
   const upstream: GoalGenerationStage[] = stage === "videos" ? ["replacement", "storyboards", "frame"] : stage === "frame" ? ["replacement", "storyboards"] : [];
   if (!upstream.length) return goal;
   const history = await goalGenerationHistory(engine, goal.notebookId, { goalId: goal.goalId, related: true });
   let next = goal;
   for (const earlier of upstream) for (const output of goal.stages[earlier]?.outputs ?? []) {
     const entry = history.find(item => item.stage === earlier && item.index === output.index && item.artifactId === output.artifactId);
-    if (entry?.mediaHash) next = await rememberReviewedOutput(engine, next, plan, entry);
+    if (entry?.mediaHash && (!automatic || goal.automation?.approvedImages.some(review => review.artifactId === entry.artifactId && review.mediaHash === entry.mediaHash))) {
+      next = await rememberReviewedOutput(engine, next, plan, entry);
+    }
   }
   return next;
 }
@@ -786,7 +821,7 @@ function contentFingerprint(fingerprint: string): string {
   } catch { return fingerprint; }
 }
 
-async function reviewedShortCandidates(engine: Engine, goal: GoalRecord, plan: GoalShortPlan): Promise<GoalHistoryEntry[]> {
+export async function reviewedShortCandidates(engine: Engine, goal: GoalRecord, plan: GoalShortPlan): Promise<GoalHistoryEntry[]> {
   if (plan.version !== 5 || !plan.analysis?.source) return [];
   const history = await goalGenerationHistory(engine, goal.notebookId, { goalId: goal.goalId, related: true, sourceArtifactId: plan.analysis.source.artifactId });
   const source = { artifactId: plan.analysis.source.artifactId, mediaHash: plan.analysis.source.mediaHash };
@@ -1066,6 +1101,9 @@ export async function retryShortGoal(engine: Engine, goal: GoalRecord): Promise<
   if (repairClip) return startShortStage(engine, { ...goal, status: "review" }, { action: "approve", revision: content.revision, stage: "videos" }, false);
   await assertRemixPreflight(engine, plan);
   assertStageKey(plan, stage, run?.attempts?.find((attempt) => attempt.chainId === goal.chainId)?.model);
+  if (Object.values(getChainRun(engine, goal.chainId)?.goalOrigins ?? {}).some(origin => origin.automation)) {
+    return startShortStage(engine, { ...goal, status: "review" }, { action: "approve", revision: content.revision, stage }, false);
+  }
   const { lookup } = await toolLookup(engine);
   retryChainRun(engine, goal.chainId, lookup, { continueOnFailure: stage === "storyboards" });
   return saveGoal(engine, { ...goal, status: "running", error: null });

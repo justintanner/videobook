@@ -29,7 +29,7 @@ export type GoalOutputCheck = {
   key: string;
   artifactId: string;
   mediaHash: string;
-  stage: "frame" | "videos" | "finish";
+  stage: "replacement" | "frame" | "videos" | "finish";
   index: number;
   semantic: boolean;
   jobId: number | null;

@@ -8,9 +8,6 @@ import {
 import { getApiKey } from "../api-key.js";
 import { logger } from "../logger.js";
 
-// Upload prepared bytes to fal's native CDN via @apicity/fal's uploadFile
-// helper. Returns a stable https://v3.fal.media/... URL. Falls back to the
-// free-host rotation on any native failure (missing key, network, non-2xx).
 async function uploadPreparedToFal(
   data: Uint8Array,
   hashedFilename: string,
@@ -25,6 +22,8 @@ async function uploadPreparedToFal(
         contentType,
       });
     } catch (err) {
+      const status = err && typeof err === "object" && "status" in err ? err.status : null;
+      if (status === 401 || status === 403 || /\b(?:401|403|unauthori[sz]ed|insufficient (?:balance|credits)|account (?:blocked|disabled))\b/iu.test(err instanceof Error ? err.message : String(err))) throw err;
       logger.warn("fal-upload-fallback", { error: err });
     }
   } else {

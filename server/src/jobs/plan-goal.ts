@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
+import { goalPlanningOutputTokens } from "../goal-planning-cost.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } from "../openai-intelligence.js";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
 import { isCurrentShort, readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent, type GoalRecord } from "../goal-store.js";
@@ -49,7 +50,7 @@ async function askShortPlanner(engine: Engine, goal: GoalRecord, brief: string, 
   const sourceVideo = remix?.video ?? (!isLegacyShortDraft(draft) ? draft.analysisRequest?.sourceVideo : null);
   const count = draft.segmentSeconds.length;
   const options = chatIntelligenceRequestOptions();
-  const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"), options);
+  const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"), { ...options, ...(analysis ? { retries: 0 } : {}) });
   const fixedBeats = authored.beats.flatMap((beat, index) => beat === null ? [] : [[`beat ${index + 1}`, beat] as const]);
   const phones = shortWantsPhone(brief);
   const sampled = analysis?.source && analysis.source.semanticStatus !== "sampled"
@@ -72,13 +73,18 @@ async function askShortPlanner(engine: Engine, goal: GoalRecord, brief: string, 
       ...sampled?.content ?? [],
     ] }],
     text: { format: { type: "json_schema" as const, name: "short_plan", strict: true, schema: z.toJSONSchema(shortPlannerResponseSchema(count, Boolean(sourceVideo), Boolean(analysis?.source))) } },
-    max_output_tokens: analysis?.source ? 6000 : 2000,
+    max_output_tokens: goalPlanningOutputTokens(Boolean(analysis?.source)),
   };
   const first = shortPlannerAnswer(firstResponseText(await responses(intelligenceRequest(request, options), signal)));
   const firstIssues: ShortPlannerIssue[] = first
     ? shortPlannerIssues(first, count, authored, phones)
     : [{ kind: "count", message: "Answer with JSON holding a title, a frame and the beats." }];
   if (first && firstIssues.length === 0) return { ...first, ...(sampled ? { sourceSampleTimes: sampled.times } : {}) };
+  if (analysis) {
+    const cleaned = first && cleanedAnswer(first, authored, phones);
+    if (cleaned && shortPlannerIssues(cleaned, count, authored, phones).length === 0) return { ...cleaned, ...(sampled ? { sourceSampleTimes: sampled.times } : {}) };
+    throw new Error(`Planning stopped after one paid request. ${firstIssues.map(issue => issue.message).join(" ")} Edit the prompts or explicitly retry planning.`);
+  }
   const revised = await responses(intelligenceRequest({
     ...request,
     input: [...request.input, {

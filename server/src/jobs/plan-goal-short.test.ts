@@ -12,6 +12,7 @@ import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
 import { goalTestCharacters } from "../test-goals.js";
+import { createShortGoal } from "../goal-short-runtime.js";
 import { testBudget } from "../test-budget.js";
 import { shortTiming, SHORT_WORD_CEILINGS, type GoalShortDraft } from "../goal-short-plan.js";
 import { LEGACY_SHORT_SILENCE, SHORT_AVOID, SHORT_RULES, shortBannedWords } from "../goal-short-rules.js";
@@ -212,6 +213,31 @@ describe("plan_goal for a short", () => {
     expect(retry.role).toBe("user");
     expect(retry.content).toContain(issue);
     expect(requireGoalShortContent(engine, goal).plan?.frame.prompt).toBe(PLAN.frame);
+  });
+
+  it("keeps new analyzed planning to one paid request when the answer violates a hard limit", async () => {
+    answers = [{ ...PLAN, beats: [words(46), PLAN.beats[1]] }, PLAN];
+    const created = await createShortGoal(engine, engine.book.get().bookId, notebookId, { brief: "He waits for a bus, 20 seconds", requestId: uuidv7() });
+    await expect.poll(() => readGoal(engine, created.goalId).status, { timeout: testBudget(30_000) }).toBe("failed");
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ max_output_tokens: 2000 });
+    expect(readGoal(engine, created.goalId).error).toContain("after one paid request");
+    expect(answers).toHaveLength(1);
+  });
+
+  it("cleans a new plan locally without another paid corrective request", async () => {
+    answers = [{ ...PLAN, frame: "A cinematic shot of him at the bus stop." }];
+    const created = await createShortGoal(engine, engine.book.get().bookId, notebookId, { brief: "He waits for a bus, 20 seconds", requestId: uuidv7() });
+    await expect.poll(() => readGoal(engine, created.goalId).status, { timeout: testBudget(30_000) }).toBe("review");
+    expect(requests).toHaveLength(1);
+    expect(requireGoalShortContent(engine, created).plan?.frame.prompt).not.toContain("cinematic");
+  });
+
+  it("does not retry a failed paid request during new initial planning", async () => {
+    answers = [];
+    const created = await createShortGoal(engine, engine.book.get().bookId, notebookId, { brief: "He waits for a bus, 20 seconds", requestId: uuidv7() });
+    await expect.poll(() => readGoal(engine, created.goalId).status, { timeout: testBudget(30_000) }).toBe("failed");
+    expect(requests).toHaveLength(1);
   });
 
   it("re-asks once when a planner beat names a phone the brief never asked for, and drops a phone sentence the second answer keeps", async () => {

@@ -38,6 +38,7 @@ import { registerExtractNotebookAudioJob } from "./extract-notebook-audio.js";
 import { registerExtractAudioJob } from "./extract-audio.js";
 import { registerAnalyzeMusicJob } from "./analyze-music.js";
 import { registerPlanGoalJob } from "./plan-goal.js";
+import { registerContinueGoalJob } from "./continue-goal.js";
 import { registerPrepareGoalSourceJob } from "./prepare-goal-source.js";
 import { registerCheckGoalRealismJob } from "./check-goal-realism.js";
 import { registerCheckGoalOutputJob } from "./check-goal-output.js";
@@ -136,6 +137,7 @@ export function registerAllJobHandlers(
   registerAssessMediaProbeJobs(engine);
   registerAnalyzeMusicJob(engine);
   registerPlanGoalJob(engine);
+  registerContinueGoalJob(engine);
   registerPrepareGoalSourceJob(engine);
   registerCheckGoalRealismJob(engine);
   registerCheckGoalOutputJob(engine);

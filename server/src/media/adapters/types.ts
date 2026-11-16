@@ -15,6 +15,7 @@ export interface SubmitContext {
   assetDir: string;
   meta: Record<string, unknown>;
   costHints: CostHints;
+  creativeRetries?: 0;
 }
 
 export type SubmitResult =

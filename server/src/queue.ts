@@ -153,6 +153,9 @@ async function tickProviderPoll(info: RunnerInfo): Promise<void> {
     );
     await reconcileImageSubjectJobFailures(info.engine, info.bookId);
     await settleFinishedUsage(info.engine);
+    const { sweepGoalAutomation } = await import("./goal-automation.js");
+    await sweepGoalAutomation(info.engine);
+    if (info.pollAbort.signal.aborted) return;
     const pending = info.engine.jobs.pending.findAll();
     if (!pending.ok || pending.value.length === 0) return;
     providerPollTickHook?.(info.bookId);

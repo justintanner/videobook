@@ -1,13 +1,13 @@
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { Engine } from "videobook-engine";
-import { notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
+import { notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
 import type { ToolDef, ToolResult } from "./tools/tool-def.js";
 import { queue, waitForJob } from "./queue.js";
 import { placeChainGeneration } from "./chain-generation.js";
 import { buildChainStepReview, type ChainStepReview } from "./chain-step-review.js";
 import type { AwaitNotebookOutputPayload } from "./jobs/run-notebook.js";
-import { failNotebookProviderOutput } from "./jobs/run-notebook.js";
+import { failNotebookProviderOutput, reconcileAwaitingNotebookOutputs } from "./jobs/run-notebook.js";
 import { tryResolveModel } from "./media/descriptor.js";
 import { withBookContext } from "./book-context.js";
 import type { GoalGenerationOrigin } from "./goal-generation-provenance.js";
@@ -157,6 +157,51 @@ function saveRun(engine: Engine, run: ChainRunRecord): ChainRunRecord {
 
 export function getChainRun(engine: Engine, chainId: string): ChainRunRecord | null {
   return readStore(engine).runs[chainId] ?? null;
+}
+
+export async function recoverAutomaticChainOutput(engine: Engine, chainId: string): Promise<boolean> {
+  const run = getChainRun(engine, chainId);
+  const step = run?.steps[0];
+  if (!run?.notebookId || run.steps.length !== 1 || !step || !run.goalOrigins?.[step.id]?.automation
+    || run.status === "completed" || run.status === "cancelled") return false;
+  const artifactId = step.outputs?.asset_id;
+  if (typeof artifactId !== "string") return false;
+  try {
+    let cellId = typeof step.outputs?.cell_id === "string" ? step.outputs.cell_id : null;
+    if (cellId === null) {
+      const spec = supportedChainTool(step.tool);
+      if (!spec?.placement) throw new Error("The saved generation has no recoverable placement.");
+      const placement = await placeChainGeneration({ engine, notebookId: run.notebookId, tool: step.tool, placement: spec.placement,
+        params: applyPins(step.params, step.pins), artifactId, runId: `${chainId}:${step.id}`, pins: step.pins, goalOrigin: run.goalOrigins[step.id] });
+      cellId = placement.outputCellId;
+      step.outputs = { ...step.outputs, cell_id: cellId, address: placement.address };
+      saveRun(engine, { ...run, updatedAt: nowIso() });
+    }
+    const notebook = engine.notebooks.read(run.notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const cell = notebook.value.cells.find(value => value.id === cellId);
+    const state = notebook.value.execution?.[cellId];
+    if (!cell || state?.runId !== `${chainId}:${step.id}`) throw new Error("The saved generation placement changed. Review its existing take before continuing.");
+    if (state.status === "awaiting-output") {
+      await reconcileAwaitingNotebookOutputs(engine, run.bookId);
+      return true;
+    }
+    if (state.status === "error") throw new Error(state.error || "The recovered generation failed.");
+    if (state.status !== "completed" || !state.outputArtifactId) throw new Error("The recovered generation has no completed output.");
+    const status = await engine.status.get(state.outputArtifactId);
+    if (!status.ok) throw new Error(status.error.message);
+    if (status.value === "error") throw new Error("The recovered output is no longer ready. Review its existing take before continuing.");
+    if (status.value !== "ready") return true;
+    step.status = "completed";
+    step.error = null;
+    step.outputs = { ...step.outputs, asset_id: state.outputArtifactId, cell_id: cellId, address: notebookGridTag(cell.slot), status: "completed" };
+    saveRun(engine, { ...run, status: "completed", error: null, awaitingStepId: null, updatedAt: nowIso() });
+  } catch (error) {
+    step.status = "failed";
+    step.error = error instanceof Error ? error.message : String(error);
+    saveRun(engine, { ...run, status: "failed", error: step.error, awaitingStepId: null, updatedAt: nowIso() });
+  }
+  return false;
 }
 
 function findChainRunByRequestId(
@@ -466,6 +511,8 @@ async function completeGeneration(
   try {
     if (typeof submission === "string") await waitForNamedJob(submission, signal, STEP_TIMEOUT_MS);
   } catch (error) {
+    const stopped = engine.jobs.queue.list({ states: ["aborted"] }).some(job => job.operationId === submission && job.error?.message === "Queue stopped");
+    if (stopped) throw new Error("Queue stopped");
     await failNotebookProviderOutput(engine, awaiting);
     throw error;
   }

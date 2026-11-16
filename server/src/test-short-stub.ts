@@ -16,6 +16,12 @@ export type ShortStub = {
   failNext: boolean;
   refuseNext: boolean;
   rejectNext: { status: number; message: string } | null;
+  outputUnits: number | null;
+  noRetryHeaders: (string | undefined)[];
+  uploadFailureStatus: number | null;
+  holdResults: boolean;
+  downloadFailures: number;
+  polls: number;
   reset(): void;
   close(): Promise<void>;
 };
@@ -63,6 +69,12 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
     failNext: false,
     refuseNext: false,
     rejectNext: null,
+    outputUnits: null,
+    noRetryHeaders: [],
+    uploadFailureStatus: null,
+    holdResults: false,
+    downloadFailures: 0,
+    polls: 0,
     reset() {
       stub.submissions = [];
       stub.plannerRequests = [];
@@ -74,6 +86,12 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
       refused.clear();
       stub.refuseNext = false;
       stub.rejectNext = null;
+      stub.outputUnits = null;
+      stub.noRetryHeaders = [];
+      stub.uploadFailureStatus = null;
+      stub.holdResults = false;
+      stub.downloadFailures = 0;
+      stub.polls = 0;
     },
     close: async () => {
       server.closeAllConnections();
@@ -125,8 +143,11 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
     }
     const poll = POLL.exec(path);
     if (method === "GET" && poll) {
+      stub.polls += 1;
       const id = poll[1]!;
+      if (stub.holdResults) return sendJson(response, { status: "IN_PROGRESS" });
       if (poll[2]) return sendJson(response, failing.has(id) ? { status: "COMPLETED", error: SHORT_STUB_REFUSAL } : { status: "COMPLETED" });
+      if (stub.outputUnits !== null) response.setHeader("x-fal-billable-units", String(stub.outputUnits));
       if (refused.has(id)) {
         response.writeHead(422, { "content-type": "application/json" });
         response.end(JSON.stringify({ detail: [{ loc: ["body"], msg: "The content could not be processed because it contained material flagged by a content checker.", type: "content_policy_violation", url: "https://docs.fal.ai/errors#content_policy_violation", input: "", categories: ["model_moderated"] }] }));
@@ -138,11 +159,13 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
     }
     const file = /^\/files\/([^/.]+)\.(png|mp4)$/u.exec(path);
     if (method === "GET" && file && served.has(file[1]!)) {
+      if (stub.downloadFailures > 0) { stub.downloadFailures -= 1; response.writeHead(503).end(); return; }
       response.writeHead(200, { "content-type": file[2] === "mp4" ? "video/mp4" : "image/png" });
       response.end(served.get(file[1]!));
       return;
     }
     if (method === "POST" && path === `/${FAL_STORAGE_HOST}/storage/upload/initiate`) {
+      if (stub.uploadFailureStatus) { response.writeHead(stub.uploadFailureStatus, { "content-type": "application/json" }).end(JSON.stringify({ detail: "Account access denied; exhausted balance" })); return; }
       const { file_name: name } = JSON.parse(body.toString()) as { file_name: string };
       return sendJson(response, { file_url: `${stub.baseURL}/files/uploaded-${name}`, upload_url: `${stub.baseURL}/fal-storage/${name}` });
     }
@@ -166,6 +189,7 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
     request.on("data", (chunk: Buffer) => chunks.push(chunk));
     request.on("end", () => {
       const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      if (request.method === "POST" && SUBMIT.test(url.pathname)) stub.noRetryHeaders.push(typeof request.headers["x-fal-no-retry"] === "string" ? request.headers["x-fal-no-retry"] : undefined);
       route(request.method ?? "", url.pathname, Buffer.concat(chunks), response, url.searchParams);
     });
   });

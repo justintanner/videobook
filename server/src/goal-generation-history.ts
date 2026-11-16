@@ -68,13 +68,19 @@ function sourceOf(engine: Engine, goal: GoalRecord): { artifactId: string; media
 
 export function resolveCellGoalOrigin(engine: Engine, notebookId: string, cell: NotebookCell): GoalGenerationOrigin | undefined {
   const saved = cellGoalOrigin(cell);
-  if (saved) return saved;
+  if (saved) {
+    const { automation: _automation, ...manual } = saved;
+    return manual;
+  }
   if (typeof cell.inputs?.chainRunId !== "string") return undefined;
   for (const goal of listGoals(engine, notebookId)) for (const run of Object.values(goal.stages)) {
     const attempt = run?.attempts?.find(value => value.chainId && cell.inputs?.chainRunId === `${value.chainId}:${value.stepId}`);
     if (!attempt?.chainId) continue;
     const origin = getChainRun(engine, attempt.chainId)?.goalOrigins?.[attempt.stepId];
-    if (origin) return origin;
+    if (origin) {
+      const { automation: _automation, ...manual } = origin;
+      return manual;
+    }
     const source = sourceOf(engine, goal);
     return { version: 1, goalId: goal.goalId, stage: attempt.stage, index: attempt.index,
       revision: run?.chainId === attempt.chainId ? run.revision : null, fingerprint: attempt.fingerprint ?? "", basePrompt: attempt.basePrompt,

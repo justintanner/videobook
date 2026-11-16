@@ -18,7 +18,7 @@ import { queue } from "./queue.js";
 
 export const GOAL_QUALITY: AnalysisComponentSpec = { component: "goal-output-quality", version: 1, jobType: "check_goal_output" };
 export const GOAL_QUALITY_OUTPUT_TOKENS = 2400;
-const GOAL_QUALITY_STAGE = z.enum(["frame", "videos", "finish"]);
+const GOAL_QUALITY_STAGE = z.enum(["replacement", "frame", "videos", "finish"]);
 const referenceSchema = z.object({ artifactId: z.string(), expectedHash: z.string().nullable(), currentHash: z.string().nullable(), role: z.string() }).strict();
 export const goalQualityRequestSchema = z.object({
   version: z.literal(1), goalId: z.string(), key: z.string(), slot: z.string(), stage: GOAL_QUALITY_STAGE, index: z.number().int().nonnegative(),
@@ -44,7 +44,7 @@ function constraints(plan: GoalShortPlan, goal: GoalRecord, stage: GoalQualityRe
   const { audio: _audio, origins: _origins, ...visualIntent } = intent;
   return {
     brief: plan.analysis.brief, intent: visualIntent, scope: stage,
-    prompt: stage === "frame" ? plan.frame.prompt : stage === "videos" ? shortGenerationSegments(plan)[index]?.prompt : null,
+    prompt: stage === "replacement" ? plan.remix?.replacement.prompt : stage === "frame" ? plan.frame.prompt : stage === "videos" ? shortGenerationSegments(plan)[index]?.prompt : null,
     assembly: recipe.assembly,
     ...(stage === "videos" && recipe.assembly ? { actionWindow: goal.actionWindow ? { startFrame: goal.actionWindow.startFrame, endFrame: goal.actionWindow.endFrame, mediaHash: goal.actionWindow.mediaHash } : null } : {}),
     ...(stage === "finish" ? { audio: intent.audio, soundtrack: recipe.soundtrack, branding: plan.analysis.preferences.branding ? recipe.branding : null, title: plan.finish.title } : {}),
@@ -64,7 +64,8 @@ export async function makeGoalQualityRequest(engine: Engine, goal: GoalRecord, s
   const artifactId = stage === "finish" ? goal.finish?.finalArtifactId : goal.stages[stage]?.outputs.find(value => value.index === index)?.artifactId;
   if (!artifactId) throw new Error("Keep the output selected before checking it.");
   const manifest = await engine.files.manifest(artifactId);
-  const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, stage === "frame" ? "image" : "video") : null;
+  const still = stage === "frame" || stage === "replacement";
+  const file = manifest.ok ? findPrimaryMediaFile(manifest.value.files, still ? "image" : "video") : null;
   if (!file) throw new Error("The selected output has no readable media.");
   const { recipe, source } = analysis;
   const references = [
@@ -92,7 +93,7 @@ export async function makeGoalQualityRequest(engine: Engine, goal: GoalRecord, s
   const retainedStart = window && assembly ? window.startFrame / assembly.fps : stage === "videos" && !assembly ? Math.max(0, expectedSeconds - retainedSeconds) : 0;
   const plannedTimes = recipe.checkTimes.filter(time => time >= Math.max(0, retainedStart - 0.1) && time < expectedSeconds);
   const segmentTimes = Array.from({ length: 7 }, (_, at) => retainedStart + Math.max(0, retainedSeconds - 0.1) * at / 6);
-  const sampleTimes = stage === "frame" ? [] : stage === "videos" && assembly
+  const sampleTimes = still ? [] : stage === "videos" && assembly
     ? [...new Set([Math.max(0, retainedStart - 0.1), ...Array.from({ length: 7 }, (_, at) => retainedStart + (retainedSeconds - Math.min(0.1, 1 / assembly.fps)) * at / 6), retainedStart + retainedSeconds + 0.1])]
     : stage === "videos" ? [...new Set([...plannedTimes, ...segmentTimes])].slice(0, 12).sort((left, right) => left - right) : recipe.checkTimes;
   const model = chatIntelligenceRequestOptions().model;
@@ -111,9 +112,9 @@ export async function makeGoalQualityRequest(engine: Engine, goal: GoalRecord, s
   const output = goal.stages[generationStage]?.outputs.find(value => value.index === generationIndex);
   const attempt = reviewedGoalOutput(goal, generationStage, generationIndex, output?.artifactId)
     ?? goal.stages[generationStage]?.attempts?.find(value => value.index === generationIndex && value.artifactId === output?.artifactId);
-  const upstream = generationStage === "frame" ? goal.stages.replacement?.outputs[0]?.artifactId ?? goal.stages.storyboards?.outputs[0]?.artifactId ?? null
+  const upstream = generationStage === "replacement" ? null : generationStage === "frame" ? goal.stages.replacement?.outputs[0]?.artifactId ?? goal.stages.storyboards?.outputs[0]?.artifactId ?? null
     : (generationIndex === 0 ? goal.stages.frame?.outputs[0] : goal.stages.videos?.outputs.find(value => value.index === generationIndex - 1))?.artifactId ?? null;
-  const stale = (generationStage === "frame" ? shortFrameStale(goal) : shortSegmentStale(goal, generationIndex))
+  const stale = (generationStage === "replacement" ? false : generationStage === "frame" ? shortFrameStale(goal) : shortSegmentStale(goal, generationIndex))
     || Boolean(attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, generationStage, generationIndex, upstream));
   const request = { version: 1, goalId: goal.goalId, slot: `${stage}:${index}`, stage, index, artifactId, mediaHash: file.objectHash, semantic, model,
     constraints: material, constraintHash: digest(material), references: pinned, expectedSeconds, retainedStart, retainedSeconds,
@@ -158,7 +159,7 @@ export async function reconcileGoalQuality(engine: Engine, goal: GoalRecord): Pr
   const content = requireGoalShortContent(engine, goal);
   if (content.plan?.version !== 5 || !content.plan.analysis?.recipe.outputAssertions) return goal;
   const slots = [
-    ...(["frame", "videos"] as const).flatMap(stage => (goal.stages[stage]?.outputs ?? []).map(output => ({ stage, index: output.index }))),
+    ...(["replacement", "frame", "videos"] as const).flatMap(stage => (goal.stages[stage]?.outputs ?? []).map(output => ({ stage, index: output.index }))),
     ...(goal.finish?.finalArtifactId ? [{ stage: "finish" as const, index: 0 }] : []),
   ];
   for (const { stage, index } of slots) {

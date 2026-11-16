@@ -22,7 +22,7 @@ async function submitQueued(request: Record<string, unknown>, context: SubmitCon
   const endpointId = context.model.apiId;
   let submitted: { request_id: string };
   try {
-    submitted = await falProvider().post.v1.queue.submit({ endpoint_id: endpointId, input: request } as never);
+    submitted = await falProvider().post.v1.queue.submit({ endpoint_id: endpointId, input: request, ...(context.creativeRetries === 0 ? { no_retry: true } : {}) } as never, context.ctx.signal);
   } catch (cause) {
     const message = falContentRefusal(cause, context.model.id)?.message ?? reframeVideoFailure(context.model.id, describeFalError(cause));
     if (cause instanceof Error && message === cause.message) throw cause;

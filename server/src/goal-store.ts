@@ -4,6 +4,7 @@ import { goalShortDraftSchema, goalShortPlanSchema, isLegacyShortDraft, isLegacy
 import { mutateNotebook } from "./notebook-mutations.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 import type { GoalOutputCheck } from "./goal-quality-model.js";
+import type { GoalAutomation } from "./goal-automation-model.js";
 
 export type GoalStatus = "planning" | "review" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 export type GoalGenerationStage = "storyboards" | "replacement" | "frame" | "videos";
@@ -12,6 +13,7 @@ export type GoalEstimate = { usd: number | null; warnings: string[] };
 export type GoalEstimates = Record<Exclude<GoalGenerationStage, "replacement"> | "total", GoalEstimate> & {
   replacement?: GoalEstimate;
   quality?: GoalEstimate;
+  planning?: GoalEstimate;
   segments?: GoalEstimate[]; storyboardFrames?: GoalEstimate[]; storyboardFallbackFrames?: GoalEstimate[]; title?: GoalEstimate;
 };
 export type GoalStageOutput = { index: number; artifactId: string; cellId: string | null; producerCellId: string | null; address: string | null };
@@ -132,6 +134,7 @@ export type GoalRecord = {
   finish?: GoalFinish | null;
   realism?: Record<string, GoalRealismCheck>;
   quality?: Record<string, GoalOutputCheck>;
+  automation?: GoalAutomation;
   resumeStage?: GoalGenerationStage | null;
   resumeStatus?: "review" | "completed" | null;
   resumeOutputs?: GoalStageOutput[] | null;
@@ -172,9 +175,9 @@ function hasTile(goal: GoalRecord): boolean {
   return typeof goal.cellId === "string";
 }
 
-export function listGoals(engine: Engine, notebookId: string): GoalRecord[] {
+export function listGoals(engine: Engine, notebookId?: string): GoalRecord[] {
   return Object.values(goalStore(engine))
-    .filter((goal) => goal.notebookId === notebookId && hasTile(goal))
+    .filter((goal) => (notebookId === undefined || goal.notebookId === notebookId) && hasTile(goal))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
@@ -210,6 +213,7 @@ function estimatesFrom(value: unknown): GoalEstimates {
     frame: estimateFrom(record.frame), storyboards: estimateFrom(record.storyboards), videos: estimateFrom(record.videos), total: estimateFrom(record.total),
     ...(record.replacement ? { replacement: estimateFrom(record.replacement) } : {}),
     ...(record.quality ? { quality: estimateFrom(record.quality) } : {}),
+    ...(record.planning ? { planning: estimateFrom(record.planning) } : {}),
     ...(Array.isArray(record.segments) ? { segments: record.segments.map(estimateFrom) } : {}),
     ...(Array.isArray(record.storyboardFrames) ? { storyboardFrames: record.storyboardFrames.map(estimateFrom) } : {}),
     ...(Array.isArray(record.storyboardFallbackFrames) ? { storyboardFallbackFrames: record.storyboardFallbackFrames.map(estimateFrom) } : {}),

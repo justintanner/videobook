@@ -17,6 +17,7 @@ import { GoalSourcePreparation } from './GoalSourcePreparation'
 import { GoalActionWindow } from './GoalActionWindow'
 import { GoalTakeHistory } from './GoalTakeHistory'
 import { GoalOutputQuality } from './GoalOutputQuality'
+import { GoalAutomation } from './GoalAutomation'
 
 type GoalAction = Record<string, unknown>
 type AssetResolver = (artifactId: string) => AssetRecord | null
@@ -135,7 +136,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const beatLimit = Math.min(15, 60 - totalSeconds)
   const canAddBeat = !assembly && plan.segments.length < 4 && beatLimit >= 2
   const saved = async () => dirty ? shortSnapshot(await onAction({ action: 'update', revision: goal.revision, plan: draft })) : goal
-  const outputChecks = (stage: 'frame' | 'videos' | 'finish', index: number, artifactId: string, name: string) => {
+  const outputChecks = (stage: 'replacement' | 'frame' | 'videos' | 'finish', index: number, artifactId: string, name: string) => {
     const check = goal.quality?.[`${stage}:${index}`]
     return <GoalOutputQuality name={name} check={check?.artifactId === artifactId ? check : null} estimate={goal.estimate.quality}
       disabled={disabled || running || finishing || dirty || goal.status === 'cancelled'}
@@ -177,6 +178,9 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
     {analysis && <GoalSourcePreparation analysis={analysis} preparation={goal.preparation} disabled={disabled || running || finishing || goal.status === 'cancelled'} resolveAsset={resolveAsset}
       onPrepare={preparation => onRun(async () => { const current = await saved(); return onAction({ action: 'prepare', revision: current.revision, preparation }) })}
       onReview={(artifactId, mediaHash) => onRun(async () => { const current = await saved(); return onAction({ action: 'review_source', revision: current.revision, artifact_id: artifactId, media_hash: mediaHash, confirmed: true }) })} />}
+    {analysis && (analysis.preferences.autoContinue || goal.automation) && <GoalAutomation goal={goal} analysis={analysis} disabled={disabled}
+      onPause={() => onRun(() => onAction({ action: 'pause_auto' }))}
+      onStart={args => onRun(async () => { const current = await saved(); return onAction({ action: 'auto_continue', revision: current.revision, ...args }) })} />}
     <nav className="goal-stage-tabs" aria-label="Short stages">
       {tabs.map(([id, label]) => <button key={id} type="button" className="goal-panel-button" aria-pressed={view === id} onClick={() => onView(id)}>{label}</button>)}
     </nav>
@@ -233,8 +237,8 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
       {imageOutput && <GoalMedia artifactId={imageOutput.artifactId} cellId={imageOutput.cellId} label={imageName} resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
       {imageOutput?.stale && <p role="status" className="goal-panel-warning">{imageOutput.stale}</p>}
       {imageOutput && <div className="goal-versions" aria-label={`${imageName} versions`}>{versions(imageStage, 0, imageName)}</div>}
-      {imageOutput && !replacing && (analysis?.recipe.outputAssertions ? outputChecks('frame', 0, imageOutput.artifactId, imageName.toLowerCase()) : <RealismCheck name={imageName.toLowerCase()} check={imageOutput.realism} disabled={disabled} onCheck={() => onRun(() => onAction({ action: 'check', stage: 'frame', index: 0 }))} />)}
-      {imageOutput && !replacing && <p className="goal-panel-muted">{REALISM_NOTE}</p>}
+      {imageOutput && (analysis?.recipe.outputAssertions ? outputChecks(imageStage, 0, imageOutput.artifactId, imageName.toLowerCase()) : !replacing && <RealismCheck name={imageName.toLowerCase()} check={imageOutput.realism} disabled={disabled} onCheck={() => onRun(() => onAction({ action: 'check', stage: 'frame', index: 0 }))} />)}
+      {imageOutput && !replacing && !analysis?.recipe.outputAssertions && <p className="goal-panel-muted">{REALISM_NOTE}</p>}
       <label><span>Title</span><input aria-label="Short title" value={title} maxLength={120} disabled={disabled || finishing} onChange={event => setTitle(event.target.value)} /></label>
       <GoalPromptInput label={`${imageName} prompt`} value={replacing ? replacementPrompt : framePrompt} wordLimit={SHORT_WORD_CEILINGS.frame} disabled={disabled || finishing} onChange={replacing ? setReplacementPrompt : setFramePrompt} />
       {!replacing && <AlwaysAdded lines={[plan.rules.frame]} />}

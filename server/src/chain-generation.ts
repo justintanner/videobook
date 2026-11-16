@@ -1,6 +1,6 @@
 import type { Engine, NotebookCell } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine";
-import { mutateNotebook } from "./notebook-mutations.js";
+import { mutateNotebook, withNotebookMutation } from "./notebook-mutations.js";
 import { generationInputPort } from "./generation-input-targets.js";
 import {
   allocateGenerateImageResult,
@@ -73,20 +73,39 @@ function pinTargetInput(pin: PinnedChainTarget): string {
 export async function placeChainGeneration(
   input: ChainGenerationPlacementInput,
 ): Promise<ChainGenerationPlacement> {
+  return withNotebookMutation(`chain-placement:${input.runId}`, () => placeGeneration(input));
+}
+
+async function placeGeneration(input: ChainGenerationPlacementInput): Promise<ChainGenerationPlacement> {
   const produced: { producer: NotebookCell | null; outputCellId: string | null } = {
     producer: null,
     outputCellId: null,
   };
-  const sourceCellIds = [...new Set(
-    input.pins.flatMap((pin) => pin.cellId ? [pin.cellId] : []),
-  )];
   const acceptedAt = new Date().toISOString();
   const result = await mutateNotebook(
     input.engine,
     input.notebookId,
     "chain_generation",
     (notebook) => {
-      const anchors = notebook.cells.filter((cell) => sourceCellIds.includes(cell.id));
+      const existing = notebook.cells.find(cell => {
+        if (cell.inputs?.chainRunId !== input.runId) return false;
+        const attempts = input.engine.generations.listForCell(input.notebookId, cell.id);
+        if (!attempts.ok) throw new Error(attempts.error.message);
+        return attempts.value.some(attempt => attempt.providerArtifactId === input.artifactId && attempt.runId === input.runId)
+          || notebook.cells.some(output => (output.id === cell.id || output.inputs?.producerCellId === cell.id)
+            && (output.outputArtifactId === input.artifactId || notebook.execution?.[output.id]?.providerArtifactId === input.artifactId));
+      });
+      if (existing) {
+        const output = input.placement === "generate_audio" ? existing : notebook.cells.find(cell =>
+          cell.inputs?.producerCellId === existing.id && cell.inputs?.generationRunId === input.runId
+          && (cell.outputArtifactId === input.artifactId || notebook.execution?.[cell.id]?.providerArtifactId === input.artifactId));
+        if (!output || notebook.execution?.[output.id]?.runId !== input.runId) {
+          throw new Error("The saved generation placement changed. Review its existing take before continuing.");
+        }
+        produced.producer = existing;
+        produced.outputCellId = output.id;
+        return notebook;
+      }
       const placed = placeInNotebookLane(notebook.cells, "gen");
       const model = producerModel(input.params);
       const producer = input.engine.notebooks.createCell({
@@ -105,8 +124,8 @@ export async function placeChainGeneration(
         },
       });
       const provenance = input.pins.flatMap((pin) => {
-        if (!pin.cellId || !anchors.some(anchor => anchor.id === pin.cellId)) return [];
-        return [input.engine.notebooks.createEdge({ source: pin.cellId, target: producer.id, targetInput: pinTargetInput(pin) })];
+        const anchor = notebook.cells.find(cell => pin.cellId ? cell.id === pin.cellId : cell.outputArtifactId === pin.artifactId);
+        return anchor ? [input.engine.notebooks.createEdge({ source: anchor.id, target: producer.id, targetInput: pinTargetInput(pin) })] : [];
       });
       const withProducer = {
         ...notebook,
