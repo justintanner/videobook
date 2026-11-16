@@ -10,7 +10,7 @@ import type { NodeProps } from '@xyflow/react'
 import { GoalCellNode } from '../../src/components/videobook/GoalCellNode'
 import { GoalTileContext } from '../../src/components/videobook/notebook-canvas-context'
 import type { CanvasNode } from '../../src/videobook/notebook-canvas'
-import { defaultShortTab, goalTileView, LEGACY_GOAL_NOTE, type GoalSnapshot, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
+import { defaultShortTab, defaultShortView, goalTileView, LEGACY_GOAL_NOTE, type GoalSnapshot, type ShortGoalSnapshot, type ShortView } from '../../src/videobook/goals'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
 import { goalRemixAnalysisSchema, remixRules } from '../../server/src/goal-remix-model'
 import { goalShortPlanSchema, withShortFinishTitle, type ShortFinishTitle } from '../../server/src/goal-short-plan'
@@ -24,9 +24,9 @@ function asset(artifactId: string): AssetRecord | null {
   return { type: 'video', mediaUrl: `/media/${artifactId}.mp4`, thumbnailUrl: null, duration: 20, fps: 24, objectHash: `${artifactId}-hash` } as unknown as AssetRecord
 }
 
-function render(goal: ShortGoalSnapshot, view: ShortTab = defaultShortTab(goal, goal.shortPlan!), titleOptions: readonly ShortFinishTitle[] = []): string {
+function render(goal: ShortGoalSnapshot, view: ShortView = defaultShortTab(goal, goal.shortPlan!), titleOptions: readonly ShortFinishTitle[] = []): string {
   return renderToStaticMarkup(createElement(GoalShortReview, {
-    goal, plan: goal.shortPlan!, view, disabled: false,
+    goal, plan: goal.shortPlan!, view, stage: defaultShortTab(goal, goal.shortPlan!), disabled: false,
     resolveAsset: asset, onView: () => undefined, onPreviewCell: () => undefined, onRun: () => undefined, onAction: noop,
     titleOptions, onWriteTitle: async () => undefined,
   }))
@@ -69,12 +69,27 @@ describe('GoalShortReview', () => {
     })
     const plan = goalShortPlanSchema.parse({ ...remixPlanFixture(), rules: remixRules(analysis.intent), analysis })
     const html = render(shortGoalFixture({}, plan))
-    expect(html).toContain('Initial analysis')
-    expect(html).toContain('keep 0.00–12.00s')
-    expect(html).toContain('generate 2s')
+    expect(html).not.toContain('Initial analysis')
+    expect(button(html, 'Plan')).toContain('aria-pressed="false"')
+    expect(defaultShortView(shortGoalFixture({}, plan), plan)).toBe(defaultShortTab(shortGoalFixture({}, plan), plan))
+    const unprepared = goalShortPlanSchema.parse({ ...plan, analysis: { ...analysis, intent: { ...analysis.intent, cleanup: 'remove' }, recipe: { ...analysis.recipe, cleanupConfirmed: false },
+      source: { artifactId: 'video-source', mediaHash: 'source-hash', durationSeconds: 14, fps: 24, width: 1080, height: 1920, hasAudio: true, cuts: [4, 9], sampleTimes: [1, 6, 12], observations: null, semanticStatus: 'missing', transcript: null, evidenceKey: 'evidence' } } })
+    expect(defaultShortView(shortGoalFixture({}, unprepared), unprepared)).toBe('plan')
+    const blocked = render(shortGoalFixture({}, unprepared), 'replacement')
+    expect(blocked).toContain('Prepare and review the source in Plan before generating.')
+    expect(button(blocked, 'Insert character ·')).toContain('disabled')
+    expect(render(shortGoalFixture({}, unprepared), 'plan')).toContain('Source · 2 cuts · reference 0.00–14.00s')
+    const planView = render(shortGoalFixture({}, plan), 'plan')
+    expect(planView).toContain('Initial analysis')
+    expect(planView).toContain('keep 0.00–12.00s')
+    expect(planView).toContain('generate 2s')
+    expect(planView).toMatch(/role="group" aria-label="Remix audio">.*?aria-pressed="true">Original audio<\/button>/u)
+    expect(planView).not.toContain('aria-label="Default continuation allowance USD"')
+    expect(planView).not.toContain('aria-label="Insertion prompt"')
+    expect(button(planView, 'Insert character ·')).not.toContain('disabled')
+    expect(button(planView, 'Use these defaults for this book')).not.toContain('disabled')
     expect(html).toContain('aria-label="Insertion prompt"')
     expect(html).toContain('>Action setup</button>')
-    expect(button(html, 'Use these defaults for this book')).not.toContain('disabled')
     expect(html).not.toMatch(/<button[^>]*>Save<\/button>/u)
     expect(button(html, 'Insert character ·')).not.toContain('disabled')
   })

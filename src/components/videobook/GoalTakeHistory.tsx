@@ -15,8 +15,8 @@ const names = { replacement: 'Character', frame: 'Action setup', videos: 'Video'
 export function GoalTakeHistory({ entries, revision, disabled, resolveAsset, onAdopt }: Props) {
   const [reviewed, setReviewed] = useState<string | null>(null)
   if (!entries.length) return null
-  return <details className="goal-take-history">
-    <summary>Generation history · {entries.length} attempts</summary>
+  return <section className="goal-take-history" aria-label="Generation history">
+    <h3>Generation history · {entries.length} attempts</h3>
     {entries.map(entry => {
       const key = `${entry.generationId ?? `${entry.chainId}:${entry.stepId}`}:${entry.artifactId}:${entry.mediaHash}:${revision}`
       const asset = entry.artifactId ? resolveAsset(entry.artifactId) : null
@@ -35,5 +35,5 @@ export function GoalTakeHistory({ entries, revision, disabled, resolveAsset, onA
         </>}
       </details>
     })}
-  </details>
+  </section>
 }

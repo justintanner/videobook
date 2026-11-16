@@ -3,8 +3,8 @@ import type { ShortFinishTitle } from '../../../server/src/goal-short-plan'
 import { Flag } from 'lucide-react'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
-  defaultShortTab, goalCanRetry, goalProgress, goalStatusLine, goalStopLabel, goalTileView, LEGACY_GOAL_NOTE, shortPlanOf,
-  type GoalSnapshot, type LegacyGoalSnapshot, type ShortTab,
+  defaultShortTab, defaultShortView, goalCanRetry, goalProgress, goalStatusLine, goalStopLabel, goalTileView, LEGACY_GOAL_NOTE, shortPlanOf,
+  type GoalSnapshot, type LegacyGoalSnapshot, type ShortTab, type ShortView,
 } from '@/videobook/goals'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
 import { GoalShortReview } from './GoalShortReview'
@@ -43,12 +43,17 @@ export function GoalPanel({ goal, connected, onAction, onWriteTitle, onSelectCel
   const [titleOptions, setTitleOptions] = useState<ShortFinishTitle[]>([])
   const pendingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<ShortTab | null>(null)
+  const [tab, setTab] = useState<ShortView | null>(null)
+  const [stageTab, setStageTab] = useState<ShortTab | null>(null)
   const shortPlan = shortPlanOf(goal)
-  const shortView = goal.legacy || !shortPlan ? null : tab ?? defaultShortTab(goal, shortPlan)
+  const shortView = goal.legacy || !shortPlan ? null : tab ?? defaultShortView(goal, shortPlan)
   const line = goalStatusLine(goal)
   const view = goalTileView(goal, undefined)
   const disabled = pending || !connected
+  const showView = (next: ShortView) => {
+    setTab(next)
+    if (next !== 'plan' && next !== 'history') setStageTab(next)
+  }
   const perform = async (work: () => Promise<unknown>) => {
     if (!connected || pendingRef.current) return
     pendingRef.current = true
@@ -91,9 +96,10 @@ export function GoalPanel({ goal, connected, onAction, onWriteTitle, onSelectCel
         goal={goal}
         plan={shortPlan}
         view={shortView}
+        stage={stageTab ?? defaultShortTab(goal, shortPlan)}
         disabled={disabled}
         resolveAsset={resolveAsset}
-        onView={setTab}
+        onView={showView}
         onPreviewCell={onPreviewCell}
         onRun={work => { void perform(work) }}
         onAction={args => onAction({ ...args, goal_id: goal.goalId })}

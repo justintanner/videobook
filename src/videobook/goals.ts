@@ -8,6 +8,8 @@ import { lowerBoundEstimate } from './provider-payload-preview'
 
 export type { GoalSnapshot, LegacyGoalSnapshot, ShortGoalSnapshot }
 export type ShortTab = 'storyboard' | 'character' | 'replacement' | 'frame' | 'video' | 'finish'
+export type ShortView = ShortTab | 'plan' | 'history'
+export type ShortStageState = 'done' | 'review' | 'todo'
 export type GoalShotState = 'planned' | 'waiting' | 'submitting' | 'generating' | 'done' | 'failed' | 'skipped' | 'stopped'
 export type GoalPhase = 'planning' | 'review' | 'storyboards' | 'replacement' | 'frame' | 'videos' | 'complete' | 'failed' | 'interrupted' | 'stopped'
 export type GoalShotView = {
@@ -78,6 +80,39 @@ export function defaultShortTab(goal: ShortGoalSnapshot, plan: GoalShortPlan): S
 
 export function goalStoryboardClean(goal: ShortGoalSnapshot): boolean {
   return (goal.storyboard?.frames ?? []).every(frame => frame.clean)
+}
+
+export function goalSourceReady(plan: GoalShortPlan): boolean {
+  const analysis = plan.version === 5 ? plan.analysis : undefined
+  if (!analysis?.source) return true
+  const { recipe } = analysis
+  return recipe.cleanupConfirmed && Boolean(recipe.preparedArtifactId) && recipe.cleanupReviewedHash === recipe.preparedMediaHash
+}
+
+function sourceNeedsPreparation(plan: GoalShortPlan): boolean {
+  return plan.version === 5 && plan.analysis?.intent.cleanup !== 'keep' && !goalSourceReady(plan)
+}
+
+export function defaultShortView(goal: ShortGoalSnapshot, plan: GoalShortPlan): ShortView {
+  return sourceNeedsPreparation(plan) ? 'plan' : defaultShortTab(goal, plan)
+}
+
+function stageOutputReady(goal: ShortGoalSnapshot, stage: 'replacement' | 'frame'): boolean {
+  const output = goal.stages[stage]?.outputs[0]
+  return Boolean(output && !output.stale)
+}
+
+function shortStageDone(goal: ShortGoalSnapshot, plan: GoalShortPlan, tab: ShortTab): boolean {
+  if (tab === 'storyboard') return goalStoryboardClean(goal)
+  if (tab === 'character') return true
+  if (tab === 'replacement' || tab === 'frame') return stageOutputReady(goal, tab)
+  if (tab === 'video') return goalNextSegment(goal, plan) === null
+  return Boolean(goal.finalArtifactId)
+}
+
+export function shortStageState(goal: ShortGoalSnapshot, plan: GoalShortPlan, tab: ShortTab): ShortStageState {
+  if (shortStageDone(goal, plan, tab)) return 'done'
+  return defaultShortTab(goal, plan) === tab ? 'review' : 'todo'
 }
 
 function goalStoryboardFailures(goal: ShortGoalSnapshot): number {
