@@ -324,20 +324,20 @@ describe('notebook grid', () => {
       maxColumn: 7,
       centerX: 1044,
       width: 2088,
-      height: 2880,
+      height: 2440,
     })
     expect(notebookGridMetrics([], {
       viewportWidth: 2048,
       viewportHeight: 900,
       zoom: 0.75,
     })).toEqual({
-      rowCount: 5,
+      rowCount: 6,
       columnCount: 8,
       minColumn: 0,
       maxColumn: 7,
       centerX: 1044,
       width: 2088,
-      height: 1296,
+      height: 1320,
     })
     expect(notebookGridMetrics([]).rowCount).toBe(3)
     expect(notebookGridMetrics([{ row: 63, column: 7 }]).rowCount).toBe(64)
@@ -351,7 +351,7 @@ describe('notebook grid', () => {
       .toEqual({ row: NOTEBOOK_GRID_ROW_COUNT - 1, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 })
     expect(notebookGridFrameSize(notebookGridMetrics([]), 1.5)).toEqual({
       width: 3132,
-      height: 1152,
+      height: 972,
     })
     expect(notebookGridViewport(metrics, 1.5, -40)).toEqual({
       x: 0,
@@ -367,7 +367,7 @@ describe('notebook grid', () => {
       y: notebookGrid.originY + notebookGrid.rowPitch * 2 + 36,
     }, metrics)).toEqual({ row: 2, column: 1 })
     expect(notebookGridSquareAt({
-      x: notebookGrid.originX + notebookGrid.squareSize,
+      x: notebookGrid.originX + notebookGrid.cellWidth,
       y: notebookGrid.originY + 24,
     }, metrics)).toBeNull()
     expect(notebookGridSquareAt({
@@ -396,16 +396,16 @@ describe('notebook grid', () => {
       expect(notebookGridViewport(metrics, zoom).zoom).toBe(zoom)
       expect(frame.height).toBeCloseTo(metrics.height * zoom)
     }
-    expect(fitNotebookGridZoom(1224) * notebookGrid.squareSize).toBeCloseTo(140.69, 2)
-    expect(fitNotebookGridZoom(2504) * notebookGrid.squareSize).toBeCloseTo(287.82, 2)
+    expect(fitNotebookGridZoom(1224) * notebookGrid.cellWidth).toBeCloseTo(140.69, 2)
+    expect(fitNotebookGridZoom(2504) * notebookGrid.cellWidth).toBeCloseTo(287.82, 2)
     expect(fitNotebookGridZoom(0)).toBe(1)
     expect(fitNotebookGridZoom(Number.NaN)).toBe(1)
-    expect(notebookGridMetrics([], { viewportHeight: 600, zoom: 0.6 }).rowCount).toBe(4)
+    expect(notebookGridMetrics([], { viewportHeight: 600, zoom: 0.6 }).rowCount).toBe(5)
   })
 
-  it('shrinks the fit so the first three rows show in a short, wide viewport', () => {
-    const threeRows = 3 * notebookGrid.rowPitch - notebookGrid.gap
-    expect(fitNotebookGridZoom(2000, 0, 600)).toBeCloseTo(600 / threeRows)
+  it('shrinks the fit so the first four rows show in a short, wide viewport', () => {
+    const fourRows = 4 * notebookGrid.rowPitch - notebookGrid.gap
+    expect(fitNotebookGridZoom(2000, 0, 600)).toBeCloseTo(600 / fourRows)
     expect(fitNotebookGridZoom(1224, 0, 2000)).toBe(fitNotebookGridZoom(1224))
     expect(fitNotebookGridZoom(2000, 0.5, 200)).toBe(0.5)
   })

@@ -18,7 +18,6 @@ import {
   Ellipsis,
   Flag,
   GripVertical,
-  ArrowDown,
 } from 'lucide-react'
 import {
   cellTypeLabel,
@@ -88,12 +87,14 @@ import {
   videoPreviewBadges,
   previewMeter,
   previewMetadataLabel,
+  type CellPreviewBadge,
 } from '@/videobook/cell-preview'
 import { notebookTypeLane } from '../../../server/src/notebook-lanes'
 import {
-  notebookIncomingRouteText,
-  notebookOutgoingRouteText,
+  notebookIncomingRouteBadge,
+  notebookOutgoingRouteBadge,
 } from '@/videobook/notebook-route-tags'
+import { CellRouteBadge } from '@/components/videobook/CellRouteBadge'
 import { AnalysisCellSummary } from '@/components/videobook/AnalysisCellSummary'
 import { CellMediaFrame } from '@/components/videobook/CellMediaFrame'
 import { PublishedPostTileChrome } from '@/components/videobook/PublishedPostChrome'
@@ -140,6 +141,11 @@ function emptyCellLabel(data: CanvasCellData): string {
   if (data.kind === 'concat') return 'Connect clip:0 and clip:1'
   if (data.kind === 'splice') return 'Connect first and second'
   return data.prompt || notebookGridTag(data.slot)
+}
+
+function aspectFirst(badges: readonly CellPreviewBadge[]): CellPreviewBadge[] {
+  return [...badges].sort((left, right) =>
+    Number(right.key === 'aspect') - Number(left.key === 'aspect'))
 }
 
 function assetPreviewUrl(asset: AssetRecord | undefined): string | null {
@@ -311,36 +317,21 @@ const cellSourceRoutePorts = cellSourcePortSides.flatMap((side) =>
       : { top: `${offset * 100}%` },
   })))
 
-function CellRouteTag({ direction, text }: {
-  direction: 'incoming' | 'outgoing'
-  text: string | null
-}) {
-  if (!text) return null
-  return (
-    <span
-      className={`cell-route-tag cell-route-tag-${direction}`}
-      aria-label={direction === 'outgoing' ? `Feeds ${text}` : `Fed ${text}`}
-      title={direction === 'outgoing' ? `Feeds ${text}` : `Fed ${text}`}
-    >
-      <ArrowDown size={10} strokeWidth={2} aria-hidden="true" />
-      <span>{text}</span>
-    </span>
-  )
-}
-
 function CellStatusBadge({ status }: { status: string | null }) {
   if (!status) return null
   const label = status.replaceAll('-', ' ').replaceAll('_', ' ')
 
   return (
-    <span
-      className={`cell-status cell-status-${status}`}
-      aria-label={`Status: ${label}`}
-      title={label}
-    >
-      {status === 'completed'
-        ? <Check size={11} strokeWidth={2.4} aria-hidden="true" />
-        : <span>{label}</span>}
+    <span className="cell-status-slot">
+      <span
+        className={`cell-status cell-status-${status}`}
+        aria-label={`Status: ${label}`}
+        title={label}
+      >
+        {status === 'completed'
+          ? <Check size={11} strokeWidth={2.4} aria-hidden="true" />
+          : <span>{label}</span>}
+      </span>
     </span>
   )
 }
@@ -493,6 +484,9 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const visualMeter = visualPreviewCell && playableVideo
     ? previewMeter(data.videoDurationSeconds ?? data.asset?.duration ?? null)
     : null
+  const visualMetadataLabel = previewMetadataLabel(typeLabel, visualBadges, visualMeter, imagePrompt)
+  const incomingBadge = notebookIncomingRouteBadge(data.incomingRoutes ?? [])
+  const outgoingBadge = notebookOutgoingRouteBadge(data.outgoingRoutes ?? [])
   const running = notebookCellIsActiveStatus(data.status)
   const failed = data.status === 'error'
   const outputVersions = notebookOutputVersionArtifactIds(
@@ -540,6 +534,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         data.revealing ? 'cell-node-created' : '',
         data.highlighted ? 'cell-node-highlight' : '',
         mediaTile ? 'cell-node-media-tile' : '',
+        incomingBadge ? 'cell-node-has-inputs' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
       data-lane-family={data.lane ?? notebookTypeLane(data.kind)}
@@ -609,14 +604,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           style={port.style}
         />
       ))}
-      <CellRouteTag
-        direction="incoming"
-        text={notebookIncomingRouteText(data.incomingRoutes ?? [])}
-      />
-      <CellRouteTag
-        direction="outgoing"
-        text={notebookOutgoingRouteText(data.outgoingRoutes ?? [])}
-      />
+      <CellRouteBadge direction="incoming" badge={incomingBadge} />
       <section className="cell-node-shell">
         <header className="cell-node-header">
           <span
@@ -702,7 +690,6 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           />
         ) : audioPreviewCell ? (
           <CellMediaFrame
-            producerAddress={data.producerAddress}
             posterUrl={null}
             waveform={data.asset?.waveform ?? []}
             alt={data.label ?? address}
@@ -714,14 +701,13 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           />
         ) : visualPreviewCell ? (
           <CellMediaFrame
-            producerAddress={data.producerAddress}
             posterUrl={thumbnailUrl ?? (playableVideo ? null : mediaUrl ?? null)}
             waveform={null}
             alt={data.label ?? address}
             title={imagePrompt ?? undefined}
-            badges={visualBadges}
-            meter={visualMeter}
-            metadataLabel={previewMetadataLabel(typeLabel, visualBadges, visualMeter, imagePrompt)}
+            badges={[]}
+            meter={null}
+            metadataLabel={visualMetadataLabel}
             pendingLabel="Poster pending"
             pendingIcon={<Film size={26} aria-hidden="true" />}
           >
@@ -759,6 +745,28 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         </div>
         <footer className="cell-node-footer">
           <strong>{notebookGridTag(data.slot)}</strong>
+          {mediaTile && (visualBadges.length > 0 || visualMeter) && (
+            <span className="cell-node-footer-meta" role="group" aria-label={visualMetadataLabel}>
+              {visualMeter && (
+                <time
+                  className="cell-node-footer-meter"
+                  dateTime={`PT${visualMeter.seconds}S`}
+                  title="Duration"
+                >
+                  {visualMeter.label}
+                </time>
+              )}
+              {aspectFirst(visualBadges).map((badge) => (
+                <span
+                  key={badge.key}
+                  className={`cell-media-badge${badge.emphasis === 'generator' ? ' cell-media-badge-wide' : ''}`}
+                  title={badge.title}
+                >
+                  {badge.label}
+                </span>
+              ))}
+            </span>
+          )}
           <span className="cell-node-footer-actions">
             {inputKind && (
               <button
@@ -799,6 +807,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
               <Ellipsis size={16} aria-hidden="true" />
             </button>
           </span>
+          <CellRouteBadge direction="outgoing" badge={outgoingBadge} />
         </footer>
       </section>
       <Handle

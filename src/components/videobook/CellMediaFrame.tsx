@@ -4,7 +4,6 @@ import { CellWaveform, CellWaveformSkeleton } from './CellWaveform'
 import type { CellPreviewBadge, CellPreviewMeter } from '@/videobook/cell-preview'
 
 type CellMediaFrameProps = {
-  producerAddress?: string
   /** Still shown at rest. Null means the pending face takes the frame. */
   posterUrl: string | null
   /** Peaks for an audio poster; null for visual media, empty while extracting. */
@@ -25,7 +24,6 @@ type CellMediaFrameProps = {
  * it. Clips never play on the board; playback lives in the cell's dock.
  */
 export function CellMediaFrame({
-  producerAddress,
   posterUrl,
   waveform,
   alt,
@@ -64,13 +62,8 @@ export function CellMediaFrame({
         </span>
       )}
 
-      {(producerAddress || badges.length > 0) && (
+      {badges.length > 0 && (
         <div className="cell-media-rail" role="group" aria-label={metadataLabel}>
-          {producerAddress && (
-            <span className="cell-media-badge cell-media-source" title={`Source ${producerAddress}`}>
-              ↳ {producerAddress}
-            </span>
-          )}
           {badges.map((badge) => (
             <span
               key={badge.key}

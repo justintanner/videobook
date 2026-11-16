@@ -4,7 +4,9 @@ import type { NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '@/videobook/notebook-canvas'
 import { formatGoalClock, goalTileView, type GoalTileRow } from '@/videobook/goals'
 import { notebookGridTag } from '@/videobook/notebook-grid'
+import { notebookIncomingRouteBadge } from '@/videobook/notebook-route-tags'
 import { useElapsedSeconds } from '@/videobook/use-elapsed-seconds'
+import { CellRouteBadge } from '@/components/videobook/CellRouteBadge'
 import {
   CellContextMenuContext,
   GoalTileContext,
@@ -41,6 +43,7 @@ export function GoalCellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const view = goalTileView(goal, data.label)
   const address = notebookGridTag(data.slot)
   const primarySelected = selected && primaryCellId === id
+  const incomingBadge = notebookIncomingRouteBadge(data.incomingRoutes ?? [])
   const openMenuFromPointer = (event: MouseEvent<HTMLElement>) => {
     event.preventDefault()
     event.stopPropagation()
@@ -66,6 +69,7 @@ export function GoalCellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         data.deleting ? 'cell-node-deleting' : '',
         data.revealing ? 'cell-node-created' : '',
         data.highlighted ? 'cell-node-highlight' : '',
+        incomingBadge ? 'cell-node-has-inputs' : '',
       ].filter(Boolean).join(' ')}
       aria-label={`${address} goal: ${view.title}`}
       data-selection={primarySelected ? 'primary' : selected ? 'selected' : undefined}
@@ -74,6 +78,7 @@ export function GoalCellNode({ id, data, selected }: NodeProps<CanvasNode>) {
       onContextMenu={openMenuFromPointer}
       onKeyDown={openMenuFromKeyboard}
     >
+      <CellRouteBadge direction="incoming" badge={incomingBadge} />
       <section className="cell-node-shell">
         <header className="cell-node-header">
           <span className="cell-node-type" aria-label="GOAL">

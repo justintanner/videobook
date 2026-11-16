@@ -43,7 +43,7 @@ describe('roles an open review puts on the canvas', () => {
 
 describe('scrolling the reviewed row into the middle of the canvas', () => {
   const rowCenter = (row: number) =>
-    notebookGrid.originY + row * notebookGrid.rowPitch + notebookGrid.squareSize / 2
+    notebookGrid.originY + row * notebookGrid.rowPitch + notebookGrid.cellHeight / 2
 
   it('puts the row centre on the middle of what you can see', () => {
     const top = notebookRowScrollTop({

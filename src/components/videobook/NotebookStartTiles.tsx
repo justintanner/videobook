@@ -43,8 +43,8 @@ const mediaCopy: Record<NotebookStartMediaKind, StartMediaCopy> = {
 function tileStyle(slot: NotebookGridSlot): CSSProperties {
   const position = notebookGridPosition(slot)
   return {
-    width: notebookGrid.squareSize,
-    height: notebookGrid.squareSize,
+    width: notebookGrid.cellWidth,
+    height: notebookGrid.cellHeight,
     transform: `translate(${position.x}px, ${position.y}px)`,
   }
 }
@@ -59,8 +59,8 @@ const startTileStyles: Record<StartTileKind, CSSProperties> = {
 const lastStartPosition = notebookGridPosition(startSlots.library)
 
 const startTilesStyle: CSSProperties = {
-  width: lastStartPosition.x + notebookGrid.squareSize,
-  height: lastStartPosition.y + notebookGrid.squareSize,
+  width: lastStartPosition.x + notebookGrid.cellWidth,
+  height: lastStartPosition.y + notebookGrid.cellHeight,
 }
 
 type StartTileProps = {

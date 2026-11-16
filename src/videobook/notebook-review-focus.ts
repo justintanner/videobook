@@ -53,7 +53,7 @@ export function notebookRowScrollTop(input: NotebookRowScrollInput): number {
   const zoom = Number.isFinite(input.zoom) && input.zoom > 0 ? input.zoom : 1
   const center = notebookGrid.originY
     + input.row * notebookGrid.rowPitch
-    + notebookGrid.squareSize / 2
+    + notebookGrid.cellHeight / 2
   const limit = Math.max(0, input.scrollHeight - input.clientHeight)
   const top = center * zoom - input.clientHeight / 2
   return Math.min(limit, Math.max(0, Math.round(top)))

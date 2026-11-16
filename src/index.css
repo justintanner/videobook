@@ -1806,52 +1806,182 @@ textarea:focus-visible {
   opacity: 0;
 }
 
-.cell-route-tag {
-  position: absolute;
+.cell-route-badge {
+  --route-scale: var(--notebook-detail-scale, 1);
+  --route-frame: #6fa58a;
   z-index: 13;
-  display: none;
-  max-width: 62%;
-  align-items: center;
-  gap: calc(4px * var(--notebook-detail-scale, 1));
-  padding: calc(2px * var(--notebook-detail-scale, 1)) calc(7px * var(--notebook-detail-scale, 1));
-  border: 1px solid var(--cell-accent-line);
-  border-radius: 999px;
-  color: var(--cell-accent-bright);
-  background: #06150d;
-  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: calc(10px * var(--notebook-detail-scale, 1));
-  line-height: 1.2;
-  white-space: nowrap;
+  display: flex;
+  min-width: 0;
+  padding: calc(2px * var(--route-scale));
+  background: var(--surface-deep);
+  clip-path: polygon(
+    calc(6px * var(--route-scale)) 0,
+    100% 0,
+    100% calc(100% - 6px * var(--route-scale)),
+    calc(100% - 6px * var(--route-scale)) 100%,
+    0 100%,
+    0 calc(6px * var(--route-scale))
+  );
   pointer-events: none;
 }
 
-.cell-route-tag > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.cell-route-badge-incoming {
+  position: absolute;
+  top: calc(-1 * var(--route-overhang));
+  left: calc(8px * var(--route-scale));
+  max-width: calc(100% - 16px * var(--route-scale));
 }
 
-.cell-route-tag > svg {
-  flex-shrink: 0;
-  width: 1em;
-  height: 1em;
+.cell-route-badge-outgoing {
+  --route-frame: var(--cell-accent);
+  position: relative;
+  flex: none;
+  align-self: flex-end;
+  margin-right: calc(8px - var(--cell-gutter) - var(--route-overhang));
+  margin-bottom: calc(-1 * var(--route-overhang));
 }
 
-.notebook-flow-at-rest .cell-route-tag {
+.cell-route-badge-frame {
   display: flex;
+  min-width: 0;
+  padding: calc(1px * var(--route-scale));
+  background: var(--route-frame);
+  clip-path: polygon(
+    calc(5px * var(--route-scale)) 0,
+    100% 0,
+    100% calc(100% - 5px * var(--route-scale)),
+    calc(100% - 5px * var(--route-scale)) 100%,
+    0 100%,
+    0 calc(5px * var(--route-scale))
+  );
 }
 
-.cell-route-tag-outgoing {
-  bottom: 0;
-  left: 50%;
-  transform: translate(-50%, 50%);
+.cell-route-badge-fill {
+  display: flex;
+  min-width: 0;
+  height: calc(20px * var(--route-scale));
+  align-items: center;
+  gap: calc(6px * var(--route-scale));
+  padding: 0 calc(8px * var(--route-scale)) 0 calc(7px * var(--route-scale));
+  overflow: hidden;
+  color: var(--route-frame);
+  background: #0b1a14;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: calc(12.5px * var(--route-scale));
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+  clip-path: polygon(
+    calc(4px * var(--route-scale)) 0,
+    100% 0,
+    100% calc(100% - 4px * var(--route-scale)),
+    calc(100% - 4px * var(--route-scale)) 100%,
+    0 100%,
+    0 calc(4px * var(--route-scale))
+  );
 }
 
-.cell-route-tag-incoming {
-  top: 0;
-  right: var(--cell-gutter-tight);
-  transform: translateY(-50%);
-  border-color: rgba(96, 176, 132, 0.35);
-  color: #a9c9b7;
+.cell-route-arrow {
+  flex: none;
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.cell-route-segment {
+  --route-hue: #9aa89f;
+  --route-ink: #c8d4cc;
+  --route-slot: rgba(154, 168, 159, 0.2);
+  --route-slot-ink: #c8d4cc;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: calc(4px * var(--route-scale));
+  color: var(--route-hue);
+}
+
+.cell-route-badge-incoming .cell-route-segment + .cell-route-segment {
+  padding-left: calc(6px * var(--route-scale));
+  border-left: 1px solid rgba(169, 214, 191, 0.22);
+}
+
+.cell-route-segment > svg {
+  flex: none;
+  width: 0.85em;
+  height: 0.85em;
+}
+
+.cell-route-address {
+  color: var(--route-ink);
+}
+
+.cell-route-slot {
+  display: inline-grid;
+  min-width: calc(20px * var(--route-scale));
+  height: calc(15px * var(--route-scale));
+  box-sizing: border-box;
+  place-items: center;
+  padding: 0 calc(4px * var(--route-scale));
+  border-radius: calc(3px * var(--route-scale));
+  color: var(--route-slot-ink);
+  background: var(--route-slot);
+  font-size: calc(10.5px * var(--route-scale));
+  font-weight: 700;
+}
+
+.cell-route-more {
+  flex: none;
+  color: #8fb9a2;
+}
+
+.cell-route-segment[data-family='image'] {
+  --route-hue: #63c7d8;
+  --route-ink: #c4f1f8;
+  --route-slot: rgba(99, 199, 216, 0.2);
+  --route-slot-ink: #93e4f1;
+}
+
+.cell-route-segment[data-family='video'],
+.cell-route-segment[data-family='gen'] {
+  --route-hue: #72e7aa;
+  --route-ink: #c9f8dd;
+  --route-slot: rgba(114, 231, 170, 0.2);
+  --route-slot-ink: #a3f2c8;
+}
+
+.cell-route-segment[data-family='audio'] {
+  --route-hue: #c989a2;
+  --route-ink: #f4cddb;
+  --route-slot: rgba(201, 137, 162, 0.2);
+  --route-slot-ink: #f0bfd2;
+}
+
+.cell-route-segment[data-family='goal'] {
+  --route-hue: #b9a9f2;
+  --route-ink: #ddd4ff;
+  --route-slot: rgba(185, 169, 242, 0.2);
+  --route-slot-ink: #d6ccff;
+}
+
+.cell-route-badge[data-tone='image'] {
+  --route-frame: #63c7d8;
+}
+
+.cell-route-badge[data-tone='video'],
+.cell-route-badge[data-tone='gen'] {
+  --route-frame: #72e7aa;
+}
+
+.cell-route-badge[data-tone='audio'] {
+  --route-frame: #c989a2;
+}
+
+.cell-route-badge[data-tone='goal'] {
+  --route-frame: #b9a9f2;
+}
+
+.cell-route-badge[data-tone='data'] {
+  --route-frame: #9aa89f;
 }
 
 .cell-connect-handle {
@@ -1874,6 +2004,7 @@ textarea:focus-visible {
      window; much wider and it wraps. */
   --cell-gutter: calc(22px * var(--notebook-detail-scale, 1));
   --cell-gutter-tight: calc(14px * var(--notebook-detail-scale, 1));
+  --route-overhang: min(10px * var(--notebook-detail-scale, 1), 11px);
   --cell-state-color: #72e7aa;
   --cell-state-soft: rgba(114, 231, 170, 0.22);
   --cell-state-glow: rgba(114, 231, 170, 0.38);
@@ -1886,13 +2017,12 @@ textarea:focus-visible {
   position: relative;
   display: block;
   width: 240px;
-  height: 240px;
+  height: 200px;
   overflow: visible;
   border: 1px solid rgba(96, 176, 132, 0.35);
   border-radius: 3px;
   color: var(--ink);
   background: rgba(4, 14, 9, 0.97);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
   isolation: isolate;
   perspective: 900px;
   transform-origin: center;
@@ -1952,8 +2082,7 @@ textarea:focus-visible {
   background: rgba(4, 18, 11, 0.92);
   box-shadow:
     5px 5px 0 -1px rgba(4, 13, 9, 0.96),
-    5px 5px 0 0 rgba(114, 231, 170, 0.18),
-    0 12px 30px rgba(0, 0, 0, 0.34);
+    5px 5px 0 0 rgba(114, 231, 170, 0.18);
   content: '';
   pointer-events: none;
 }
@@ -1983,16 +2112,12 @@ textarea:focus-visible {
 
 .cell-node-selected {
   border-color: rgba(79, 183, 125, 0.98);
-  box-shadow:
-    0 0 26px rgba(79, 183, 125, 0.42),
-    0 18px 38px rgba(0, 0, 0, 0.42);
+  box-shadow: 0 0 0 1px rgba(79, 183, 125, 0.55);
   animation: cell-selection-settle 220ms ease-out;
 }
 
 .cell-node-selected:not(.cell-node-primary) {
-  box-shadow:
-    0 0 14px rgba(79, 183, 125, 0.28),
-    0 12px 28px rgba(0, 0, 0, 0.36);
+  box-shadow: 0 0 0 1px rgba(79, 183, 125, 0.3);
 }
 
 .cell-node-selected::before {
@@ -2050,7 +2175,7 @@ textarea:focus-visible {
   flex-direction: column;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
   border-radius: inherit;
   background: rgba(4, 14, 9, 0.99);
 }
@@ -2061,6 +2186,7 @@ textarea:focus-visible {
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .cell-node-body:has(> .cell-state-overlay) .cell-media-pending-face,
@@ -2079,8 +2205,7 @@ textarea:focus-visible {
   border-color: var(--cell-state-color);
   box-shadow:
     0 0 0 1px var(--cell-state-soft),
-    0 0 14px var(--cell-state-glow),
-    0 18px 40px rgba(0, 0, 0, 0.42);
+    0 0 14px var(--cell-state-glow);
 }
 
 .cell-node-running.cell-kind-image,
@@ -2108,8 +2233,7 @@ textarea:focus-visible {
   border-color: color-mix(in srgb, var(--cell-state-color) 55%, transparent);
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--cell-state-color) 16%, transparent),
-    0 0 14px color-mix(in srgb, var(--cell-state-color) 28%, transparent),
-    0 10px 26px rgba(0, 0, 0, 0.34);
+    0 0 14px color-mix(in srgb, var(--cell-state-color) 28%, transparent);
 }
 
 .cell-node-error::before {
@@ -2554,6 +2678,10 @@ textarea:focus-visible {
   color: #9ee0b8;
 }
 
+.cell-node-has-inputs:not(.cell-node-media-tile) .cell-node-header {
+  padding-top: calc(26px * var(--notebook-detail-scale, 1) - var(--route-overhang) + 3px);
+}
+
 .cell-node-type {
   display: inline-flex;
   min-width: 0;
@@ -2594,12 +2722,58 @@ textarea:focus-visible {
 
 .cell-node-footer {
   min-height: 34px;
+  justify-content: flex-start;
   gap: 8px;
   padding: 0 calc(var(--cell-gutter) - 8px) 0 var(--cell-gutter);
   border-top: 1px solid var(--line);
   color: #779b87;
   font-size: 12px;
   letter-spacing: 0;
+}
+
+.cell-node-footer-meta {
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: center;
+  min-width: 0;
+  height: 1.5em;
+  overflow: hidden;
+  column-gap: 8px;
+  row-gap: 2em;
+  font-size: var(--cell-label-font-size);
+  line-height: 1.5;
+}
+
+.cell-node-footer-meta::before {
+  flex: none;
+  width: 0;
+  margin-right: -8px;
+  content: '';
+}
+
+.cell-node-footer-meta > .cell-media-badge,
+.cell-node-footer-meta > .cell-node-footer-meter {
+  flex: none;
+  max-width: none;
+  line-height: 1.5;
+}
+
+.cell-node-footer-meter {
+  flex: none;
+  color: #b9dfcb;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: var(--cell-label-font-size);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.cell-node-footer-meta > * + *::before {
+  margin-right: 8px;
+  color: rgba(185, 223, 203, 0.45);
+  content: '·';
 }
 
 .cell-node-footer strong {
@@ -2617,6 +2791,7 @@ textarea:focus-visible {
   min-width: 0;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
 }
 
 .cell-context-menu-trigger {
@@ -2806,12 +2981,28 @@ textarea:focus-visible {
   content: '·';
 }
 
+.cell-goal-mark {
+  gap: calc(4px * var(--notebook-detail-scale, 1));
+  height: calc(17px * var(--notebook-detail-scale, 1));
+  padding: 0 calc(12px * var(--notebook-detail-scale, 1)) 0 calc(6px * var(--notebook-detail-scale, 1));
+  color: #1a1433;
+  background: #b9a9f2;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 6px * var(--notebook-detail-scale, 1)) 50%, 100% 100%, 0 100%);
+}
+
+.cell-aspect-ratio + .cell-goal-mark::before {
+  content: none;
+}
+
 /* The badge rail: what the media is, on one line under the picture rather
    than over it. Floating it top right meant it wrapped to two or three rows
    on a portrait frame and covered whatever the frame was of. A single strip
-   on the bottom edge cannot wrap and cannot land on a face; the scrim keeps
-   it legible over any media. Image, video and audio differ only in which
-   badges they hand it. */
+   on the bottom edge cannot wrap and cannot land on a face; its solid ground
+   keeps it legible over any media. Image, video and audio differ only in
+   which badges they hand it; a media tile moves them into its footer strip. */
 .cell-media-rail {
   position: absolute;
   right: 0;
@@ -2826,7 +3017,7 @@ textarea:focus-visible {
   gap: 8px;
   padding: 0 var(--cell-gutter);
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(2, 10, 7, 0), rgba(2, 10, 7, 0.94) 62%);
+  background: rgba(2, 10, 7, 0.9);
   font-size: var(--cell-label-font-size);
   pointer-events: none;
 }
@@ -2838,8 +3029,8 @@ textarea:focus-visible {
   padding-right: calc(3.35em + var(--cell-gutter));
 }
 
-/* No pill: the rail's scrim carries the contrast, so the badges are plain
-   text separated by a middot. */
+/* No pill: the strip under them carries the contrast, so the badges are
+   plain text separated by a middot. */
 .cell-media-badge {
   display: block;
   min-width: 0;
@@ -3068,6 +3259,25 @@ textarea:focus-visible {
   font-size: 12px;
 }
 
+.cell-status-slot {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: center;
+  min-width: 0;
+  height: 1.65em;
+  overflow: hidden;
+  row-gap: 2em;
+  font-size: var(--cell-label-font-size);
+}
+
+.cell-status-slot::before {
+  flex: none;
+  width: 0;
+  content: '';
+}
+
 .cell-status {
   display: inline-grid;
   min-width: 0;
@@ -3075,14 +3285,15 @@ textarea:focus-visible {
   flex: 0 1 auto;
   place-items: center;
   padding: 0 6px;
-  border: 1px solid rgba(114, 231, 170, 0.22);
-  border-radius: 999px;
+  border: 0;
   color: #b4d9c4;
-  background: rgba(45, 117, 74, 0.09);
+  background: rgba(114, 231, 170, 0.14);
   font-size: var(--cell-label-font-size);
+  font-weight: 700;
   letter-spacing: 0.05em;
   line-height: 1;
   text-transform: uppercase;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
 }
 
 .cell-status > span {
@@ -3143,10 +3354,9 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
-/* A media tile is all picture: no type header or footer band. The address
-   and the cell menu float on the bottom edge over a scrim, the badges move
-   to the top edge, and the meter keeps the bottom-right corner beside the
-   menu. */
+/* A media tile is all picture above one solid footer strip: the address, the
+   media's badges and meter, and the cell menu sit in the strip, never over
+   the picture, so nothing needs a scrim. */
 .cell-node-media-tile .cell-node-header {
   position: absolute;
   top: 0;
@@ -3165,42 +3375,21 @@ textarea:focus-visible {
   display: none;
 }
 
+.cell-node-media-tile .cell-node-body {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+
 .cell-node-media-tile .cell-node-footer {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  position: relative;
   z-index: 3;
-  border-top: 0;
-  pointer-events: none;
+  background: var(--surface);
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
 }
 
-.cell-node-media-tile .cell-node-footer > * {
-  pointer-events: auto;
-}
-
-.cell-node-media-tile .cell-media::after {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1;
-  height: 48px;
-  background: linear-gradient(180deg, rgba(2, 10, 7, 0), rgba(2, 10, 7, 0.9) 70%);
-  content: '';
-  pointer-events: none;
-}
-
-.cell-node-media-tile .cell-media-rail {
-  top: 0;
-  bottom: auto;
-  background: linear-gradient(0deg, rgba(2, 10, 7, 0), rgba(2, 10, 7, 0.9) 62%);
-}
-
-.cell-node-media-tile .cell-media-meter {
-  right: 20px;
-  bottom: 3px;
-  background: none;
+.cell-node-media-tile .cell-version-count {
+  background: var(--surface);
 }
 
 /* Audio's poster: the artifact's peaks, mirrored around the midline. */
@@ -3270,8 +3459,8 @@ textarea:focus-visible {
 }
 
 /* The corner meter: how long the media runs. It shares the badge rail's
-   strip, so it carries the same scrim rather than a pill of its own — and
-   still reads when a cell has a meter and no badges. */
+   solid strip rather than a pill of its own — and still reads when a cell
+   has a meter and no badges. */
 .cell-media-meter {
   position: absolute;
   right: 0;
@@ -3283,7 +3472,7 @@ textarea:focus-visible {
   padding: 0 var(--cell-gutter) 0 1.6em;
   border: 0;
   color: #b9dfcb;
-  background: linear-gradient(90deg, rgba(2, 10, 7, 0), rgba(2, 10, 7, 0.94) 45%);
+  background: rgba(2, 10, 7, 0.9);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
   font-size: var(--cell-label-font-size);
   font-variant-numeric: tabular-nums;
@@ -13898,6 +14087,3 @@ textarea:focus-visible {
   }
 }
 
-.cell-media-badge.cell-media-source {
-  flex-shrink: 0;
-}

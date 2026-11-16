@@ -52,13 +52,13 @@ export const BusRiverEdge = memo(function BusRiverEdge(
     const targetPosition = targetNode.internals?.positionAbsolute
       ?? targetNode.position
     const sourceWidth = sourceNode.measured?.width
-      ?? notebookGrid.squareSize
+      ?? notebookGrid.cellWidth
     const sourceHeight = sourceNode.measured?.height
-      ?? notebookGrid.squareSize
+      ?? notebookGrid.cellHeight
     const targetWidth = targetNode.measured?.width
-      ?? notebookGrid.squareSize
+      ?? notebookGrid.cellWidth
     const targetHeight = targetNode.measured?.height
-      ?? notebookGrid.squareSize
+      ?? notebookGrid.cellHeight
     return {
       sourceLeftX: sourcePosition.x,
       sourceRightX: sourcePosition.x + sourceWidth,

@@ -108,8 +108,8 @@ export function NotebookGridBoard({
                 className={className}
                 key={slotKey}
                 style={{
-                  width: notebookGrid.squareSize,
-                  height: notebookGrid.squareSize,
+                  width: notebookGrid.cellWidth,
+                  height: notebookGrid.cellHeight,
                   transform: `translate(${notebookGrid.originX + index * notebookGrid.columnPitch}px, ${notebookGrid.originY + row * notebookGrid.rowPitch}px)`,
                 }}
               >
@@ -124,8 +124,8 @@ export function NotebookGridBoard({
           <div
             className="notebook-grid-preview"
             style={{
-              width: notebookGrid.squareSize,
-              height: notebookGrid.squareSize,
+              width: notebookGrid.cellWidth,
+              height: notebookGrid.cellHeight,
               transform: `translate(${previewPosition.x}px, ${previewPosition.y}px)`,
             }}
           />

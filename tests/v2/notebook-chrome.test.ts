@@ -103,6 +103,49 @@ describe('notebook chrome tokens', () => {
       .toBe('calc(3.35em + var(--cell-gutter))')
   })
 
+  it('draws cells flat, with no resting drop shadow and no scrim over media', () => {
+    const cell = rule(css, '\n.cell-node')
+    expect(cell).not.toMatch(/(?:^|\n)\s*box-shadow:/u)
+    expect(pixelCount(declaration(cell, 'height'))).toBe(notebookGrid.cellHeight)
+    expect(pixelCount(declaration(cell, 'width'))).toBe(notebookGrid.cellWidth)
+    expect(css).not.toContain('.cell-node-media-tile .cell-media::after')
+    expect(declaration(rule(css, '.cell-media-rail'), 'background')).not.toContain('gradient')
+    expect(declaration(rule(css, '.cell-media-meter'), 'background')).not.toContain('gradient')
+    const tileFooter = rule(css, '.cell-node-media-tile .cell-node-footer')
+    expect(declaration(tileFooter, 'position')).toBe('relative')
+    expect(declaration(tileFooter, 'background')).toBe('var(--surface)')
+  })
+
+  it('hangs link badges off the card edges without crossing the gutter', () => {
+    const overhang = css.match(/\n\s*--route-overhang:\s*([^;]+);/u)?.[1]
+    expect(overhang).toBe('min(10px * var(--notebook-detail-scale, 1), 11px)')
+    expect(2 * pixelCount(overhang?.match(/(\d+px)\)$/u)?.[1] ?? '')).toBeLessThan(notebookGrid.gap)
+    expect(declaration(rule(css, '.cell-route-badge-incoming'), 'top')).toBe('calc(-1 * var(--route-overhang))')
+    const outgoing = rule(css, '.cell-route-badge-outgoing')
+    expect(declaration(outgoing, 'flex')).toBe('none')
+    expect(declaration(outgoing, 'margin-bottom')).toBe('calc(-1 * var(--route-overhang))')
+    expect(declaration(outgoing, 'margin-right')).toBe('calc(8px - var(--cell-gutter) - var(--route-overhang))')
+    expect(css).toContain('padding: 0 calc(var(--cell-gutter) - 8px) 0 var(--cell-gutter);')
+    expect(declaration(rule(css, '.cell-route-badge-fill'), 'font-family')).toContain('JetBrains Mono')
+    expect(declaration(rule(css, '.cell-node-has-inputs:not(.cell-node-media-tile) .cell-node-header'), 'padding-top'))
+      .toBe('calc(26px * var(--notebook-detail-scale, 1) - var(--route-overhang) + 3px)')
+  })
+
+  it('shows footer metadata as whole items, dropping the ones that do not fit', () => {
+    const meta = rule(css, '.cell-node-footer-meta')
+    expect(declaration(meta, 'flex')).toBe('1 1 0')
+    expect(declaration(meta, 'flex-wrap')).toBe('wrap')
+    expect(declaration(meta, 'height')).toBe('1.5em')
+    expect(declaration(meta, 'overflow')).toBe('hidden')
+    expect(declaration(rule(css, '.cell-node-footer-meta > .cell-media-badge,\n.cell-node-footer-meta > .cell-node-footer-meter'), 'flex'))
+      .toBe('none')
+    expect(declaration(rule(css, '.cell-node-footer-meta::before'), 'width')).toBe('0')
+    const status = rule(css, '.cell-status-slot')
+    expect(declaration(status, 'flex-wrap')).toBe('wrap')
+    expect(declaration(status, 'overflow')).toBe('hidden')
+    expect(declaration(rule(css, '.cell-status-slot::before'), 'width')).toBe('0')
+  })
+
   it('prints generation settings as plain text so a dense header keeps one line', () => {
     // Outlined chips are what wrapped GEN VID · 10s · adaptive onto a second
     // line once the gutter grew.

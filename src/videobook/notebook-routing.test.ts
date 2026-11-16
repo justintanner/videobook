@@ -112,18 +112,18 @@ function sourceCoordinates(
   if (route.sourceSide === 'left') {
     return {
       sourceX: position.x - 4.5,
-      sourceY: position.y + notebookGrid.squareSize * offset,
+      sourceY: position.y + notebookGrid.cellHeight * offset,
     }
   }
   if (route.sourceSide === 'right') {
     return {
-      sourceX: position.x + notebookGrid.squareSize + 4.5,
-      sourceY: position.y + notebookGrid.squareSize * offset,
+      sourceX: position.x + notebookGrid.cellWidth + 4.5,
+      sourceY: position.y + notebookGrid.cellHeight * offset,
     }
   }
   return {
-    sourceX: position.x + notebookGrid.squareSize * offset,
-    sourceY: position.y + notebookGrid.squareSize + 4.5,
+    sourceX: position.x + notebookGrid.cellWidth * offset,
+    sourceY: position.y + notebookGrid.cellHeight + 4.5,
   }
 }
 
@@ -137,11 +137,11 @@ function targetCoordinates(
       ?? notebookSourcePortOffsets[1]
     return {
       targetX: position.x,
-      targetY: position.y + notebookGrid.squareSize * offset,
+      targetY: position.y + notebookGrid.cellHeight * offset,
     }
   }
   return {
-    targetX: position.x + notebookGrid.squareSize / 2,
+    targetX: position.x + notebookGrid.cellWidth / 2,
     targetY: position.y,
   }
 }
@@ -157,11 +157,11 @@ function routeCoordinates(
     ...sourceCoordinates(sourceSlot, route),
     ...targetCoordinates(targetSlot, route),
     sourceLeftX: sourcePosition.x,
-    sourceRightX: sourcePosition.x + notebookGrid.squareSize,
-    sourceBottomY: sourcePosition.y + notebookGrid.squareSize,
+    sourceRightX: sourcePosition.x + notebookGrid.cellWidth,
+    sourceBottomY: sourcePosition.y + notebookGrid.cellHeight,
     targetLeftX: targetPosition.x,
     targetTopY: targetPosition.y,
-    targetHeight: notebookGrid.squareSize,
+    targetHeight: notebookGrid.cellHeight,
   }
 }
 
@@ -172,9 +172,9 @@ function segmentIntersectsCard(
 ): boolean {
   const position = notebookGridPosition(slot)
   const left = position.x
-  const right = left + notebookGrid.squareSize
+  const right = left + notebookGrid.cellWidth
   const top = position.y
-  const bottom = top + notebookGrid.squareSize
+  const bottom = top + notebookGrid.cellHeight
 
   if (start.x === end.x) {
     return start.x > left
@@ -443,10 +443,10 @@ describe('notebook bus and river routing', () => {
     const points = notebookBusRiverPoints(coordinates, route!)
 
     expect(points).toEqual([
-      { x: 508.5, y: 384 },
-      { x: 528, y: 384 },
+      { x: 508.5, y: 324 },
+      { x: 528, y: 324 },
     ])
-    expect(notebookBusRiverPath(coordinates, route!)).toBe('M 508.5 384 H 528')
+    expect(notebookBusRiverPath(coordinates, route!)).toBe('M 508.5 324 H 528')
     expect(points.every((point) => point.y >= notebookGridPosition(sourceSlot).y)).toBe(true)
     expect(segmentIntersectsCard(points[0]!, points[1]!, targetSlot)).toBe(false)
   })
@@ -461,7 +461,7 @@ describe('notebook bus and river routing', () => {
     const route = notebookBusRiverRoutes(document).get('edge')
     expect(route?.targetSide).toBe('left')
     expect(notebookBusRiverPath(routeCoordinates(sourceSlot, targetSlot, route!), route!))
-      .toBe('M 244.5 120 H 792')
+      .toBe('M 244.5 100 H 792')
   })
 
   it('routes cross-row forward connections through the target-column gutter', () => {
@@ -474,7 +474,7 @@ describe('notebook bus and river routing', () => {
     const route = notebookBusRiverRoutes(document).get('edge')
     expect(route).toMatchObject({ targetSide: 'left', riverOffset: notebookGutterLaneOffsets[1] })
     expect(notebookBusRiverPath(routeCoordinates(sourceSlot, targetSlot, route!), route!))
-      .toBe('M 244.5 120 H 508 Q 516 120 516 128 V 642 Q 516 648 522 648 H 528')
+      .toBe('M 244.5 100 H 508 Q 516 100 516 108 V 542 Q 516 548 522 548 H 528')
   })
 
   it('keeps backward connections on the target top edge', () => {

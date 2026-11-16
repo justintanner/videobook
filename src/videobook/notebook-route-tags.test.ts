@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { NotebookCell, NotebookDocument } from 'videobook-engine'
 import {
   notebookCellRouteTags,
-  notebookIncomingRouteText,
-  notebookOutgoingRouteText,
+  notebookIncomingRouteBadge,
+  notebookOutgoingRouteBadge,
+  notebookRouteSlotLabel,
+  type NotebookRouteTag,
 } from './notebook-route-tags'
 import { notebookNodes } from './notebook-draft'
 
@@ -44,35 +46,83 @@ const board: NotebookDocument = {
 }
 
 describe('notebook route tags', () => {
-  it('names each input cell by the generation slot it fills', () => {
+  it('points each input cell at the generation it feeds and speaks the slot it fills', () => {
     const tags = notebookCellRouteTags(board)
+    const photoBadge = notebookOutgoingRouteBadge(tags.get(photo.id)?.outgoing ?? [])
+    const clipBadge = notebookOutgoingRouteBadge(tags.get(clip.id)?.outgoing ?? [])
 
-    expect(notebookOutgoingRouteText(tags.get(photo.id)?.outgoing ?? [])).toBe('@b1 · image1')
-    expect(notebookOutgoingRouteText(tags.get(clip.id)?.outgoing ?? [])).toBe('@b1 · video1')
+    expect(photoBadge?.segments).toEqual([{ address: 'b1', slots: [], family: 'gen' }])
+    expect(photoBadge?.label).toBe('Feeds @b1 as image1')
+    expect(clipBadge?.segments).toEqual([{ address: 'b1', slots: [], family: 'gen' }])
+    expect(clipBadge?.label).toBe('Feeds @b1 as video1')
+  })
+
+  it('shows what feeds a generation as slot keycaps coloured by the source cell', () => {
+    const tags = notebookCellRouteTags(board)
+    const badge = notebookIncomingRouteBadge(tags.get(generation.id)?.incoming ?? [])
+
+    expect(badge?.segments).toEqual([
+      { address: 'a1', slots: ['I1'], family: 'image' },
+      { address: 'c1', slots: ['V1'], family: 'video' },
+    ])
+    expect(badge?.tone).toBe('mixed')
+    expect(badge?.label).toBe('Fed by @a1 into image1, @c1 into video1')
   })
 
   it('lists every destination of a cell with several outputs', () => {
     const tags = notebookCellRouteTags(board)
+    const outputs = notebookOutgoingRouteBadge(tags.get(generation.id)?.outgoing ?? [])
+    const producer = notebookIncomingRouteBadge(tags.get(firstRun.id)?.incoming ?? [])
 
-    expect(notebookOutgoingRouteText(tags.get(generation.id)?.outgoing ?? [])).toBe('@c2 · @c3')
-    expect(notebookIncomingRouteText(tags.get(generation.id)?.incoming ?? [])).toBe('from @a1 · @c1')
-    expect(notebookIncomingRouteText(tags.get(firstRun.id)?.incoming ?? [])).toBe('from @b1')
+    expect(outputs?.segments).toEqual([
+      { address: 'c2', slots: [], family: 'video' },
+      { address: 'c3', slots: [], family: 'video' },
+    ])
+    expect(outputs?.label).toBe('Feeds @c2, @c3')
+    expect(producer?.segments).toEqual([{ address: 'b1', slots: [], family: 'gen' }])
+    expect(producer?.tone).toBe('gen')
+    expect(producer?.label).toBe('Fed by @b1')
   })
 
   it('collapses long route lists into a count', () => {
-    const many = [1, 2, 3, 4, 5].map((index) => ({ address: `@d${index}`, tokens: [] }))
+    const many: NotebookRouteTag[] = [1, 2, 3, 4, 5].map((index) => ({
+      address: `@d${index}`,
+      tokens: [],
+      type: 'video',
+    }))
+    const outputs = notebookOutgoingRouteBadge(many)
+    const inputs = notebookIncomingRouteBadge(many)
 
-    expect(notebookOutgoingRouteText(many)).toBe('@d1 · @d2 · @d3 +2')
-    expect(notebookIncomingRouteText(many)).toBe('from 5 cells')
-    expect(notebookOutgoingRouteText([])).toBeNull()
-    expect(notebookIncomingRouteText([])).toBeNull()
+    expect(outputs?.segments.map((segment) => segment.address)).toEqual(['d1'])
+    expect(outputs?.hidden).toBe(4)
+    expect(outputs?.label).toBe('Feeds @d1, @d2, @d3 and 2 more')
+    expect(notebookOutgoingRouteBadge(many.slice(0, 2))?.segments.map((segment) => segment.address))
+      .toEqual(['d1', 'd2'])
+    expect(notebookOutgoingRouteBadge(many.slice(0, 3))?.hidden).toBe(2)
+    expect(inputs?.segments.map((segment) => segment.address)).toEqual(['d1', 'd2', 'd3'])
+    expect(inputs?.hidden).toBe(2)
+    expect(inputs?.label).toBe('Fed by @d1, @d2, @d3 and 2 more')
+    expect(notebookOutgoingRouteBadge([])).toBeNull()
+    expect(notebookIncomingRouteBadge([])).toBeNull()
+  })
+
+  it('shortens mention tokens into keycap labels', () => {
+    expect(notebookRouteSlotLabel('image2')).toBe('I2')
+    expect(notebookRouteSlotLabel('video1')).toBe('V1')
+    expect(notebookRouteSlotLabel('audio1')).toBe('A1')
+    expect(notebookRouteSlotLabel('keyframe3')).toBe('K3')
+    expect(notebookRouteSlotLabel('firstframe')).toBe('FF')
+    expect(notebookRouteSlotLabel('lastframe')).toBe('LF')
+    expect(notebookRouteSlotLabel('input')).toBe('INP')
   })
 
   it('hands route tags to the canvas nodes and leaves unconnected cells bare', () => {
     const lonely: NotebookDocument = { ...board, cells: [...board.cells, cell('018f7cf5-0d31-7d96-8c0f-8000000000a2', 'image', 0, 1)] }
     const nodes = new Map(notebookNodes(lonely).map((node) => [node.id, node.data]))
 
-    expect(nodes.get(photo.id)?.outgoingRoutes).toEqual([{ address: '@b1', tokens: ['image1'] }])
+    expect(nodes.get(photo.id)?.outgoingRoutes).toEqual([
+      { address: '@b1', tokens: ['image1'], type: 'generate_video' },
+    ])
     expect(nodes.get('018f7cf5-0d31-7d96-8c0f-8000000000a2')?.outgoingRoutes).toEqual([])
     expect(nodes.get('018f7cf5-0d31-7d96-8c0f-8000000000a2')?.incomingRoutes).toEqual([])
   })

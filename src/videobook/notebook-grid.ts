@@ -30,14 +30,15 @@ export const notebookGrid = {
      same line as the header logo. */
   originX: 0,
   originY: 0,
-  squareSize: 240,
+  cellWidth: 240,
+  cellHeight: 200,
   gap: 24,
   columnPitch: 264,
-  rowPitch: 264,
+  rowPitch: 224,
   columnCount: NOTEBOOK_GRID_COLUMN_COUNT,
   maximumRowCount: NOTEBOOK_GRID_ROW_COUNT,
   minimumRowCount: 3,
-  fitRowCount: 3,
+  fitRowCount: 4,
   trailingRowCount: 1,
   detailZoomFloor: 0.5,
 } as const
@@ -280,7 +281,7 @@ function firstRowsHeight(): number {
 
 function gridWidth(): number {
   return notebookGrid.originX * 2
-    + NOTEBOOK_GRID_COLUMN_COUNT * notebookGrid.squareSize
+    + NOTEBOOK_GRID_COLUMN_COUNT * notebookGrid.cellWidth
     + (NOTEBOOK_GRID_COLUMN_COUNT - 1) * notebookGrid.gap
 }
 
@@ -348,8 +349,8 @@ export function notebookGridSquareAt(
   const column = metrics.minColumn + columnIndex
   if (column > metrics.maxColumn) return null
   if (
-    offsetX - columnIndex * notebookGrid.columnPitch >= notebookGrid.squareSize
-    || offsetY - row * notebookGrid.rowPitch >= notebookGrid.squareSize
+    offsetX - columnIndex * notebookGrid.columnPitch >= notebookGrid.cellWidth
+    || offsetY - row * notebookGrid.rowPitch >= notebookGrid.cellHeight
   ) return null
 
   return { row, column }
@@ -374,7 +375,7 @@ export function notebookGridMetrics(
   )
   const width = gridWidth()
   const height = notebookGrid.originY * 2
-    + rowCount * notebookGrid.squareSize
+    + rowCount * notebookGrid.cellHeight
     + Math.max(0, rowCount - 1) * notebookGrid.gap
   return {
     rowCount,
