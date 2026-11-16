@@ -2017,7 +2017,7 @@ textarea:focus-visible {
   position: relative;
   display: block;
   width: 240px;
-  height: 200px;
+  height: var(--notebook-cell-height, 200px);
   overflow: visible;
   border: 1px solid rgba(96, 176, 132, 0.35);
   border-radius: 3px;
@@ -3764,6 +3764,7 @@ textarea:focus-visible {
   align-items: start;
   overflow: hidden;
   padding: var(--cell-gutter-tight) var(--cell-gutter);
+  padding-block: calc(6px * var(--notebook-detail-scale, 1));
   color: #b9dfcb;
   text-align: left;
 }

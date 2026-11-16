@@ -44,7 +44,7 @@ function tileStyle(slot: NotebookGridSlot): CSSProperties {
   const position = notebookGridPosition(slot)
   return {
     width: notebookGrid.cellWidth,
-    height: notebookGrid.cellHeight,
+    height: 'var(--notebook-cell-height, 200px)',
     transform: `translate(${position.x}px, ${position.y}px)`,
   }
 }
@@ -60,7 +60,7 @@ const lastStartPosition = notebookGridPosition(startSlots.library)
 
 const startTilesStyle: CSSProperties = {
   width: lastStartPosition.x + notebookGrid.cellWidth,
-  height: lastStartPosition.y + notebookGrid.cellHeight,
+  height: 'var(--notebook-cell-height, 200px)',
 }
 
 type StartTileProps = {

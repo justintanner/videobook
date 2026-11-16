@@ -1,21 +1,21 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { revealNotebookCell } from './notebook-result-reveal'
-import { fitNotebookGridZoom } from './notebook-grid'
+import { fitNotebookGridCellHeight, fitNotebookGridZoom, notebookGrid } from './notebook-grid'
 
-const RESTING_COMPOSER_RESERVE = 160
-
-export function useNotebookViewport(bookId: string, notebookId: string | undefined, active: boolean) {
+export function useNotebookViewport(bookId: string, notebookId: string | undefined, active: boolean, commandRowHeight: number) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [surface, setSurface] = useState({ width: 0, height: 0, fitHeight: 0, minimumZoom: 0 })
-  const appliedZoomRef = useRef(1)
+  const appliedRowPitchRef = useRef<number>(notebookGrid.rowPitch)
   const anchorTopRef = useRef(0)
   const revealCleanupRef = useRef<(() => void) | null>(null)
-  const zoom = fitNotebookGridZoom(surface.width, surface.minimumZoom, surface.fitHeight)
+  const zoom = fitNotebookGridZoom(surface.width, surface.minimumZoom)
+  const cellHeight = fitNotebookGridCellHeight(surface.fitHeight, zoom)
+  const rowPitch = (cellHeight + notebookGrid.gap) * zoom
 
   const rememberPosition = useCallback(() => {
     const container = scrollRef.current
     if (!container) return
-    anchorTopRef.current = container.scrollTop / appliedZoomRef.current
+    anchorTopRef.current = container.scrollTop / appliedRowPitchRef.current
   }, [])
 
   useLayoutEffect(() => {
@@ -24,12 +24,19 @@ export function useNotebookViewport(bookId: string, notebookId: string | undefin
     container.scrollLeft = 0
     container.scrollTop = 0
     anchorTopRef.current = 0
+  }, [active, bookId, notebookId])
+
+  useLayoutEffect(() => {
+    const container = scrollRef.current
+    if (!active || !container) return
     const sync = () => {
       rememberPosition()
       const style = getComputedStyle(container)
       const width = Math.max(0, container.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight))
       const height = container.clientHeight
-      const composerReserve = Math.min(parseFloat(style.paddingBottom) || 0, RESTING_COMPOSER_RESERVE)
+      const composerReserve = commandRowHeight
+        + (parseFloat(style.getPropertyValue('--app-gutter')) || 0)
+        + (parseFloat(style.getPropertyValue('--app-gap')) || 0) + 16
       const fitHeight = Math.max(0, height - (parseFloat(style.paddingTop) || 0) - composerReserve)
       const minimumZoom = parseFloat(style.getPropertyValue('--notebook-minimum-zoom')) || 0
       setSurface(current => current.width === width && current.height === height
@@ -46,20 +53,20 @@ export function useNotebookViewport(bookId: string, notebookId: string | undefin
       container.removeEventListener('scroll', rememberPosition)
       observer.disconnect()
     }
-  }, [active, bookId, notebookId, rememberPosition])
+  }, [active, bookId, notebookId, commandRowHeight, rememberPosition])
 
   useLayoutEffect(() => {
     const container = scrollRef.current
     if (!active || !container) return
-    container.scrollTop = anchorTopRef.current * zoom
-    appliedZoomRef.current = zoom
+    container.scrollTop = anchorTopRef.current * rowPitch
+    appliedRowPitchRef.current = rowPitch
     rememberPosition()
-  }, [active, rememberPosition, zoom])
+  }, [active, rememberPosition, rowPitch])
 
   const revealCell = useCallback((cellId: string) => {
     revealCleanupRef.current?.()
     revealCleanupRef.current = revealNotebookCell(() => scrollRef.current, cellId)
   }, [])
 
-  return { scrollRef, surface, zoom, revealCell }
+  return { scrollRef, surface, zoom, cellHeight, revealCell }
 }

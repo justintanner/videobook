@@ -194,11 +194,6 @@
 .goal-tile-chip[data-tone='done'] { border-color: rgba(114, 231, 170, 0.5); color: var(--green); }
 .goal-tile-chip[data-tone='attention'] { border-color: rgba(240, 126, 126, 0.5); color: #ffae9f; }
 
-.cell-goal-mark {
-  gap: 3px;
-  color: #b9a9f2;
-}
-
 .goal-tile-thumbnails {
   display: flex;
   flex: 0 0 40px;

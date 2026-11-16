@@ -15,6 +15,7 @@ import { MVP_CONTRACT_VERSION, type EditIntent, type NotebookDocument, type Sequ
 import { v7 as uuidv7 } from 'uuid'
 import { MANAGED_ENV_KEYS } from '../../server/src/env-secrets.js'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -1033,8 +1034,13 @@ describe('chat composer browser flow', () => {
       await addTimeline()
       const timeline = page.locator('.react-flow__node-timeline .notebook-timeline')
       await timeline.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
-      const dimensions = await timeline.evaluate((element) => ({ width: (element as HTMLElement).offsetWidth, height: (element as HTMLElement).offsetHeight }))
-      expect(dimensions).toEqual({ width: 2088, height: 240 })
+      const dimensions = await timeline.evaluate((element) => ({
+        width: (element as HTMLElement).offsetWidth,
+        height: element.getBoundingClientRect().height,
+        rowHeight: document.querySelector('.notebook-grid-square')!.getBoundingClientRect().height,
+      }))
+      expect(dimensions.width).toBe(2088)
+      expect(dimensions.height).toBeCloseTo(dimensions.rowHeight, 0)
       const notebook = await call<NotebookDocument>('get_notebook', { notebook_id: timelineNotebookId })
       const timelineCell = notebook.cells.find((cell) => cell.type === 'timeline')!
       expect(timelineCell.slot).toEqual({ row: 1, column: 0 })
@@ -1649,6 +1655,8 @@ describe('chat composer browser flow', () => {
       const details = [...element.querySelectorAll('.cell-node-type-label, .cell-media-badge, .cell-media-meter, .cell-aspect-ratio, .cell-model-line, .cell-status, .cell-media-slot-library strong, .cell-media-slot-library span, .cell-media-slot-upload')]
         .filter((detail) => {
           const rect = detail.getBoundingClientRect()
+          const rail = detail.closest('.cell-node-footer-meta, .cell-status-slot')?.getBoundingClientRect()
+          if (rail && (rect.top < rail.top || rect.bottom > rail.bottom + 1)) return false
           return rect.width > 0 && rect.height > 0
         })
       const prompts = [...element.querySelectorAll('.cell-copy-text p')]
@@ -1659,15 +1667,12 @@ describe('chat composer browser flow', () => {
           const width = Math.max(0, element.clientWidth
             - (parseFloat(style.paddingLeft) || 0)
             - (parseFloat(style.paddingRight) || 0))
-          const composerReserve = Math.min(parseFloat(style.paddingBottom) || 0, 160)
-          const fitHeight = Math.max(0, element.clientHeight
-            - (parseFloat(style.paddingTop) || 0)
-            - composerReserve)
           const widthZoom = width / 2088
-          const heightZoom = fitHeight > 0 ? fitHeight / (3 * 264 - 24) : widthZoom
           const minimumZoom = parseFloat(style.getPropertyValue('--notebook-minimum-zoom')) || 0
-          return Math.max(minimumZoom, Math.min(widthZoom, heightZoom))
+          return Math.max(minimumZoom, widthZoom)
         })(),
+        fourthRowBottom: element.querySelectorAll('.notebook-grid-square')[24]!.getBoundingClientRect().bottom,
+        composerTop: composer.getBoundingClientRect().top,
         contentLeft: bounds.left,
         leftGutter: Math.min(...squareBounds.map(rect => rect.left)),
         unusedWidth: bounds.left + element.clientWidth - Math.max(...squareBounds.map(rect => rect.right)),
@@ -1693,10 +1698,11 @@ describe('chat composer browser flow', () => {
             && rect.top >= card.top && rect.bottom <= card.bottom + 1
             ? [] : [{ text: detail.textContent, className: detail.className, rect: rect.toJSON(), card: card?.toJSON() }]
         }),
-        promptsUseWholeLines: prompts.every(prompt => {
+        incompletePrompts: prompts.flatMap(prompt => {
           const style = getComputedStyle(prompt)
           const lines = parseFloat(style.height) / parseFloat(style.lineHeight)
           return lines >= 0.99 && Math.abs(lines - Math.round(lines)) < 0.01
+            ? [] : [{ text: prompt.textContent, height: style.height, lineHeight: style.lineHeight }]
         }),
         headersDoNotOverlap: [...element.querySelectorAll('.cell-node-header')].every(cellHeader => {
           const type = cellHeader.querySelector('.cell-node-type')?.getBoundingClientRect()
@@ -1716,13 +1722,13 @@ describe('chat composer browser flow', () => {
       expect(layout.promptTextSize).toBeCloseTo(13 * textScale, 2)
       expect(layout).toMatchObject({
         detailsOutsideCards: [],
-        promptsUseWholeLines: true,
+        incompletePrompts: [],
         headersDoNotOverlap: true,
       })
     }
 
-    for (const width of [1024, 1280, 1476, 1920, 2560]) {
-      await page.setViewportSize({ width, height: 850 })
+    for (const [width, height] of [[1024, 850], [1280, 850], [1476, 850], [1920, 937], [2560, 850]]) {
+      await page.setViewportSize({ width: width!, height: height! })
       await expect.poll(async () => {
         const layout = await readLayout()
         const fitted = layout.overflow <= 1 && Math.abs(layout.zoom - layout.fitZoom) < 0.001
@@ -1737,7 +1743,9 @@ describe('chat composer browser flow', () => {
       expect(layout.contentLeft).toBeCloseTo(28, 0)
       const sideGap = layout.leftGutter - layout.contentLeft
       expect(sideGap).toBeGreaterThanOrEqual(-1)
-      expect(Math.abs(sideGap - layout.unusedWidth)).toBeLessThanOrEqual(1)
+      expect(Math.abs(sideGap)).toBeLessThanOrEqual(1)
+      expect(Math.abs(layout.unusedWidth)).toBeLessThanOrEqual(1)
+      expect(layout.fourthRowBottom + 12).toBeLessThanOrEqual(layout.composerTop)
       expect(layout.topGap).toBeGreaterThanOrEqual(8)
       expect(layout.topGap).toBeLessThanOrEqual(24)
       expect(layout.bottomClearance).toBeGreaterThanOrEqual(4)
@@ -1772,14 +1780,16 @@ describe('chat composer browser flow', () => {
     await expect.poll(() => scroll.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
     const rowBefore = await scroll.evaluate(element => {
       const viewport = element.querySelector('.react-flow__viewport')!
-      return element.scrollTop / new DOMMatrix(getComputedStyle(viewport).transform).a
+      const height = parseFloat(getComputedStyle(element.querySelector('.notebook-flow-frame')!).getPropertyValue('--notebook-cell-height'))
+      return element.scrollTop / ((height + 24) * new DOMMatrix(getComputedStyle(viewport).transform).a)
     })
     await page.setViewportSize({ width: 1280, height: 850 })
     await expect.poll(async () => (await readLayout()).overflow).toBeLessThanOrEqual(1)
     await expect.poll(async () => scroll.evaluate((element, expectedRow) => {
       const viewport = element.querySelector('.react-flow__viewport')!
-      return Math.abs(element.scrollTop / new DOMMatrix(getComputedStyle(viewport).transform).a - expectedRow)
-    }, rowBefore)).toBeLessThanOrEqual(2)
+      const height = parseFloat(getComputedStyle(element.querySelector('.notebook-flow-frame')!).getPropertyValue('--notebook-cell-height'))
+      return Math.abs(element.scrollTop / ((height + 24) * new DOMMatrix(getComputedStyle(viewport).transform).a) - expectedRow)
+    }, rowBefore)).toBeLessThanOrEqual(0.02)
     expect(await selected.getAttribute('data-selection')).toBe('primary')
     expect(await input.textContent()).toBe('Keep my draft while resizing the notebook')
 
@@ -1809,6 +1819,55 @@ describe('chat composer browser flow', () => {
       return layout.overflow <= 1 && Math.abs(layout.zoom - layout.fitZoom) < 0.001
     }, { timeout: 10_000 }).toBe(true)
   }, 60_000)
+
+  it('keeps top-row badges visible and persists drags between fitted rows', async () => {
+    const page = await openApp()
+    await page.setViewportSize({ width: 1920, height: 937 })
+    await collapseComposerDock(page)
+    const client = new Client({ name: 'fitted-grid-browser', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const call = async <T,>(name: string, args: Record<string, unknown> = {}): Promise<T> =>
+      resultValue(await client.callTool({ name, arguments: { book_id: bookId, notebook_id: notebookId, ...args } })) as T
+    let cellId = ''
+    try {
+      const cell = await call<{ id: string }>('create_notebook_cell', {
+        cell: { type: 'video', slot: { row: 0, column: 7 }, output_artifact_id: videoArtifactId },
+      })
+      cellId = cell.id
+      await call('connect_notebook_cells', {
+        source_cell_id: generationCellId, target_cell_id: cellId, target_input: 'media',
+      })
+      const node = notebookCellNode(page, cellId)
+      const scroll = page.locator('.notebook-horizontal-scroll')
+      await node.locator('.cell-route-badge-incoming').waitFor({ timeout: testBudget(15_000) })
+      await scroll.evaluate(element => { element.scrollTop = 0 })
+      const badge = await node.locator('.cell-route-badge-incoming').boundingBox()
+      const viewport = await scroll.boundingBox()
+      expect(badge!.y).toBeGreaterThanOrEqual(viewport!.y)
+      const source = await node.locator('.cell-node-body').boundingBox()
+      const target = await page.locator('.notebook-grid-square').filter({ hasText: /^@d8$/u }).boundingBox()
+      if (!source || !target) throw new Error('Missing fitted drag surfaces')
+      await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(target.x + target.width / 2, target.y + source.height / 2, { steps: 12 })
+      await page.mouse.up()
+      await expect.poll(async () => (await call<NotebookDocument>('get_notebook')).cells.find(item => item.id === cellId)?.slot,
+        { timeout: testBudget(15_000) }).toEqual({ row: 3, column: 7 })
+      await page.reload()
+      await expect.poll(() => node.locator('.cell-node-footer strong').textContent(),
+        { timeout: testBudget(15_000) }).toBe('@d8')
+      const moved = await node.boundingBox()
+      const square = await page.locator('.notebook-grid-square').filter({ hasText: /^@d8$/u }).boundingBox()
+      expect(moved!.y).toBeCloseTo(square!.y, 0)
+      expect(moved!.height).toBeCloseTo(square!.height, 0)
+    } finally {
+      if (cellId) await call('delete_notebook_cell', { cell_id: cellId })
+      await client.close()
+      notebookDirty = true
+    }
+  }, testBudget(60_000))
 
   it('centers clicked tiles above the preview dock and clears it at the final row', async () => {
     const page = await openApp()

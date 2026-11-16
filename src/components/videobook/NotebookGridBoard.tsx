@@ -27,11 +27,12 @@ interface NotebookGridBoardProps {
 // against the band's edge. Under half the gap, so stacked lanes stay apart.
 const LANE_BAND_INSET = 10
 
-function laneBandStyle(section: NotebookLaneSection) {
+function laneBandStyle(section: NotebookLaneSection, cellHeight: number) {
+  const rowPitch = cellHeight + notebookGrid.gap
   const width = notebookGrid.columnCount * notebookGrid.columnPitch - notebookGrid.gap
-  const height = section.rowCount * notebookGrid.rowPitch - notebookGrid.gap
+  const height = section.rowCount * rowPitch - notebookGrid.gap
   const x = notebookGrid.originX - LANE_BAND_INSET
-  const y = notebookGrid.originY + section.startRow * notebookGrid.rowPitch - LANE_BAND_INSET
+  const y = notebookGrid.originY + section.startRow * rowPitch - LANE_BAND_INSET
   return {
     width: width + LANE_BAND_INSET * 2,
     height: height + LANE_BAND_INSET * 2,
@@ -48,7 +49,7 @@ export function NotebookGridBoard({
   mediaDropSlot,
   reviewRoles,
 }: NotebookGridBoardProps) {
-  const previewPosition = previewSlot ? notebookGridPosition(previewSlot) : null
+  const previewPosition = previewSlot ? notebookGridPosition(previewSlot, metrics.cellHeight) : null
   const occupiedSlotKeys = new Set(occupiedSlots.map(notebookGridSlotKey))
   const mediaDropSlotKey = mediaDropSlot
     ? notebookGridSlotKey(mediaDropSlot)
@@ -73,7 +74,7 @@ export function NotebookGridBoard({
               data-lane-row-count={section.rowCount}
               data-lane-start-row={section.startRow}
               key={`lane-${section.startRow}-${family}`}
-              style={laneBandStyle(section)}
+              style={laneBandStyle(section, metrics.cellHeight)}
             />
           )
         })}
@@ -109,8 +110,8 @@ export function NotebookGridBoard({
                 key={slotKey}
                 style={{
                   width: notebookGrid.cellWidth,
-                  height: notebookGrid.cellHeight,
-                  transform: `translate(${notebookGrid.originX + index * notebookGrid.columnPitch}px, ${notebookGrid.originY + row * notebookGrid.rowPitch}px)`,
+                  height: metrics.cellHeight,
+                  transform: `translate(${notebookGrid.originX + index * notebookGrid.columnPitch}px, ${notebookGrid.originY + row * (metrics.cellHeight + notebookGrid.gap)}px)`,
                 }}
               >
                 <span className="notebook-grid-square-label">
@@ -125,7 +126,7 @@ export function NotebookGridBoard({
             className="notebook-grid-preview"
             style={{
               width: notebookGrid.cellWidth,
-              height: notebookGrid.cellHeight,
+              height: metrics.cellHeight,
               transform: `translate(${previewPosition.x}px, ${previewPosition.y}px)`,
             }}
           />

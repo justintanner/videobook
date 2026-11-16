@@ -52,7 +52,7 @@ describe('scrolling the reviewed row into the middle of the canvas', () => {
       clientHeight: 600,
       scrollHeight: 8000,
     })
-    expect(top).toBe(Math.round(rowCenter(6) - 300))
+    expect(top).toBe(Math.round(rowCenter(6) - 300) + 12)
   })
 
   it('scales the row position by the canvas zoom', () => {
@@ -62,7 +62,7 @@ describe('scrolling the reviewed row into the middle of the canvas', () => {
       clientHeight: 600,
       scrollHeight: 8000,
     })
-    expect(top).toBe(Math.round(rowCenter(6) * 0.5 - 300))
+    expect(top).toBe(Math.round(rowCenter(6) * 0.5 - 300) + 12)
   })
 
   it('never scrolls above the top or past the end', () => {

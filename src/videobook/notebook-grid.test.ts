@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { NotebookCellType } from 'videobook-engine'
 import {
   changedNotebookGridNodes,
+  fitNotebookGridCellHeight,
   fitNotebookGridZoom,
   nextNotebookGridSlot,
   normalizeNotebookGridZoom,
@@ -18,9 +19,11 @@ import {
   notebookGridTag,
   notebookGridViewport,
   openNotebookGridNodeRow,
+  projectNotebookGridPosition,
   resolveNotebookGridGroupMove,
   resolveNotebookGridMove,
   snapNotebookGridMove,
+  unprojectNotebookGridPosition,
   type NotebookGridData,
 } from './notebook-grid'
 import {
@@ -318,6 +321,7 @@ describe('notebook grid', () => {
       { row: 0, column: 0 },
       { row: 9, column: 7 },
     ])).toEqual({
+      cellHeight: 200,
       rowCount: 11,
       columnCount: 8,
       minColumn: 0,
@@ -331,6 +335,7 @@ describe('notebook grid', () => {
       viewportHeight: 900,
       zoom: 0.75,
     })).toEqual({
+      cellHeight: 200,
       rowCount: 6,
       columnCount: 8,
       minColumn: 0,
@@ -351,7 +356,7 @@ describe('notebook grid', () => {
       .toEqual({ row: NOTEBOOK_GRID_ROW_COUNT - 1, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 })
     expect(notebookGridFrameSize(notebookGridMetrics([]), 1.5)).toEqual({
       width: 3132,
-      height: 972,
+      height: 996,
     })
     expect(notebookGridViewport(metrics, 1.5, -40)).toEqual({
       x: 0,
@@ -394,7 +399,7 @@ describe('notebook grid', () => {
       const frame = notebookGridFrameSize(metrics, zoom)
       expect(frame.width).toBeCloseTo(width)
       expect(notebookGridViewport(metrics, zoom).zoom).toBe(zoom)
-      expect(frame.height).toBeCloseTo(metrics.height * zoom)
+      expect(frame.height).toBeCloseTo(metrics.height * zoom + 24)
     }
     expect(fitNotebookGridZoom(1224) * notebookGrid.cellWidth).toBeCloseTo(140.69, 2)
     expect(fitNotebookGridZoom(2504) * notebookGrid.cellWidth).toBeCloseTo(287.82, 2)
@@ -403,11 +408,34 @@ describe('notebook grid', () => {
     expect(notebookGridMetrics([], { viewportHeight: 600, zoom: 0.6 }).rowCount).toBe(5)
   })
 
-  it('shrinks the fit so the first four rows show in a short, wide viewport', () => {
-    const fourRows = 4 * notebookGrid.rowPitch - notebookGrid.gap
-    expect(fitNotebookGridZoom(2000, 0, 600)).toBeCloseTo(600 / fourRows)
-    expect(fitNotebookGridZoom(1224, 0, 2000)).toBe(fitNotebookGridZoom(1224))
-    expect(fitNotebookGridZoom(2000, 0.5, 200)).toBe(0.5)
+  it('fits four rows independently of the full grid width and leaves room for badges', () => {
+    for (const [width, height] of [[1864, 720], [2504, 620], [2000, 600]]) {
+      const zoom = fitNotebookGridZoom(width!)
+      const cellHeight = fitNotebookGridCellHeight(height!, zoom)
+      const metrics = notebookGridMetrics([], { cellHeight, zoom, viewportHeight: height })
+      const fourthRow = notebookGridPosition({ row: 3, column: 0 }, cellHeight)
+      expect(notebookGridFrameSize(metrics, zoom).width).toBeCloseTo(width!)
+      expect((fourthRow.y + cellHeight) * zoom + 24).toBeCloseTo(height!)
+      expect(notebookGridViewport(metrics, zoom).y).toBe(12)
+    }
+    expect(fitNotebookGridCellHeight(2000, 0.5)).toBe(280)
+    expect(fitNotebookGridCellHeight(200, 1)).toBe(120)
+    expect(fitNotebookGridCellHeight(Number.NaN, 1)).toBe(200)
+  })
+
+  it('keeps resized cells, drop targets and drag positions on the same grid', () => {
+    const cellHeight = fitNotebookGridCellHeight(600, fitNotebookGridZoom(2000))
+    const metrics = notebookGridMetrics([{ row: 63, column: 7 }], { cellHeight })
+    for (const row of [0, 1, 3, 20, 63]) {
+      const slot = { row, column: 7 }
+      const logical = notebookGridPosition(slot)
+      const position = projectNotebookGridPosition(logical, cellHeight)
+      expect(position).toEqual(notebookGridPosition(slot, cellHeight))
+      expect(unprojectNotebookGridPosition(position, cellHeight).y).toBeCloseTo(logical.y)
+      expect(notebookGridDropSlot(position, metrics)).toEqual(slot)
+      expect(notebookGridSquareAt({ x: position.x + 20, y: position.y + cellHeight - 1 }, metrics)).toEqual(slot)
+      expect(notebookGridSquareAt({ x: position.x + 20, y: position.y + cellHeight + 1 }, metrics)).toBeNull()
+    }
   })
 
   it('keeps cell details at screen size until cells drop below half scale', () => {

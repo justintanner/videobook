@@ -351,8 +351,10 @@ import {
   openNotebookGridNodeRow,
   notebookGridTag,
   notebookGridViewport,
+  projectNotebookGridPosition,
   resolveNotebookGridGroupMove,
   snapNotebookGridMove,
+  unprojectNotebookGridPosition,
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
 import {
@@ -1076,14 +1078,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
   const [mediaDropActive, setMediaDropActive] = useState(false)
   const [mediaDropSlot, setMediaDropSlot] = useState<NotebookGridSlot | null>(null)
+  const [commandRowHeight, setCommandRowHeight] = useState(58)
+  const [composerHeight, setComposerHeight] = useState(58)
   const {
     scrollRef: notebookScrollRef,
     surface: notebookSurface,
     zoom: notebookZoom,
+    cellHeight: notebookCellHeight,
     revealCell: revealNotebookCanvasCell,
-  } = useNotebookViewport(bookId, notebook?.id, screen === 'notebook')
-  const [commandRowHeight, setCommandRowHeight] = useState(58)
-  const [composerHeight, setComposerHeight] = useState(58)
+  } = useNotebookViewport(bookId, notebook?.id, screen === 'notebook', commandRowHeight)
   const notebookCanvasStyle = useMemo(() => ({
     '--notebook-command-row-height': `${commandRowHeight}px`,
     '--notebook-composer-height': `${composerHeight}px`,
@@ -2614,10 +2617,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       role ? `notebook-review-${role}` : '',
       lineageDim ? 'notebook-lineage-dim' : '',
     ].filter(Boolean).join(' ') || undefined
-    return node.selected === selected && node.className === className
+    const position = projectNotebookGridPosition(node.position, notebookCellHeight)
+    return node.selected === selected && node.className === className && node.position.y === position.y
       ? node
-      : { ...node, selected, className }
-  }), [lineageCellIds, pendingReviewRoles, presentedNodes, selectedCellIds])
+      : { ...node, selected, className, position }
+  }), [lineageCellIds, notebookCellHeight, pendingReviewRoles, presentedNodes, selectedCellIds])
   const focusedEdges = useMemo(
     () => notebookEdgesWithCellFocus(edges, selectedCellId),
     [edges, selectedCellId],
@@ -2640,12 +2644,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => notebookGridMetrics(
       notebookOccupiedSlots,
       {
+        cellHeight: notebookCellHeight,
         viewportWidth: notebookSurface.width,
         viewportHeight: notebookSurface.height,
         zoom: notebookZoom,
       },
     ),
     [
+      notebookCellHeight,
       notebookOccupiedSlots,
       notebookSurface.height,
       notebookSurface.width,
@@ -2658,6 +2664,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           notebookOccupiedSlots,
           {
             preview: previewSlot,
+            cellHeight: notebookCellHeight,
             viewportWidth: notebookSurface.width,
             viewportHeight: notebookSurface.height,
             zoom: notebookZoom,
@@ -2665,6 +2672,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         )
       : notebookBaseMetrics,
     [
+      notebookCellHeight,
       notebookOccupiedSlots,
       notebookBaseMetrics,
       notebookSurface.height,
@@ -2686,10 +2694,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const notebookFlowStyle = useMemo<CSSProperties>(
     () => ({
       '--notebook-detail-scale': notebookGridDetailScale(notebookZoom),
+      '--notebook-cell-height': `${notebookCellHeight}px`,
       width: notebookFrameSize.width,
       height: notebookFrameSize.height,
     }) as CSSProperties,
-    [notebookFrameSize.height, notebookFrameSize.width, notebookZoom],
+    [notebookCellHeight, notebookFrameSize.height, notebookFrameSize.width, notebookZoom],
   )
   const notebookViewport = useMemo(
     () => notebookGridViewport(
@@ -3174,14 +3183,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (screen !== 'notebook' || reviewFocusRow === null) return
     revealNotebookReviewRow(
       () => notebookScrollRef.current,
-      { row: reviewFocusRow, zoom: notebookZoom },
+      { row: reviewFocusRow, zoom: notebookZoom, cellHeight: notebookCellHeight },
       {
         reducedMotion: typeof window !== 'undefined'
           && typeof window.matchMedia === 'function'
           && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       },
     )
-  }, [notebookScrollRef, notebookZoom, reviewFocusRow, screen])
+  }, [notebookCellHeight, notebookScrollRef, notebookZoom, reviewFocusRow, screen])
 
   const selectedCell = useMemo(
     () => presentedNodes.find((node) => node.id === selectedCellId) ?? null,
@@ -10800,7 +10809,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           }
                         }
                         setNodes((current) => {
-                          let next = applyNodeChanges(changes, current)
+                          const logicalChanges = changes.map(change => change.type === 'position' && change.position
+                            ? { ...change, position: unprojectNotebookGridPosition(change.position, notebookCellHeight) }
+                            : change)
+                          let next = applyNodeChanges(logicalChanges, current)
                           for (const change of changes) {
                             if (
                               change.type !== 'position'
@@ -10810,7 +10822,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                             next = snapNotebookGridMove(
                               next,
                               change.id,
-                              notebookGridSlot(change.position),
+                              notebookGridSlot(change.position, notebookCellHeight),
                             )
                           }
                           return next
@@ -10855,7 +10867,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       }}
                       onNodeDrag={(_event, node) => {
                         closeCellContextMenu()
-                        setPreviewSlot(notebookGridSlot(node.position))
+                        setPreviewSlot(notebookGridSlot(node.position, notebookCellHeight))
                       }}
                       onNodeDragStop={(_event, node, draggedNodes) => {
                         const settledNodes = applyNodeChanges<CanvasNode>(
@@ -10870,7 +10882,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           settledNodes,
                           node.id,
                           draggedNodes.map((draggedNode) => draggedNode.id),
-                          notebookGridSlot(node.position),
+                          notebookGridSlot(node.position, notebookCellHeight),
                         )
                         const movedNodes = changedNotebookGridNodes(nodes, nextNodes)
                         setNodes(nextNodes)
@@ -10923,7 +10935,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                                 compact={notebookGridDetailScale(notebookZoom) > 1.8}
                                 dimmed={mediaDropActive || previewSlot !== null}
                                 onUpload={(slot, file) => void createMediaCellFromFile(slot, file)}
-                                onPick={(kind, slot) => void createCell(kind, notebookGridPosition(slot))}
+                                onPick={(kind, slot) => void createCell(kind, notebookGridPosition(slot, notebookCellHeight))}
                                 onDownload={downloadClipToSlot}
                                 onBrowseLibrary={openNotebookLibrary}
                               />

@@ -106,7 +106,7 @@ describe('notebook chrome tokens', () => {
   it('draws cells flat, with no resting drop shadow and no scrim over media', () => {
     const cell = rule(css, '\n.cell-node')
     expect(cell).not.toMatch(/(?:^|\n)\s*box-shadow:/u)
-    expect(pixelCount(declaration(cell, 'height'))).toBe(notebookGrid.cellHeight)
+    expect(declaration(cell, 'height')).toBe(`var(--notebook-cell-height, ${notebookGrid.cellHeight}px)`)
     expect(pixelCount(declaration(cell, 'width'))).toBe(notebookGrid.cellWidth)
     expect(css).not.toContain('.cell-node-media-tile .cell-media::after')
     expect(declaration(rule(css, '.cell-media-rail'), 'background')).not.toContain('gradient')

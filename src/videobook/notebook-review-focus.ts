@@ -40,6 +40,7 @@ export function notebookReviewUnchanged(
 export interface NotebookRowScrollInput {
   row: number
   zoom: number
+  cellHeight?: number
   clientHeight: number
   scrollHeight: number
 }
@@ -51,11 +52,12 @@ export interface NotebookRowScrollInput {
 export function notebookRowScrollTop(input: NotebookRowScrollInput): number {
   if (!Number.isFinite(input.row) || input.row < 0) return 0
   const zoom = Number.isFinite(input.zoom) && input.zoom > 0 ? input.zoom : 1
+  const cellHeight = input.cellHeight ?? notebookGrid.cellHeight
   const center = notebookGrid.originY
-    + input.row * notebookGrid.rowPitch
-    + notebookGrid.cellHeight / 2
+    + input.row * (cellHeight + notebookGrid.gap)
+    + cellHeight / 2
   const limit = Math.max(0, input.scrollHeight - input.clientHeight)
-  const top = center * zoom - input.clientHeight / 2
+  const top = notebookGrid.badgeClearance + center * zoom - input.clientHeight / 2
   return Math.min(limit, Math.max(0, Math.round(top)))
 }
 

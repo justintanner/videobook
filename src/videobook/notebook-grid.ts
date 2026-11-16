@@ -39,6 +39,7 @@ export const notebookGrid = {
   maximumRowCount: NOTEBOOK_GRID_ROW_COUNT,
   minimumRowCount: 3,
   fitRowCount: 4,
+  badgeClearance: 12,
   trailingRowCount: 1,
   detailZoomFloor: 0.5,
 } as const
@@ -68,21 +69,29 @@ export function notebookGridSlotKey(slot: NotebookGridSlot): string {
   return `${slot.row}:${slot.column}`
 }
 
-export function notebookGridSlot(position: XYPosition): NotebookGridSlot {
+export function notebookGridSlot(position: XYPosition, cellHeight: number = notebookGrid.cellHeight): NotebookGridSlot {
   return boundedSlot({
-    row: Math.round((position.y - notebookGrid.originY) / notebookGrid.rowPitch),
+    row: Math.round((position.y - notebookGrid.originY) / (cellHeight + notebookGrid.gap)),
     column: Math.round(
       (position.x - notebookGrid.originX) / notebookGrid.columnPitch,
     ),
   })
 }
 
-export function notebookGridPosition(slot: NotebookGridSlot): XYPosition {
+export function notebookGridPosition(slot: NotebookGridSlot, cellHeight: number = notebookGrid.cellHeight): XYPosition {
   const bounded = boundedSlot(slot)
   return {
     x: notebookGrid.originX + bounded.column * notebookGrid.columnPitch,
-    y: notebookGrid.originY + bounded.row * notebookGrid.rowPitch,
+    y: notebookGrid.originY + bounded.row * (cellHeight + notebookGrid.gap),
   }
+}
+
+export function projectNotebookGridPosition(position: XYPosition, cellHeight: number): XYPosition {
+  return { x: position.x, y: position.y / notebookGrid.rowPitch * (cellHeight + notebookGrid.gap) }
+}
+
+export function unprojectNotebookGridPosition(position: XYPosition, cellHeight: number): XYPosition {
+  return { x: position.x, y: position.y / (cellHeight + notebookGrid.gap) * notebookGrid.rowPitch }
 }
 
 export function snapNotebookGridMove<T extends NotebookGridData>(
@@ -233,6 +242,7 @@ export function notebookCreationPlacement(
 }
 
 export interface NotebookGridMetrics {
+  cellHeight: number
   rowCount: number
   columnCount: number
   minColumn: number
@@ -243,6 +253,7 @@ export interface NotebookGridMetrics {
 }
 
 interface NotebookGridMetricsOptions {
+  cellHeight?: number
   preview?: NotebookGridSlot | null
   viewportWidth?: number
   viewportHeight?: number
@@ -260,23 +271,23 @@ export function notebookGridDetailScale(zoom: number): number {
 export function fitNotebookGridZoom(
   viewportWidth: number,
   minimumZoom = 0,
-  viewportHeight = 0,
 ): number {
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return 1
   const widthZoom = viewportWidth / gridWidth()
-  const heightZoom = Number.isFinite(viewportHeight) && viewportHeight > 0
-    ? viewportHeight / firstRowsHeight()
-    : widthZoom
   return Math.max(
     Number.isFinite(minimumZoom) ? minimumZoom : 0,
-    Math.min(widthZoom, heightZoom),
+    widthZoom,
   )
 }
 
-function firstRowsHeight(): number {
-  return notebookGrid.originY * 2
-    + notebookGrid.fitRowCount * notebookGrid.rowPitch
-    - notebookGrid.gap
+export function fitNotebookGridCellHeight(viewportHeight: number, zoom: number): number {
+  if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) return notebookGrid.cellHeight
+  const scale = normalizeNotebookGridZoom(zoom)
+  const availableHeight = (viewportHeight - notebookGrid.badgeClearance * 2) / scale
+  const height = (availableHeight - (notebookGrid.fitRowCount - 1) * notebookGrid.gap)
+    / notebookGrid.fitRowCount
+  const preferredHeight = Math.max(notebookGrid.cellHeight, 140 / scale)
+  return Math.max(120 / scale, Math.min(preferredHeight, height))
 }
 
 function gridWidth(): number {
@@ -285,7 +296,7 @@ function gridWidth(): number {
     + (NOTEBOOK_GRID_COLUMN_COUNT - 1) * notebookGrid.gap
 }
 
-function fittingRowCount(viewportHeight: number, zoom: number): number {
+function fittingRowCount(viewportHeight: number, zoom: number, cellHeight: number): number {
   if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) {
     return notebookGrid.minimumRowCount
   }
@@ -294,7 +305,7 @@ function fittingRowCount(viewportHeight: number, zoom: number): number {
     notebookGrid.minimumRowCount,
     Math.ceil(
       (target - notebookGrid.originY * 2 + notebookGrid.gap)
-      / notebookGrid.rowPitch,
+      / (cellHeight + notebookGrid.gap),
     ),
   )
 }
@@ -306,14 +317,14 @@ export function notebookGridFrameSize(
   const normalizedZoom = normalizeNotebookGridZoom(zoom)
   return {
     width: metrics.width * normalizedZoom,
-    height: metrics.height * normalizedZoom,
+    height: metrics.height * normalizedZoom + notebookGrid.badgeClearance * 2,
   }
 }
 
 export function notebookGridViewport(
   _metrics: NotebookGridMetrics,
   zoom: number,
-  y = 0,
+  y: number = notebookGrid.badgeClearance,
 ): { x: number; y: number; zoom: number } {
   return {
     x: 0,
@@ -324,9 +335,9 @@ export function notebookGridViewport(
 
 export function notebookGridDropSlot(
   position: XYPosition,
-  _metrics: NotebookGridMetrics,
+  metrics: NotebookGridMetrics,
 ): NotebookGridSlot {
-  return notebookGridSlot(position)
+  return notebookGridSlot(position, metrics.cellHeight)
 }
 
 export function notebookGridSquareAt(
@@ -338,7 +349,8 @@ export function notebookGridSquareAt(
   if (offsetX < 0 || offsetY < 0) return null
 
   const columnIndex = Math.floor(offsetX / notebookGrid.columnPitch)
-  const row = Math.floor(offsetY / notebookGrid.rowPitch)
+  const rowPitch = metrics.cellHeight + notebookGrid.gap
+  const row = Math.floor(offsetY / rowPitch)
   if (
     columnIndex < 0
     || columnIndex >= metrics.columnCount
@@ -350,7 +362,7 @@ export function notebookGridSquareAt(
   if (column > metrics.maxColumn) return null
   if (
     offsetX - columnIndex * notebookGrid.columnPitch >= notebookGrid.cellWidth
-    || offsetY - row * notebookGrid.rowPitch >= notebookGrid.cellHeight
+    || offsetY - row * rowPitch >= metrics.cellHeight
   ) return null
 
   return { row, column }
@@ -360,6 +372,7 @@ export function notebookGridMetrics(
   slots: readonly NotebookGridSlot[],
   options: NotebookGridMetricsOptions = {},
 ): NotebookGridMetrics {
+  const cellHeight = options.cellHeight ?? notebookGrid.cellHeight
   const populated = options.preview ? [...slots, boundedSlot(options.preview)] : slots
   const highestOccupiedRow = Math.max(
     -1,
@@ -369,15 +382,16 @@ export function notebookGridMetrics(
     NOTEBOOK_GRID_ROW_COUNT,
     Math.max(
       notebookGrid.minimumRowCount,
-      fittingRowCount(options.viewportHeight ?? 0, options.zoom ?? 1),
+      fittingRowCount(options.viewportHeight ?? 0, options.zoom ?? 1, cellHeight),
       highestOccupiedRow + 2,
     ),
   )
   const width = gridWidth()
   const height = notebookGrid.originY * 2
-    + rowCount * notebookGrid.cellHeight
+    + rowCount * cellHeight
     + Math.max(0, rowCount - 1) * notebookGrid.gap
   return {
+    cellHeight,
     rowCount,
     columnCount: NOTEBOOK_GRID_COLUMN_COUNT,
     minColumn: 0,

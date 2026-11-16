@@ -39,7 +39,7 @@ const width = notebookGrid.columnCount * notebookGrid.columnPitch - notebookGrid
 const labelWidth = 200
 const laneHeight = 36
 const endPadding = 120
-const blockStyle = { width, height: notebookGrid.cellHeight }
+const blockStyle = { width, height: 'var(--notebook-cell-height, 200px)' }
 
 type TrimDrag = { clipId: string; edge: 'start' | 'end'; clientX: number; start: number; end: number; origin: number }
 
