@@ -3,7 +3,7 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { cancelChainRun, getChainRun, type ChainRunRecord } from "./chain-executor.js";
 import {
   activeGoalStage, emptyGoalEstimates, findGoalCell, goalShortContent, isCurrentShort, legacyGoalText, requireGoalShortContent, saveGoal, writeGoalShortContent,
-  type GoalEstimates, type GoalGenerationStage, type GoalRecord, type GoalStageOutput, type GoalStageRun,
+  type GoalEstimates, type GoalGenerationStage, type GoalRecord, type GoalStageOutput, type GoalStageRun, type GoalStillAttempt,
 } from "./goal-store.js";
 import { goalStageAttempts } from "./goal-stills.js";
 import { refreshGoalShortPlan, shortGenerationSegments, shortRemixOf, shortStoryboardOf, type GoalShortPlan, type ShortStoryboardModel } from "./goal-short-plan.js";
@@ -13,6 +13,7 @@ import {
 import { goalTitleEstimate } from "./graphics/suggest.js";
 import { watermarkTitleSlots } from "./graphics/templates.js";
 import { goalPreparationStatus } from "./goal-source-preparation.js";
+import { goalGenerationHistory, reviewedGoalOutput, type GoalHistoryEntry } from "./goal-generation-history.js";
 
 export const LEGACY_GOAL_MESSAGE = "This goal was made by an earlier /goal. Its images and videos stay in the notebook. Start a new /goal.";
 const SHORT_STALE_MESSAGE = "The frame or an earlier clip changed after this clip was made.";
@@ -62,7 +63,7 @@ function completedStageOutputs(engine: Engine, goal: GoalRecord, document: Noteb
   });
 }
 
-function allGoalChainSteps(engine: Engine, document: NotebookDocument, chainId: string) {
+function allGoalChainSteps(engine: Engine, document: NotebookDocument, chainId: string | null) {
   return goalChainSteps(engine, document, chainId).flatMap(step => {
     const producers = document.cells.filter(cell => cell.inputs?.chainRunId === `${chainId}:${step.id}`);
     if (producers.length === 0) return [step];
@@ -146,7 +147,7 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
   }
   const stage = activeGoalStage(goal);
   const run = goal.stages[stage];
-  const chain = run ? getChainRun(engine, run.chainId) : null;
+  const chain = run?.chainId ? getChainRun(engine, run.chainId) : null;
   if (!run || !chain) return goal;
   const merged = new Map(run.outputs.map(output => [output.index, output]));
   for (const output of completedStageOutputs(engine, goal, document)) merged.set(output.index, output);
@@ -200,7 +201,7 @@ function outputStale(goal: GoalRecord, plan: GoalShortPlan | null, stage: GoalGe
   if (replacement) {
     const changed = (target: "replacement" | "frame", prompt: string) => {
       const selected = goal.stages[target]?.outputs[0];
-      const attempt = goal.stages[target]?.attempts?.find(candidate => candidate.artifactId === selected?.artifactId);
+      const attempt = reviewedGoalOutput(goal, target, 0, selected?.artifactId) ?? goal.stages[target]?.attempts?.find(candidate => candidate.artifactId === selected?.artifactId);
       return Boolean(attempt && attempt.basePrompt !== prompt);
     };
     if (changed("replacement", replacement.replacement.prompt)) return "The character replacement prompt changed. Regenerate the replacement before continuing.";
@@ -209,7 +210,7 @@ function outputStale(goal: GoalRecord, plan: GoalShortPlan | null, stage: GoalGe
   }
   if (stage === "videos" && plan?.version === 5 && plan.analysis) {
     const selected = goal.stages.videos?.outputs.find(output => output.index === index);
-    const attempt = goal.stages.videos?.attempts?.find(value => value.artifactId === selected?.artifactId);
+    const attempt = reviewedGoalOutput(goal, "videos", index, selected?.artifactId) ?? goal.stages.videos?.attempts?.find(value => value.artifactId === selected?.artifactId);
     if (attempt && attempt.basePrompt !== shortGenerationSegments(plan)[index]?.prompt) return "The action prompt changed. Review a compatible take before continuing.";
   }
   if (stage === "videos") return shortSegmentStale(goal, index) ? SHORT_STALE_MESSAGE : null;
@@ -239,20 +240,19 @@ function storyboardView<Output extends { index: number }>(
   };
 }
 
-function stageView(engine: Engine, goal: GoalRecord, plan: GoalShortPlan | null, document: NotebookDocument, stage: GoalGenerationStage, run: GoalStageRun) {
+type GoalVersion = GoalStillAttempt & { address: string | null; status: string; current: boolean; mediaHash?: string | null; requiresReview?: boolean };
+
+function stageView(engine: Engine, goal: GoalRecord, plan: GoalShortPlan | null, document: NotebookDocument, stage: GoalGenerationStage, run: GoalStageRun, history: GoalHistoryEntry[]) {
   return {
     ...run,
     ...(stage === "videos" ? { attempts: goalStageAttempts(goal, "videos") } : {}),
     outputs: run.outputs.map(output => {
       const outputCell = document.cells.find(candidate => candidate.id === output.cellId);
-      const versions = goalStageAttempts(goal, stage).filter(attempt => attempt.index === output.index).slice().reverse().map(attempt => {
-        const versionCell = document.cells.find(candidate => candidate.id === attempt.cellId);
-        const step = getChainRun(engine, attempt.chainId)?.steps.find(candidate => candidate.id === attempt.stepId);
-        return {
-          ...attempt, address: versionCell ? notebookGridTag(versionCell.slot) : null,
-          status: step?.status ?? "interrupted" as const, current: attempt.artifactId === output.artifactId,
-        };
-      });
+      const versions: GoalVersion[] = history.filter(entry => entry.stage === stage && entry.index === output.index && (entry.originGoalId === goal.goalId
+        || run.attempts?.some(attempt => attempt.artifactId && attempt.artifactId === entry.artifactId))).map(entry => ({
+        ...entry, current: entry.artifactId === output.artifactId,
+        requiresReview: !run.attempts?.some(attempt => attempt.artifactId && attempt.artifactId === entry.artifactId),
+      }));
       return {
         ...output, address: outputCell ? notebookGridTag(outputCell.slot) : null, versions,
         stale: outputStale(goal, plan, stage, output.index), realism: goal.realism?.[output.artifactId] ?? null,
@@ -273,10 +273,12 @@ async function shortGoalSnapshot(engine: Engine, goal: GoalRecord, document: Not
     ? { brief: short.brief, revision: short.revision, estimate, notes: short.notes }
     : { brief: "", revision: 0, estimate, notes: [] };
   const shortPlan = short?.plan ? refreshGoalShortPlan(short.plan, document) : null;
+  const history = await goalGenerationHistory(engine, goal.notebookId, { goalId: goal.goalId, related: true });
   const runs = Object.entries(goal.stages) as [GoalGenerationStage, GoalStageRun][];
-  const stages: Partial<Record<GoalGenerationStage, ReturnType<typeof stageView>>> = Object.fromEntries(runs.map(([stage, run]) => [stage, stageView(engine, goal, shortPlan, document, stage, run)]));
+  const stages: Partial<Record<GoalGenerationStage, ReturnType<typeof stageView>>> = Object.fromEntries(runs.map(([stage, run]) => [stage, stageView(engine, goal, shortPlan, document, stage, run, history)]));
   return {
     kind: "video-goal" as const, legacy: false as const, ...goal, ...content,
+    ...({ generationHistory: history } as { generationHistory?: GoalHistoryEntry[] }),
     ...(goal.preparation ? { preparation: goalPreparationStatus(engine, goal) } : {}),
     ...(shortPlan ? { shortPlan } : {}),
     storyboard: storyboardView(shortPlan, stages.storyboards?.outputs ?? [], content.estimate, index => storyboardFrameFailure(engine, goal, index)),

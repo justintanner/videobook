@@ -10,9 +10,8 @@ import {
   goalRemixAnalysisSchema, remixPreferencesSchema, remixSourceEvidenceSchema, resolveRemixIntent,
   type GoalRemixAnalysis, type RemixFinding, type RemixPreferences, type RemixSourceEvidence, type RemixUnderstanding,
 } from "./goal-remix-model.js";
-import { shortRemixOf } from "./goal-short-plan.js";
 import { storyboardMoments } from "./goal-short-storyboard.js";
-import { listGoals, requireGoalShortContent } from "./goal-store.js";
+import { goalGenerationHistory, goalHistoryFailure, goalHistoryInputProblem } from "./goal-generation-history.js";
 import { readGraphicsTemplates } from "./graphics/templates.js";
 import { selectSceneCuts } from "./scene-cuts.js";
 import { DEFAULT_TRANSCRIPT_OPTIONS, hasCurrentElevenLabsTranscript, OPENAI_TRANSCRIPT, openAiTranscriptRecord } from "./transcript-components.js";
@@ -116,31 +115,17 @@ export async function remixPlannerFrames(engine: Engine, artifactId: string, sou
   ]) };
 }
 
-function failureKind(message: string | null): GoalRemixAnalysis["history"][number]["failure"] {
-  if (!message) return null;
-  if (/\b(?:401|403|balance|credits?|unauthori[sz]ed|quota)\b/iu.test(message)) return "account";
-  if (/\b(?:400|422|invalid|validation|required|reference)\b/iu.test(message)) return "request";
-  if (/\b(?:network|timeout|timed out|ECONNRESET|download|poll)\b/iu.test(message)) return "transport";
-  return "unknown";
-}
-
-function relatedHistory(engine: Engine, notebookId: string, sourceArtifactId: string | null): GoalRemixAnalysis["history"] {
-  if (!sourceArtifactId) return [];
-  const rows: GoalRemixAnalysis["history"] = [];
-  for (const goal of listGoals(engine, notebookId)) {
-    if (goal.planVersion !== 5) continue;
-    let source: string | undefined;
-    try { source = shortRemixOf(requireGoalShortContent(engine, goal).plan)?.video.artifactId; } catch { continue; }
-    if (source !== sourceArtifactId) continue;
-    for (const [stage, run] of Object.entries(goal.stages)) {
-      for (const attempt of run?.attempts ?? []) {
-        rows.push({ goalId: goal.goalId, artifactId: attempt.artifactId, stage,
-          selected: Boolean(run?.outputs.some(output => output.artifactId === attempt.artifactId)),
-          status: goal.status, failure: failureKind(goal.error) });
-      }
-    }
-  }
-  return rows.slice(0, 100);
+async function relatedHistory(engine: Engine, notebookId: string, source: { artifactId: string; mediaHash: string } | null): Promise<GoalRemixAnalysis["history"]> {
+  if (!source) return [];
+  const history = await goalGenerationHistory(engine, notebookId, { sourceArtifactId: source.artifactId });
+  return Promise.all(history.map(async entry => ({
+    goalId: entry.originGoalId, artifactId: entry.artifactId, stage: entry.stage, selected: entry.selected,
+    status: entry.status, failure: goalHistoryFailure(entry.error), generationId: entry.generationId,
+    revision: entry.revision, mediaHash: entry.mediaHash, sourceHash: entry.source?.mediaHash ?? null,
+    prompt: entry.prompt, model: entry.actualModel, approved: Boolean(entry.review && entry.review.mediaHash === entry.mediaHash),
+    reusable: false, reason: await goalHistoryInputProblem(engine, entry, source), references: entry.references,
+    usageIds: entry.usageIds, costUsd: entry.costUsd, estimateUsd: entry.estimateUsd,
+  })));
 }
 
 function sourceReferenceRange(source: RemixSourceEvidence, frameSeconds: number): { start: number; end: number } {
@@ -218,6 +203,6 @@ export async function buildRemixAnalysis(engine: Engine, input: {
       cleanupRegions, cleanupConfirmed: intent.cleanup === "keep", cleanupCandidates: candidates,
       cleanupFrames: source ? cleanupFrameCount(cleanupRegions, source.fps) : 0,
       cleanupModelReady: models?.lama ?? false, cleanupMethod: preferences.cleanupMethod, templateId: templateId ?? null, templateRevision: template?.updatedAt ?? null, checkTimes },
-    history: relatedHistory(engine, input.notebookId, source?.artifactId ?? null), findings, analyzedAt: new Date().toISOString(),
+    history: await relatedHistory(engine, input.notebookId, source), findings, analyzedAt: new Date().toISOString(),
   });
 }

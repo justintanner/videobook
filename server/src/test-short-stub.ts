@@ -15,6 +15,7 @@ export type ShortStub = {
   media: ShortStubMedia;
   failNext: boolean;
   refuseNext: boolean;
+  rejectNext: { status: number; message: string } | null;
   reset(): void;
   close(): Promise<void>;
 };
@@ -61,6 +62,7 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
     media,
     failNext: false,
     refuseNext: false,
+    rejectNext: null,
     reset() {
       stub.submissions = [];
       stub.plannerRequests = [];
@@ -71,6 +73,7 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
       failing.clear();
       refused.clear();
       stub.refuseNext = false;
+      stub.rejectNext = null;
     },
     close: async () => {
       server.closeAllConnections();
@@ -97,6 +100,14 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
     }
     if (method === "POST" && SUBMIT.test(path)) {
       const input = JSON.parse(body.toString()) as Record<string, unknown>;
+      if (stub.rejectNext) {
+        const failure = stub.rejectNext;
+        stub.rejectNext = null;
+        stub.submissions.push({ path, body: input });
+        response.writeHead(failure.status, { "content-type": "application/json" });
+        response.end(JSON.stringify({ detail: failure.message }));
+        return;
+      }
       if (path === "/minimax/h3-max/reference-to-video" && !["reference_image_urls", "reference_video_urls", "reference_audio_urls"].some(key => Array.isArray(input[key]) && input[key].length > 0)) {
         response.writeHead(422, { "content-type": "application/json" });
         response.end(JSON.stringify({ detail: [{ loc: ["body"], msg: "At least one reference image, video, or audio must be provided", type: "value_error" }] }));

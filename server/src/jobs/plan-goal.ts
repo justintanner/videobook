@@ -7,7 +7,7 @@ import { chatIntelligenceRequestOptions } from "../chat-models.js";
 import { isCurrentShort, readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent, type GoalRecord } from "../goal-store.js";
 import { buildGoalShortPlan, buildLegacyGoalShortPlan, isLegacyShortDraft, shortRemixSourceOf, shortStoryboardOf, type GoalShortDraft } from "../goal-short-plan.js";
 import { shortWantsPhone, stripShortBannedWords, withoutShortPhoneSentences } from "../goal-short-rules.js";
-import { estimateShort, mentionedSourceFrame } from "../goal-short-runtime.js";
+import { annotateShortReuse, estimateShort, mentionedSourceFrame } from "../goal-short-runtime.js";
 import {
   shortAuthoredCopy, shortBriefPlan, shortPlannerBrief, shortPlannerInstructions, shortPlannerIssues, shortPlannerNeeded, shortPlannerResponseSchema, shortTitle,
   type ShortAuthoredCopy, type ShortPlannerIssue, type ShortPlannerResponse,
@@ -127,7 +127,10 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
       analysis = await buildRemixAnalysis(engine, { ...analysisInput, source: { ...remembered, artifactId: source.artifactId }, understanding: written.understanding });
     }
     if (analysis && !isLegacyShortDraft(draft)) {
-      analysis = { ...analysis, intent: { ...analysis.intent,
+      analysis = { ...analysis, recipe: { ...analysis.recipe, promptBindings: supplied?.version === 5 && supplied.analysis?.recipe.promptBindings
+        ? supplied.analysis.recipe.promptBindings : Object.fromEntries([
+          ...draft.sourceImages.map((image, index) => [image.address, `@image${index + 1}`]), ...(sourceVideo?.address ? [[sourceVideo.address, "source"]] : []),
+        ]) }, intent: { ...analysis.intent,
         actionDescription: shortPlannerBrief(analysis.intent.actionDescription, draft.sourceImages, null, sourceVideo ?? null, "@video1").replace(/\bSource image \d+\b/gu, "@image1"),
       } };
     }
@@ -166,6 +169,7 @@ async function planShortGoal(engine: Engine, goalId: string, signal: AbortSignal
       const findings = remixPromptFindings(analysis, [plan.frame.prompt, plan.remix?.replacement.prompt ?? "", ...plan.segments.map(segment => segment.prompt), ...Object.values(plan.rules)]);
       plan.analysis = { ...analysis, findings: [...analysis.findings, ...findings] };
     }
+    plan = await annotateShortReuse(engine, goal, plan);
     const estimate = await estimateShort(engine, plan, content);
     const added = [authored.note, offline?.note ?? null,
       initial?.sourceVideo && remix ? `Prepared the source frame at ${remix.frame.atSeconds.toFixed(1)} s. Review the initial analysis before generating.` : null,

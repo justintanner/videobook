@@ -288,6 +288,29 @@ span.goal-progress-address {
   padding: 2px;
 }
 
+.goal-take-history,
+.goal-take-entry {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.goal-take-entry {
+  padding: 0.5rem 0;
+}
+
+.goal-take-entry video,
+.goal-take-entry img {
+  display: block;
+  max-width: 100%;
+  max-height: 20rem;
+  object-fit: contain;
+  margin: 0.5rem 0;
+}
+
+.goal-take-prompt {
+  white-space: pre-wrap;
+}
+
 .goal-version {
   display: grid;
   flex: 0 0 62px;

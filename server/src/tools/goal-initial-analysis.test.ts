@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
+import { v7 as uuidv7 } from "uuid";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
@@ -16,7 +17,8 @@ import { cleanupCandidate } from "../video-cleanup/prepared.js";
 import { readCleanupRequest } from "../video-cleanup/service.js";
 import { indexRenderRequest, writeRenderSetting } from "../render-requests.js";
 import { configureProviderPollDriverForTests, pauseBookQueueForTests, resetProviderPollDriverForTests, resumeBookQueueForTests, waitForBookQueuesIdleForTests } from "../queue.js";
-import { readGoal } from "../goal-store.js";
+import { readGoal, saveGoal } from "../goal-store.js";
+import { reconcileAwaitingNotebookOutputs, runNotebookCell } from "../jobs/run-notebook.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
 import { createTestClient } from "../test-client.js";
@@ -140,6 +142,22 @@ describe("initial source-goal analysis", () => {
     return goal.shortPlan.analysis;
   }
 
+  async function manualRerun(goal: ShortGoalSnapshot, prompt: string, legacyProducer = false) {
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const producerId = goal.stages.videos!.outputs[0]!.producerCellId;
+    const producer = notebook.value.cells.find(cell => cell.id === producerId)!;
+    const edited = { ...producer, prompt, ...(legacyProducer ? { inputs: Object.fromEntries(Object.entries(producer.inputs ?? {}).filter(([key]) => key !== "goalOrigin")) } : {}) };
+    const saved = await engine.notebooks.write({ ...notebook.value, cells: notebook.value.cells.map(cell => cell.id === producerId ? edited : cell) });
+    if (!saved.ok) throw new Error(saved.error.message);
+    const rerun = await runNotebookCell(engine, bookId, notebookId, { ...notebook.value, cells: notebook.value.cells.map(cell => cell.id === producerId ? edited : cell) }, edited,
+      { confirmPaid: true, runId: uuidv7() });
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(60_000) });
+    await reconcileAwaitingNotebookOutputs(engine, bookId);
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(60_000) });
+    return rerun.outputArtifactId;
+  }
+
   function queueAnswer() {
     stub.plannerAnswers = [{
       title: "A bite of Christmas", replacement: "Insert the man beside the gingerbread display, keeping decorative figures and props.",
@@ -200,20 +218,54 @@ describe("initial source-goal analysis", () => {
     expect(stub.submissions).toHaveLength(0);
   });
 
-  it("generates only the changed interval and requires a current reviewed action window before queued assembly", async () => {
-    let goal = await settled(await invoke({ action: "create", brief: authored().replace("Remove all OSG", "Keep source graphics") }));
+  it("keeps manual reruns as candidates until adoption and finishes the selected action window after reload", async () => {
+    const sourceTag = address(sourceId);
+    const identityTag = address(identityId);
+    const prompts = authored().replace("Remove all OSG", "Keep source graphics")
+      .replace("Insert the man beside the display", `Insert the man from ${identityTag} beside the display in ${sourceTag}`)
+      .replace("The empty display montage runs twelve seconds", `The empty display montage from ${sourceTag} runs twelve seconds`);
+    let goal = await settled(await invoke({ action: "create", brief: prompts }));
+    const beforeMove = engine.notebooks.read(notebookId);
+    if (!beforeMove.ok) throw new Error(beforeMove.error.message);
+    const sourceCell = beforeMove.value.cells.find(cell => cell.outputArtifactId === sourceId)!;
+    const identityCell = beforeMove.value.cells.find(cell => cell.outputArtifactId === identityId)!;
+    const moved = await engine.notebooks.write({ ...beforeMove.value, cells: beforeMove.value.cells.map(cell => cell.id === sourceCell.id ? { ...cell, slot: identityCell.slot }
+      : cell.id === identityCell.id ? { ...cell, slot: sourceCell.slot } : cell) });
+    if (!moved.ok) throw new Error(moved.error.message);
     for (let stage = 0; stage < 3; stage++) {
       goal = await invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
       await waitForChainRun(engine, goal.chainId!, testBudget(60_000));
       goal = await invoke({ action: "status", goal_id: goal.goalId });
       expect(goal.status, goal.error ?? "").toBe("review");
     }
-    const clip = await cleanupSource(engine, goal.stages.videos!.outputs[0]!.artifactId);
+    const firstClip = goal.stages.videos!.outputs[0]!.artifactId;
     const video = stub.submissions.filter(submission => submission.path.includes("reference-to-video"));
     expect(video).toHaveLength(1);
     expect(video[0]!.body.duration).toBe(2);
     expect(video[0]!.body.prompt).toContain("starting at local time 0");
     expect(video[0]!.body.prompt).not.toMatch(/@[a-z]{1,2}[1-8]\b/u);
+    expect(String(stub.submissions[0]!.body.prompt)).toContain("man from reference image 1");
+    expect(stub.submissions.every(submission => !/@[a-z]{1,2}[1-8]\b/u.test(String(submission.body.prompt)))).toBe(true);
+    const manualPrompt = "The man bites the gingerbread display, then shows the bite. Keep the entire action within two seconds.";
+    const manualId = await manualRerun(goal, manualPrompt);
+    goal = await invoke({ action: "status", goal_id: goal.goalId });
+    expect(goal.finish?.sourceArtifactId).toBe(firstClip);
+    expect(goal.generationHistory).toHaveLength(4);
+    const manual = goal.generationHistory!.find(entry => entry.artifactId === manualId)!;
+    expect(manual).toMatchObject({ prompt: manualPrompt, status: "completed", originGoalId: goal.goalId, revision: goal.stages.videos!.revision, actualModel: "fal:minimax/h3-max/reference-to-video" });
+    expect(manual.lineage?.references.length).toBeGreaterThan(0);
+    expect(goal.stages.videos!.outputs[0]!.versions).toHaveLength(2);
+    expect((await call({ action: "select", goal_id: goal.goalId, stage: "videos", index: 0, artifact_id: manualId })).isError).toBe(true);
+    expect((await call({ action: "adopt", goal_id: goal.goalId, revision: goal.revision, stage: "videos", index: 0, artifact_id: manualId, media_hash: "stale", confirmed: true })).isError).toBe(true);
+    goal = await invoke({ action: "adopt", goal_id: goal.goalId, revision: goal.revision, stage: "videos", index: 0, artifact_id: manualId, media_hash: manual.mediaHash, confirmed: true });
+    expect(goal.finish?.sourceArtifactId).toBe(manualId);
+    await client.close();
+    engine = createEngineForTest(join(root, "book"));
+    client = await createTestClient(join(root, "book"));
+    goal = await invoke({ action: "status", goal_id: goal.goalId });
+    expect(goal.stages.videos!.outputs[0]!.artifactId).toBe(manualId);
+    expect(goal.generationHistory!.find(entry => entry.artifactId === manualId)?.prompt).toBe(manualPrompt);
+    const clip = await cleanupSource(engine, manualId);
     expect(clip.durationSeconds).toBe(14);
     const unreviewed = await call({ action: "finish", goal_id: goal.goalId });
     expect(unreviewed.isError).toBe(true);
@@ -238,7 +290,7 @@ describe("initial source-goal analysis", () => {
     }, { timeout: testBudget(120_000) }).toBe("completed:");
     const assembled = await cleanupSource(engine, goal.finish!.assembledArtifactId!);
     expect(await probeVideo(assembled.path)).toMatchObject({ fps: 12, videoDuration: 14, hasAudio: true, width: 180, height: 320 });
-    expect(stub.submissions).toHaveLength(3);
+    expect(stub.submissions).toHaveLength(4);
     expect(goal.finish?.sourceArtifactId).toBe(clip.artifactId);
     expect((await invoke({ ...review, revision: goal.revision, start_seconds: 12 })).finalArtifactId).toBe(goal.finalArtifactId);
     await waitForBookQueuesIdleForTests({ budgetMs: testBudget(60_000) });
@@ -257,6 +309,69 @@ describe("initial source-goal analysis", () => {
     expect(stub.plannerRequests).toHaveLength(0);
     expect(stub.submissions).toHaveLength(0);
   });
+
+  it("reuses reviewed upstream images after an account failure and adopts a cancelled goal's later manual take without reviving it", async () => {
+    const create = () => invoke({ action: "create", brief: authored().replace("Remove all OSG", "Keep source graphics") });
+    let first = await settled(await create());
+    for (let step = 0; step < 2; step++) {
+      first = await invoke({ action: "approve", goal_id: first.goalId, revision: first.revision });
+      await waitForChainRun(engine, first.chainId!, testBudget(60_000));
+      first = await invoke({ action: "status", goal_id: first.goalId });
+    }
+    stub.rejectNext = { status: 403, message: "Account balance exhausted" };
+    first = await invoke({ action: "approve", goal_id: first.goalId, revision: first.revision });
+    await waitForChainRun(engine, first.chainId!, testBudget(60_000));
+    first = await invoke({ action: "status", goal_id: first.goalId });
+    expect(first.status).toBe("failed");
+    saveGoal(engine, { ...readGoal(engine, first.goalId), reviewedOutputs: [] });
+    const paid = stub.submissions.length;
+    let next = await settled(await create());
+    expect(analysisOf(next).history.filter(entry => entry.approved)).toHaveLength(2);
+    expect(analysisOf(next).history.filter(entry => entry.reusable)).toHaveLength(2);
+    expect(analysisOf(next).history.find(entry => entry.stage === "videos")).toMatchObject({ status: "failed", failure: "account", selected: false });
+    for (let step = 0; step < 2; step++) next = await invoke({ action: "approve", goal_id: next.goalId, revision: next.revision });
+    expect(next.stage).toBe("videos");
+    expect(next.stages.replacement!.outputs[0]!.artifactId).toBe(first.stages.replacement!.outputs[0]!.artifactId);
+    expect(next.stages.frame!.outputs[0]!.artifactId).toBe(first.stages.frame!.outputs[0]!.artifactId);
+    expect(stub.submissions).toHaveLength(paid);
+    next = await invoke({ action: "approve", goal_id: next.goalId, revision: next.revision });
+    await waitForChainRun(engine, next.chainId!, testBudget(60_000));
+    next = await invoke({ action: "status", goal_id: next.goalId });
+    const originalClip = next.finish!.sourceArtifactId;
+    next = await invoke({ action: "cancel", goal_id: next.goalId });
+    expect(next.status).toBe("cancelled");
+    const laterId = await manualRerun(next, "A later reviewed take of the same bite, with the complete payoff.", true);
+    next = await invoke({ action: "status", goal_id: next.goalId });
+    expect(next.status).toBe("cancelled");
+    expect(next.finish?.sourceArtifactId).toBe(originalClip);
+    const later = next.generationHistory!.find(entry => entry.artifactId === laterId)!;
+    expect(later.status).toBe("completed");
+    expect((await call({ action: "adopt", goal_id: next.goalId, revision: next.revision, stage: "videos", index: 0, artifact_id: laterId, media_hash: later.mediaHash, confirmed: true })).isError).toBe(true);
+    let recovered = await settled(await create());
+    for (let step = 0; step < 2; step++) recovered = await invoke({ action: "approve", goal_id: recovered.goalId, revision: recovered.revision });
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const removed = await engine.notebooks.write({ ...notebook.value,
+      cells: notebook.value.cells.filter(cell => cell.id !== later.cellId), edges: notebook.value.edges.filter(edge => edge.source !== later.cellId && edge.target !== later.cellId),
+      execution: Object.fromEntries(Object.entries(notebook.value.execution ?? {}).filter(([cellId]) => cellId !== later.cellId)) });
+    if (!removed.ok) throw new Error(removed.error.message);
+    recovered = await invoke({ action: "adopt", goal_id: recovered.goalId, revision: recovered.revision, stage: "videos", index: 0, artifact_id: laterId, media_hash: later.mediaHash, confirmed: true });
+    expect(recovered.finish?.sourceArtifactId).toBe(laterId);
+    expect(recovered.stages.videos!.outputs[0]!.cellId).not.toBe(later.cellId);
+    expect(readGoal(engine, next.goalId).status).toBe("cancelled");
+    expect(stub.submissions).toHaveLength(paid + 2);
+    const changed = await engine.files.writeFromPath(sourceId, "original.mp4", join(fixtures, "changed.mp4"));
+    if (!changed.ok) throw new Error(changed.error.message);
+    const stale = await call({ action: "adopt", goal_id: recovered.goalId, revision: recovered.revision, stage: "videos", index: 0, artifact_id: laterId, media_hash: later.mediaHash, confirmed: true });
+    expect(stale.isError).toBe(true);
+    expect(JSON.stringify(stale.content)).toMatch(/changed/iu);
+    const blockedRerun = await manualRerun(next, "The same reviewed bite after the source changed.");
+    const stopped = await invoke({ action: "status", goal_id: next.goalId });
+    expect(stopped.status).toBe("cancelled");
+    expect(stopped.generationHistory!.find(entry => entry.artifactId === blockedRerun)).toMatchObject({ status: "failed", error: expect.stringMatching(/source changed/iu) });
+    expect(stub.submissions).toHaveLength(paid + 2);
+    expect(stub.unexpected).toEqual([]);
+  }, testBudget(120_000));
 
   it("refreshes changed source evidence without resubmitting creative work and leaves cancelled goals stopped", async () => {
     const goal = await settled(await invoke({ action: "create", brief: authored() }));

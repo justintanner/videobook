@@ -142,6 +142,7 @@ async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Rec
     ...(context?.attemptId ? { generationId: context.attemptId } : {}),
     ...(context?.notebookId ? { notebookId: context.notebookId } : {}),
     ...(context?.cellId ? { cellId: context.cellId } : {}),
+    ...(context?.goalOrigin ? { goalOrigin: context.goalOrigin } : {}),
     model: model.id,
     bookId: String(args.book_id),
     assetId: artifactId,
@@ -153,7 +154,7 @@ async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Rec
     options: optionsOf(args.options),
     ...(optionalString(args.mode) ? { mode: optionalString(args.mode)! } : {}),
     ...(optionalString(args.replace_audio_with) ? { replaceAudioWith: optionalString(args.replace_audio_with)! } : {}),
-    ...(model.media === "video" && args.transcribe === false ? { transcribe: false as const } : {}),
+    ...(model.media === "video" && (args.transcribe === false || context?.goalOrigin?.transcribe === false && args.transcribe !== true) ? { transcribe: false as const } : {}),
   };
   await queue.enqueue(jobId, job);
   return textResult({ asset_id: artifactId, job_id: jobId, model: model.id, status: "enqueued" });

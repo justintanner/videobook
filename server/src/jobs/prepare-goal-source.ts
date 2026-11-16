@@ -1,7 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent } from "../goal-store.js";
-import { estimateShort, mentionedSourceFrame } from "../goal-short-runtime.js";
+import { annotateShortReuse, estimateShort, mentionedSourceFrame } from "../goal-short-runtime.js";
 import { goalReferenceHashes } from "../goal-reference-images.js";
 import { prepareGoalSourceReference } from "../goal-source-reference.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
@@ -53,11 +53,11 @@ async function prepareSource(engine: Engine, input: Record<string, unknown>, ctx
   const [frameHash] = await goalReferenceHashes(engine, [frame.remix.frame.artifactId]);
   if (!frameHash?.objectHash) throw new Error("The prepared source frame is missing.");
   const reviewed = (await cleanupCandidate(engine, artifactId, source.mediaHash))?.reviewed ?? false;
-  const nextPlan = { ...plan, remix: { ...plan.remix, frame: frame.remix.frame }, analysis: { ...analysis, recipe: {
+  const nextPlan = await annotateShortReuse(engine, goal, { ...plan, remix: { ...plan.remix, frame: frame.remix.frame }, analysis: { ...analysis, recipe: {
     ...recipe, preparedArtifactId: artifactId, preparedMediaHash: prepared.mediaHash, cleanupReviewedHash: reviewed ? prepared.mediaHash : null,
     preparedFrameArtifactId: frame.remix.frame.artifactId, preparedFrameMediaHash: frameHash.objectHash,
     referenceArtifactId: reference.artifactId, referenceMediaHash: reference.mediaHash, reference: { start: reference.start, end: reference.end },
-  } } };
+  } } });
   const estimate = await estimateShort(engine, nextPlan, content);
   await withNotebookMutation(`goal:${goalId}`, async () => {
     const current = readGoal(engine, goalId);

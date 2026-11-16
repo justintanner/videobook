@@ -7,6 +7,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { toNodeHandler } from '@modelcontextprotocol/node'
 import express from 'express'
 import sharp from 'sharp'
+import { v7 as uuidv7 } from 'uuid'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import type { Engine } from 'videobook-engine'
@@ -15,7 +16,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
 import { createHttpHandler } from '../../server/src/server.js'
-import { configureProviderPollDriverForTests, queue, resetProviderPollDriverForTests, setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
+import { configureProviderPollDriverForTests, queue, resetProviderPollDriverForTests, setEngineRoot, stopBookQueue, waitForBookQueuesIdleForTests } from '../../server/src/queue.js'
+import { reconcileAwaitingNotebookOutputs, runNotebookCell } from '../../server/src/jobs/run-notebook.js'
 import { readGoal, requireGoalShortContent, writeGoalShortContent } from '../../server/src/goal-store.js'
 import { registerAllJobHandlers } from '../../server/src/jobs/index.js'
 import { loadLegacyGoalFixture } from '../../server/src/test-legacy-goals.js'
@@ -453,9 +455,38 @@ describe('goal mode in the browser', () => {
         goal = shortGoal(await call<GoalSnapshot>('video_goal', { action: 'approve', goal_id: goal.goalId, revision: goal.revision }))
         await expect.poll(async () => { goal = shortGoal(await current(goal)); return goal.status }, { timeout: testBudget(90_000) }).toBe('review')
       }
+      const firstClip = goal.stages.videos!.outputs[0]!.artifactId
+      const beforeRerun = engine.notebooks.read(notebookId)
+      if (!beforeRerun.ok) throw new Error(beforeRerun.error.message)
+      const producer = beforeRerun.value.cells.find(cell => cell.id === goal.stages.videos!.outputs[0]!.producerCellId)!
+      const manualPrompt = 'The man waves with both hands, then lowers them. Complete the wave within two seconds.'
+      const edited = { ...producer, prompt: manualPrompt }
+      const rerunDocument = { ...beforeRerun.value, cells: beforeRerun.value.cells.map(cell => cell.id === producer.id ? edited : cell) }
+      await engine.notebooks.write(rerunDocument)
+      const manual = await runNotebookCell(engine, bookId, notebookId, rerunDocument, edited, { confirmPaid: true, runId: uuidv7() })
+      await waitForBookQueuesIdleForTests({ budgetMs: testBudget(60_000) })
+      await reconcileAwaitingNotebookOutputs(engine, bookId)
+      await waitForBookQueuesIdleForTests({ budgetMs: testBudget(60_000) })
+      goal = shortGoal(await current(goal))
+      expect(goal.finish?.sourceArtifactId).toBe(firstClip)
       await page.reload()
       await tile(goal).waitFor({ state: 'visible', timeout: testBudget(30_000) })
       if (!(await panel().isVisible())) await tile(goal).click()
+      const history = panel().locator('.goal-take-history')
+      await history.locator(':scope > summary').click()
+      const take = history.locator('.goal-take-entry').filter({ has: page.getByText(manualPrompt, { exact: true }) })
+      await take.locator(':scope > summary').click()
+      const adopt = take.getByRole('button', { name: 'Use reviewed take', exact: true })
+      expect(await adopt.isDisabled()).toBe(true)
+      for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+        await page.setViewportSize(viewport)
+        await take.scrollIntoViewIfNeeded()
+        expect(await take.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+      }
+      await take.getByLabel('I reviewed this take for the current brief', { exact: true }).check()
+      await adopt.click()
+      await expect.poll(async () => shortGoal(await current(goal)).finish?.sourceArtifactId, { timeout: testBudget(30_000) }).toBe(manual.outputArtifactId)
+      await history.locator(':scope > summary').click()
       const tabs = panel().getByRole('navigation', { name: 'Short stages' })
       await tabs.getByRole('button', { name: 'Video', exact: true }).click()
       expect(await panel().getByLabel('Changed action prompt', { exact: true }).isVisible()).toBe(true)
@@ -477,7 +508,7 @@ describe('goal mode in the browser', () => {
       await expect.poll(() => finish.isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
       await finish.click()
       await expect.poll(async () => shortGoal(await current(goal)).finish?.status, { timeout: testBudget(120_000) }).toBe('completed')
-      expect(stub.submissions).toHaveLength(3)
+      expect(stub.submissions).toHaveLength(4)
       expect(stub.submissions.at(-1)!.body.duration).toBe(2)
       expect(stub.unexpected).toEqual([])
       expect(errors).toEqual([])

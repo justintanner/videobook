@@ -582,7 +582,7 @@ export function compileShortReplacementStep(plan: GoalShortPlan): ChainStep {
   const sourceSlot = `@image${images.length + 1}`;
   const insert = plan.analysis?.intent.character === "insert";
   return frameStep({ ...plan, frame: remix.replacement }, paragraphs(
-    remix.replacement.prompt,
+    boundRemixPrompt(plan, remix.replacement.prompt, "replacement"),
     sourceImageLine(images.length, `use the person as the ${insert ? "inserted character" : "replacement"}, keeping their face, hair, build and clothes exactly.`),
     `${sourceSlot} is the extracted source frame. ${insert ? "Insert the requested person at the action location, with realistic scale and contact. Keep existing decorative figures and props." : "Replace only its main person, matching their pose, position, scale and contact with objects."} Keep the camera angle, framing, place, light, animals and props. ${plan.analysis ? "Save the requested action for the video." : "Save the funny twist for the next edit."}`,
     plan.analysis ? plan.analysis.intent.cleanup === "keep" ? "Preserve the source graphics and physical printing."
@@ -616,7 +616,7 @@ export function compileShortFrameStep(plan: GoalShortPlan, storyboardFrameAddres
   if (shortRemixOf(plan)) {
     if (!storyboardFrameAddress) throw new Error("Replace the character before adding the twist.");
     return frameStep(plan, paragraphs(
-      plan.frame.prompt,
+      boundRemixPrompt(plan, plan.frame.prompt, "frame"),
       plan.version === 5 && plan.analysis
         ? "@image1 is the reviewed character and scene reference. Prepare the appearance and physical setup for the requested action. This is a reference for the action, not a required opening frame or proof that the action already happened. Keep the person, face, hair, build, clothes and surroundings. Preserve the action's target and realistic contact."
         : "@image1 is the reviewed character replacement. Make one funny but physically believable visual change to this frame. Keep the person, face, hair, build and clothes, camera angle, place and light. Preserve everything outside the change. Use realistic scale, anatomy, weight, support and contact shadows.",
@@ -652,9 +652,18 @@ export function shortGenerationSegments(plan: GoalShortPlan): GoalShortPlan["seg
     : plan.segments;
 }
 
-function localRemixPrompt(plan: GoalShortPlan, prompt: string): string {
+function boundRemixPrompt(plan: GoalShortPlan, prompt: string, stage: "replacement" | "frame" | "videos"): string {
   const remix = shortRemixOf(plan);
-  if (!remix || plan.version !== 5) return prompt;
+  if (!remix || plan.version !== 5 || !plan.analysis) return prompt;
+  const bindings = plan.analysis?.recipe.promptBindings;
+  if (bindings) return prompt.replace(/@[a-z]{1,2}[1-8]\b/giu, address => {
+    const role = bindings[address];
+    if (!role) return address;
+    if (stage === "frame") return "@image1";
+    if (stage === "replacement") return role === "source" ? `@image${plan.sourceImages.length + 1}` : role;
+    return role === "source" ? "@video1" : "@image1";
+  });
+  if (stage !== "videos") return prompt;
   const references = new Map([[remix.video.address, "@video1"], ...plan.sourceImages.map(image => [image.address, "@image1"] as const)]);
   return prompt.replace(/@[a-z]{1,2}[1-8]\b/giu, address => references.get(address) ?? address);
 }
@@ -686,14 +695,14 @@ export function compileShortClipStep(plan: GoalShortPlan, frameAddress: string):
   const assembly = analysis?.recipe.assembly;
   if (remix && assembly) return clipStep(plan, paragraphs(
     `Generate only the changed action, starting at local time 0. This clip replaces final-video seconds ${formatShortSeconds(assembly.changeStartFrame / assembly.fps)}–${formatShortSeconds(assembly.changeEndFrame / assembly.fps)}. The editor keeps every other source shot. Local 0 corresponds to the start of that interval; do not wait until that final-video timestamp. Complete the action and its payoff within ${formatShortSeconds((assembly.changeEndFrame - assembly.changeStartFrame) / assembly.fps)} seconds.`,
-    localRemixPrompt(plan, segment.prompt),
-    `Full-edit context, with final-video timing (perform only the changed interval): ${localRemixPrompt(plan, plan.segments.map(item => item.prompt).join(" "))}`,
+    boundRemixPrompt(plan, segment.prompt, "videos"),
+    `Full-edit context, with final-video timing (perform only the changed interval): ${boundRemixPrompt(plan, plan.segments.map(item => item.prompt).join(" "), "videos")}`,
     "@video1 provides the scene and camera context. @image1 is the reviewed identity and action setup. Preserve its people, clothes and props. Perform the action from its starting pose; do not hold a completed payoff pose. Do not repeat the preceding montage.",
     plan.rules.video,
     plan.rules.silence,
   ), { video: [analysis!.recipe.referenceArtifactId ?? remix.video.artifactId], image: [frameAddress] });
   if (remix) return clipStep(plan, paragraphs(
-    segment.prompt,
+    boundRemixPrompt(plan, segment.prompt, "videos"),
     "@video1 is the source video: use its setting, camera movement and action as the reference. @image1 is the reviewed twist: keep its person, clothes, animals and changed props. Follow the beat's timing for when the person and visual joke appear; this image is a reference, not a fixed opening frame. Do not restore the original character or overlays from the video.",
     plan.rules.video,
     plan.rules.silence,

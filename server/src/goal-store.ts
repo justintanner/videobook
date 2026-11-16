@@ -16,12 +16,14 @@ export type GoalStageOutput = { index: number; artifactId: string; cellId: strin
 export type GoalStillAttempt = {
   stage: GoalGenerationStage;
   index: number;
-  chainId: string;
+  chainId: string | null;
   stepId: string;
   artifactId: string | null;
   cellId: string | null;
   basePrompt: string;
   fingerprint?: string;
+  generationId?: string;
+  originGoalId?: string;
   feedback: string | null;
   parentArtifactId: string | null;
   frameArtifactId: string | null;
@@ -29,13 +31,26 @@ export type GoalStillAttempt = {
   createdAt: string;
 };
 export type GoalStageRun = {
-  chainId: string;
+  chainId: string | null;
   revision: number;
   approvedAt: string;
   shotIndexes: number[];
   outputs: GoalStageOutput[];
   previousChainIds: string[];
   attempts?: GoalStillAttempt[];
+};
+
+export type GoalOutputReview = {
+  stage: GoalGenerationStage;
+  index: number;
+  artifactId: string;
+  mediaHash: string;
+  fingerprint: string;
+  basePrompt: string;
+  frameArtifactId: string | null;
+  originGoalId: string;
+  generationId?: string;
+  reviewedAt: string;
 };
 
 export type GoalRealismFinding = { severity: "note" | "warn"; text: string };
@@ -104,6 +119,7 @@ export type GoalRecord = {
   planningJobId: number | null;
   preparation?: GoalPreparation | null;
   actionWindow?: GoalActionWindow | null;
+  reviewedOutputs?: GoalOutputReview[];
   clipIds: string[];
   trackId: string | null;
   assembly: GoalAssembly | null;

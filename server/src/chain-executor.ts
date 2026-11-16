@@ -9,6 +9,8 @@ import { buildChainStepReview, type ChainStepReview } from "./chain-step-review.
 import type { AwaitNotebookOutputPayload } from "./jobs/run-notebook.js";
 import { failNotebookProviderOutput } from "./jobs/run-notebook.js";
 import { tryResolveModel } from "./media/descriptor.js";
+import { withBookContext } from "./book-context.js";
+import type { GoalGenerationOrigin } from "./goal-generation-provenance.js";
 import {
   isChainRef,
   preflightChainPlan,
@@ -52,6 +54,7 @@ type ChainRunStatus =
   | "interrupted";
 
 export type ChainApprovalActor = "chat" | "voice" | "api";
+type ChainPlanApproval = { actor: ChainApprovalActor; goalOrigins?: Record<string, GoalGenerationOrigin> };
 
 type ChainStepApproval = {
   approvedAt: string;
@@ -93,6 +96,7 @@ export type ChainRunRecord = {
   effect: "read" | "mutation" | "generation";
   awaitingStepId: string | null;
   continueOnFailure?: boolean;
+  goalOrigins?: Record<string, GoalGenerationOrigin>;
 };
 
 type ChainStore = {
@@ -445,6 +449,7 @@ async function completeGeneration(
     artifactId,
     runId,
     pins: context.pins,
+    goalOrigin: getChainRun(engine, context.chainId)?.goalOrigins?.[context.stepId],
   });
   const awaitJobId = `chain-await-${context.chainId}-${context.stepId}-${artifactId}`;
   const awaiting: AwaitNotebookOutputPayload = {
@@ -608,7 +613,9 @@ async function dispatchStep(
   onDispatched: (outputs: Record<string, unknown>, jobIds: string[]) => void,
 ): Promise<{ outputs: Record<string, unknown>; childJobIds: string[] }> {
   if (signal.aborted) throw new Error("Cancelled");
-  const result = await prepared.def.handler(prepared.params);
+  const result = await withBookContext({ bookId: context.bookId, engine, operation: step.tool, runId: `${context.chainId}:${step.id}`,
+    ...(context.notebookId ? { notebookId: context.notebookId } : {}), goalOrigin: getChainRun(engine, context.chainId)?.goalOrigins?.[step.id],
+  }, () => prepared.def.handler(prepared.params));
   if (result.isError) {
     const text = result.content.find((entry) => entry.type === "text")?.text;
     throw new Error(text ?? `${step.tool} failed`);
@@ -654,7 +661,7 @@ async function dispatchStep(
 function recordFromPlan(
   plan: ChainPreflightPlan,
   chainId: string,
-  approvedPlan?: { actor: ChainApprovalActor },
+  approvedPlan?: ChainPlanApproval,
 ): ChainRunRecord {
   const timestamp = nowIso();
   return {
@@ -663,6 +670,7 @@ function recordFromPlan(
     bookId: plan.bookId,
     notebookId: plan.notebookId,
     requestId: plan.requestId,
+    ...(approvedPlan?.goalOrigins ? { goalOrigins: approvedPlan.goalOrigins } : {}),
     fingerprint: plan.fingerprint,
     status: "accepted",
     createdAt: timestamp,
@@ -830,7 +838,7 @@ function acceptChainRun(
   engine: Engine,
   plan: ChainPreflightPlan,
   lookup: ToolLookup,
-  approvedPlan?: { actor: ChainApprovalActor },
+  approvedPlan?: ChainPlanApproval,
 ): ChainRunRecord {
   if (plan.requestId) {
     const existing = findChainRunByRequestId(engine, plan.bookId, plan.requestId);
@@ -1064,7 +1072,7 @@ export async function preflightAndAccept(
   input: unknown,
   context: ChainPreflightContext,
   lookup: ToolLookup,
-  approvedPlan?: { actor: ChainApprovalActor },
+  approvedPlan?: ChainPlanApproval,
 ): Promise<ChainRunRecord> {
   const preflight = await preflightChainPlan(input, context);
   if (!preflight.ok) {

@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Engine } from "videobook-engine";
+import type { GoalGenerationOrigin } from "./goal-generation-provenance.js";
 
 export interface BookContext {
   bookId: string;
@@ -13,6 +14,7 @@ export interface BookContext {
   notebookId?: string;
   cellId?: string;
   jobId?: string;
+  goalOrigin?: GoalGenerationOrigin;
 }
 
 const contexts = new AsyncLocalStorage<BookContext>();
@@ -51,6 +53,7 @@ export async function withBookContext<T>(
   if (context.notebookId === undefined && parent?.notebookId !== undefined) inherited.notebookId = parent.notebookId;
   if (context.cellId === undefined && parent?.cellId !== undefined) inherited.cellId = parent.cellId;
   if (context.jobId === undefined && parent?.jobId !== undefined) inherited.jobId = parent.jobId;
+  if (context.goalOrigin === undefined && parent?.bookId === context.bookId && parent.goalOrigin) inherited.goalOrigin = parent.goalOrigin;
   const defined = Object.fromEntries(Object.entries(context).filter(([, value]) => value !== undefined)) as BookContext;
   return contexts.run(
     { ...inherited, ...defined, engine: concreteEngine(context.engine) },

@@ -1,4 +1,5 @@
 import { falContentRefusal } from "./_fal-shared.js";
+import { assertGoalLineageCurrent, goalGenerationLineageSchema } from "../goal-generation-provenance.js";
 import { submitMediaJob } from "../usage-providers.js";
 import { type GrokImagineImage2ImageEditRequest, type KieProvider, type SeedreamProLayerDecompositionRequest } from "@apicity/kie";
 import {
@@ -1332,6 +1333,9 @@ export function registerImageSubjectJobs(engine: Engine): void {
   registerJobHandler("generate_image_subject_edit", async (rawPayload, context) => {
     const payload = rawPayload as GenerateImageSubjectEditPayload;
     try {
+      const metadata = await engine.metadata.artifacts.read(payload.imageAssetId, "goal-generation-lineage");
+      const lineage = goalGenerationLineageSchema.safeParse(metadata.ok ? metadata.value : null);
+      if (lineage.success) await assertGoalLineageCurrent(engine, lineage.data);
       const source = await resolveImageSubjectSource(engine, payload.sourceArtifactId);
       if (source.objectHash !== payload.sourceObjectHash) {
         throw new Error("The source image changed before subject editing started");

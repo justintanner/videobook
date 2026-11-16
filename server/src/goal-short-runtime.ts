@@ -3,7 +3,7 @@ import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { Engine, NotebookDocument } from "videobook-engine";
 import { findPrimaryMediaFile, resolveNotebookCellArtifactId } from "videobook-engine";
-import { notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
+import { firstEmptyNotebookGridSlot, notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
 import { replaceNotebookMentions, scanNotebookMentions, type NotebookMention } from "videobook-engine/notebook-mentions";
 import { getApiKey } from "./api-key.js";
 import { getChainRun, preflightAndAccept, retryChainRun, type ChainRunRecord } from "./chain-executor.js";
@@ -22,6 +22,7 @@ import { prepareShortSource } from "./goal-source-preparation.js";
 import { remixPromptFindings, remixRules } from "./goal-remix-model.js";
 import { goalReferenceHashes } from "./goal-reference-images.js";
 import { goalStageAttempts } from "./goal-stills.js";
+import { goalGenerationHistory, goalHistoryInputProblem, reviewedGoalOutput, type GoalHistoryEntry } from "./goal-generation-history.js";
 import {
   activeGoalStage, createGoalShortCell, emptyGoalEstimates, readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent,
   type GoalEstimate, type GoalEstimates, type GoalFinish, type GoalGenerationStage, type GoalRecord, type GoalShortContent, type GoalStageOutput,
@@ -257,7 +258,7 @@ function stageSource(goal: GoalRecord, stage: GoalGenerationStage, index: number
 function madeFromStaleSource(goal: GoalRecord, stage: "frame" | "videos", index: number): boolean {
   const output = selectedOutput(goal, stage, index);
   if (!output) return false;
-  const attempt = goal.stages[stage]?.attempts?.find((candidate) => candidate.index === index && candidate.artifactId === output.artifactId);
+  const attempt = reviewedGoalOutput(goal, stage, index, output.artifactId) ?? goal.stages[stage]?.attempts?.find((candidate) => candidate.index === index && candidate.artifactId === output.artifactId);
   return Boolean(attempt?.frameArtifactId && attempt.frameArtifactId !== stageSource(goal, stage, index));
 }
 
@@ -300,7 +301,7 @@ function notRunReason(chain: ChainRunRecord): string {
 
 export function storyboardFrameFailure(engine: Engine, goal: GoalRecord, index: number): StoryboardFrameFailure | null {
   const attempt = goalStageAttempts(goal, "storyboards").filter((candidate) => candidate.index === index).at(-1);
-  const chain = attempt ? getChainRun(engine, attempt.chainId) : null;
+  const chain = attempt?.chainId ? getChainRun(engine, attempt.chainId) : null;
   const step = chain?.steps.find((candidate) => candidate.id === attempt?.stepId);
   if (!chain || !step) return null;
   const model = attempt?.model ? { model: attempt.model } : {};
@@ -501,7 +502,8 @@ export async function shortFinishSource(engine: Engine, goal: GoalRecord): Promi
   if (shortRemixOf(plan)) await assertShortUpstream(engine, goal, plan, "videos");
   if (plan.version === 5 && plan.analysis) {
     await assertRemixPreflight(engine, plan);
-    const attempt = goal.stages.videos?.attempts?.find(candidate => candidate.artifactId === clip.artifactId && candidate.fingerprint);
+    const attempt = reviewedGoalOutput(goal, "videos", clip.index, clip.artifactId) ?? goal.stages.videos?.attempts?.find(candidate => candidate.artifactId === clip.artifactId && candidate.fingerprint);
+    if (attempt && "mediaHash" in attempt && (await goalReferenceHashes(engine, [clip.artifactId]))[0]?.objectHash !== attempt.mediaHash) throw new Error("The reviewed take changed. Review its current media before finishing.");
     if (attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, "videos", clip.index, stageSource(goal, "videos", clip.index))) {
       throw new Error("The video prompt, timing or references changed. Review a compatible take before finishing.");
     }
@@ -510,16 +512,20 @@ export async function shortFinishSource(engine: Engine, goal: GoalRecord): Promi
 }
 
 async function assertShortUpstream(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, stage: GoalGenerationStage): Promise<void> {
+  for (const earlier of stage === "videos" ? ["replacement", "frame"] as const : stage === "frame" ? ["replacement"] as const : []) {
+    const review = reviewedGoalOutput(goal, earlier, 0, selectedOutput(goal, earlier, 0)?.artifactId);
+    if (review && (await goalReferenceHashes(engine, [review.artifactId]))[0]?.objectHash !== review.mediaHash) throw new Error("A reviewed upstream image changed. Review its current media before continuing.");
+  }
   if ((stage === "frame" || stage === "videos") && shortRemixOf(plan)) {
     const replacement = selectedOutput(goal, "replacement", 0);
-    const attempt = goal.stages.replacement?.attempts?.find(candidate => candidate.artifactId === replacement?.artifactId && candidate.fingerprint);
+    const attempt = reviewedGoalOutput(goal, "replacement", 0, replacement?.artifactId) ?? goal.stages.replacement?.attempts?.find(candidate => candidate.artifactId === replacement?.artifactId && candidate.fingerprint);
     if (!replacement || (attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, "replacement", 0, null))) {
       throw new Error("The character replacement prompt or references changed. Regenerate the replacement before continuing.");
     }
   }
   if (stage !== "videos") return;
   const frame = selectedOutput(goal, "frame", 0);
-  const attempt = goal.stages.frame?.attempts?.find(candidate => candidate.artifactId === frame?.artifactId && candidate.fingerprint);
+  const attempt = reviewedGoalOutput(goal, "frame", 0, frame?.artifactId) ?? goal.stages.frame?.attempts?.find(candidate => candidate.artifactId === frame?.artifactId && candidate.fingerprint);
   if (!frame || (attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, "frame", 0, stageSource(goal, "frame", 0)))) {
     throw new Error(shortRemixOf(plan)
       ? "The twist prompt or character replacement changed. Regenerate the twist before continuing."
@@ -636,6 +642,12 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   const index = indexes[0]!;
   const feedback = args.action === "revise" ? plainFeedback(engine, goal.notebookId, shortFeedbackSchema.parse(args.feedback)) : null;
   const model = cleanupModel(content.plan, stage, args, regenerate);
+  if (!regenerate && content.plan.version === 5 && content.plan.analysis) {
+    await assertRemixPreflight(engine, content.plan);
+    const reusable = (await reviewedShortCandidates(engine, goal, content.plan)).find(entry => entry.stage === stage && entry.index === index);
+    if (reusable) return selectShortVersion(engine, goal, { action: "adopt", revision: content.revision, stage, index,
+      artifact_id: reusable.artifactId, media_hash: reusable.mediaHash, confirmed: true });
+  }
   assertStageKey(content.plan, stage, model);
   if (feedback && !getApiKey("OPENAI_API_KEY")) throw new Error(NO_OPENAI_KEY);
   assertStageInputs(goal, content.plan, target, readNotebook(engine, goal.notebookId));
@@ -646,6 +658,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   const plan = refreshGoalShortPlan(content.plan, document);
   await assertRemixPreflight(engine, plan);
   await assertShortUpstream(engine, goal, plan, stage);
+  goal = saveGoal(engine, await rememberUpstreamReviews(engine, goal, plan, stage));
   const steps = await Promise.all(stageSteps(goal, plan, document, target, sourceClip, model).map(async ({ index: position, step }) => {
     const source = stageSource(goal, stage, position);
     return { index: position, step, source, fingerprint: await shortFingerprint(engine, plan, stage, position, source, model) };
@@ -661,7 +674,12 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
     engine, bookId: goal.bookId, notebookId: goal.notebookId,
     toolSchemas: new Map(defs.map((def) => [def.name, def.schema])), autoApplyTools: new Set(),
     effectForTool: () => "generation", continueOnFailure: stage === "storyboards",
-  }, lookup, { actor: "chat" });
+  }, lookup, { actor: "chat", goalOrigins: Object.fromEntries(steps.map(({ index: position, step, source, fingerprint }) => [step.id, {
+    version: 1, goalId: goal.goalId, stage, index: position, revision: content.revision, fingerprint,
+    basePrompt: stagePrompt(plan, stage, position), frameArtifactId: source,
+    ...(stage === "videos" ? { transcribe: false as const } : {}),
+    source: plan.version === 5 && plan.analysis?.source ? { artifactId: plan.analysis.source.artifactId, mediaHash: plan.analysis.source.mediaHash } : null,
+  }])) });
   const approvedAt = new Date().toISOString();
   const { finish: _finish, ...stored } = goal;
   return saveGoal(engine, {
@@ -673,7 +691,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
     resumeOutputs: regenerate ? previous?.outputs ?? [] : null,
     stages: { ...goal.stages, [stage]: {
       chainId: chain.chainId, revision: content.revision, approvedAt, shotIndexes: indexes,
-      outputs: previous?.outputs ?? [], previousChainIds: previous ? [...previous.previousChainIds, previous.chainId] : [],
+      outputs: previous?.outputs ?? [], previousChainIds: previous ? [...previous.previousChainIds, ...(previous.chainId ? [previous.chainId] : [])] : [],
       attempts: [...(previous?.attempts ?? []), ...steps.map(({ index: position, step, source, fingerprint }) => ({
         stage, index: position, chainId: chain.chainId, stepId: step.id, artifactId: null, cellId: null,
         basePrompt: stagePrompt(plan, stage, position), feedback, fingerprint,
@@ -714,33 +732,126 @@ async function assertRemixPreflight(engine: Engine, plan: GoalShortPlan): Promis
   }
 }
 
-export function selectShortVersion(engine: Engine, goal: GoalRecord, args: GoalArgs): GoalRecord {
+async function placeRecoveredTake(engine: Engine, goal: GoalRecord, entry: GoalHistoryEntry): Promise<GoalStageOutput> {
+  const artifactId = entry.artifactId!;
+  const output: GoalStageOutput = { index: entry.index, artifactId, cellId: entry.cellId, producerCellId: entry.producerCellId, address: entry.address };
+  if (output.cellId) return output;
+  const artifact = engine.artifacts.get(artifactId);
+  if (!artifact.ok || !["video", "image"].includes(artifact.value.kind)) throw new Error("This take has no image or video artifact.");
+  const kind = artifact.value.kind === "video" ? "video" : "image";
+  const placed = await mutateNotebook(engine, goal.notebookId, "goal_adopt_output", document => {
+    const slot = firstEmptyNotebookGridSlot(notebookOccupiedSlots(document.cells));
+    if (!slot) throw new Error("The notebook needs one empty cell for the recovered take.");
+    const cell = engine.notebooks.createCell({ type: kind, label: artifact.value.label ?? "Recovered take", slot,
+      outputArtifactId: artifactId, inputs: { goalId: goal.goalId, recoveredFromGoalId: entry.originGoalId, state: "completed" } });
+    output.cellId = cell.id;
+    output.address = notebookGridTag(slot);
+    return { ...document, cells: [...document.cells, cell] };
+  });
+  if (!placed.ok) throw new Error(placed.error.message);
+  return output;
+}
+
+async function rememberReviewedOutput(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, entry: GoalHistoryEntry): Promise<GoalRecord> {
+  if (!entry.artifactId || !entry.mediaHash) throw new Error("Review a completed take before adopting it.");
+  const { stage, index, artifactId, mediaHash } = entry;
+  const review = { stage, index, artifactId, mediaHash, fingerprint: await shortFingerprint(engine, plan, stage, index, stageSource(goal, stage, index)),
+    basePrompt: stagePrompt(plan, stage, index), frameArtifactId: stageSource(goal, stage, index), originGoalId: entry.originGoalId,
+    ...(entry.generationId ? { generationId: entry.generationId } : {}), reviewedAt: new Date().toISOString() };
+  return { ...goal, reviewedOutputs: [...(goal.reviewedOutputs ?? []).filter(item => !(item.stage === stage && item.index === index && item.artifactId === artifactId)), review] };
+}
+
+async function rememberUpstreamReviews(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, stage: GoalGenerationStage): Promise<GoalRecord> {
+  const upstream: GoalGenerationStage[] = stage === "videos" ? ["replacement", "storyboards", "frame"] : stage === "frame" ? ["replacement", "storyboards"] : [];
+  if (!upstream.length) return goal;
+  const history = await goalGenerationHistory(engine, goal.notebookId, { goalId: goal.goalId, related: true });
+  let next = goal;
+  for (const earlier of upstream) for (const output of goal.stages[earlier]?.outputs ?? []) {
+    const entry = history.find(item => item.stage === earlier && item.index === output.index && item.artifactId === output.artifactId);
+    if (entry?.mediaHash) next = await rememberReviewedOutput(engine, next, plan, entry);
+  }
+  return next;
+}
+
+function contentFingerprint(fingerprint: string): string {
+  try {
+    return JSON.stringify(JSON.parse(fingerprint), (key, value: unknown) => {
+      if (key === "references" || key === "videoReferences") return Array.isArray(value) ? value.map((item: { artifactId?: string; objectHash?: string | null }) => item.objectHash ? { objectHash: item.objectHash } : item) : value;
+      return value;
+    });
+  } catch { return fingerprint; }
+}
+
+async function reviewedShortCandidates(engine: Engine, goal: GoalRecord, plan: GoalShortPlan): Promise<GoalHistoryEntry[]> {
+  if (plan.version !== 5 || !plan.analysis?.source) return [];
+  const history = await goalGenerationHistory(engine, goal.notebookId, { goalId: goal.goalId, related: true, sourceArtifactId: plan.analysis.source.artifactId });
+  const source = { artifactId: plan.analysis.source.artifactId, mediaHash: plan.analysis.source.mediaHash };
+  const candidates: GoalHistoryEntry[] = [];
+  let selected = goal;
+  const stages: GoalGenerationStage[] = plan.remix ? ["replacement", "frame"] : ["frame"];
+  for (const stage of stages) {
+    const fingerprint = contentFingerprint(await shortFingerprint(engine, plan, stage, 0, stageSource(selected, stage, 0)));
+    for (const entry of history.filter(value => value.stage === stage && value.index === 0 && value.review && value.mediaHash === value.review.mediaHash && value.status === "completed")) {
+      if (contentFingerprint(entry.review!.fingerprint) !== fingerprint || await goalHistoryInputProblem(engine, entry, source)) continue;
+      candidates.push(entry);
+      if (!selectedOutput(selected, stage, 0)) selected = { ...selected, stages: { ...selected.stages, [stage]: {
+        chainId: null, revision: 0, approvedAt: entry.review!.reviewedAt, shotIndexes: [0], previousChainIds: [],
+        outputs: [{ index: 0, artifactId: entry.artifactId!, cellId: entry.cellId, producerCellId: entry.producerCellId, address: entry.address }],
+      } } };
+      break;
+    }
+  }
+  return candidates;
+}
+
+export async function annotateShortReuse(engine: Engine, goal: GoalRecord, plan: GoalShortPlan): Promise<GoalShortPlan> {
+  if (plan.version !== 5 || !plan.analysis) return plan;
+  const candidates = await reviewedShortCandidates(engine, goal, plan);
+  return { ...plan, analysis: { ...plan.analysis, history: plan.analysis.history.map(entry => {
+    const reusable = candidates.some(candidate => candidate.artifactId === entry.artifactId);
+    return { ...entry, reusable, reason: entry.reason ?? (reusable ? null : entry.approved ? "The current prompt, settings or upstream selection differ." : "Review this output before reusing it.") };
+  }) } };
+}
+
+export async function selectShortVersion(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {
   if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Select a version while reviewing the goal");
-  if (args.revision !== undefined && requireGoalShortContent(engine, goal).revision !== args.revision) {
+  if (goal.finish?.status === "running") throw new Error("Wait until finishing stops before selecting a take.");
+  const content = requireGoalShortContent(engine, goal);
+  const plan = content.plan;
+  if (!plan) throw new Error("Review the goal's plan before selecting a take.");
+  const adopting = args.action === "adopt";
+  if ((adopting || args.revision !== undefined) && content.revision !== args.revision) {
     throw new Error("The goal changed. Review the current version before approving it.");
   }
   const stage = stageSchema.parse(args.stage);
   const index = z.number().int().nonnegative().parse(args.index);
   const artifactId = z.string().uuid().parse(args.artifact_id);
   const run = goal.stages[stage];
-  const attempts = goalStageAttempts(goal, stage);
-  const attempt = attempts.find((item) => item.stage === stage && item.index === index && item.artifactId === artifactId);
-  const step = attempt ? getChainRun(engine, attempt.chainId)?.steps.find((item) => item.id === attempt.stepId) : null;
-  if (!run || !attempt || step?.status !== "completed") throw new Error("Choose a completed version of this goal's output");
-  const document = readNotebook(engine, goal.notebookId);
-  const producer = document.cells.find((cell) => cell.inputs?.chainRunId === `${attempt.chainId}:${attempt.stepId}`);
-  const output = { index, artifactId, cellId: attempt.cellId, producerCellId: producer?.id ?? null, address: null };
-  const address = outputAddress(document, output);
+  const ownAttempt = goalStageAttempts(goal, stage).find(item => item.index === index && item.artifactId === artifactId);
+  const history = await goalGenerationHistory(engine, goal.notebookId, { goalId: goal.goalId, related: adopting });
+  const entry = history.find(item => item.stage === stage && item.index === index && item.artifactId === artifactId);
+  if (!entry?.mediaHash || (!adopting && (!run || !ownAttempt || entry.status !== "completed"))) throw new Error("Choose a completed goal version, or adopt a recovered take after review.");
+  if (adopting && (args.confirmed !== true || args.media_hash !== entry.mediaHash)) throw new Error("Confirm that you reviewed this take for the current brief and provide its current media_hash.");
+  if (adopting && !["completed", "cancelled", "interrupted"].includes(entry.status)) throw new Error("Wait for this generation to settle before adopting it.");
+  const source = plan.version === 5 && plan.analysis?.source ? { artifactId: plan.analysis.source.artifactId, mediaHash: plan.analysis.source.mediaHash } : null;
+  const problem = await goalHistoryInputProblem(engine, entry, source);
+  if (problem) throw new Error(problem);
+  if (stage === "videos" && index >= shortGenerationSegments(plan).length || stage !== "videos" && stage !== "storyboards" && index !== 0) throw new Error("This output has no matching stage in the current plan.");
+  const output = await placeRecoveredTake(engine, goal, entry);
   const changed = selectedOutput(goal, stage, index)?.artifactId !== artifactId;
-  const outputs = [...run.outputs.filter((item) => item.index !== index), { ...output, address }].sort((a, b) => a.index - b.index);
-  const next = { ...goal, stages: { ...goal.stages, [stage]: { ...run, attempts, outputs } } };
+  const outputs = [...(run?.outputs ?? []).filter(item => item.index !== index), output].sort((a, b) => a.index - b.index);
+  const attempt = { stage, index, artifactId, cellId: output.cellId, chainId: entry.chainId, stepId: entry.stepId, basePrompt: entry.basePrompt,
+    ...(entry.fingerprint ? { fingerprint: entry.fingerprint } : {}), ...(entry.generationId ? { generationId: entry.generationId } : {}),
+    originGoalId: entry.originGoalId, frameArtifactId: entry.frameArtifactId, feedback: entry.feedback, parentArtifactId: entry.parentArtifactId, createdAt: entry.createdAt };
+  let next: GoalRecord = { ...goal, stages: { ...goal.stages, [stage]: { chainId: null, revision: content.revision, approvedAt: new Date().toISOString(), shotIndexes: [index], previousChainIds: [], ...run,
+    attempts: ownAttempt ? run?.attempts ?? [] : [...(run?.attempts ?? []), attempt], outputs } } };
+  if (adopting) next = await rememberReviewedOutput(engine, next, plan, entry);
   if (!changed) return saveGoal(engine, next);
-  const plan = requireGoalShortContent(engine, goal).plan;
   if (stage === "storyboards") return saveGoal(engine, storyboardReview(goal, next, plan));
-  if (stage === "replacement") return saveGoal(engine, { ...next, stage: "frame", status: "review", error: null, finish: null });
+  if (stage === "replacement") return saveGoal(engine, { ...next, stage: "frame", status: "review", error: null, finish: null, actionWindow: null });
   const clip = stage === "videos" && plan && nextShortSegment(next, plan) === null ? currentShortClip(next) : null;
   const finish = clip ? { status: "review" as const, sourceArtifactId: clip.artifactId, finalArtifactId: null, error: null } : null;
-  return saveGoal(engine, { ...next, status: "review", error: null, finish });
+  return saveGoal(engine, { ...next, stage: stage === "frame" ? "videos" : stage, status: "review", error: null, finish, actionWindow: null });
 }
 
 function lockedSettings(plan: GoalShortPlan) {
@@ -811,6 +922,7 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
         preferences: plan.analysis.preferences, source: analyzed.source, intent,
         requestedFrameSeconds: content.draft && !isLegacyShortDraft(content.draft) ? content.draft.analysisRequest?.atSeconds : null,
       });
+      analysis.recipe.promptBindings = analyzed.recipe.promptBindings;
       if (analysis.recipe.sourceFrameSeconds === analyzed.recipe.sourceFrameSeconds) {
         if (analysis.intent.cleanup === analyzed.intent.cleanup) {
           for (const key of ["reference", "referenceArtifactId", "referenceMediaHash", "preparedArtifactId", "preparedMediaHash", "preparedFrameArtifactId", "preparedFrameMediaHash", "cleanupReviewedHash", "cleanupConfirmed", "cleanupRegions", "cleanupMethod"] as const) {

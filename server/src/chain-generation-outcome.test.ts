@@ -14,6 +14,7 @@ import { configureProviderPollDriverForTests, resetProviderPollDriverForTests } 
 import { testBudget } from "./test-budget.js";
 import { createTestClient } from "./test-client.js";
 import { getAllToolDefs } from "./tools/index.js";
+import { listCellGenerationsDef, type ListCellGenerationsResponse } from "./tools/list-cell-generations.js";
 
 const ENDPOINT = "openai/gpt-image-2.6/flare/text-to-image";
 const REFUSAL = "Request blocked by the content policy";
@@ -105,6 +106,21 @@ describe("notebook chain generation outcome", () => {
     return waitForChainRun(engine, accepted.chainId, testBudget(60_000));
   }
 
+  async function recordedAttempt(run: ChainRunRecord) {
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const producer = notebook.value.cells.find(cell => cell.inputs?.chainRunId === `${run.chainId}:image`)!;
+    const listed = engine.generations.listForCell(notebookId, producer.id);
+    if (!listed.ok) throw new Error(listed.error.message);
+    expect(listed.value).toHaveLength(1);
+    expect(listed.value[0]).toMatchObject({ prompt: "a red fox in the snow", model: `fal:${ENDPOINT}`, runId: `${run.chainId}:image`, providerArtifactId: run.steps[0]!.outputs?.asset_id });
+    const response = await listCellGenerationsDef(engine).handler({ book_id: bookId, notebook_id: notebookId, cell_id: producer.id });
+    expect(response.isError).toBeFalsy();
+    const history = JSON.parse(response.content[0]!.text!) as ListCellGenerationsResponse;
+    expect(history.attempts.map(attempt => attempt.attemptId)).toEqual([listed.value[0]!.generationId]);
+    return listed.value[0]!;
+  }
+
   it("fails the step and the run with the provider's message when the generation fails", async () => {
     refuse = true;
     const run = await generateInChain();
@@ -115,6 +131,7 @@ describe("notebook chain generation outcome", () => {
     const failedCells = Object.values(notebook.value.execution ?? {})
       .filter((execution) => execution.runId === `${run.chainId}:image` && execution.status === "error");
     expect(failedCells.map((execution) => execution.error)).toEqual([expect.stringContaining(REFUSAL)]);
+    expect(await recordedAttempt(run)).toMatchObject({ status: "failed", error: expect.stringContaining(REFUSAL) });
   });
 
   it("completes the step with the generated image when the provider succeeds", async () => {
@@ -123,5 +140,6 @@ describe("notebook chain generation outcome", () => {
     expect(run.steps[0]).toMatchObject({ status: "completed", error: null });
     const manifest = await engine.files.manifest(String(run.steps[0]!.outputs?.asset_id));
     expect(manifest.ok && manifest.value.files.map((file) => file.name)).toContain("original.png");
+    expect(await recordedAttempt(run)).toMatchObject({ status: "completed", outputArtifactId: run.steps[0]!.outputs?.asset_id });
   });
 });

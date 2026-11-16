@@ -15,6 +15,7 @@ import { GoalMedia } from './GoalStillCard'
 import { GoalInitialAnalysis } from './GoalInitialAnalysis'
 import { GoalSourcePreparation } from './GoalSourcePreparation'
 import { GoalActionWindow } from './GoalActionWindow'
+import { GoalTakeHistory } from './GoalTakeHistory'
 
 type GoalAction = Record<string, unknown>
 type AssetResolver = (artifactId: string) => AssetRecord | null
@@ -154,11 +155,13 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const versions = (stage: GoalGenerationStage, index: number, label: string) => goalStillVersions(goal, stage, index).map((version, position, all) => {
     const asset = version.artifactId ? resolveAsset(version.artifactId) : null
     const name = `v${all.length - position}`
-    return <button key={`${version.chainId}:${version.stepId}`} type="button" className="goal-version" aria-label={`${label} ${name}`} aria-pressed={version.current} disabled={disabled || !version.artifactId || version.status !== 'completed'} onClick={() => { if (version.artifactId) onRun(() => onAction({ action: 'select', revision: goal.revision, stage, index, artifact_id: version.artifactId })) }}>
+    return <button key={version.generationId ?? `${version.chainId}:${version.stepId}`} type="button" className="goal-version" aria-label={`${label} ${name}`} title={version.requiresReview ? 'Review and adopt this take in Generation history' : undefined} aria-pressed={version.current} disabled={disabled || !version.artifactId || version.status !== 'completed' || version.requiresReview} onClick={() => { if (version.artifactId) onRun(() => onAction({ action: 'select', revision: goal.revision, stage, index, artifact_id: version.artifactId })) }}>
       {(asset?.thumbnailUrl ?? asset?.mediaUrl) && <img src={asset.thumbnailUrl ?? asset.mediaUrl ?? ''} alt="" />}<span>{name}</span>
     </button>
   })
   return <div className="goal-editor goal-simple goal-short" data-review={view}>
+    <GoalTakeHistory entries={goal.generationHistory ?? []} revision={goal.revision} disabled={disabled || running || finishing || goal.status === 'cancelled'} resolveAsset={resolveAsset}
+      onAdopt={entry => onRun(async () => { const current = await saved(); return onAction({ action: 'adopt', revision: current.revision, stage: entry.stage, index: entry.index, artifact_id: entry.artifactId, media_hash: entry.mediaHash, confirmed: true }) })} />
     {analysis && <GoalInitialAnalysis analysis={analysis} estimate={goal.estimate.total} disabled={disabled || running || finishing} onChange={setAnalysis}
       onSaveDefaults={() => onRun(async () => { const current = await saved(); return onAction({ action: 'save_defaults', revision: current.revision }) })}
       onAnalyze={() => onRun(async () => { const current = await saved(); return onAction({ action: 'analyze', revision: current.revision }) })} />}

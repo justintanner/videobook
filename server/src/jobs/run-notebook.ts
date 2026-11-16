@@ -1,4 +1,6 @@
 import { withBookContext } from "../book-context.js";
+import { generationReferenceSnapshot } from "../goal-generation-provenance.js";
+import { resolveCellGoalOrigin } from "../goal-generation-history.js";
 import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -1434,6 +1436,13 @@ async function generationTool(
       const output = await engine.artifacts.create({ kind: "image", label: cell.label ?? "Edited image" });
       if (!output.ok) throw new Error(output.error.message);
       const imageAssetId = output.value.artifactId;
+      const origin = resolveCellGoalOrigin(engine, document.id, cell);
+      if (origin) {
+        const input = prepared.imageEdit.jobInput;
+        const references = await generationReferenceSnapshot(engine, { image: [input.sourceArtifactId, ...input.replacementRefs?.map(reference => reference.assetId) ?? []] });
+        const written = await engine.metadata.artifacts.write(imageAssetId, "goal-generation-lineage", { version: 1, origin, references });
+        if (!written.ok) throw new Error(written.error.message);
+      }
       const jobId = `notebook-image-edit-${imageAssetId}`;
       await queue.enqueue(jobId, {
         ...prepared.imageEdit.jobInput,
@@ -1450,6 +1459,7 @@ async function generationTool(
         ...(options.runId ? { runId: options.runId } : {}),
         ...(generationId ? { attemptId: generationId } : {}),
         model: prepared.model,
+        goalOrigin: resolveCellGoalOrigin(engine, document.id, cell),
       }, () => definition.handler(prepared.input));
     }
   } catch (cause) {

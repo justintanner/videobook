@@ -13,6 +13,7 @@ import { tryResolveModel } from "./media/descriptor.js";
 import { generationLabel } from "./artifact-label.js";
 import type { ChainPlacementKind, PinnedChainTarget } from "./chain-plan.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
+import type { GoalGenerationOrigin } from "./goal-generation-provenance.js";
 
 export type ChainGenerationPlacement = {
   producerCellId: string;
@@ -30,6 +31,7 @@ export type ChainGenerationPlacementInput = {
   artifactId: string;
   runId: string;
   pins: readonly PinnedChainTarget[];
+  goalOrigin?: GoalGenerationOrigin;
 };
 
 function producerModel(params: Record<string, unknown>) {
@@ -99,6 +101,7 @@ export async function placeChainGeneration(
         inputs: {
           ...producerSettings(input.params),
           chainRunId: input.runId,
+          ...(input.goalOrigin ? { goalOrigin: input.goalOrigin } : {}),
         },
       });
       const provenance = input.pins.flatMap((pin) => {
@@ -147,6 +150,18 @@ export async function placeChainGeneration(
   const outputCellId = produced.outputCellId;
   if (!producer || !outputCellId) {
     throw new Error(`${input.tool} produced no notebook cell`);
+  }
+  const existing = input.engine.generations.listForCell(input.notebookId, producer.id);
+  if (!existing.ok) throw new Error(existing.error.message);
+  if (!existing.value.some(generation => generation.providerArtifactId === input.artifactId && generation.runId === input.runId)) {
+    const model = producerModel(input.params);
+    const recorded = await input.engine.generations.record({
+      notebookId: input.notebookId, cellId: producer.id, outputCellId, runId: input.runId,
+      tool: input.tool, status: "awaiting_provider", providerArtifactId: input.artifactId,
+      ...(model ? { model: model.id, provider: model.provider } : {}),
+      ...(typeof input.params.prompt === "string" ? { prompt: input.params.prompt, resolvedPrompt: input.params.prompt } : {}),
+    });
+    if (!recorded.ok) throw new Error(recorded.error.message);
   }
   return {
     producerCellId: producer.id,
