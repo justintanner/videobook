@@ -199,7 +199,20 @@ silence. The person never speaks: no dialogue, voiceover, narration, singing
 or music, while natural ambient sound stays. Planned beats call the camera the
 camera, so the person holds a phone only when the brief gives them one.
 
-**AI-tell check.** On request, **Check for AI tells** looks at the frame, or at
+**Output checks.** New analyzed goals run local checks when a selected frame,
+clip or final render becomes ready. They check decoding, current inputs,
+duration and frames, and the final assembly and sound recipe. The initial
+analysis saves action and shot-cut sample times. **Review against brief** is
+an optional paid review of identity, added overlays, action and reveal timing;
+it shows the actual sample times, uncertainty and targeted corrections.
+Physical signs and natural eating are allowed. Samples do not certify every
+frame or audio content. File readiness and brief compliance remain separate.
+The complete image-input price is unavailable, so the review is labelled
+unknown and requires an explicit paid request. Unchanged media and constraints
+reuse the saved review, including refusals, without another paid submission.
+Missing credentials preserve local checks and manual review.
+
+**Earlier AI-tell check.** On saved plans, **Check for AI tells** looks at the frame, or at
 four frames of a clip's new footage, beside the first source image when there
 is one, and lists up to five findings, warnings first: extra or fused fingers,
 garbled text, waxy skin, warped objects, drift from the source image, or mouth

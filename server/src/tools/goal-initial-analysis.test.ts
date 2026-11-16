@@ -293,6 +293,8 @@ describe("initial source-goal analysis", () => {
     expect(await probeVideo(assembled.path)).toMatchObject({ fps: 12, videoDuration: 14, hasAudio: false, width: 180, height: 320 });
     const final = await cleanupSource(engine, goal.finalArtifactId!);
     expect(await probeVideo(final.path)).toMatchObject({ videoDuration: 14, hasAudio: true });
+    await expect.poll(() => readGoal(engine, goal.goalId).quality?.["finish:0"]?.status, { timeout: testBudget(30_000) }).toBe("completed");
+    expect(readGoal(engine, goal.goalId).quality?.["finish:0"]?.result?.technical).toMatchObject({ status: "pass", frameCount: 168, findings: [] });
     expect(stub.submissions).toHaveLength(4);
     expect(goal.finish?.sourceArtifactId).toBe(clip.artifactId);
     expect((await invoke({ ...review, revision: goal.revision, start_seconds: 12 })).finalArtifactId).toBe(goal.finalArtifactId);
@@ -325,6 +327,8 @@ describe("initial source-goal analysis", () => {
     expect(goal.finalArtifactId).not.toBe(firstFinalId);
     expect(goal.finish?.assembledArtifactId).toBe(assembled.artifactId);
     expect((await cleanupSource(engine, goal.finalArtifactId!)).hasAudio).toBe(false);
+    await expect.poll(() => readGoal(engine, goal.goalId).quality?.["finish:0"]?.status, { timeout: testBudget(30_000) }).toBe("completed");
+    expect(readGoal(engine, goal.goalId).quality?.["finish:0"]?.result?.technical.status).toBe("pass");
     const alternate = await engine.artifacts.create("video", "Alternate soundtrack");
     if (!alternate.ok) throw new Error(alternate.error.message);
     const alternateId = alternate.value.artifactId;

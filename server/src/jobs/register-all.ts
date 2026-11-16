@@ -40,6 +40,7 @@ import { registerAnalyzeMusicJob } from "./analyze-music.js";
 import { registerPlanGoalJob } from "./plan-goal.js";
 import { registerPrepareGoalSourceJob } from "./prepare-goal-source.js";
 import { registerCheckGoalRealismJob } from "./check-goal-realism.js";
+import { registerCheckGoalOutputJob } from "./check-goal-output.js";
 import { registerReviseGoalPromptJob } from "./revise-goal-prompt.js";
 import { registerFinishGoalJob } from "./finish-goal.js";
 import { registerLabelMusicSectionsJob } from "./label-music-sections.js";
@@ -137,6 +138,7 @@ export function registerAllJobHandlers(
   registerPlanGoalJob(engine);
   registerPrepareGoalSourceJob(engine);
   registerCheckGoalRealismJob(engine);
+  registerCheckGoalOutputJob(engine);
   registerReviseGoalPromptJob(engine);
   registerFinishGoalJob(engine);
   registerLabelMusicSectionsJob(engine);

@@ -14,6 +14,7 @@ import { goalTitleEstimate } from "./graphics/suggest.js";
 import { goalFinishTitleSlots } from "./goal-finish-settings.js";
 import { goalPreparationStatus } from "./goal-source-preparation.js";
 import { goalGenerationHistory, reviewedGoalOutput, type GoalHistoryEntry } from "./goal-generation-history.js";
+import { reconcileGoalQuality } from "./goal-quality.js";
 
 export const LEGACY_GOAL_MESSAGE = "This goal was made by an earlier /goal. Its images and videos stay in the notebook. Start a new /goal.";
 const SHORT_STALE_MESSAGE = "The frame or an earlier clip changed after this clip was made.";
@@ -138,7 +139,7 @@ function settleRealismChecks(engine: Engine, goal: GoalRecord): GoalRecord {
 export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: NotebookDocument): Promise<GoalRecord> {
   if (!isCurrentShort(goal.planVersion)) return stopLegacyGoal(engine, goal);
   goal = settleRealismChecks(engine, goal);
-  if (["completed", "cancelled", "review"].includes(goal.status)) return goal;
+  if (["completed", "cancelled", "review"].includes(goal.status)) return reconcileGoalQuality(engine, goal);
   if (goal.status === "planning") {
     const job = goal.planningJobId ? engine.jobs.queue.get(goal.planningJobId) : null;
     return job && ["failed", "aborted"].includes(job.state)
@@ -167,7 +168,7 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
   } else {
     next = { ...next, stage, status: "running", error: null };
   }
-  return JSON.stringify(next) === JSON.stringify(goal) ? goal : saveGoal(engine, next);
+  return reconcileGoalQuality(engine, JSON.stringify(next) === JSON.stringify(goal) ? goal : saveGoal(engine, next));
 }
 
 function legacyOutputs(engine: Engine, goal: GoalRecord, document: NotebookDocument) {

@@ -132,7 +132,7 @@ async function runFinish(engine: Engine, payload: FinishPayload, signal: AbortSi
     await assertGoalFinishRecipe(engine, payload.recipe);
     if (payload.recipe.audio === "mute" && probe.hasAudio) throw new Error("The muted finish still contains audio.");
     if (["source", "mix"].includes(payload.recipe.audio) && (!probe.hasAudio || Math.abs((probe.audioDuration ?? 0) - probe.videoDuration) > 0.06)) throw new Error("The finished soundtrack does not cover the final video duration.");
-    const provenance = await engine.files.write(finalArtifactId, "goal-finish.json", JSON.stringify({ ...payload, sourceArtifactId: goal.finish.sourceArtifactId, sourceObjectHash: goal.finish.sourceObjectHash, ...(assembled ? { assembledArtifactId: assembled.artifactId } : {}) }));
+    const provenance = await engine.files.write(finalArtifactId, "goal-finish.json", JSON.stringify({ ...payload, outputHash: file.objectHash, sourceArtifactId: goal.finish.sourceArtifactId, sourceObjectHash: goal.finish.sourceObjectHash, ...(assembled ? { assembledArtifactId: assembled.artifactId } : {}) }));
     if (!provenance.ok) throw new Error(provenance.error.message);
   }
   if (payload.edit) {

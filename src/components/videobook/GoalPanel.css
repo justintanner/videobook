@@ -561,11 +561,26 @@ span.goal-progress-address {
 }
 
 .goal-source-preparation,
-.goal-action-window {
+.goal-action-window,
+.goal-output-quality {
   border: 1px solid var(--color-border, #ffffff25);
   border-radius: 8px;
   padding: 10px;
   min-width: 0;
+}
+
+.goal-output-quality {
+  overflow-wrap: anywhere;
+}
+
+.goal-output-quality .goal-panel-bar {
+  position: static;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.goal-output-quality [data-severity="error"] {
+  color: var(--color-danger, #c33);
 }
 
 .goal-action-window {

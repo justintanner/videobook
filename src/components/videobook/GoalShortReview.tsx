@@ -16,6 +16,7 @@ import { GoalInitialAnalysis } from './GoalInitialAnalysis'
 import { GoalSourcePreparation } from './GoalSourcePreparation'
 import { GoalActionWindow } from './GoalActionWindow'
 import { GoalTakeHistory } from './GoalTakeHistory'
+import { GoalOutputQuality } from './GoalOutputQuality'
 
 type GoalAction = Record<string, unknown>
 type AssetResolver = (artifactId: string) => AssetRecord | null
@@ -134,6 +135,12 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const beatLimit = Math.min(15, 60 - totalSeconds)
   const canAddBeat = !assembly && plan.segments.length < 4 && beatLimit >= 2
   const saved = async () => dirty ? shortSnapshot(await onAction({ action: 'update', revision: goal.revision, plan: draft })) : goal
+  const outputChecks = (stage: 'frame' | 'videos' | 'finish', index: number, artifactId: string, name: string) => {
+    const check = goal.quality?.[`${stage}:${index}`]
+    return <GoalOutputQuality name={name} check={check?.artifactId === artifactId ? check : null} estimate={goal.estimate.quality}
+      disabled={disabled || running || finishing || dirty || goal.status === 'cancelled'}
+      onCheck={semantic => onRun(() => onAction({ action: 'check_output', revision: goal.revision, stage, index, semantic }))} />
+  }
   const revisingName = (stage: GoalGenerationStage, index: number) => ({ storyboards: `the clean-up of storyboard ${index + 1}`, replacement: 'the character replacement', frame: remix ? 'the twist' : 'the frame prompt', videos: `beat ${index + 1}` })[stage]
   const generate = (action: 'approve' | 'regenerate' | 'revise', stage: GoalGenerationStage, index = 0, note?: string, model?: string) => onRun(async () => {
     const current = await saved()
@@ -163,7 +170,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   return <div className="goal-editor goal-simple goal-short" data-review={view}>
     <GoalTakeHistory entries={goal.generationHistory ?? []} revision={goal.revision} disabled={disabled || running || finishing || goal.status === 'cancelled'} resolveAsset={resolveAsset}
       onAdopt={entry => onRun(async () => { const current = await saved(); return onAction({ action: 'adopt', revision: current.revision, stage: entry.stage, index: entry.index, artifact_id: entry.artifactId, media_hash: entry.mediaHash, confirmed: true }) })} />
-    {analysis && <GoalInitialAnalysis analysis={analysis} estimate={goal.estimate.total} disabled={disabled || running || finishing} onChange={setAnalysis}
+    {analysis && <GoalInitialAnalysis analysis={analysis} estimate={goal.estimate.total} qualityEstimate={goal.estimate.quality} disabled={disabled || running || finishing} onChange={setAnalysis}
       onSaveDefaults={() => onRun(async () => { const current = await saved(); return onAction({ action: 'save_defaults', revision: current.revision }) })}
       onAnalyze={() => onRun(async () => { const current = await saved(); return onAction({ action: 'analyze', revision: current.revision }) })}
       onRefreshFinish={() => onRun(async () => { const current = await saved(); return onAction({ action: 'refresh_finish', revision: current.revision }) })} />}
@@ -226,7 +233,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
       {imageOutput && <GoalMedia artifactId={imageOutput.artifactId} cellId={imageOutput.cellId} label={imageName} resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
       {imageOutput?.stale && <p role="status" className="goal-panel-warning">{imageOutput.stale}</p>}
       {imageOutput && <div className="goal-versions" aria-label={`${imageName} versions`}>{versions(imageStage, 0, imageName)}</div>}
-      {imageOutput && !replacing && <RealismCheck name={imageName.toLowerCase()} check={imageOutput.realism} disabled={disabled} onCheck={() => onRun(() => onAction({ action: 'check', stage: 'frame', index: 0 }))} />}
+      {imageOutput && !replacing && (analysis?.recipe.outputAssertions ? outputChecks('frame', 0, imageOutput.artifactId, imageName.toLowerCase()) : <RealismCheck name={imageName.toLowerCase()} check={imageOutput.realism} disabled={disabled} onCheck={() => onRun(() => onAction({ action: 'check', stage: 'frame', index: 0 }))} />)}
       {imageOutput && !replacing && <p className="goal-panel-muted">{REALISM_NOTE}</p>}
       <label><span>Title</span><input aria-label="Short title" value={title} maxLength={120} disabled={disabled || finishing} onChange={event => setTitle(event.target.value)} /></label>
       <GoalPromptInput label={`${imageName} prompt`} value={replacing ? replacementPrompt : framePrompt} wordLimit={SHORT_WORD_CEILINGS.frame} disabled={disabled || finishing} onChange={replacing ? setReplacementPrompt : setFramePrompt} />
@@ -259,7 +266,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
           {output && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'videos', index)}>Regenerate clip {index + 1}</button>}
           {output && <label><span>Revise clip {index + 1}</span><textarea aria-label={`Clip ${index + 1} feedback`} value={clipFeedback[index] ?? ''} maxLength={2000} rows={2} disabled={!canGenerate} onChange={event => setClipFeedback(current => ({ ...current, [index]: event.target.value }))} /></label>}
           {output && <button type="button" className="goal-panel-button" disabled={!canGenerate || !clipFeedback[index]?.trim()} onClick={() => generate('revise', 'videos', index, clipFeedback[index]?.trim())}>Revise clip {index + 1} · {shortEstimateText(goal.estimate.segments?.[index])}</button>}
-          {output && <RealismCheck name={`clip ${index + 1}`} check={output.realism} disabled={disabled} onCheck={() => onRun(() => onAction({ action: 'check', stage: 'videos', index }))} />}
+          {output && (analysis?.recipe.outputAssertions ? outputChecks('videos', index, output.artifactId, `clip ${index + 1}`) : <RealismCheck name={`clip ${index + 1}`} check={output.realism} disabled={disabled} onCheck={() => onRun(() => onAction({ action: 'check', stage: 'videos', index }))} />)}
         </li>
       })}</ol>
       {clips.length > 0 && <p className="goal-panel-muted">{REALISM_NOTE}</p>}
@@ -283,6 +290,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
       {finishFailed && <p role="alert">{goal.finish?.error ?? 'Finishing failed'}</p>}
       {finishFailed && workingAsset?.mediaUrl && <video className="goal-video-preview" aria-label="Unfinished local render" src={workingAsset.mediaUrl} controls preload="metadata" />}
       {goal.finalArtifactId && finalAsset?.mediaUrl && <video className="goal-video-preview" aria-label="Finished short" src={finalAsset.mediaUrl} poster={finalAsset.thumbnailUrl ?? undefined} controls preload="metadata" />}
+      {goal.finalArtifactId && analysis?.recipe.outputAssertions && outputChecks('finish', 0, goal.finalArtifactId, 'finished short')}
       {!finishing && !goal.finalArtifactId && sourceAsset?.mediaUrl && <video className="goal-video-preview" aria-label="Reviewed take" src={sourceAsset.mediaUrl} poster={sourceAsset.thumbnailUrl ?? undefined} controls preload="metadata" />}
       <p className="goal-panel-muted">{assembly ? 'Finish keeps the source shots outside the changed interval and inserts the reviewed action window, then applies the selected sound and saved watermark.' : 'Finish keeps the reviewed take and burns the saved watermark.'}</p>
       {!finishing && sourceId && !sourceAsset?.mediaUrl && <p role="status">The short is not playable yet.</p>}

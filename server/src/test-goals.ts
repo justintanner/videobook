@@ -42,11 +42,7 @@ async function completeGoalProviderJob(engine: Engine, artifactId: string): Prom
   const job = goalProviderJob(engine, artifactId);
   let current = job;
   if (current.state === "queued") {
-    let leased = engine.jobs.queue.dequeue(process.pid, 60_000);
-    while (leased?.type === "process_image") {
-      await engine.jobs.queue.complete(leased.id, { result: { settled: true } });
-      leased = engine.jobs.queue.dequeue(process.pid, 60_000);
-    }
+    const leased = engine.jobs.queue.dequeue(process.pid, testBudget(60_000), [], [job.type]);
     if (!leased || leased.id !== job.id) throw new Error(`leased ${leased?.type ?? "nothing"} instead of ${job.type}`);
     current = leased;
   }

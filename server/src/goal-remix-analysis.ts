@@ -191,8 +191,15 @@ export async function buildRemixAnalysis(engine: Engine, input: {
   const change = localized && alignedAction ? [alignedAction] : [{ start: 0, end: totalSeconds }];
   const generatedSeconds = Math.max(0.92, Math.ceil(change.reduce((sum, range) => sum + range.end - range.start, 0) * 100) / 100);
   if (assembly && generatedSeconds > 15) findings.push({ code: "action-duration", severity: "error", text: "H3 Max supports a changed clip of 0.92–15 seconds. Shorten the changed interval or choose full regeneration with multiple beats." });
-  const checkTimes = [...new Set([0, ...source?.cuts ?? [], ...(action ? [Math.max(0, action.start - 0.1), action.start + 0.1, (action.start + action.end) / 2, action.end - 0.1] : [totalSeconds / 2]), totalSeconds - 0.1])]
-    .filter(time => time >= 0 && time < totalSeconds).sort((left, right) => left - right);
+  const sampleStep = Math.min(0.1, alignedAction ? (alignedAction.end - alignedAction.start) / 4 : 0.1);
+  const actionTimes = [0, ...(alignedAction ? [alignedAction.start - sampleStep, alignedAction.start + sampleStep, (alignedAction.start + alignedAction.end) / 2,
+    alignedAction.end - sampleStep, alignedAction.end + sampleStep] : [totalSeconds / 2]), totalSeconds - sampleStep];
+  const checkTimes = [...new Set(actionTimes)].filter(time => time >= 0 && time < totalSeconds);
+  const cutTimes = [...new Set((source?.cuts ?? []).flatMap(time => [time - sampleStep, time + sampleStep]))]
+    .filter(time => time >= 0 && time < totalSeconds && !checkTimes.includes(time));
+  const remainingSamples = Math.min(12 - checkTimes.length, cutTimes.length);
+  for (let index = 0; index < remainingSamples; index += 1) checkTimes.push(cutTimes[Math.floor(index * cutTimes.length / remainingSamples)]!);
+  checkTimes.sort((left, right) => left - right);
   return goalRemixAnalysisSchema.parse({
     version: 1, brief: input.brief, preferences, source, intent,
     recipe: { targetSeconds: totalSeconds, sourceFrameSeconds: frameSeconds, keep, change, generatedSeconds, assembly,
@@ -205,6 +212,7 @@ export async function buildRemixAnalysis(engine: Engine, input: {
       cleanupModelReady: models?.lama ?? false, cleanupMethod: preferences.cleanupMethod, templateId: branding.template?.id ?? branding.starterId,
       templateRevision: branding.template?.updatedAt ?? null, branding,
       soundtrack: source ? { artifactId: source.artifactId, mediaHash: source.mediaHash, startSeconds: 0, durationSeconds: source.durationSeconds, hasAudio: source.hasAudio } : null,
+      outputAssertions: { version: 1, checks: ["decode", "current-inputs", "duration", "frame-count", "geometry", "audio", "identity", "overlays", "action", ...(assembly ? ["kept-source", "reveal"] : [])] },
       checkTimes },
     history: await relatedHistory(engine, input.notebookId, source), findings, analyzedAt: new Date().toISOString(),
   });

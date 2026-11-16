@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { GoalShortReview } from '../../src/components/videobook/GoalShortReview'
 import { GoalComposerStatus } from '../../src/components/videobook/GoalComposerStatus'
 import { GoalPanel } from '../../src/components/videobook/GoalPanel'
+import { GoalOutputQuality } from '../../src/components/videobook/GoalOutputQuality'
 import type { AssetRecord } from '../../src/videobook/workspace-responses'
 import type { NodeProps } from '@xyflow/react'
 import { GoalCellNode } from '../../src/components/videobook/GoalCellNode'
@@ -39,6 +40,24 @@ function button(html: string, label: string): string {
 const withFrame = { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', versions: 2 }]) }
 
 describe('GoalShortReview', () => {
+  it('distinguishes playable output from unverified compliance and shows the reviewed times and correction', () => {
+    const html = renderToStaticMarkup(createElement(GoalOutputQuality, {
+      name: 'clip 1', disabled: false, onCheck: () => undefined,
+      check: { status: 'completed', key: 'checked', artifactId: 'clip-a', mediaHash: 'hash', stage: 'videos', index: 0, semantic: true, jobId: null, error: null,
+        result: { technical: { status: 'pass', findings: [], durationSeconds: 14, frameCount: 420 },
+          semantic: { status: 'unverified', attempted: true, model: 'reviewer', sampleTimes: [11.9, 12.1, 13.9], findings: [
+            { code: 'action', severity: 'review', atSeconds: 13.9, text: 'The bite target is hidden.', correction: 'Review the action take before finishing.' },
+          ] }, checkedAt: '2026-11-16T00:00:00Z' } },
+    }))
+    expect(html).toContain('File checks: Passed')
+    expect(html).toContain('Brief compliance: Unverified')
+    expect(html).toContain('11.90s, 12.10s, 13.90s')
+    expect(html).toContain('Review the action take before finishing.')
+    expect(html).toContain('without another submission')
+    expect(button(html, 'Review against brief')).toContain('disabled')
+    expect(html).not.toContain('No AI tells')
+  })
+
   it('shows the resolved analysis and insertion workflow and keeps a parsed plan clean on first render', () => {
     const analysis = goalRemixAnalysisSchema.parse({
       version: 1, brief: 'Keep the montage and insert the person for the last two seconds.', preferences: {}, source: null,

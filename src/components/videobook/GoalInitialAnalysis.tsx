@@ -6,6 +6,7 @@ import { shortEstimateText } from '@/videobook/goals'
 type Props = {
   analysis: GoalRemixAnalysis
   estimate: GoalEstimate
+  qualityEstimate?: GoalEstimate
   disabled: boolean
   onChange: (analysis: GoalRemixAnalysis) => void
   onSaveDefaults: () => void
@@ -25,7 +26,7 @@ function ranges(values: readonly { start: number; end: number }[]): string {
   return values.map(value => `${value.start.toFixed(2)}–${value.end.toFixed(2)}s`).join(', ') || 'None'
 }
 
-export function GoalInitialAnalysis({ analysis, estimate, disabled, onChange, onSaveDefaults, onAnalyze, onRefreshFinish }: Props) {
+export function GoalInitialAnalysis({ analysis, estimate, qualityEstimate, disabled, onChange, onSaveDefaults, onAnalyze, onRefreshFinish }: Props) {
   const { intent, source, recipe, findings } = analysis
   const update = <Key extends keyof GoalRemixAnalysis['intent']>(key: Key, value: GoalRemixAnalysis['intent'][Key]) => {
     onChange({ ...analysis, intent: { ...intent, [key]: value } })
@@ -48,8 +49,11 @@ export function GoalInitialAnalysis({ analysis, estimate, disabled, onChange, on
       <label>Action ends<input aria-label="Action end seconds" type="number" min="0" max={recipe.targetSeconds} step="0.01" value={intent.action?.end ?? ''} onChange={event => setBoundary('end', event.target.value)} /></label>
       <label className="goal-analysis-switch"><input type="checkbox" checked={intent.noDialogue} onChange={event => update('noDialogue', event.target.checked)} />No new dialogue</label>
       <label className="goal-analysis-switch"><input type="checkbox" checked={analysis.preferences.branding} onChange={event => onChange({ ...analysis, preferences: { ...analysis.preferences, branding: event.target.checked } })} />Apply saved branding</label>
+      {recipe.outputAssertions && <label className="goal-analysis-switch"><input type="checkbox" checked={analysis.preferences.semanticChecks} onChange={event => onChange({ ...analysis, preferences: { ...analysis.preferences, semanticChecks: event.target.checked } })} />Require sampled visual review before automatic continuation</label>}
     </fieldset>
     <p className="goal-panel-muted">Saved recipe: keep {ranges(recipe.keep)} · change {ranges(recipe.change)} · generate {recipe.generatedSeconds}s.</p>
+    {recipe.outputAssertions && <p className="goal-panel-muted">File checks run locally when an output is ready. Final visual samples are planned at {recipe.checkTimes.map(time => `${time.toFixed(2)}s`).join(', ')} around shot cuts and the action. A playable file does not prove that it meets the brief.</p>}
+    {recipe.outputAssertions && qualityEstimate && <p className="goal-panel-muted">Optional visual review: {qualityEstimate.warnings.join(' ')}</p>}
     {recipe.assembly && <p className="goal-panel-muted">Retain {(recipe.assembly.changeEndFrame - recipe.assembly.changeStartFrame) / recipe.assembly.fps}s of the generated action after review. Assemble {recipe.assembly.totalFrames} frames at {recipe.assembly.fps.toFixed(3)} fps, {recipe.assembly.width} × {recipe.assembly.height}, with straight cuts and the selected sound policy. Generated footage fits inside the source frame. Finishing checks frame count, duration, decoding and current inputs.</p>}
     {source && <p className="goal-panel-muted">Reference: {recipe.reference ? ranges([recipe.reference]) : 'Choose a reference'} · {recipe.cleanupRegions.length} proposed removal regions · {recipe.templateId ? 'Saved branding selected' : 'Default branding'}.</p>}
     <p className="goal-panel-muted">Sound: {audioNames[intent.audio]}.{(intent.audio === 'source' || intent.audio === 'mix') && ` Soundtrack from ${(recipe.soundtrack?.startSeconds ?? 0).toFixed(2)}s maps to the beginning of the final video; trim excess audio and pad a short track with silence.${intent.audio === 'source' ? ' Generated sound is muted.' : ''}`}</p>

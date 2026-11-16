@@ -24,6 +24,7 @@ import { goalBrandingFindings } from "./goal-finish-model.js";
 import { goalReferenceHashes } from "./goal-reference-images.js";
 import { goalStageAttempts } from "./goal-stills.js";
 import { goalGenerationHistory, goalHistoryInputProblem, reviewedGoalOutput, type GoalHistoryEntry } from "./goal-generation-history.js";
+import { goalQualityEstimate } from "./goal-quality.js";
 import {
   activeGoalStage, createGoalShortCell, emptyGoalEstimates, readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent,
   type GoalEstimate, type GoalEstimates, type GoalFinish, type GoalGenerationStage, type GoalRecord, type GoalShortContent, type GoalStageOutput,
@@ -197,7 +198,9 @@ export async function estimateShort(engine: Engine, plan: GoalShortPlan, short: 
   const storyboards = summed(storyboardFrames);
   const videos = summed(segments);
   const title = goalTitleEstimate({ brief: short.brief, draft: short.draft, plan });
-  return { frame, storyboards, videos, total: summed([storyboards, ...(replacement ? [replacement] : []), frame, videos]), segments, ...(replacement ? { replacement } : {}), ...(storyboard ? { storyboardFrames, storyboardFallbackFrames } : {}), title };
+  const quality = plan.version === 5 && plan.analysis?.recipe.outputAssertions ? goalQualityEstimate(plan) : null;
+  return { frame, storyboards, videos, total: summed([storyboards, ...(replacement ? [replacement] : []), frame, videos,
+    ...(quality && plan.version === 5 && plan.analysis?.preferences.semanticChecks ? [quality] : [])]), segments, ...(replacement ? { replacement } : {}), ...(quality ? { quality } : {}), ...(storyboard ? { storyboardFrames, storyboardFallbackFrames } : {}), title };
 }
 
 export async function shortFingerprint(

@@ -3,6 +3,7 @@ import { firstEmptyNotebookGridSlot, notebookOccupiedSlots } from "videobook-eng
 import { goalShortDraftSchema, goalShortPlanSchema, isLegacyShortDraft, isLegacyShortPlan, type GoalShortDraft, type GoalShortPlan, type ShortStoryboardModel } from "./goal-short-plan.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
+import type { GoalOutputCheck } from "./goal-quality-model.js";
 
 export type GoalStatus = "planning" | "review" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 export type GoalGenerationStage = "storyboards" | "replacement" | "frame" | "videos";
@@ -10,6 +11,7 @@ export type GoalGenerationStage = "storyboards" | "replacement" | "frame" | "vid
 export type GoalEstimate = { usd: number | null; warnings: string[] };
 export type GoalEstimates = Record<Exclude<GoalGenerationStage, "replacement"> | "total", GoalEstimate> & {
   replacement?: GoalEstimate;
+  quality?: GoalEstimate;
   segments?: GoalEstimate[]; storyboardFrames?: GoalEstimate[]; storyboardFallbackFrames?: GoalEstimate[]; title?: GoalEstimate;
 };
 export type GoalStageOutput = { index: number; artifactId: string; cellId: string | null; producerCellId: string | null; address: string | null };
@@ -129,6 +131,7 @@ export type GoalRecord = {
   combined?: GoalCombinedVideo;
   finish?: GoalFinish | null;
   realism?: Record<string, GoalRealismCheck>;
+  quality?: Record<string, GoalOutputCheck>;
   resumeStage?: GoalGenerationStage | null;
   resumeStatus?: "review" | "completed" | null;
   resumeOutputs?: GoalStageOutput[] | null;
@@ -206,6 +209,7 @@ function estimatesFrom(value: unknown): GoalEstimates {
   return {
     frame: estimateFrom(record.frame), storyboards: estimateFrom(record.storyboards), videos: estimateFrom(record.videos), total: estimateFrom(record.total),
     ...(record.replacement ? { replacement: estimateFrom(record.replacement) } : {}),
+    ...(record.quality ? { quality: estimateFrom(record.quality) } : {}),
     ...(Array.isArray(record.segments) ? { segments: record.segments.map(estimateFrom) } : {}),
     ...(Array.isArray(record.storyboardFrames) ? { storyboardFrames: record.storyboardFrames.map(estimateFrom) } : {}),
     ...(Array.isArray(record.storyboardFallbackFrames) ? { storyboardFallbackFrames: record.storyboardFallbackFrames.map(estimateFrom) } : {}),
