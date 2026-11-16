@@ -709,6 +709,27 @@ describe("generic media generation", () => {
     expect(toolError(result)).toMatch(/requires at least 1 image ref/);
   });
 
+  it("measures fal H3 references before enqueue and execution, including missing or stale metadata", async () => {
+    const book_id = engine.book.get().bookId;
+    const model = "fal:minimax/h3-max/reference-to-video";
+    const source = await probedVideoArtifact(longClip);
+    await engine.metadata.artifacts.write(source, "original", { duration: 6 });
+    const input = { book_id, model, prompt: "Follow @video1", options: { duration: 2 } };
+    const before = engine.artifacts.list().length;
+    const call = (refs: Record<string, string[]>) => client.callTool({ name: "generate_video", arguments: { ...input, refs } });
+    expect(toolError(await call({ video: [source] }))).toMatch(/is 17 s; .* accepts 2-15 s/);
+    expect(toolError(await call({ video: ["https://example.test/unchecked.mp4"] }))).toContain("Import the video reference");
+    expect(engine.artifacts.list()).toHaveLength(before);
+    await engine.files.writeFromPath(source, "original.mp4", shortClip);
+    expect(toolError(await call({ video: [source, source, source] }))).toContain("refs total 18 s");
+    const accepted = toolJson(await call({ video: [source] }));
+    const job = queuedJob(String(accepted.asset_id));
+    expect(job.refs.video).toEqual([source]);
+    await engine.files.writeFromPath(source, "original.mp4", longClip);
+    await expect(runGenerateMedia(engine, job, await ownerContext(job.assetId))).rejects.toThrow(/is 17 s/);
+    expect(requests).toHaveLength(0);
+  });
+
   it("rejects invalid H3 insertion windows before creating or uploading media", async () => {
     const book_id = engine.book.get().bookId;
     const source = await probedVideoArtifact(shortClip);

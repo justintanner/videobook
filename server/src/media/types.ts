@@ -75,6 +75,7 @@ export interface RefDurationWindowMs {
   minimum: number;
   maximum: number;
   maximumTotal: number;
+  measured?: boolean;
 }
 
 export interface InputRules {

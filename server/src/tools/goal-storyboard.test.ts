@@ -8,7 +8,7 @@ import type { Client } from "@modelcontextprotocol/client";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { getChainRun, waitForChainRun, type ChainRunRecord } from "../chain-executor.js";
 import { createEngineForTest } from "../engine.js";
-import { buildGoalShortPlan, formatShortSeconds } from "../goal-short-plan.js";
+import { buildGoalShortPlan } from "../goal-short-plan.js";
 import { captureStoryboardFrames, shortStoryboard, videoStoryboardMoments } from "../goal-short-storyboard.js";
 import { briefMention } from "../goal-short-references.js";
 import { estimateShort, shortFingerprint } from "../goal-short-runtime.js";
@@ -142,6 +142,13 @@ describe("video_goal storyboard stage", () => {
 
   const status = (goalId: string) => invoke({ action: "status", goal_id: goalId });
 
+  async function planned(goal: ShortGoalSnapshot): Promise<ShortGoalSnapshot> {
+    await expect.poll(() => readGoal(engine, goal.goalId).status, { timeout: testBudget(30_000) }).not.toBe("planning");
+    const current = await status(goal.goalId);
+    expect(current.status, current.error ?? "").toBe("review");
+    return current;
+  }
+
   async function short(brief: string): Promise<ShortGoalSnapshot> {
     if (!brief.includes("@b1")) return status((await invoke({ action: "create", brief, request_id: uuidv7() })).goalId);
     const reference = await briefMention(engine, notebookId, "@a2", {});
@@ -204,11 +211,10 @@ describe("video_goal storyboard stage", () => {
     stub.plannerAnswers = [PLAN];
     const planning = await invoke({ action: "create", brief: `${UMBRELLA}, cut like @b2` });
     expect(planning).toMatchObject({ planVersion: 5, status: "planning", stage: "replacement", legacy: false });
+    const goal = await planned(planning);
     const [cell] = rawFrameCells();
     expect(rawFrameCells()).toHaveLength(1);
     expect(cell).toMatchObject({ type: "image", inputs: { sourceArtifactId: videoId, sourceCellId: videoCellId, frameMode: "time", atSeconds: 3 } });
-    await expect.poll(() => readGoal(engine, planning.goalId).status, { timeout: testBudget(30_000) }).toBe("review");
-    const goal = await status(planning.goalId);
     expect(goal).toMatchObject({ stage: "replacement", status: "review", error: null, storyboard: null });
     const plan = goal.shortPlan!;
     if (plan.version !== 5 || !plan.remix) throw new Error("expected a remix");
@@ -218,16 +224,15 @@ describe("video_goal storyboard stage", () => {
     expect(goal.estimate.replacement?.usd).toBe(0.21);
     expect(goal.estimate.storyboards.usd).toBe(0);
     expect(goal.estimate.total.usd).toBeCloseTo(0.42 + goal.estimate.videos.usd!);
-    expect(goal.notes.join(" ")).toContain("one source frame");
+    expect(goal.notes.join(" ")).toContain("Prepared the source frame");
     expect(goal.notes.join(" ")).toContain("source frame comes from the first video");
     const request = stub.plannerRequests[0] as PlannerRequest;
     const content = request.input[0]!.content;
-    expect(content.filter(part => part.type === "input_image")).toHaveLength(2);
-    expect(content.filter(part => part.type === "input_text").slice(1).map(part => part.text)).toEqual([
-      "Source image 1: Character 2", `Extracted source frame at ${formatShortSeconds(plan.remix.frame.atSeconds)} s`,
-    ]);
-    expect(request.instructions).toContain("physically plausible");
-    expect(request.instructions).toContain("WUT!");
+    expect(content.filter(part => part.type === "input_image").length).toBeGreaterThanOrEqual(7);
+    expect(content.filter(part => part.type === "input_image").length).toBeLessThanOrEqual(9);
+    expect(content.filter(part => part.type === "input_text").slice(1).map(part => part.text)).toContain("Source image 1: Character 2");
+    expect(request.instructions).toContain("timestamped source samples");
+    expect(request.instructions).toContain("Do not invent details between samples");
     expect(JSON.parse(content[0]!.text!)).toMatchObject({ write: ["title", "replacement", "frame", "beat 1"] });
     expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: goal.revision, stage: "frame" })).toContain("Replace the character first");
     expect(chainRuns()).toBe(0);
@@ -237,7 +242,7 @@ describe("video_goal storyboard stage", () => {
 
   it("reviews replacement, twist and video separately, pins each input and invalidates later results when an earlier edit changes", async () => {
     const brief = 'based on @b1 at 1.5s with @a2. replace: "Use the man in the source image." twist: "Replace the dog with a monitor lizard under the umbrella." video: "The lizard walks and the man follows with the umbrella."';
-    let goal = await invoke({ action: "create", brief });
+    let goal = await planned(await invoke({ action: "create", brief }));
     expect(rawFrameCells()).toHaveLength(1);
     expect(rawFrameCells()[0]!.inputs?.atSeconds).toBe(1.5);
     expect(goal.shortPlan!.segments.map(segment => segment.seconds)).toEqual([12]);
@@ -291,7 +296,7 @@ describe("video_goal storyboard stage", () => {
   }, testBudget(90_000));
 
   it("repairs a saved first-frame-only video retry without rerunning the reviewed image edits", async () => {
-    let goal = await invoke({ action: "create", brief: 'based on @b1 with @a2. replace: "Use the reference man." twist: "Put a lizard under the umbrella." video: "The man follows the lizard in the last two seconds."' });
+    let goal = await planned(await invoke({ action: "create", brief: 'based on @b1 with @a2. replace: "Use the reference man." twist: "Put a lizard under the umbrella." video: "The man follows the lizard in the last two seconds."' }));
     goal = await approved(await approved(goal));
     const replacement = goal.stages.replacement!.outputs[0]!;
     const twist = goal.stages.frame!.outputs[0]!;

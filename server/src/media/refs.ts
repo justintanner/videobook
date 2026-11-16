@@ -173,9 +173,15 @@ function seconds(ms: number): string {
   return String(Math.round(ms / 100) / 10);
 }
 
-async function knownDurationMs(engine: Engine, role: TimedRole, raw: string): Promise<number | undefined> {
+async function knownDurationMs(engine: Engine, role: TimedRole, raw: string, measured = false): Promise<number | undefined> {
   if (isHttpUrl(raw)) return undefined;
   const input = await resolveRefInput(engine, role, raw);
+  if (measured) {
+    const manifest = await engine.files.manifest(input.assetId);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    const probe = await probeVideo(join(manifest.value.path, input.filename));
+    return Math.round((role === "video" ? probe.videoDuration : probe.duration) * 1000);
+  }
   if (!input.filename.startsWith("original")) return undefined;
   const meta = await engine.metadata.artifacts.read<{ duration?: unknown }>(input.assetId, "original");
   const duration = meta.ok ? meta.value?.duration : undefined;
@@ -190,8 +196,11 @@ function clipError(modelId: string, role: TimedRole, raw: string, ms: number, wi
 async function checkRoleDurations(engine: Engine, modelId: string, role: TimedRole, raws: readonly string[], window: RefDurationWindowMs): Promise<string | null> {
   let total = 0;
   for (const raw of raws) {
-    const ms = await knownDurationMs(engine, role, raw);
-    if (ms === undefined) continue;
+    const ms = await knownDurationMs(engine, role, raw, window.measured);
+    if (ms === undefined) {
+      if (window.measured) return `Import the ${role} reference into this book so its ${seconds(window.minimum)}-${seconds(window.maximum)} s duration can be checked before submission.`;
+      continue;
+    }
     const error = clipError(modelId, role, raw, ms, window);
     if (error) return error;
     total += ms;
@@ -201,12 +210,13 @@ async function checkRoleDurations(engine: Engine, modelId: string, role: TimedRo
     : null;
 }
 
-export async function checkRefDurations(engine: Engine, model: ResolvedModel, refs: MediaRefs): Promise<string | null> {
+export async function checkRefDurations(engine: Engine, model: ResolvedModel, refs: MediaRefs, fieldRefs: FieldRefs = {}): Promise<string | null> {
   const windows = model.entry.rules?.refDurationMs;
   if (!windows) return null;
   for (const role of ["video", "audio"] as const) {
     const window = windows[role];
-    const error = window ? await checkRoleDurations(engine, model.id, role, refs[role] ?? [], window) : null;
+    const fields = model.fieldSlots.filter(slot => slot.kind === role).flatMap(slot => fieldRefs[slot.field] ?? []);
+    const error = window ? await checkRoleDurations(engine, model.id, role, [...refs[role] ?? [], ...fields], window) : null;
     if (error) return error;
   }
   return null;

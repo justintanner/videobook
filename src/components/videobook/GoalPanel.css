@@ -474,3 +474,46 @@ span.goal-progress-address {
 }
 
 .goal-title-option:disabled { opacity: 0.5; cursor: default; }
+.goal-initial-analysis {
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.goal-initial-analysis > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.goal-analysis-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 10px;
+  border: 0;
+  padding: 10px 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.goal-analysis-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.goal-analysis-fields select,
+.goal-analysis-fields input[type="number"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.goal-analysis-fields .goal-analysis-switch {
+  flex-direction: row;
+  align-items: center;
+}
+
+.goal-initial-analysis [data-severity="error"] {
+  color: var(--color-danger, #c33);
+}

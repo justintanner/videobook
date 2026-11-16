@@ -124,7 +124,7 @@ async function validate(engine: Engine, model: ResolvedModel, args: Record<strin
     ?? (await checkInsertVideoTiming(engine, model, refs, optionsOf(args.options)))
     ?? (await checkReframeVideoGeometry(engine, model, refs, built.input))
     ?? (await checkSeedanceEditSource(engine, model, refs, args.mode))
-    ?? checkRefDurations(engine, model, refs);
+    ?? checkRefDurations(engine, model, refs, fieldRefs);
 }
 
 async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Record<string, unknown>, refs: MediaRefs): Promise<ToolResult> {

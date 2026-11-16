@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,6 +10,7 @@ import type { Engine } from "videobook-engine";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createEngineForTest } from "../engine.js";
+import { createApp } from "../app.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { pauseBookQueueForTests, resumeBookQueueForTests, waitForBookQueuesIdleForTests } from "../queue.js";
 import { createTestClient } from "../test-client.js";
@@ -21,7 +23,7 @@ const exec = promisify(execFile);
 const REGION: CleanupRegion = { id: "title", x: 0.09, y: 0.4, width: 0.82, height: 0.25, start: 0.5, end: 1.5 };
 const MODEL_TEST = process.env.VIDEOBOOK_RUN_CLEANUP_MODELS === "1";
 type Read = { source: { source_hash: string }; detection: { status: string; jobId: number | null; value: { regions: CleanupRegion[] } | null } };
-type Rendered = { request_id: string; job_id: number; status: string; output_asset_id: string; cell_id: string | null; error: string | null };
+type Rendered = { request_id: string; job_id: number; status: string; output_asset_id: string; cell_id: string | null; error: string | null; progress: { completedFrames: number; totalFrames: number; elapsedSeconds: number } | null };
 
 describe("remove_video_graphics", () => {
   let root = "", fixture = "", bookId = "", assetId = "", notebookId = "";
@@ -62,6 +64,7 @@ describe("remove_video_graphics", () => {
     await waitForBookQueuesIdleForTests({ budgetMs: testBudget(180_000) });
     const done = await call<Rendered>({ op: "status", request_id: args.request_id });
     expect(done.status, done.error ?? "").toBe("completed");
+    expect(done.progress).toMatchObject({ completedFrames: 12, totalFrames: 12 });
     return done;
   }
 
@@ -187,9 +190,55 @@ describe("remove_video_graphics", () => {
     expect(regions.length).toBeGreaterThan(0);
     expect(regions[0]!.start).toBe(0.5);
     expect(regions[0]!.end).toBe(1.5);
-    const done = await render("lama", regions);
+    const app = createApp({ ui: false });
+    const server = app.app.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Missing test server port");
+    let running = true;
+    const latencies: number[] = [];
+    const health = (async () => {
+      while (running) {
+        const started = performance.now();
+        const response = await fetch(`http://127.0.0.1:${address.port}/healthz`);
+        expect(response.status).toBe(200);
+        await response.arrayBuffer();
+        latencies.push(performance.now() - started);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    })();
+    let done: Rendered;
+    try {
+      done = await render("lama", regions);
+    } finally {
+      running = false;
+      await health;
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      await app.mcpHandler.close();
+    }
+    expect(latencies.length).toBeGreaterThan(5);
+    expect(Math.max(...latencies)).toBeLessThan(1000);
     expect(await whitePixels(await path(done.output_asset_id), 1)).toBeLessThan(30);
+    const audio = (file: string) => ffmpeg(["-i", file, "-map", "0:a", "-c", "copy", "-f", "md5", "pipe:1"]);
+    expect((await audio(await path(done.output_asset_id))).toString()).toBe((await audio(fixture)).toString());
+    expect(await readFile(await path(assetId))).toEqual(await readFile(fixture));
   }, testBudget(240_000));
+
+  it.runIf(MODEL_TEST)("cancels running model inference after reporting frame progress", async () => {
+    const read = await call<Read>({ op: "get" });
+    const requestId = randomUUID();
+    const queued = await call<Rendered>({ op: "render", method: "lama", source_hash: read.source.source_hash, request_id: requestId, regions: [REGION] });
+    await expect.poll(async () => (await call<Rendered>({ op: "status", request_id: requestId })).progress?.completedFrames ?? 0,
+      { timeout: testBudget(120_000) }).toBeGreaterThan(3);
+    const started = performance.now();
+    await client.callTool({ name: "cancel_job", arguments: { book_id: bookId, job_id: queued.job_id } });
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(15_000) });
+    expect(performance.now() - started).toBeLessThan(testBudget(10_000));
+    expect((await call<Rendered>({ op: "status", request_id: requestId })).status).toBe("failed");
+    const manifest = await engine.files.manifest(queued.output_asset_id);
+    expect(manifest.ok && manifest.value.files.some(file => file.name === "original.mp4")).toBe(false);
+    expect(await readFile(await path(assetId))).toEqual(await readFile(fixture));
+  }, testBudget(180_000));
 });
 
 describe("timed removal regions", () => {

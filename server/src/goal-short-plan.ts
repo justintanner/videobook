@@ -5,6 +5,7 @@ import type { ChainStep } from "./chain-plan.js";
 import { LEGACY_SHORT_SILENCE, SHORT_RULES } from "./goal-short-rules.js";
 import { MAX_GRAPHICS_TEXT_LENGTH } from "./graphics/model.js";
 import { LIGHTNING_WATERMARK_PROFILE } from "./lightning-defaults.js";
+import { goalRemixAnalysisSchema, remixPreferencesSchema, remixRules, type GoalRemixAnalysis } from "./goal-remix-model.js";
 
 export const SHORT_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
 export const SHORT_FRAME_MODELS = ["fal:openai/gpt-image-2.6/sunburst/edit", "fal:openai/gpt-image-2.6/flare/edit"] as const;
@@ -242,6 +243,7 @@ const goalShortPlanV5Schema = z.object({
   video: videoSettingsSchema,
   rules: rulesSchema,
   finish: finishSchema,
+  analysis: goalRemixAnalysisSchema.optional(),
 }).strict().superRefine((plan, context) => {
   if (plan.remix && plan.storyboard) context.addIssue({ code: "custom", path: ["remix"], message: "Use a single source frame or a saved storyboard, not both." });
   plan.sourceImages.forEach((reference, index) => {
@@ -281,6 +283,12 @@ const goalShortDraftV5Schema = z.object({
   sourceImages: z.array(shortReferenceInputSchema).max(SOURCE_IMAGE_LIMIT),
   remix: remixSourceSchema.optional(),
   storyboard: storyboardSchema.optional(),
+  analysisRequest: z.object({
+    preferences: remixPreferencesSchema,
+    sourceVideo: sourceVideoSchema.nullable(),
+    atSeconds: z.number().nonnegative().nullable(),
+    intent: goalRemixAnalysisSchema.shape.intent.optional(),
+  }).strict().optional(),
 }).strict();
 
 export const goalShortDraftSchema = z.union([goalShortDraftV5Schema, goalShortDraftV4Schema]);
@@ -448,6 +456,7 @@ export function buildGoalShortPlan(input: {
   framePrompt: string;
   beats: readonly string[];
   segmentSeconds: readonly number[];
+  analysis?: GoalRemixAnalysis;
 }): GoalShortPlanV5 {
   assertBeatCount(input.segmentSeconds, input.beats);
   return goalShortPlanV5Schema.parse({
@@ -457,7 +466,8 @@ export function buildGoalShortPlan(input: {
     ...(input.remix ? { remix: { ...input.remix, replacement: frameSettings(input.aspectRatio, input.replacementPrompt ?? "Replace the main person with the person in the source images, keeping the same pose and scene.") } } : {}),
     ...(input.storyboard ? { storyboard: input.storyboard } : {}),
     frame: frameSettings(input.aspectRatio, input.framePrompt),
-    rules: { ...SHORT_RULES },
+    rules: input.analysis ? remixRules(input.analysis.intent) : { ...SHORT_RULES },
+    ...(input.analysis ? { analysis: input.analysis } : {}),
   });
 }
 
@@ -570,11 +580,12 @@ export function compileShortReplacementStep(plan: GoalShortPlan): ChainStep {
   if (!remix || plan.version !== 5) throw new Error("This short has no character replacement step.");
   const images = addresses(plan.sourceImages);
   const sourceSlot = `@image${images.length + 1}`;
+  const insert = plan.analysis?.intent.character === "insert";
   return frameStep({ ...plan, frame: remix.replacement }, paragraphs(
     remix.replacement.prompt,
-    sourceImageLine(images.length, "use the person as the replacement, keeping their face, hair, build and clothes exactly."),
-    `${sourceSlot} is the extracted source frame. Replace only its main person, matching their pose, position, scale and contact with objects. Keep the camera angle, framing, place, light, animals and props. Save the funny twist for the next edit.`,
-    "Remove all graphics added on top of the camera picture, including text, captions, stickers and underlines, creator credits, icons, watermarks and shade gradients. Reconstruct the scene behind them. Keep printing physically on objects.",
+    sourceImageLine(images.length, `use the person as the ${insert ? "inserted character" : "replacement"}, keeping their face, hair, build and clothes exactly.`),
+    `${sourceSlot} is the extracted source frame. ${insert ? "Insert the requested person at the action location, with realistic scale and contact. Keep existing decorative figures and props." : "Replace only its main person, matching their pose, position, scale and contact with objects."} Keep the camera angle, framing, place, light, animals and props. ${plan.analysis ? "Save the requested action for the video." : "Save the funny twist for the next edit."}`,
+    plan.analysis?.intent.cleanup === "keep" ? "Preserve the source graphics and physical printing." : "Remove all graphics added on top of the camera picture, including text, captions, stickers and underlines, creator credits, icons, watermarks and shade gradients. Reconstruct the scene behind them. Keep printing physically on objects.",
     "Natural colour, realistic anatomy, contact shadows and unretouched skin. Keep the original composition.",
   ), [...images, remix.frame.address], "replacement");
 }
@@ -604,7 +615,9 @@ export function compileShortFrameStep(plan: GoalShortPlan, storyboardFrameAddres
     if (!storyboardFrameAddress) throw new Error("Replace the character before adding the twist.");
     return frameStep(plan, paragraphs(
       plan.frame.prompt,
-      "@image1 is the reviewed character replacement. Make one funny but physically believable visual change to this frame. Keep the person, face, hair, build and clothes, camera angle, place and light. Preserve everything outside the change. Use realistic scale, anatomy, weight, support and contact shadows.",
+      plan.version === 5 && plan.analysis
+        ? "@image1 is the reviewed character and scene reference. Prepare the appearance and physical setup for the requested action. This is a reference for the action, not a required opening frame or proof that the action already happened. Keep the person, face, hair, build, clothes and surroundings. Preserve the action's target and realistic contact."
+        : "@image1 is the reviewed character replacement. Make one funny but physically believable visual change to this frame. Keep the person, face, hair, build and clothes, camera angle, place and light. Preserve everything outside the change. Use realistic scale, anatomy, weight, support and contact shadows.",
       plan.rules.frame,
     ), [storyboardFrameAddress]);
   }
@@ -659,7 +672,7 @@ export function compileShortClipStep(plan: GoalShortPlan, frameAddress: string):
     "@video1 is the source video: use its setting, camera movement and action as the reference. @image1 is the reviewed twist: keep its person, clothes, animals and changed props. Follow the beat's timing for when the person and visual joke appear; this image is a reference, not a fixed opening frame. Do not restore the original character or overlays from the video.",
     plan.rules.video,
     plan.rules.silence,
-  ), { video: [remix.video.artifactId], image: [frameAddress] });
+  ), { video: [plan.version === 5 ? plan.analysis?.recipe.referenceArtifactId ?? remix.video.artifactId : remix.video.artifactId], image: [frameAddress] });
   const images = addresses(plan.version === 4 ? plan.character.references : plan.sourceImages);
   const refs = { first_frame: [frameAddress], image: images.length > 0 ? images : [frameAddress] };
   if (plan.version === 4) {

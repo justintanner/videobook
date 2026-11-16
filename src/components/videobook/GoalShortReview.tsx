@@ -3,6 +3,7 @@ import {
   formatShortSeconds, shortFinishTitleInput, shortFinishTitleIssue, shortRemixOf, SHORT_STORYBOARD_MODEL_TITLES, SHORT_WORD_CEILINGS, withShortFinishTitle, type GoalShortPlan, type ShortFinishTitle,
 } from '../../../server/src/goal-short-plan'
 import type { GoalGenerationStage } from '../../../server/src/goal-store'
+import { remixPromptFindings } from '../../../server/src/goal-remix-model'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
   goalCanRetry, goalNextSegment, goalPlanSeconds, goalStillStale, goalStillVersions, goalStoryboardClean, goalStoryboardEstimate, goalStoryboardRetry, shortEstimateText,
@@ -11,6 +12,7 @@ import {
 import { GoalFinishTitle } from './GoalFinishTitle'
 import { GoalPromptInput } from './GoalPromptInput'
 import { GoalMedia } from './GoalStillCard'
+import { GoalInitialAnalysis } from './GoalInitialAnalysis'
 
 type GoalAction = Record<string, unknown>
 type AssetResolver = (artifactId: string) => AssetRecord | null
@@ -30,6 +32,7 @@ type ShortReviewProps = {
 
 const CURRENT_TABS = [['frame', 'Frame'], ['video', 'Video'], ['finish', 'Finish']] as const
 const REMIX_TABS = [['replacement', 'Replace character'], ['frame', 'Twist'], ['video', 'Video'], ['finish', 'Finish']] as const
+const INSERT_TABS = [['replacement', 'Insert character'], ['frame', 'Action setup'], ['video', 'Video'], ['finish', 'Finish']] as const
 const STORYBOARD_TABS = [['storyboard', 'Storyboard'], ['frame', 'Frame'], ['video', 'Video'], ['finish', 'Finish']] as const
 const LEGACY_TABS = [['character', 'Character'], ['frame', 'Frame'], ['video', 'Video'], ['finish', 'Finish']] as const
 const STORYBOARD_FIRST = 'Remove the on-screen graphics from the storyboard first: the frame is made from clean storyboard frame 1.'
@@ -70,6 +73,7 @@ function shortSnapshot(goal: GoalSnapshot): ShortGoalSnapshot {
 
 export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onView, onPreviewCell, onRun, onAction, titleOptions, onWriteTitle }: ShortReviewProps) {
   const remix = shortRemixOf(plan)
+  const [analysis, setAnalysis] = useState(plan.version === 5 ? plan.analysis : undefined)
   const [title, setTitle] = useState(plan.title)
   const [burnedTitle, setBurnedTitle] = useState(plan.finish.title?.headline ?? '')
   const [englishLine, setEnglishLine] = useState(plan.finish.title?.secondary ?? '')
@@ -89,7 +93,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const titleIssue = shortFinishTitleIssue(typedTitle)
   const edited: GoalShortPlan = plan.version === 4
     ? { ...plan, title: nextTitle, frame: { ...plan.frame, prompt: nextFrame }, segments: nextSegments }
-    : { ...plan, title: nextTitle, ...(plan.remix ? { remix: { ...plan.remix, replacement: { ...plan.remix.replacement, prompt: replacementPrompt.trim() } } } : {}), frame: { ...plan.frame, prompt: nextFrame }, segments: nextSegments }
+    : { ...plan, title: nextTitle, ...(plan.remix ? { remix: { ...plan.remix, replacement: { ...plan.remix.replacement, prompt: replacementPrompt.trim() } } } : {}), frame: { ...plan.frame, prompt: nextFrame }, segments: nextSegments, ...(analysis ? { analysis } : {}) }
   const draft = withShortFinishTitle(edited, typedTitle)
   const dirty = JSON.stringify(draft) !== JSON.stringify(plan)
   const promptsReady = Boolean(draft.title && draft.frame.prompt && (!remix || replacementPrompt.trim()) && draft.segments.every(segment => segment.prompt)) && titleIssue === null
@@ -97,7 +101,8 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const replacementOutput = goal.stages.replacement?.outputs[0]
   const replacing = view === 'replacement'
   const imageStage = replacing ? 'replacement' : 'frame'
-  const imageName = replacing ? 'Replacement' : remix ? 'Twist' : 'Frame'
+  const inserting = analysis?.intent.character === 'insert'
+  const imageName = replacing ? inserting ? 'Insertion' : 'Replacement' : remix ? analysis ? 'Action setup' : 'Twist' : 'Frame'
   const imageOutput = replacing ? replacementOutput : frameOutput
   const imageFeedback = replacing ? replacementFeedback : feedback
   const imageEstimate = replacing ? goal.estimate.replacement : goal.estimate.frame
@@ -109,7 +114,8 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const running = goal.status === 'running'
   const finishing = goal.finish?.status === 'running'
   const finishFailed = goal.finish?.status === 'failed'
-  const canGenerate = goal.status === 'review' && promptsReady && !disabled && !running && !finishing
+  const analysisErrors = analysis ? [...analysis.findings.filter(finding => finding.severity === 'error' && !finding.code.startsWith('conflicting-')), ...remixPromptFindings(analysis, [nextFrame, replacementPrompt, ...nextSegments.map(segment => segment.prompt), ...Object.values(draft.rules)])] : []
+  const canGenerate = goal.status === 'review' && promptsReady && analysisErrors.length === 0 && !disabled && !running && !finishing
   const sourceId = next === null ? goal.finish?.sourceArtifactId ?? currentClip?.artifactId ?? null : null
   const sourceAsset = sourceId ? resolveAsset(sourceId) : null
   const clipAsset = currentClip ? resolveAsset(currentClip.artifactId) : null
@@ -137,7 +143,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
   const storyboard = goal.storyboard
   const storyboardClean = goalStoryboardClean(goal)
   const cleanFirst = storyboard?.frames[0]?.clean ?? null
-  const tabs = plan.version === 4 ? LEGACY_TABS : remix ? REMIX_TABS : storyboard ? STORYBOARD_TABS : CURRENT_TABS
+  const tabs = plan.version === 4 ? LEGACY_TABS : remix ? inserting ? INSERT_TABS : REMIX_TABS : storyboard ? STORYBOARD_TABS : CURRENT_TABS
   const frameImages = plan.version === 4 ? [...plan.character.references, ...plan.frame.references] : plan.sourceImages
   const versions = (stage: GoalGenerationStage, index: number, label: string) => goalStillVersions(goal, stage, index).map((version, position, all) => {
     const asset = version.artifactId ? resolveAsset(version.artifactId) : null
@@ -147,13 +153,16 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
     </button>
   })
   return <div className="goal-editor goal-simple goal-short" data-review={view}>
+    {analysis && <GoalInitialAnalysis analysis={analysis} estimate={goal.estimate.total} disabled={disabled || running || finishing} onChange={setAnalysis}
+      onSaveDefaults={() => onRun(async () => { const current = await saved(); return onAction({ action: 'save_defaults', revision: current.revision }) })}
+      onAnalyze={() => onRun(async () => { const current = await saved(); return onAction({ action: 'analyze', revision: current.revision }) })} />}
     <nav className="goal-stage-tabs" aria-label="Short stages">
       {tabs.map(([id, label]) => <button key={id} type="button" className="goal-panel-button" aria-pressed={view === id} onClick={() => onView(id)}>{label}</button>)}
     </nav>
-    {remix && <p className="goal-panel-muted">One source frame → replace character → funny, realistic twist → video. Review each edit before continuing.</p>}
+    {remix && <p className="goal-panel-muted">{analysis ? 'Source analysis → character reference → action setup → video. The saved plan controls the entrance and action timing.' : 'One source frame → replace character → funny, realistic twist → video. Review each edit before continuing.'}</p>}
     <p className="goal-panel-muted">{plan.segments.length === 1 ? '1 clip' : `${plan.segments.length} clips`} · {totalSeconds}s · {plan.aspectRatio} · {storyboard ? `${SHORT_STORYBOARD_MODEL_TITLES[storyboard.model]} storyboard clean-up · ` : ''}GPT Image 2.6 frame · H3 Max video</p>
     {notes.length > 0 && <ul className="goal-short-notes" aria-label="Notes">{notes.map((note, index) => <li key={`${index}:${note}`}>{note}</li>)}</ul>}
-    {running && <p role="status">{remix && goal.stage === 'frame' ? 'Adding the twist to the reviewed replacement.' : RUNNING[goal.stage === 'assembly' ? 'videos' : goal.stage]}</p>}
+    {running && <p role="status">{analysis && remix ? `Generating the ${goal.stage === 'replacement' ? 'character image' : goal.stage === 'frame' ? 'action setup' : 'video'}.` : remix && goal.stage === 'frame' ? 'Adding the twist to the reviewed replacement.' : RUNNING[goal.stage === 'assembly' ? 'videos' : goal.stage]}</p>}
     {revising && <p role="status">Writing your feedback into {revising}, then generating…</p>}
     {view === 'character' && plan.version === 4 && <>
       <p className="goal-panel-muted">This short was saved with a character. The name, description and pictures stay as they were.</p>
@@ -199,7 +208,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
         {cleanFirst && <GoalMedia artifactId={cleanFirst.artifactId} cellId={cleanFirst.cellId} label={`@image${frameImages.length + 1} · storyboard 1`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
       </div>
       {storyboard && !storyboardClean && <p role="note" className="goal-panel-muted">{STORYBOARD_FIRST}</p>}
-      {remix && <p className="goal-panel-muted">{replacing ? 'Replace the main person and remove added text, stickers, credits and shade. Keep the scene and props for the next edit.' : replacementReady ? 'Add one funny, physically believable change to the reviewed replacement. Keep the same person and surroundings.' : 'Review the character replacement before adding the twist.'}</p>}
+      {remix && <p className="goal-panel-muted">{analysis ? replacing ? `${inserting ? 'Insert' : 'Replace'} the person while keeping the scene and physical props. The video performs the planned action.` : replacementReady ? 'Prepare the starting pose for the action. Keep the reviewed identity and surroundings.' : 'Review the character image before preparing the action.' : replacing ? 'Replace the main person and remove added text, stickers, credits and shade. Keep the scene and props for the next edit.' : replacementReady ? 'Add one funny, physically believable change to the reviewed replacement. Keep the same person and surroundings.' : 'Review the character replacement before adding the twist.'}</p>}
       {imageOutput && <GoalMedia artifactId={imageOutput.artifactId} cellId={imageOutput.cellId} label={imageName} resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
       {imageOutput?.stale && <p role="status" className="goal-panel-warning">{imageOutput.stale}</p>}
       {imageOutput && <div className="goal-versions" aria-label={`${imageName} versions`}>{versions(imageStage, 0, imageName)}</div>}
@@ -268,7 +277,7 @@ export function GoalShortReview({ goal, plan, view, disabled, resolveAsset, onVi
       {dirty && <button type="button" className="goal-panel-button" disabled={disabled || !promptsReady || finishing} onClick={() => onRun(() => onAction({ action: 'update', revision: goal.revision, plan: draft }))}>Save</button>}
       {view === 'storyboard' && goal.status === 'review' && goal.stage === 'storyboards' && <button type="button" className="goal-panel-primary" disabled={!canGenerate} onClick={() => generate('approve', 'storyboards')}>Remove on-screen graphics · {shortEstimateText(goalStoryboardEstimate(goal))}</button>}
       {(view === 'frame' || replacing) && goal.status === 'review' && imageOutput && imageFeedback.trim() && <button type="button" className="goal-panel-button" disabled={!canGenerate || !replacing && !replacementReady} onClick={() => generate('revise', imageStage, 0, imageFeedback.trim())}>Revise {imageName.toLowerCase()}</button>}
-      {(view === 'frame' || replacing) && goal.status === 'review' && <button type="button" className="goal-panel-primary" disabled={!canGenerate || !storyboardClean || !replacing && !replacementReady} onClick={() => generate(imageOutput ? 'regenerate' : 'approve', imageStage)}>{imageOutput ? `Regenerate ${imageName.toLowerCase()}` : replacing ? 'Replace character' : remix ? 'Add twist' : 'Generate frame'} · {shortEstimateText(imageEstimate)}</button>}
+      {(view === 'frame' || replacing) && goal.status === 'review' && <button type="button" className="goal-panel-primary" disabled={!canGenerate || !storyboardClean || !replacing && !replacementReady} onClick={() => generate(imageOutput ? 'regenerate' : 'approve', imageStage)}>{imageOutput ? `Regenerate ${imageName.toLowerCase()}` : replacing ? inserting ? 'Insert character' : 'Replace character' : remix ? analysis ? 'Prepare action' : 'Add twist' : 'Generate frame'} · {shortEstimateText(imageEstimate)}</button>}
       {view === 'video' && goal.status === 'review' && next !== null && <button type="button" className="goal-panel-primary" disabled={!canGenerate || !frameOutput || Boolean(frameOutput.stale) || !replacementReady} onClick={() => generate('approve', 'videos', next)}>{next === 0 ? 'Generate clip' : `Continue · clip ${next + 1}`} · {shortEstimateText(goal.estimate.segments?.[next])}</button>}
       {view === 'finish' && !finishing && (goal.status === 'review' || goal.status === 'completed' || finishFailed) && <button type="button" className="goal-panel-primary" disabled={!canFinish} onClick={() => onRun(() => onAction({ action: 'finish' }))}>Finish</button>}
       {goalCanRetry(goal) && <button type="button" className="goal-panel-primary" disabled={disabled} onClick={() => onRun(() => onAction({ action: 'retry' }))}>Retry</button>}

@@ -111,7 +111,9 @@ describe("video_goal shorts", () => {
   const chainRuns = () => Object.keys(engine.settings.get<{ runs: Record<string, unknown> }>("application.chain-runs.v1")?.runs ?? {}).length;
 
   async function short(brief = AUTHORED): Promise<ShortGoalSnapshot> {
-    return status((await invoke({ action: "create", brief, request_id: uuidv7() })).goalId);
+    const created = await invoke({ action: "create", brief, request_id: uuidv7() });
+    await expect.poll(() => readGoal(engine, created.goalId).status, { timeout: testBudget(30_000) }).not.toBe("planning");
+    return status(created.goalId);
   }
 
   function sourceImagesOf(goal: ShortGoalSnapshot) {
@@ -126,8 +128,8 @@ describe("video_goal shorts", () => {
     return plan.remix;
   }
 
-  function sourceNote(mention: string, frame: { address: string; atSeconds: number }) {
-    return `Extracted one source frame from ${mention}: ${frame.address} at ${formatShortSeconds(frame.atSeconds)} s. Replace the character and clear on-screen graphics, then add a funny, realistic twist before making the video.`;
+  function sourceNote(_mention: string, frame: { address: string; atSeconds: number }) {
+    return `Prepared the source frame at ${formatShortSeconds(frame.atSeconds)} s. Review the initial analysis before generating.`;
   }
 
   function stepPrompt(chainId: string | null, stepId: string): string {
@@ -268,7 +270,7 @@ describe("video_goal shorts", () => {
     const planning = await invoke({ action: "create", brief: "use @a1 and @a2 to make a funny stairs are slippery video" });
     expect(planning).toMatchObject({ status: "planning", stage: "replacement" });
     expect(planning.shortPlan).toBeUndefined();
-    expect(planning.notes).toEqual([expect.stringContaining("Extracted one source frame from @a1:")]);
+    expect(planning.notes).toEqual([]);
     await expect.poll(() => readGoal(engine, planning.goalId).status, { timeout: testBudget(30_000) }).toBe("review");
     const goal = await status(planning.goalId);
     expect(goal).toMatchObject({ stage: "replacement", status: "review" });
@@ -353,7 +355,6 @@ describe("video_goal shorts", () => {
     const empty = notebookGridTag({ row: 7, column: 7 });
     const audio = notebookGridTag({ row: 2, column: 0 });
     const pending = notebookGridTag({ row: 2, column: 1 });
-    const unreadableVideo = notebookGridTag({ row: 2, column: 2 });
     const unreadableImage = notebookGridTag({ row: 2, column: 3 });
     await addArtifactCell("audio", { row: 2, column: 0 });
     const notebook = engine.notebooks.read(notebookId);
@@ -365,12 +366,11 @@ describe("video_goal shorts", () => {
     const images: string[] = [];
     for (const slot of slots) images.push(await addArtifactCell("image", slot, { name: "original.png", bytes: png }));
     const tags = slots.map((slot) => notebookGridTag(slot));
-    const goal = await short(`${empty} ${audio} ${pending} ${unreadableVideo} ${unreadableImage} ${tags.join(" ")}, ${AUTHORED}`);
+    const goal = await short(`${empty} ${audio} ${pending} ${unreadableImage} ${tags.join(" ")}, ${AUTHORED}`);
     expect(goal.notes).toEqual([
       `${empty} is empty and was skipped.`,
       `${audio} is audio and was skipped.`,
       `${pending} has no output yet and was skipped.`,
-      `${unreadableVideo} is a video, but its frames could not be read, so it was skipped.`,
       `${unreadableImage} has no readable image and was skipped.`,
       `${tags[12]} was skipped because a short takes at most 12 mentioned images.`,
     ]);
@@ -449,7 +449,7 @@ describe("video_goal shorts", () => {
     const step = getChainRun(engine, started.chainId!)?.steps.find((item) => item.id === "frame");
     const prompt = String((step?.params as { prompt?: string } | undefined)?.prompt ?? "");
     expect(prompt).toContain("He stands under a bus shelter at dusk.");
-    expect(prompt).toContain(SHORT_RULES.frame);
+    expect(prompt).toContain(goal.shortPlan!.rules.frame);
     expect(prompt).not.toMatch(/Main character|a man in a green shirt|source image/iu);
     expect(goal.shortPlan).toMatchObject({ frame: { model: "fal:openai/gpt-image-2.6/sunburst/edit" } });
     expect(step?.params).toMatchObject({ model: "fal:openai/gpt-image-2.6/sunburst/text-to-image" });
@@ -466,7 +466,7 @@ describe("video_goal shorts", () => {
     const frame = await approved(goal);
     expect(stub.submissions.map((submission) => submission.path)).toEqual(["/openai/gpt-image-2.6/sunburst/edit"]);
     expect(stub.submissions[0]!.body).toMatchObject({ image_size: "portrait_16_9", quality: "high", output_format: "jpeg" });
-    expect(String(stub.submissions[0]!.body.prompt)).toContain(SHORT_RULES.frame);
+    expect(String(stub.submissions[0]!.body.prompt)).toContain(goal.shortPlan!.rules.frame);
     expect(stepPrompt(frame.chainId, "frame")).toContain("@image1 is a source image: keep that person exactly");
     expect(String(stub.submissions[0]!.body.prompt)).toContain("reference image 1 is a source image: keep that person exactly");
     expect(stub.submissions[0]!.body.image_urls).toHaveLength(1);
@@ -479,7 +479,7 @@ describe("video_goal shorts", () => {
     expect(submitted.body.reference_image_urls).toHaveLength(1);
     expect(stepPrompt(clip.chainId, "clip1")).toContain("@image1 is a source image: keep that person exactly, in the same clothes.");
     expect(String(submitted.body.prompt)).toContain("reference image 1 is a source image: keep that person exactly, in the same clothes.");
-    expect(String(submitted.body.prompt)).toContain(`${SHORT_RULES.video}\n\n${SHORT_RULES.silence}`);
+    expect(String(submitted.body.prompt)).toContain(`${goal.shortPlan!.rules.video}\n\n${goal.shortPlan!.rules.silence}`);
     expect(JSON.stringify(stub.submissions)).not.toMatch(/Main character|a man in a green shirt/u);
     expect(mediaJobs("fal:minimax/h3-max/reference-to-video")[0]?.payload).toMatchObject({ refs: { first_frame: [frameId], image: [imageIds[1]] }, transcribe: false });
     const clipId = clip.stages.videos!.outputs[0]!.artifactId;
@@ -597,7 +597,7 @@ describe("video_goal shorts", () => {
     expect(prompt.startsWith(`${rewritten}\n\n`)).toBe(true);
     expect(prompt).not.toContain("chest height");
     expect(prompt).not.toContain("does not hold");
-    expect(prompt.match(PHONE_SENTENCE)).toEqual([SHORT_RULES.video.split(".")[0]]);
+    expect(prompt.match(PHONE_SENTENCE)).toEqual([goal.shortPlan!.rules.video.split(".")[0]]);
     expect(revised).toMatchObject({ status: "review", revision: clip.revision + 1, shortPlan: { segments: [{ prompt: rewritten }] } });
     expect(revised.stages.videos!.outputs[0]!.versions).toHaveLength(2);
     expect(revised.stages.videos!.outputs[0]!.versions[0]).toMatchObject({ basePrompt: rewritten, feedback, current: true });
@@ -611,7 +611,7 @@ describe("video_goal shorts", () => {
     stub.plannerAnswers = [{ prompt: beat }, { prompt: beat }];
     const revised = await settled(await invoke({ action: "revise", goal_id: goal.goalId, revision: clip.revision, stage: "videos", index: 0, feedback: "No phone in his hand." }));
     expect(revised.shortPlan!.segments[0]!.prompt).toBe("He waits at the stop as a bus passes.");
-    expect(String(stub.submissions.at(-1)!.body.prompt).match(PHONE_SENTENCE)).toEqual([SHORT_RULES.video.split(".")[0]]);
+    expect(String(stub.submissions.at(-1)!.body.prompt).match(PHONE_SENTENCE)).toEqual([goal.shortPlan!.rules.video.split(".")[0]]);
   });
 
   it("rewrites an @ mention in revise feedback and accepts 1000 characters", async () => {
@@ -674,15 +674,15 @@ describe("video_goal shorts", () => {
     expect(chainRuns()).toBe(runs);
   });
 
-  it("keeps a short's settings once its frame exists and the seconds of generated segments", async () => {
+  it("allows analyzed video settings to change without regenerating images and keeps generated segment durations", async () => {
     const goal = await short('he waits, 20 seconds, frame: "A bus stop." beat 1: "He waits." beat 2: "He boards the bus."');
     const plan = goal.shortPlan!;
     const edited = await invoke({ action: "update", goal_id: goal.goalId, revision: goal.revision, plan: { ...plan, title: "Rainy stop", video: { ...plan.video, resolution: "768P" } } });
     expect(edited.shortPlan).toMatchObject({ title: "Rainy stop", video: { resolution: "768P" } });
     const frame = await approved(edited);
-    expect(await refusal({ action: "update", goal_id: goal.goalId, revision: frame.revision, plan: { ...frame.shortPlan!, video: { ...frame.shortPlan!.video, resolution: "1080P" } } }))
-      .toBe("Models, resolution, aspect ratio and rules stay with this short once its frame exists. Start a new /goal to change them.");
-    const clip = await approved(frame);
+    const updated = await invoke({ action: "update", goal_id: goal.goalId, revision: frame.revision, plan: { ...frame.shortPlan!, video: { ...frame.shortPlan!.video, resolution: "1080P" } } });
+    expect(updated.stages.frame?.outputs[0]?.artifactId).toBe(frame.stages.frame?.outputs[0]?.artifactId);
+    const clip = await approved(updated);
     const rewritten = await invoke({ action: "update", goal_id: goal.goalId, revision: clip.revision, plan: { ...clip.shortPlan!, segments: [clip.shortPlan!.segments[0]!, { prompt: "He waves from the bus.", seconds: 10 }] } });
     expect(rewritten.shortPlan?.segments[1]?.prompt).toBe("He waves from the bus.");
     expect(await refusal({ action: "update", goal_id: goal.goalId, revision: rewritten.revision, plan: { ...rewritten.shortPlan!, segments: [{ ...rewritten.shortPlan!.segments[0]!, seconds: 11 }, rewritten.shortPlan!.segments[1]!] } }))

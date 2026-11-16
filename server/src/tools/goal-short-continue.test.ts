@@ -189,7 +189,8 @@ describe("continuing a short with H3 Max Extend", () => {
     expect(finished.status).toBe("completed");
     const plan = clip.shortPlan!;
     const appended = await invoke({ action: "update", goal_id: clip.goalId, revision: clip.revision, plan: { ...plan, segments: [...plan.segments, { prompt: "He steps onto the bus.", seconds: 6 }] } });
-    expect(appended).toMatchObject({ status: "review", finish: { status: "completed" } });
+    expect(appended).toMatchObject({ status: "review", finish: null, shortPlan: { analysis: { recipe: { targetSeconds: 18 } } } });
+    expect(appended.stages.frame?.outputs[0]?.artifactId).toBe(frame.stages.frame?.outputs[0]?.artifactId);
     expect(appended.estimate.segments).toHaveLength(2);
     expect(appended.estimate.segments![1]!.usd).toBeGreaterThan(0);
     const started = await invoke({ action: "approve", goal_id: clip.goalId, revision: appended.revision });

@@ -16,6 +16,12 @@ const requestSchema = z.object({
   notebookId: z.string().nullable(), method: cleanupMethodSchema, regions: cleanupRegionsSchema, jobId: z.number().nullable(),
 });
 export type CleanupRequest = z.infer<typeof requestSchema>;
+const progressSchema = z.object({ completedFrames: z.number().int().nonnegative(), totalFrames: z.number().int().positive(), elapsedSeconds: z.number().nonnegative() });
+
+export function cleanupRenderStatus(engine: Engine, request: CleanupRequest) {
+  const parsed = progressSchema.safeParse(engine.settings.get<unknown>(`video-cleanup.progress.${request.requestId}`));
+  return { ...renderRequestStatus(engine, request), progress: parsed.success ? parsed.data : null };
+}
 
 export function cleanupDetectionKey(mediaHash: string, interval: number): string {
   return analysisComponentKey(CLEANUP_DETECTION, { sourceHash: mediaHash, options: { interval, model: "PP-OCRv5_mobile_det:e6f4fa85" } });
@@ -27,7 +33,10 @@ export function readCleanupRequest(engine: Engine, requestId: string): CleanupRe
 }
 
 export function forgetCleanupState(engine: Engine, artifactId: string): void {
-  for (const id of indexedRenderRequests(engine, `video-cleanup.requests.${artifactId}`)) engine.settings.delete(`video-cleanup.request.${id}`);
+  for (const id of indexedRenderRequests(engine, `video-cleanup.requests.${artifactId}`)) {
+    engine.settings.delete(`video-cleanup.request.${id}`);
+    engine.settings.delete(`video-cleanup.progress.${id}`);
+  }
   engine.settings.delete(`video-cleanup.requests.${artifactId}`);
 }
 
@@ -77,13 +86,14 @@ export async function requestCleanupRender(engine: Engine, bookId: string, asset
     if (existing) {
       if (existing.fingerprint !== fingerprint) throw new Error("This request ID belongs to a different removal. Start a new request.");
       if (!engine.artifacts.get(existing.outputArtifactId).ok) throw new Error("The cleaned copy was deleted. Start a new request.");
-      if (renderRequestRunning(engine, existing)) return renderRequestStatus(engine, existing);
+      if (renderRequestRunning(engine, existing)) return cleanupRenderStatus(engine, existing);
     }
     const created = existing ? null : await engine.artifacts.create({ kind: "video", label: `${source.label ?? "Video"} — Cleaned` });
     if (created && !created.ok) throw new Error(created.error.message);
     const outputArtifactId = existing?.outputArtifactId ?? (created?.ok ? created.value.artifactId : "");
     const request: CleanupRequest = { ...input, regions, fingerprint, sourceArtifactId: assetId, outputArtifactId, jobId: null };
     writeRenderSetting(engine, `video-cleanup.request.${input.requestId}`, request);
+    engine.settings.delete(`video-cleanup.progress.${input.requestId}`);
     indexRenderRequest(engine, `video-cleanup.requests.${assetId}`, input.requestId);
     indexRenderRequest(engine, `video-cleanup.requests.${outputArtifactId}`, input.requestId);
     const cleared = await engine.jobs.failures.clear(outputArtifactId);
@@ -91,6 +101,6 @@ export async function requestCleanupRender(engine: Engine, bookId: string, asset
     const job = await queue.enqueue(`video-cleanup:${input.requestId}`, { type: "remove_video_graphics", bookId, assetId: outputArtifactId, requestId: input.requestId });
     const queued = { ...request, jobId: job.id };
     writeRenderSetting(engine, `video-cleanup.request.${input.requestId}`, queued);
-    return renderRequestStatus(engine, queued);
+    return cleanupRenderStatus(engine, queued);
   });
 }

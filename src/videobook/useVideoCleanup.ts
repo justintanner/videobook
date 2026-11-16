@@ -24,6 +24,9 @@ type State = {
 }
 const EMPTY: State = { target: null, bookId: null, read: null, regions: [], method: 'lama', busy: null, jobId: null, error: null }
 const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 800))
+const renderStatusSchema = z.object({ status: z.string(), job_id: z.number().nullable(), error: z.string().nullable(),
+  progress: z.object({ completedFrames: z.number(), totalFrames: z.number(), elapsedSeconds: z.number() }).nullable().optional(),
+})
 
 export function useVideoCleanup({ bookId, ready, call }: { bookId: string | null; ready: boolean; call: Call }) {
   const [state, setState] = useState<State>(EMPTY)
@@ -106,12 +109,29 @@ export function useVideoCleanup({ bookId, ready, call }: { bookId: string | null
       const fingerprint = JSON.stringify([target.artifactId, read.source.source_hash, method, regions])
       if (request.current?.fingerprint !== fingerprint) request.current = { fingerprint, id: crypto.randomUUID() }
       change((s) => ({ ...s, busy: 'Queuing removal…', error: null }))
-      const result = z.object({ status: z.string(), job_id: z.number().nullable(), error: z.string().nullable() }).parse(await call('remove_video_graphics', {
+      const result = renderStatusSchema.parse(await call('remove_video_graphics', {
         ...args(target), op: 'render', source_hash: read.source.source_hash, request_id: request.current.id, method, regions,
       }, { chat }))
       if (result.status === 'failed') throw new Error(result.error ?? 'Removal failed.')
       if (!active(token)) return { ok: false, message: 'The remover was closed.' }
-      change((s) => ({ ...s, busy: null }))
+      const requestId = request.current.id
+      change((s) => ({ ...s, busy: result.status === 'completed' ? null : 'Removing graphics…', jobId: result.job_id }))
+      void (async () => {
+        try {
+          let status = result
+          while (active(token) && ['queued', 'running'].includes(status.status)) {
+            await wait()
+            if (!active(token)) return
+            status = renderStatusSchema.parse(await call('remove_video_graphics', { ...args(target), op: 'status', request_id: requestId }, { background: true }))
+            if (!active(token)) return
+            const progress = status.progress
+            if (progress) change(s => ({ ...s, busy: `Removing graphics · ${progress.completedFrames} / ${progress.totalFrames} frames (${Math.min(100, Math.round(100 * progress.completedFrames / progress.totalFrames))}%)` }))
+          }
+          if (!active(token)) return
+          if (status.status === 'failed') throw new Error(status.error ?? 'Removal stopped.')
+          change(s => ({ ...s, busy: null, jobId: null }))
+        } catch (error) { fail(token, error) }
+      })()
       return { ok: true, message: `Local removal queued${result.job_id ? ` · job ${result.job_id}` : ''}. The cleaned copy will appear in the notebook.` }
     } catch (error) {
       fail(token, error)

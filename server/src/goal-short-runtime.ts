@@ -11,12 +11,14 @@ import type { ChainStep } from "./chain-plan.js";
 import { probeVideo } from "./ffmpeg.js";
 import {
   buildGoalShortPlan, compileShortClipStep, compileShortContinuationStep, compileShortFrameStep, compileShortReplacementStep, compileShortStoryboardStep, formatShortSeconds,
-  goalShortPlanSchema, refreshGoalShortPlan, SHORT_STORYBOARD_MODELS, shortPlanTitleInput, shortRemixOf, shortRemixSourceOf, shortStoryboardOf, shortTiming, storyboardFallbackModel,
+  goalShortPlanSchema, isLegacyShortDraft, refreshGoalShortPlan, SHORT_STORYBOARD_MODELS, shortPlanTitleInput, shortRemixOf, shortRemixSourceOf, shortStoryboardOf, shortTiming, storyboardFallbackModel,
   type GoalShortDraft, type GoalShortImageRef, type GoalShortPlan, type ShortRemixSource, type ShortStoryboard, type ShortStoryboardModel, type ShortStoryboardVideo,
 } from "./goal-short-plan.js";
 import { shortAuthoredCopy, shortBriefPlan, shortPlannerNeeded, shortTitle } from "./goal-short-planner.js";
 import { briefMention, renderReferenceNotes, type ReferenceNote } from "./goal-short-references.js";
 import { captureStoryboardFrames, videoGoalFrameMoment } from "./goal-short-storyboard.js";
+import { buildRemixAnalysis, readRemixPreferences, writeRemixPreferences } from "./goal-remix-analysis.js";
+import { remixPromptFindings, remixRules } from "./goal-remix-model.js";
 import { goalReferenceHashes } from "./goal-reference-images.js";
 import { goalStageAttempts } from "./goal-stills.js";
 import {
@@ -34,7 +36,7 @@ import { queue } from "./queue.js";
 type GoalArgs = Record<string, unknown>;
 type ShortReference = Omit<GoalShortImageRef, "slot">;
 type ShortTarget = { stage: GoalGenerationStage; indexes: number[] };
-type BriefReferences = { references: ShortReference[]; remix: ShortRemixSource | null; notes: ReferenceNote[] };
+type BriefReferences = { references: ShortReference[]; sourceVideo: ShortStoryboardVideo | null; atSeconds: number | null; notes: ReferenceNote[] };
 export type StoryboardFrameFailure = { kind: "failed" | "not-run"; message: string; model?: ShortStoryboardModel };
 
 const EXTRA_REFERENCE_LIMIT = 12;
@@ -86,7 +88,7 @@ function mentionTimestamp(brief: string, mention: NotebookMention): number | nul
   return Number.isFinite(seconds) ? seconds : null;
 }
 
-async function mentionedSourceFrame(
+export async function mentionedSourceFrame(
   engine: Engine,
   bookId: string,
   notebookId: string,
@@ -118,7 +120,7 @@ async function mentionedSourceFrame(
   }
 }
 
-async function briefReferences(engine: Engine, bookId: string, notebookId: string, brief: string): Promise<BriefReferences> {
+async function briefReferences(engine: Engine, notebookId: string, brief: string): Promise<BriefReferences> {
   const references: ShortReference[] = [];
   const notes: (ReferenceNote | null)[] = [];
   const ignored = new Set<string>();
@@ -147,8 +149,7 @@ async function briefReferences(engine: Engine, bookId: string, notebookId: strin
     video = { found: found.video, mention };
     notes.push(null);
   }
-  const made = video ? await mentionedSourceFrame(engine, bookId, notebookId, video.found, video.mention.raw, mentionTimestamp(brief, video.mention)) : null;
-  return { references, remix: made?.remix ?? null, notes: notes.map((note) => note ?? made!.note) };
+  return { references, sourceVideo: video?.found ?? null, atSeconds: video ? mentionTimestamp(brief, video.mention) : null, notes: notes.filter((note): note is ReferenceNote => note !== null) };
 }
 
 async function priced(engine: Engine, step: ChainStep, refs: Record<string, string[]>): Promise<GoalEstimate> {
@@ -176,7 +177,7 @@ export async function estimateShort(engine: Engine, plan: GoalShortPlan, short: 
   const frameIds = [...shortImageIds(plan, false), ...(firstFrame ? [firstFrame.artifactId] : [])];
   const clipIds = shortImageIds(plan, true);
   const clipRefs: Record<string, string[]> = remix
-    ? { video: [remix.video.artifactId], image: [PLACEHOLDER_FRAME] }
+    ? { video: [plan.version === 5 ? plan.analysis?.recipe.referenceArtifactId ?? remix.video.artifactId : remix.video.artifactId], image: [PLACEHOLDER_FRAME] }
     : { first_frame: [PLACEHOLDER_FRAME], image: clipIds.length > 0 ? clipIds : [PLACEHOLDER_FRAME] };
   const storyboardFrames = storyboard
     ? await Promise.all(storyboard.frames.map((frame) => priced(engine, compileShortStoryboardStep(storyboard, frame.index), { image: [frame.artifactId] })))
@@ -203,7 +204,9 @@ export async function shortFingerprint(
   const remix = shortRemixOf(plan);
   if (stage === "replacement") {
     if (!remix) throw new Error("This short has no character replacement step.");
-    return JSON.stringify({ settings: remix.replacement, references: await goalReferenceHashes(engine, [...shortImageIds(plan, false), remix.frame.artifactId]) });
+    return JSON.stringify({ settings: remix.replacement,
+      ...(plan.version === 5 && plan.analysis ? { policy: { character: plan.analysis.intent.character, cleanup: plan.analysis.intent.cleanup } } : {}),
+      references: await goalReferenceHashes(engine, [...shortImageIds(plan, false), remix.frame.artifactId]) });
   }
   if (stage === "storyboards") {
     const frame = storyboard?.frames[index];
@@ -234,7 +237,8 @@ export async function shortFingerprint(
     settings: { ...plan.video, aspectRatio: plan.aspectRatio },
     references: await goalReferenceHashes(engine, shortImageIds(plan, true)),
     sourceArtifactId,
-    ...(remix && index === 0 ? { videoReferences: await goalReferenceHashes(engine, [remix.video.artifactId, ...(sourceArtifactId ? [sourceArtifactId] : [])]) } : {}),
+    ...(remix && index === 0 ? { videoReferences: await goalReferenceHashes(engine, [remix.video.artifactId,
+      ...(plan.version === 5 && plan.analysis?.recipe.referenceArtifactId ? [plan.analysis.recipe.referenceArtifactId] : []), ...(sourceArtifactId ? [sourceArtifactId] : [])]) } : {}),
   });
 }
 
@@ -377,20 +381,31 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
   const brief = input.brief;
   let content: GoalShortContent;
   let referenceNotes: ReferenceNote[] = [];
+  const preferences = readRemixPreferences(engine);
   if (input.plan) {
     const plan = goalShortPlanSchema.parse(input.plan);
-    content = { brief, revision: 1, draft: null, plan, estimate: await estimateShort(engine, plan, { brief, draft: null }), notes: [] };
+    const remix = shortRemixOf(plan);
+    const draft: GoalShortDraft | null = plan.version === 5 ? {
+      aspectRatio: plan.aspectRatio, segmentSeconds: plan.segments.map(segment => segment.seconds), sourceImages: plan.sourceImages.map(({ slot: _slot, ...reference }) => reference),
+      ...(remix ? { remix: { video: remix.video, frame: remix.frame } } : {}), ...(plan.storyboard ? { storyboard: plan.storyboard } : {}),
+      analysisRequest: { preferences: plan.analysis?.preferences ?? preferences, sourceVideo: remix?.video ?? null, atSeconds: remix?.frame.atSeconds ?? null },
+    } : null;
+    const analyzed = plan.version === 5 && !remix ? { ...plan, analysis: await buildRemixAnalysis(engine, {
+      brief, totalSeconds: plan.segments.reduce((sum, segment) => sum + segment.seconds, 0), notebookId,
+      preferences: plan.analysis?.preferences ?? preferences, source: null,
+    }) } : plan;
+    content = { brief, revision: 1, draft, plan: analyzed, estimate: await estimateShort(engine, analyzed, { brief, draft }), notes: [] };
   } else {
     const timing = shortTiming(brief);
-    const mentioned = await briefReferences(engine, bookId, notebookId, brief);
-    const authored = shortAuthoredCopy(brief, timing.segmentSeconds, Boolean(mentioned.remix));
-    const planning = shortPlannerNeeded(brief, authored.segmentSeconds, Boolean(mentioned.remix));
+    const mentioned = await briefReferences(engine, notebookId, brief);
+    const authored = shortAuthoredCopy(brief, timing.segmentSeconds, Boolean(mentioned.sourceVideo));
+    const planning = mentioned.sourceVideo !== null || shortPlannerNeeded(brief, authored.segmentSeconds, false);
     referenceNotes = mentioned.notes;
     const draft: GoalShortDraft = {
       aspectRatio: timing.aspectRatio,
       segmentSeconds: authored.segmentSeconds,
       sourceImages: mentioned.references,
-      ...(mentioned.remix ? { remix: mentioned.remix } : {}),
+      analysisRequest: { preferences, sourceVideo: mentioned.sourceVideo, atSeconds: mentioned.atSeconds },
     };
     const notes = [timing.note, authored.note].filter((note): note is string => note !== null);
     if (planning) {
@@ -402,11 +417,11 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
         aspectRatio: draft.aspectRatio,
         segmentSeconds: draft.segmentSeconds,
         sourceImages: draft.sourceImages,
-        remix: mentioned.remix,
         replacementPrompt: written.replacement,
         title: shortTitle(brief, written.frame),
         framePrompt: written.frame,
         beats: written.beats,
+        analysis: await buildRemixAnalysis(engine, { brief, totalSeconds: authored.segmentSeconds.reduce((sum, seconds) => sum + seconds, 0), notebookId, preferences, source: null }),
       });
       content = { brief, revision: 1, draft, plan, estimate: await estimateShort(engine, plan, { brief, draft }), notes };
     }
@@ -414,9 +429,10 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
   const goalId = uuidv7();
   const cell = await createGoalShortCell(engine, notebookId, goalId, content);
   const timestamp = new Date().toISOString();
+  const pendingSource = content.draft && !isLegacyShortDraft(content.draft) ? content.draft.analysisRequest?.sourceVideo : null;
   const goal: GoalRecord = {
-    goalId, bookId, notebookId, cellId: cell.id, requestId: input.requestId, status: content.plan ? "review" : "planning", planVersion: content.plan?.version ?? 5,
-    stage: shortRemixSourceOf(content.plan ?? content.draft) ? "replacement" : shortStoryboardOf(content.plan ?? content.draft) ? "storyboards" : "frame", stages: {}, chainId: null, planningJobId: null, clipIds: [], trackId: null,
+    goalId, bookId, notebookId, cellId: cell.id, requestId: input.requestId, status: content.plan && !pendingSource ? "review" : "planning", planVersion: content.plan?.version ?? 5,
+    stage: pendingSource || shortRemixSourceOf(content.plan ?? content.draft) ? "replacement" : shortStoryboardOf(content.plan ?? content.draft) ? "storyboards" : "frame", stages: {}, chainId: null, planningJobId: null, clipIds: [], trackId: null,
     assembly: null, error: null, dismissedAt: null, createdAt: timestamp, updatedAt: timestamp,
   };
   if (referenceNotes.length > 0) {
@@ -424,7 +440,7 @@ export async function createShortGoal(engine: Engine, bookId: string, notebookId
     await writeGoalShortContent(engine, goal, content);
   }
   const saved = saveGoal(engine, goal);
-  return content.plan ? saved : queueShortPlanning(engine, saved);
+  return saved.status === "review" ? saved : queueShortPlanning(engine, saved);
 }
 
 async function rewrittenShortPrompt(goal: GoalRecord, stage: GoalGenerationStage, index: number, feedback: string, revision: number): Promise<string> {
@@ -618,6 +634,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   if (feedback) content = await revisedShortContent(engine, goal, content, stage, index, feedback);
   const document = readNotebook(engine, goal.notebookId);
   const plan = refreshGoalShortPlan(content.plan, document);
+  await assertRemixPreflight(engine, plan);
   await assertShortUpstream(engine, goal, plan, stage);
   const steps = await Promise.all(stageSteps(goal, plan, document, target, sourceClip, model).map(async ({ index: position, step }) => {
     const source = stageSource(goal, stage, position);
@@ -655,6 +672,22 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
       }))],
     } },
   });
+}
+
+async function assertRemixPreflight(engine: Engine, plan: GoalShortPlan): Promise<void> {
+  if (plan.version !== 5 || !plan.analysis) return;
+  const { analysis } = plan;
+  const prompts = [plan.frame.prompt, plan.remix?.replacement.prompt ?? "", ...plan.segments.map(segment => segment.prompt), ...Object.values(plan.rules)];
+  const errors = [...analysis.findings.filter(finding => finding.severity === "error" && !finding.code.startsWith("conflicting-")), ...remixPromptFindings(analysis, prompts)];
+  if (errors.length) throw new Error(errors.map(finding => finding.text).join(" "));
+  const references = await goalReferenceHashes(engine, [...plan.sourceImages.map(reference => reference.artifactId), ...(analysis.source ? [analysis.source.artifactId] : [])]);
+  if (references.some(reference => reference.objectHash === null)) throw new Error("An analyzed reference is missing. Restore it or analyze the goal again.");
+  if (analysis.source && references.at(-1)?.objectHash !== analysis.source.mediaHash) throw new Error("The source video changed after initial analysis. Analyze the goal again before generating.");
+  if (plan.sourceImages.some((reference, index) => references[index]?.objectHash !== reference.objectHash)) throw new Error("A source image changed after initial analysis. Review its current version before generating.");
+  if (analysis.recipe.referenceArtifactId) {
+    const [reference] = await goalReferenceHashes(engine, [analysis.recipe.referenceArtifactId]);
+    if (reference?.objectHash !== analysis.recipe.referenceMediaHash) throw new Error("The prepared source reference changed. Refresh analysis before generating.");
+  }
 }
 
 export function selectShortVersion(engine: Engine, goal: GoalRecord, args: GoalArgs): GoalRecord {
@@ -733,26 +766,96 @@ export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: Go
   if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Wait until generation stops before editing the goal");
   const content = assertShortRevision(engine, goal, args.revision);
   const previous = content.plan;
-  const plan = goalShortPlanSchema.parse(shortPlanTitleInput(args.plan));
+  let plan = goalShortPlanSchema.parse(shortPlanTitleInput(args.plan));
+  const analyzed = previous.version === 5 ? previous.analysis : undefined;
+  let analysisChanged = false;
+  if (analyzed && plan.version === 5) {
+    if (!plan.analysis) throw new Error("Keep the initial analysis with this goal. Start a new goal to change workflows.");
+    if (JSON.stringify(plan.analysis.source) !== JSON.stringify(analyzed.source)) throw new Error("Source analysis is read-only. Analyze the goal again to refresh it.");
+    for (const key of ["brief", "history", "analyzedAt", "recipe", "findings"] as const) {
+      if (JSON.stringify(plan.analysis[key]) !== JSON.stringify(analyzed[key])) throw new Error("The saved analysis evidence is read-only. Edit its settings or refresh analysis.");
+    }
+    analysisChanged = JSON.stringify(plan.analysis.intent) !== JSON.stringify(analyzed.intent) || JSON.stringify(plan.analysis.preferences) !== JSON.stringify(analyzed.preferences)
+      || plan.segments.reduce((sum, segment) => sum + segment.seconds, 0) !== analyzed.recipe.targetSeconds;
+    if (analysisChanged) {
+      const intent = { ...plan.analysis.intent, origins: { ...plan.analysis.intent.origins } };
+      for (const key of ["structure", "character", "audio", "cleanup", "action", "noDialogue"] as const) {
+        if (JSON.stringify(intent[key]) !== JSON.stringify(analyzed.intent[key])) intent.origins[key] = "edited";
+      }
+      const analysis = await buildRemixAnalysis(engine, {
+        brief: content.brief, totalSeconds: plan.segments.reduce((sum, segment) => sum + segment.seconds, 0), notebookId: goal.notebookId,
+        preferences: plan.analysis.preferences, source: analyzed.source, intent,
+        requestedFrameSeconds: content.draft && !isLegacyShortDraft(content.draft) ? content.draft.analysisRequest?.atSeconds : null,
+      });
+      if (analysis.recipe.sourceFrameSeconds === analyzed.recipe.sourceFrameSeconds) {
+        analysis.recipe.reference = analyzed.recipe.reference;
+        analysis.recipe.referenceArtifactId = analyzed.recipe.referenceArtifactId;
+        analysis.recipe.referenceMediaHash = analyzed.recipe.referenceMediaHash;
+      }
+      plan = { ...plan, analysis, rules: remixRules(intent) };
+    }
+  }
   if (JSON.stringify(lockedReferences(previous)) !== JSON.stringify(lockedReferences(plan))) throw new Error(REFERENCES_LOCKED);
   if (JSON.stringify(lockedStoryboard(previous)) !== JSON.stringify(lockedStoryboard(plan))) throw new Error(STORYBOARD_LOCKED);
   const frameMade = (goal.stages.frame?.outputs.length ?? 0) > 0;
   const replacementMade = (goal.stages.replacement?.outputs.length ?? 0) > 0;
-  if ((frameMade || replacementMade) && JSON.stringify(lockedSettings(previous)) !== JSON.stringify(lockedSettings(plan))) throw new Error(SETTINGS_LOCKED);
+  if (!analyzed && (frameMade || replacementMade) && JSON.stringify(lockedSettings(previous)) !== JSON.stringify(lockedSettings(plan))) throw new Error(SETTINGS_LOCKED);
   const generated = goal.stages.videos?.outputs.map((output) => output.index) ?? [];
   if (generated.some((index) => plan.segments[index]?.seconds !== previous.segments[index]?.seconds)) throw new Error(SEGMENT_LOCKED);
   if (JSON.stringify(previous) === JSON.stringify(plan)) return goal;
-  const generatedPromptChanged = (frameMade && previous.frame.prompt !== plan.frame.prompt)
+  if (plan.version === 5 && plan.analysis) {
+    const findings = remixPromptFindings(plan.analysis, [plan.frame.prompt, plan.remix?.replacement.prompt ?? "", ...plan.segments.map(segment => segment.prompt), ...Object.values(plan.rules)]);
+    plan = { ...plan, analysis: { ...plan.analysis, findings: [...plan.analysis.findings.filter(finding => !finding.code.startsWith("conflicting-")), ...findings] } };
+  }
+  const generatedPromptChanged = analysisChanged || (frameMade && previous.frame.prompt !== plan.frame.prompt)
     || (replacementMade && shortRemixOf(previous)?.replacement.prompt !== shortRemixOf(plan)?.replacement.prompt)
     || generated.some((index) => previous.segments[index]?.prompt !== plan.segments[index]?.prompt);
   const retitled = titleFinish(goal, previous, plan);
-  await writeGoalShortContent(engine, goal, { ...content, plan, estimate: await estimateShort(engine, plan, content), revision: content.revision + 1 });
+  const sourceFrameChanged = analysisChanged && plan.version === 5 && plan.remix && plan.analysis?.recipe.sourceFrameSeconds !== plan.remix.frame.atSeconds;
+  const draft = sourceFrameChanged && plan.version === 5 && plan.analysis ? {
+    aspectRatio: plan.aspectRatio, segmentSeconds: plan.segments.map(segment => segment.seconds), sourceImages: plan.sourceImages.map(({ slot: _slot, ...reference }) => reference),
+    remix: plan.remix ? { video: plan.remix.video, frame: plan.remix.frame } : undefined,
+    analysisRequest: { preferences: plan.analysis.preferences, sourceVideo: plan.remix!.video,
+      atSeconds: plan.analysis.recipe.sourceFrameSeconds, intent: plan.analysis.intent },
+  } : content.draft;
+  await writeGoalShortContent(engine, goal, { ...content, draft, plan, estimate: await estimateShort(engine, plan, content), revision: content.revision + 1 });
+  if (sourceFrameChanged) return queueShortPlanning(engine, saveGoal(engine, { ...goal, finish: null }));
   const reopened = generatedPromptChanged || retitled !== undefined || plan.segments.length !== previous.segments.length;
   return saveGoal(engine, {
     ...goal,
     ...(reopened ? { status: "review" as const, error: null } : {}),
     ...(generatedPromptChanged ? { finish: null } : retitled !== undefined ? { finish: retitled } : {}),
   });
+}
+
+export async function reanalyzeShortGoal(engine: Engine, goal: GoalRecord, revision: unknown): Promise<GoalRecord> {
+  if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Stop the current work before refreshing analysis. Cancelled goals stay cancelled.");
+  const content = assertShortRevision(engine, goal, revision);
+  const plan = refreshGoalShortPlan(content.plan, readNotebook(engine, goal.notebookId));
+  if (plan.version !== 5) throw new Error("Start a new goal to use initial analysis with this earlier workflow.");
+  const hashes = await goalReferenceHashes(engine, plan.sourceImages.map(reference => reference.artifactId));
+  const sourceImages = plan.sourceImages.map((reference, index) => {
+    const objectHash = hashes[index]?.objectHash;
+    if (!objectHash) throw new Error(`The reference ${reference.address} is missing. Restore it before analyzing.`);
+    return { ...reference, objectHash };
+  });
+  const originalRequest = content.draft && !isLegacyShortDraft(content.draft) ? content.draft.analysisRequest : undefined;
+  const draft: GoalShortDraft = {
+    aspectRatio: plan.aspectRatio, segmentSeconds: plan.segments.map(segment => segment.seconds), sourceImages: sourceImages.map(({ slot: _slot, ...reference }) => reference),
+    ...(plan.remix ? { remix: { video: plan.remix.video, frame: plan.remix.frame } } : {}), ...(plan.storyboard ? { storyboard: plan.storyboard } : {}),
+    analysisRequest: { preferences: plan.analysis?.preferences ?? readRemixPreferences(engine), sourceVideo: plan.remix?.video ?? null,
+      atSeconds: originalRequest?.atSeconds ?? null, ...(plan.analysis ? { intent: plan.analysis.intent } : {}) },
+  };
+  await writeGoalShortContent(engine, goal, { ...content, draft, plan: { ...plan, sourceImages }, revision: content.revision + 1 });
+  return queueShortPlanning(engine, goal);
+}
+
+export function saveShortDefaults(engine: Engine, goal: GoalRecord, revision: unknown): GoalRecord {
+  const { plan } = assertShortRevision(engine, goal, revision);
+  if (plan.version !== 5 || !plan.analysis) throw new Error("Analyze this goal before saving its defaults.");
+  const { preferences, intent } = plan.analysis;
+  writeRemixPreferences(engine, { ...preferences, structure: intent.structure, character: intent.character, audio: intent.audio, cleanup: intent.cleanup });
+  return goal;
 }
 
 export async function queueShortRealismCheck(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {

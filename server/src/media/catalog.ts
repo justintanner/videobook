@@ -142,6 +142,7 @@ function machgenModes(tasks: MachGenTasks): readonly ModeSpec[] | undefined {
 }
 
 const FAL_H3_MAX_SOURCE_VIDEO: InputRules = { maxVideoRefBytes: 50 * 1024 * 1024 };
+const FAL_H3_MAX_REFERENCES: InputRules = { refDurationMs: { video: { minimum: 2000, maximum: 15000, maximumTotal: 15000, measured: true } } };
 
 function machgenClips(maximumSeconds: number): InputRules {
   const window = { minimum: 2000, maximum: maximumSeconds * 1000, maximumTotal: maximumSeconds * 1000 };
@@ -523,7 +524,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:minimax/h3/reference-to-video/lora", media: "video", operations: ["reference_to_video"], dialect: "natural" },
   { id: "fal:minimax/h3-max/text-to-video", media: "video", operations: ["text_to_video"] },
   { id: "fal:minimax/h3-max/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames", refs: { first_frame: "image_url" }, modes: FRAME_MODES },
-  { id: "fal:minimax/h3-max/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural", refs: { image: "reference_image_urls", first_frame: "image_url" }, modes: H3_MAX_REFERENCE_MODES },
+  { id: "fal:minimax/h3-max/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural", refs: { image: "reference_image_urls", first_frame: "image_url" }, modes: H3_MAX_REFERENCE_MODES, rules: FAL_H3_MAX_REFERENCES },
   { id: "fal:minimax/h3-max/extend-video", media: "video", operations: ["extend_video"], rules: FAL_H3_MAX_SOURCE_VIDEO },
   { id: "fal:minimax/h3-max/3d-to-video", media: "video", operations: ["edit_video"], rules: FAL_H3_MAX_SOURCE_VIDEO },
   { id: "fal:minimax/h3-max/lip-sync/image-to-video", media: "video", operations: ["lip_sync"], refs: { first_frame: "image_url" } },

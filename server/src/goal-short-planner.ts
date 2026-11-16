@@ -11,6 +11,7 @@ import {
 import type { GoalGenerationStage } from "./goal-store.js";
 import { SHORT_AVOID, SHORT_BANNED_WORDS, SHORT_RULES, shortBannedWords, shortMentionsPhone } from "./goal-short-rules.js";
 import { loadGuide } from "./tools/rewrite-prompt.js";
+import { remixRules, remixUnderstandingSchema, type GoalRemixAnalysis, type RemixUnderstanding } from "./goal-remix-model.js";
 
 const LABELLED = /(?<![\p{L}\p{N}])(replace|replacement|twist|frame|video|beat\s*(\d+))\s*:\s*["“]([^"”]*)["”]/giu;
 const CAMERA_LINE = "Call it the camera, never the phone: someone off screen holds it.";
@@ -32,7 +33,7 @@ export type ShortAuthoredCopy = {
 
 type ShortBriefPlan = { replacement?: string; frame: string; beats: string[]; note: string | null };
 
-export type ShortPlannerResponse = { title: string; replacement?: string; frame: string; beats: string[] };
+export type ShortPlannerResponse = { title: string; replacement?: string; frame: string; beats: string[]; understanding?: RemixUnderstanding };
 
 export type ShortPlannerIssue = { kind: "count" | "empty" | "ceiling" | "banned" | "phone"; message: string };
 
@@ -99,14 +100,16 @@ export function shortPlannerNeeded(brief: string, segmentSeconds: readonly numbe
   return needed && getApiKey("OPENAI_API_KEY") !== null;
 }
 
-export function shortBriefPlan(brief: string, authored: ShortAuthoredCopy): ShortBriefPlan {
+export function shortBriefPlan(brief: string, authored: ShortAuthoredCopy, analysis?: GoalRemixAnalysis): ShortBriefPlan {
   const remix = "replacement" in authored;
   const gaps = authored.replacement === null || authored.frame === null || authored.beats.some((beat) => beat === null);
   const prose = briefProse(brief).slice(0, PROMPT_LIMIT).trim();
   const quoted = authored.frame ?? authored.beats.find((beat): beat is string => beat !== null);
   const filler = prose || quoted || "Short";
   return {
-    ...(remix ? { replacement: authored.replacement ?? `Replace only the main person using the source images and this brief: ${filler}. Keep the pose, scene, animals and props unchanged; leave the funny twist for the next edit.`.slice(0, PROMPT_LIMIT) } : {}),
+    ...(remix ? { replacement: authored.replacement ?? (analysis?.intent.character === "insert"
+      ? `Insert the person from the identity image into the scene for this action: ${filler}. Keep existing decorative figures and props. Prepare the setup; the video performs the action.`
+      : `Replace only the main person using the source images and this brief: ${filler}. Keep the pose, scene, animals and props unchanged; leave the funny twist for the next edit.`).slice(0, PROMPT_LIMIT) } : {}),
     frame: authored.frame ?? (remix ? `Add one funny, physically believable visual twist to the reviewed frame. Follow this idea: ${filler}`.slice(0, PROMPT_LIMIT) : filler),
     beats: authored.beats.map((beat) => beat ?? (remix ? "Animate the reviewed twist frame with one simple, natural action. Keep the same person, animals, props and setting. The camera gently follows the action; natural ambient sound." : filler)),
     note: gaps ? PLANNED_FROM_BRIEF : null,
@@ -153,13 +156,14 @@ export function shortPlannerBrief(
   ]);
 }
 
-export function shortPlannerResponseSchema(segmentCount: number, remix = false) {
+export function shortPlannerResponseSchema(segmentCount: number, remix = false, analyzeSource = false) {
   return z.object({
     title: z.string().describe(`At most ${SHORT_WORD_CEILINGS.title} words`),
     ...(remix ? { replacement: z.string().describe(`Character replacement only, at most ${SHORT_WORD_CEILINGS.frame} words`) } : {}),
     frame: z.string().describe(`The opening frame, at most ${SHORT_WORD_CEILINGS.frame} words`),
     beats: z.array(z.string().describe(`One beat, at most ${SHORT_WORD_CEILINGS.beat} words`)).min(segmentCount).max(segmentCount)
       .describe("One beat per segment, in order"),
+    ...(analyzeSource ? { understanding: remixUnderstandingSchema } : {}),
   }).strict();
 }
 
@@ -248,17 +252,26 @@ export async function shortPlannerInstructions(input: {
   storyboardFrameCount?: number;
   aspectRatio: ShortAspectRatio;
   segmentSeconds: readonly number[];
+  analysis?: GoalRemixAnalysis;
 }): Promise<string> {
   const [h3Guide, imageGuide] = await Promise.all([loadGuide("minimax_h3"), loadGuide("gpt_image_26")]);
   const count = input.segmentSeconds.length;
+  const rules = input.analysis ? remixRules(input.analysis.intent) : SHORT_RULES;
+  const analyzed = input.remix && input.analysis;
   return [
     `Plan a short that looks like real phone footage filmed by someone off screen, starring ${shortStar(input.sourceImageCount)}. That person never speaks.`,
     `Return JSON with a title, one opening frame prompt for GPT Image 2.6 and ${count === 1 ? "one beat" : `${count} beats`} for MiniMax H3 Max, one per segment: ${input.segmentSeconds.map((seconds, index) => `beat ${index + 1} lasts ${seconds} seconds`).join(", ")}. The aspect ratio is ${input.aspectRatio}.`,
     `Word ceilings, not targets: title ${SHORT_WORD_CEILINGS.title}, frame ${SHORT_WORD_CEILINGS.frame}, each beat ${SHORT_WORD_CEILINGS.beat}.`,
-    `${input.remix ? "Beat 1 uses the source video and reviewed twist image as references; follow the brief's timing for entrances and the joke." : "Beat 1 starts from the opening frame."} Each later beat continues from where the previous one ends, in the same place, and every beat ends with that person in frame. One action per beat, in the present tense, with what the camera does and what is heard.`,
+    `${input.remix ? "Beat 1 uses the source video and reviewed twist image as references; follow the brief's timing for entrances and the joke." : "Beat 1 starts from the opening frame."} ${analyzed ? "Preserve the requested absence, entrance, action window and shot changes." : "Each later beat continues from where the previous one ends, in the same place, and every beat ends with that person in frame."} One action per beat, in the present tense, with what the camera does and what is heard.`,
     CAMERA_LINE,
     `${POSITIVE_LINE} Give that person a phone only when the brief does.`,
-    ...(input.remix ? [
+    ...(analyzed ? [
+      "Analyze the timestamped source samples and cached evidence together with the brief. Return understanding with structure, insert versus replace, the requested action range in final-video seconds, a concrete action and target, a useful source-frame timestamp, source observations and material uncertainties. Do not invent details between samples or certify unseen frames.",
+      "Source observations describe only the source, independently of the requested change. Distinguish added overlays from printing physically on objects. Regions use normalized 0-1 coordinates and source-video seconds; uncertain text remains uncertain. Reuse supplied cached observations when frames are not attached.",
+      `Plan a character reference edit (${input.analysis!.intent.character}), an action-setup reference and the video. The replacement field describes inserting or replacing only as requested. Never replace a decorative figure merely to insert someone. The frame sets up the action and its target, without turning a future bite into a cookie already held or eaten.`,
+      "Identity images describe the person's appearance. Video samples describe the existing scene, shot order and action locations. Neither forces that person into the opening; reference images are not fixed first frames. The video performs the requested action at the requested time.",
+      "Keep explicitly authored prompts unchanged, but report contradictions as uncertainties. Explicit brief instructions override suggested defaults. Keep physical printing, and leave uncertain removal regions for review.",
+    ] : input.remix ? [
       "Plan three separate steps: replace the character in one extracted source frame, add a funny but realistic twist to that replacement, then animate the resulting frame.",
       "Return an additional replacement prompt of at most 40 words. It only replaces the main person with the person from the source images or the brief, retaining face, hair, build and clothes. Match the original pose and scene; leave its animals and props unchanged. Overlay removal is added automatically to this step.",
       "The frame prompt is the next edit, applied to the reviewed replacement, not the original frame. Make one simple visual joke that is already visible in this still. Follow the brief's twist when given; otherwise choose a surprising but physically plausible substitution or situation. Preserve the replaced person and surroundings, realistic anatomy, scale, support and gravity. Avoid fantasy, impossible stunts and extra story beats.",
@@ -268,9 +281,9 @@ export async function shortPlannerInstructions(input: {
     ] : plannerImageLines(input.sourceImageCount, input.storyboardFrameCount ?? 0)),
     "Write only the parts listed under write and keep the fixed parts exactly as given.",
     "These lines are added to the prompts after you write them. Do not repeat them and do not contradict them:",
-    `Frame: ${SHORT_RULES.frame}`,
-    `Video: ${SHORT_RULES.video}`,
-    `Silence: ${SHORT_RULES.silence}`,
+    `Frame: ${rules.frame}`,
+    `Video: ${rules.video}`,
+    `Silence: ${rules.silence}`,
     `Avoid: ${SHORT_AVOID.join("; ")}.`,
     `Never use these words: ${SHORT_BANNED_WORDS.join(", ")}.`,
     `--- MiniMax H3 prompting guide ---\n${h3Guide.trim()}`,

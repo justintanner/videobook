@@ -1,9 +1,8 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
-import { renderRequestStatus } from "../render-requests.js";
 import { cleanupMethodSchema, cleanupRegionsSchema, type CleanupMethod, type CleanupRegion } from "../video-cleanup/model.js";
-import { readCleanup, readCleanupRequest, requestCleanupDetection, requestCleanupRender } from "../video-cleanup/service.js";
+import { cleanupRenderStatus, readCleanup, readCleanupRequest, requestCleanupDetection, requestCleanupRender } from "../video-cleanup/service.js";
 import type { ToolDef } from "./tool-def.js";
 import { resolveVideoAssetReference } from "./video-source-reference.js";
 
@@ -37,7 +36,7 @@ export function removeVideoGraphicsDef(engine: Engine): ToolDef {
           const request = typeof args.request_id === "string" ? readCleanupRequest(engine, args.request_id) : null;
           if (request) {
             if (request.sourceArtifactId !== assetId) throw new Error("This removal belongs to another video.");
-            result = renderRequestStatus(engine, request);
+            result = cleanupRenderStatus(engine, request);
           } else {
             const job = typeof args.job_id === "number" ? engine.jobs.queue.get(args.job_id) : null;
             if (!job || job.type !== "install_video_cleanup_models") throw new Error("Removal or model installation job not found.");

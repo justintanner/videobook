@@ -99,7 +99,7 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
   const sourceError = (await checkInsertVideoTiming(engine, model, job.refs, job.options))
     ?? (await checkReframeVideoGeometry(engine, model, job.refs, job.options))
     ?? (await checkSeedanceEditSource(engine, model, job.refs, job.mode))
-    ?? await checkRefDurations(engine, model, job.refs);
+    ?? await checkRefDurations(engine, model, job.refs, job.fieldRefs);
   if (sourceError) throw new Error(sourceError);
   const source = await resolveGenerationSource(engine, model, job.refs, job.options);
   if (!source.ok) throw new Error(source.error);

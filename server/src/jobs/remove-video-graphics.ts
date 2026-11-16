@@ -6,6 +6,7 @@ import { runAnalysisComponentJob } from "../analysis-components.js";
 import { extractFrames } from "../captions/frames.js";
 import { cleanupSource } from "../video-cleanup/source.js";
 import { registerJobHandler } from "../queue.js";
+import { writeRenderSetting } from "../render-requests.js";
 import { withCleanupDetector } from "../video-cleanup/detect.js";
 import { cleanupSampleTimes, trackCleanupRegions, validateCleanupRegions, type CleanupBox } from "../video-cleanup/model.js";
 import { installCleanupModels } from "../video-cleanup/models.js";
@@ -61,7 +62,14 @@ export function registerRemoveVideoGraphicsJobs(engine: Engine): void {
       const scratch = await mkdtemp(join(tmpdir(), "videobook-cleanup-"));
       try {
         const outputPath = join(scratch, "cleaned.mp4");
-        await renderCleanup({ source, outputPath, regions, method: request.method, signal: ctx.signal });
+        const started = Date.now();
+        const totalFrames = Math.round(source.durationSeconds * source.fps);
+        const progressKey = `video-cleanup.progress.${request.requestId}`;
+        writeRenderSetting(engine, progressKey, { completedFrames: 0, totalFrames, elapsedSeconds: 0 });
+        await renderCleanup({ source, outputPath, regions, method: request.method, signal: ctx.signal,
+          onProgress: progress => writeRenderSetting(engine, progressKey, progress),
+        });
+        writeRenderSetting(engine, progressKey, { completedFrames: totalFrames, totalFrames, elapsedSeconds: (Date.now() - started) / 1000 });
         await reviewedSource();
         ctx.signal.throwIfAborted();
         await writeRenderedVideo(engine, request.outputArtifactId, outputPath, source, ctx.signal);

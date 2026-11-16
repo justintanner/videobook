@@ -26,6 +26,7 @@
         "scripts/**/*.ts",
         "src/remotion/index.tsx",
         "src/rhythm/worker.ts",
+        "src/video-cleanup/render-worker.ts",
         "src/quiet-probes/**"
       ]
     }

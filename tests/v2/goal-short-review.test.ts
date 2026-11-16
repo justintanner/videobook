@@ -11,6 +11,7 @@ import { GoalTileContext } from '../../src/components/videobook/notebook-canvas-
 import type { CanvasNode } from '../../src/videobook/notebook-canvas'
 import { defaultShortTab, goalTileView, LEGACY_GOAL_NOTE, type GoalSnapshot, type ShortGoalSnapshot, type ShortTab } from '../../src/videobook/goals'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
+import { goalRemixAnalysisSchema, remixRules } from '../../server/src/goal-remix-model'
 import { goalShortPlanSchema, withShortFinishTitle, type ShortFinishTitle } from '../../server/src/goal-short-plan'
 import { legacyGoalFixture, legacyShortPlanFixture, remixPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, storyboardPlanFixture, withStoryboardFailures } from './goal-short-fixtures'
 
@@ -38,6 +39,27 @@ function button(html: string, label: string): string {
 const withFrame = { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', versions: 2 }]) }
 
 describe('GoalShortReview', () => {
+  it('shows the resolved analysis and insertion workflow and keeps a parsed plan clean on first render', () => {
+    const analysis = goalRemixAnalysisSchema.parse({
+      version: 1, brief: 'Keep the montage and insert the person for the last two seconds.', preferences: {}, source: null,
+      intent: { structure: 'preserve-source', character: 'insert', audio: 'source', cleanup: 'keep', action: { start: 12, end: 14 }, actionDescription: 'Bite the display', noDialogue: true, origins: { action: 'brief' } },
+      recipe: { targetSeconds: 14, sourceFrameSeconds: 12, keep: [{ start: 0, end: 12 }], change: [{ start: 12, end: 14 }], generatedSeconds: 2,
+        reference: { start: 0, end: 14 }, preparedArtifactId: null, preparedMediaHash: null, cleanupRegions: [], cleanupConfirmed: true,
+        cleanupMethod: 'fill', templateId: null, templateRevision: null, checkTimes: [11.9, 12.1, 13.9] },
+      history: [], findings: [], analyzedAt: '2026-11-16T00:00:00Z',
+    })
+    const plan = goalShortPlanSchema.parse({ ...remixPlanFixture(), rules: remixRules(analysis.intent), analysis })
+    const html = render(shortGoalFixture({}, plan))
+    expect(html).toContain('Initial analysis')
+    expect(html).toContain('keep 0.00–12.00s')
+    expect(html).toContain('generate 2s')
+    expect(html).toContain('aria-label="Insertion prompt"')
+    expect(html).toContain('>Action setup</button>')
+    expect(button(html, 'Use these defaults for this book')).not.toContain('disabled')
+    expect(html).not.toMatch(/<button[^>]*>Save<\/button>/u)
+    expect(button(html, 'Insert character ·')).not.toContain('disabled')
+  })
+
   it('reviews the replacement and twist separately and blocks downstream steps until their inputs are ready', () => {
     const plan = remixPlanFixture()
     const first = shortGoalFixture({}, plan)
