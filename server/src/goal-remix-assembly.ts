@@ -145,7 +145,7 @@ export async function renderGoalRemixAssembly(engine: Engine, edit: GoalRemixEdi
       const filter = assemblyFilters(edit, source.hasAudio, clip.hasAudio);
       await runFfmpeg(["-y", "-i", source.path, "-i", clip.path, "-filter_complex_threads", "1", "-filter_complex", filter.graph,
         "-map", "[outv]", ...(filter.audio ? ["-map", "[outa]"] : ["-an"]), ...H264_MEDIUM,
-        ...(filter.audio ? AUDIO_OPTS : []), "-threads", "2", "-movflags", "+faststart", outputPath], { signal });
+        ...(filter.audio ? AUDIO_OPTS : []), "-r", String(fps), "-threads", "2", "-movflags", "+faststart", outputPath], { signal });
       const probe = await validateRemixAssembly(outputPath, edit, signal);
       await assertRemixEditSources(engine, edit);
       signal.throwIfAborted();
