@@ -1,5 +1,5 @@
 import { graphicsCanvas, type GraphicsFraming } from '../../../../server/src/graphics/frame'
-import { useMemo, useRef, type KeyboardEvent, type RefObject } from 'react'
+import { useMemo, useRef, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
@@ -31,9 +31,11 @@ type GraphicsPreviewStageProps = {
   onLayout: (layout: GraphicsLayerLayout[]) => void
   onSelectLayer: (layerId: string) => void
   onEdit: (edits: GraphicsEdit[], coalesceKey: string) => boolean
+  toggles?: ReactNode
 }
 
 const NO_FRAME_CHANGE = () => undefined
+const MIN_TRANSPORT_WIDTH = 340
 
 export function GraphicsPreview(props: GraphicsPreviewStageProps) {
   const { document, mediaUrl, source, framing, background, images, layout, playerRef, guides } = props
@@ -43,7 +45,8 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const aspect = useMemo(() => graphicsCanvas(source, framing), [source, framing])
   const canvasSource = useMemo(() => ({ ...source, ...aspect }), [source, aspect])
-  const stage = useStageSize(containerRef, aspect, '.confirm-graphics')
+  const stage = useStageSize(containerRef, aspect, '.confirm-graphics', 0, 'container')
+  const frameWidth = stage.width ? Math.max(stage.width, MIN_TRANSPORT_WIDTH) : undefined
   const { onLayout } = props
 
   const inputProps = useMemo<GraphicsPreviewProps>(() => ({
@@ -76,60 +79,63 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
   }
 
   return (
-    <div className="graphics-preview" ref={containerRef} style={stage.stacked || stage.width === 0 ? undefined : { width: stage.width }}>
-      <div
-        className="graphics-stage"
-        style={{ width: stage.width || undefined, height: stage.height || undefined, aspectRatio: `${aspect.width} / ${aspect.height}` }}
-        tabIndex={0}
-        role="group"
-        aria-label="Graphics preview. Space plays or pauses; arrow keys step frames."
-        onKeyDown={onKeyDown}
-      >
-        <Player
-          ref={playerRef}
-          component={GraphicsPreviewComposition}
-          inputProps={inputProps}
-          durationInFrames={durationInFrames}
-          fps={source.fps}
-          compositionWidth={aspect.width}
-          compositionHeight={aspect.height}
-          style={{ width: '100%', height: '100%' }}
-          clickToPlay={false}
-          spaceKeyToPlayOrPause={false}
-          doubleClickToFullscreen={false}
-        />
-        <div className="graphics-overlay" data-frame={`${aspect.width}x${aspect.height}`}>
-          {layout && (
-            <GraphicsStageLayers
-              document={document}
-              layout={layout}
-              source={canvasSource}
-              seconds={time}
-              selectedLayerId={props.selectedLayerId}
-              activeSlot={props.activeSlot}
-              editable={props.editable}
-              snapping={props.snapping}
-              guides={guides}
-              onSelectLayer={props.onSelectLayer}
-              onEdit={props.onEdit}
-            />
-          )}
-        </div>
-      </div>
-      <div className="graphics-transport">
-        <button type="button" className="graphics-icon-button" aria-label={playing ? 'Pause' : 'Play'} onClick={() => playerRef.current?.toggle()}>
-          {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
-        </button>
-        <span className="graphics-time" aria-live="off">{formatCaptionTime(time)} / {formatCaptionTime(source.durationSeconds)}</span>
-        <button
-          type="button"
-          className="graphics-icon-button"
-          aria-label={muted ? 'Unmute preview' : 'Mute preview'}
-          aria-pressed={muted}
-          onClick={() => (muted ? playerRef.current?.unmute() : playerRef.current?.mute())}
+    <div className="graphics-preview" ref={containerRef}>
+      <div className="graphics-preview-frame" style={{ width: frameWidth }}>
+        <div
+          className="graphics-stage"
+          style={{ width: stage.width || undefined, height: stage.height || undefined, aspectRatio: `${aspect.width} / ${aspect.height}` }}
+          tabIndex={0}
+          role="group"
+          aria-label="Graphics preview. Space plays or pauses; arrow keys step frames."
+          onKeyDown={onKeyDown}
         >
-          {muted ? <VolumeX size={14} aria-hidden="true" /> : <Volume2 size={14} aria-hidden="true" />}
-        </button>
+          <Player
+            ref={playerRef}
+            component={GraphicsPreviewComposition}
+            inputProps={inputProps}
+            durationInFrames={durationInFrames}
+            fps={source.fps}
+            compositionWidth={aspect.width}
+            compositionHeight={aspect.height}
+            style={{ width: '100%', height: '100%' }}
+            clickToPlay={false}
+            spaceKeyToPlayOrPause={false}
+            doubleClickToFullscreen={false}
+          />
+          <div className="graphics-overlay" data-frame={`${aspect.width}x${aspect.height}`}>
+            {layout && (
+              <GraphicsStageLayers
+                document={document}
+                layout={layout}
+                source={canvasSource}
+                seconds={time}
+                selectedLayerId={props.selectedLayerId}
+                activeSlot={props.activeSlot}
+                editable={props.editable}
+                snapping={props.snapping}
+                guides={guides}
+                onSelectLayer={props.onSelectLayer}
+                onEdit={props.onEdit}
+              />
+            )}
+          </div>
+        </div>
+        <div className="graphics-transport">
+          <button type="button" className="graphics-icon-button" aria-label={playing ? 'Pause' : 'Play'} onClick={() => playerRef.current?.toggle()}>
+            {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
+          </button>
+          <span className="graphics-time" aria-live="off">{formatCaptionTime(time)} / {formatCaptionTime(source.durationSeconds)}</span>
+          <button
+            type="button"
+            className="graphics-icon-button"
+            aria-label={muted ? 'Unmute preview' : 'Mute preview'}
+            aria-pressed={muted}
+            onClick={() => (muted ? playerRef.current?.unmute() : playerRef.current?.mute())}
+          >
+            {muted ? <VolumeX size={14} aria-hidden="true" /> : <Volume2 size={14} aria-hidden="true" />}
+          </button>
+          {props.toggles}
+        </div>
       </div>
     </div>
   )

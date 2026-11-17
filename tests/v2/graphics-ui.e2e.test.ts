@@ -315,12 +315,17 @@ describe('graphics editor in the composer', () => {
     expect(errors).toEqual([])
   })
 
-  it('fits one header row over the preview, quick text, inspector and a timeline that scrubs and trims, with the handle in the Credit field', async () => {
+  it('sets the chat log beside one header row over a tall preview, quick text, inspector and a timeline that scrubs and trims, with the handle in the Credit field', async () => {
     await expect.poll(() => field('Headline').inputValue()).toBe(THAI_TITLE)
     expect(await page.locator('.command-composer-dock-bar').isVisible()).toBe(false)
     expect(await sheet().locator('.confirm-sheet-foot').count()).toBe(0)
     expect((await sheet().locator('.confirm-sheet-head').boundingBox())!.height).toBeLessThanOrEqual(41)
-    expect((await sheet().boundingBox())!.height).toBeLessThanOrEqual(480)
+
+    const sheetBox = (await sheet().boundingBox())!
+    const log = (await page.locator('.composer-history-panel').boundingBox())!
+    expect(log.x + log.width).toBeLessThanOrEqual(sheetBox.x + 1)
+    expect(log.height).toBeGreaterThan(sheetBox.height * 0.9)
+    expect((await sheet().locator('.graphics-stage').boundingBox())!.height).toBeGreaterThan(sheetBox.height * 0.75)
 
     const preview = (await sheet().locator('.graphics-preview').boundingBox())!
     const controls = (await sheet().locator('.graphics-controls').boundingBox())!
@@ -344,7 +349,7 @@ describe('graphics editor in the composer', () => {
     await sheet().getByRole('button', { name: 'Undo', exact: true }).click()
     await expect.poll(() => field('Credit').inputValue()).toBe(handle)
 
-    for (const column of ['.confirm-sheet-body', '.graphics-controls', '.graphics-quick', '.graphics-side', '.graphics-layers']) {
+    for (const column of ['.confirm-sheet-body', '.graphics-preview', '.graphics-quick', '.graphics-layers']) {
       const overflow = await sheet().locator(column).evaluate((node) => node.scrollHeight - node.clientHeight)
       expect(overflow, `${column} scrolls`).toBeLessThanOrEqual(1)
     }
@@ -353,7 +358,7 @@ describe('graphics editor in the composer', () => {
     expect(await bar.getAttribute('data-window')).toBe(`0,${DURATION}`)
     const track = (await bar.boundingBox())!
     expect(track.height).toBeGreaterThanOrEqual(24)
-    expect(track.width).toBeGreaterThan(500)
+    expect(track.width).toBeGreaterThan(150)
     const grip = (await sheet().locator('.graphics-trim-handle[data-bound="end"]').boundingBox())!
     await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
     await page.mouse.down()
@@ -1031,7 +1036,8 @@ describe('graphics editor in the composer', () => {
     await platform('TikTok').click()
     await expect.poll(() => platform('TikTok').getAttribute('aria-pressed'), { timeout: testBudget(15_000) }).toBe('true')
     await expect.poll(async () => (await layers().textContent()) ?? '', { timeout: testBudget(15_000) }).not.toContain('Profile link')
-    expect(await layers().textContent()).toContain('Empty headline, second line')
+    expect(await layers().textContent()).toContain('jtbkk')
+    expect(await layers().textContent()).toContain('Bottom shade')
     await expect.poll(() => editor().locator('.graphics-save-state').textContent(), { timeout: testBudget(15_000) }).toBe('Saved')
     expect((await readWatermark()).document.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text'])
     await close()

@@ -79,6 +79,36 @@ function isStage(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.classList.contains('graphics-stage')
 }
 
+const REVEAL_MARGIN = 48
+
+function revealInColumn(column: HTMLElement | null, target: HTMLElement | null): void {
+  if (!column || !target || column.scrollHeight <= column.clientHeight) return
+  const view = column.getBoundingClientRect()
+  const top = target.getBoundingClientRect().top - view.top
+  if (top >= 0 && top <= view.height - REVEAL_MARGIN) return
+  column.scrollTo({ top: column.scrollTop + top - 8, behavior: 'smooth' })
+}
+
+function PreviewToggles({ guides, snapping, onGuides, onSnapping }: {
+  guides: boolean
+  snapping: boolean
+  onGuides: (on: boolean) => void
+  onSnapping: (on: boolean) => void
+}) {
+  return (
+    <div className="graphics-toggles" role="group" aria-label="Preview guides">
+      <label className="graphics-toggle" title="Safe-area guides">
+        <input type="checkbox" checked={guides} onChange={(event) => onGuides(event.target.checked)} />
+        Guides
+      </label>
+      <label className="graphics-toggle" title="Snap to guides. Hold Alt (Option), Ctrl or Command while dragging to move freely once.">
+        <input type="checkbox" checked={snapping} onChange={(event) => onSnapping(event.target.checked)} />
+        Snap
+      </label>
+    </div>
+  )
+}
+
 export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: {
   editor: GraphicsEditor
   assets: readonly GraphicsEditorAsset[]
@@ -88,6 +118,8 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
 }) {
   const { state } = editor
   const playerRef = useRef<PlayerRef | null>(null)
+  const controlsRef = useRef<HTMLDivElement | null>(null)
+  const selectionRef = useRef<HTMLDivElement | null>(null)
   const nudges = useRef(0)
   const [layout, setLayout] = useState<GraphicsLayerLayout[] | null>(null)
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null)
@@ -130,6 +162,10 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
     const holder = slot && document ? graphicsSlotHolder(document, slot) : null
     if (holder) setSelectedLayerId(holder.layerId)
   }, [document])
+  const revealLayer = useCallback((layerId: string | null) => {
+    setSelectedLayerId(layerId)
+    if (layerId) requestAnimationFrame(() => revealInColumn(controlsRef.current, selectionRef.current))
+  }, [])
   const pickSuggestion = useCallback((slot: GraphicsTextSlot, option: string) => {
     editor.edit([{ op: 'set_slot_text', slot, text: option }])
   }, [editor])
@@ -200,68 +236,33 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
           selectedLayerId={selectedLayerId}
           activeSlot={activeSlot}
           onLayout={onLayout}
-          onSelectLayer={setSelectedLayerId}
+          onSelectLayer={revealLayer}
           onEdit={edit}
+          toggles={<PreviewToggles guides={guides} snapping={snapping} onGuides={setGuides} onSnapping={setSnapping} />}
         />
       )}
       {document && drawn && read && (
-        <div className="graphics-controls">
+        <div className="graphics-controls" ref={controlsRef}>
           {watermark && <GraphicsWatermark editor={editor} read={read} platform={watermark.platform} disabled={!editable} />}
-          <div className="graphics-toolbar">
-            <GraphicsTemplates editor={editor} read={read} disabled={!editable} books={otherBooks} onApply={applyTemplate} />
-            <div className="graphics-toggles" role="group" aria-label="Preview guides">
-              <label className="graphics-toggle" title="Safe-area guides">
-                <input type="checkbox" checked={guides} onChange={(event) => setGuides(event.target.checked)} />
-                Guides
-              </label>
-              <label className="graphics-toggle" title="Snap to guides. Hold Alt (Option), Ctrl or Command while dragging to move freely once.">
-                <input type="checkbox" checked={snapping} onChange={(event) => setSnapping(event.target.checked)} />
-                Snap
-              </label>
-            </div>
-          </div>
-          {!watermark && <GraphicsFrameControl frame={framing} source={read.source} mediaUrl={state.target?.mediaUrl ?? ''} disabled={!editable || Boolean(subtitle)} subtitleAspect={subtitle?.aspect} onChange={editor.setFrame} />}
           <GraphicsWarnings warnings={warnings} />
-          <div className="graphics-columns">
-            <GraphicsQuickFields
-              document={document}
-              read={read}
-              disabled={!editable}
-              suggestions={state.suggestions}
-              onEdit={edit}
-              onSuggest={suggest}
-              onFocusSlot={focusSlot}
-            />
-            <div className="graphics-side">
-              <GraphicsSuggestionTray
-                document={document}
-                suggestions={state.suggestions}
-                disabled={!editable}
-                onPick={pickSuggestion}
-                onDismiss={editor.dismissSuggestions}
-              />
-              {selectedLayer
-                ? (
-                  <GraphicsInspector
-                    key={selectedLayer.id}
-                    document={document}
-                    layer={selectedLayer}
-                    read={read}
-                    frame={canvas ?? undefined}
-                    imageChoices={imageChoices}
-                    box={selectedBox}
-                    placement={selectedPlacement}
-                    playhead={playhead}
-                    disabled={!editable}
-                    tab={inspectorTab}
-                    onTab={setInspectorTab}
-                    onEdit={edit}
-                    onFindClearSpot={findClearSpot}
-                  />
-                )
-                : <p className="graphics-muted graphics-side-hint">Select a layer in the list or the preview to edit it.</p>}
-            </div>
-          </div>
+          <GraphicsQuickFields
+            document={document}
+            read={read}
+            disabled={!editable}
+            suggestions={state.suggestions}
+            onEdit={edit}
+            onSuggest={suggest}
+            onFocusSlot={focusSlot}
+          />
+          <GraphicsSuggestionTray
+            document={document}
+            suggestions={state.suggestions}
+            disabled={!editable}
+            onPick={pickSuggestion}
+            onDismiss={editor.dismissSuggestions}
+          />
+          <GraphicsTemplates editor={editor} read={read} disabled={!editable} books={otherBooks} onApply={applyTemplate} />
+          {!watermark && <GraphicsFrameControl frame={framing} source={read.source} mediaUrl={state.target?.mediaUrl ?? ''} disabled={!editable || Boolean(subtitle)} subtitleAspect={subtitle?.aspect} onChange={editor.setFrame} />}
           <GraphicsLayers
             document={document}
             drawn={drawn}
@@ -272,8 +273,30 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
             disabled={!editable}
             playerRef={playerRef}
             onEdit={edit}
-            onSelect={setSelectedLayerId}
+            onSelect={revealLayer}
           />
+          <div className="graphics-selection" ref={selectionRef}>
+            {selectedLayer
+              ? (
+                <GraphicsInspector
+                  key={selectedLayer.id}
+                  document={document}
+                  layer={selectedLayer}
+                  read={read}
+                  frame={canvas ?? undefined}
+                  imageChoices={imageChoices}
+                  box={selectedBox}
+                  placement={selectedPlacement}
+                  playhead={playhead}
+                  disabled={!editable}
+                  tab={inspectorTab}
+                  onTab={setInspectorTab}
+                  onEdit={edit}
+                  onFindClearSpot={findClearSpot}
+                />
+              )
+              : <p className="graphics-muted graphics-side-hint">Select a layer in the list or the preview to edit it.</p>}
+          </div>
         </div>
       )}
     </div>

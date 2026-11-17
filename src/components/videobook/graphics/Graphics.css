@@ -1,14 +1,14 @@
 .confirm-graphics {
-  --layers-label: 400px;
+  --layers-label: 46%;
   display: grid;
   min-height: 0;
   height: 100%;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
     'status status'
     'preview controls';
-  column-gap: 14px;
+  column-gap: 16px;
 }
 
 .confirm-sheet-graphics > .confirm-sheet-body {
@@ -74,7 +74,7 @@
 }
 
 .graphics-save-state {
-  min-width: 104px;
+  min-width: 17ch;
   color: #8fbba1;
   font-size: 11px;
 }
@@ -137,10 +137,18 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  min-width: min-content;
+  justify-content: center;
+  min-width: 0;
   min-height: 0;
   height: 100%;
+}
+
+.graphics-preview-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
 }
 
 .graphics-stage {
@@ -296,24 +304,22 @@
   grid-area: controls;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   min-height: 0;
+  padding: 0 4px 12px 14px;
+  border-left: 1px solid var(--line);
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
 }
 
-.graphics-toolbar {
-  display: flex;
+.graphics-controls > * {
   flex: none;
-  align-items: flex-start;
-  gap: 6px 14px;
-  min-width: 0;
 }
 
 .graphics-templates {
   display: grid;
-  flex: 1 1 auto;
   gap: 7px;
   min-width: 0;
 }
@@ -499,37 +505,19 @@
   font-size: 12px;
 }
 
-.graphics-columns {
-  display: grid;
-  flex: 1 1 0;
-  min-height: 208px;
-  grid-template-columns: minmax(260px, 1fr) minmax(0, 1.9fr);
-  grid-template-rows: minmax(0, 1fr);
-  gap: 10px 14px;
-}
-
-.graphics-quick,
-.graphics-side {
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-
 .graphics-quick {
   display: grid;
   align-content: start;
   gap: 8px;
+  min-width: 0;
 }
 
-.graphics-side {
+.graphics-selection {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.graphics-side > * {
-  flex: none;
+  min-width: 0;
+  scroll-margin-top: 8px;
 }
 
 .graphics-field {
@@ -1042,22 +1030,15 @@ label.graphics-field > span:first-child {
 
 .graphics-layers {
   position: relative;
-  flex: 0 1 auto;
-  max-height: 46%;
   min-height: 62px;
-  overflow: hidden auto;
   border: 1px solid var(--line);
   background: rgba(1, 9, 5, 0.68);
-  scrollbar-width: thin;
 }
 
 .graphics-timeline-head {
   position: sticky;
   top: 0;
   z-index: 3;
-  display: grid;
-  grid-template-columns: var(--layers-label) minmax(0, 1fr);
-  min-height: 32px;
   border-bottom: 1px solid var(--line);
   background: #030d08;
 }
@@ -1069,7 +1050,16 @@ label.graphics-field > span:first-child {
   justify-content: space-between;
   gap: 4px 6px;
   min-width: 0;
-  padding: 3px 6px 3px 10px;
+  padding: 4px 6px 4px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.graphics-ruler-row {
+  display: grid;
+  grid-template-columns: var(--layers-label) minmax(0, 1fr);
+}
+
+.graphics-ruler-gutter {
   border-right: 1px solid var(--line);
 }
 
@@ -1379,33 +1369,12 @@ label.graphics-field > span:first-child {
   }
 
   .graphics-preview {
-    min-width: 0;
     height: min(52dvh, 460px);
   }
 
-  .graphics-toolbar {
-    flex-wrap: wrap;
-  }
-
   .graphics-controls {
-    overflow: visible;
-  }
-
-  .graphics-columns {
-    flex: none;
-    min-height: 0;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto;
-  }
-
-  .graphics-quick,
-  .graphics-side {
-    overflow: visible;
-  }
-
-  .graphics-layers {
-    flex: none;
-    max-height: none;
+    padding: 0;
+    border-left: 0;
     overflow: visible;
   }
 
@@ -1415,11 +1384,11 @@ label.graphics-field > span:first-child {
 }
 
 .command-composer[data-resizable-review='true']:has(.confirm-sheet-graphics) {
-  height: var(--composer-review-height, min(610px, 76dvh));
+  height: var(--composer-review-height, min(720px, 80dvh));
 }
 
 .command-composer[data-resizable-review='true']:has(.graphics-watermark) {
-  height: var(--composer-review-height, min(650px, 80dvh));
+  height: var(--composer-review-height, min(760px, 84dvh));
 }
 
 .command-composer:has(.confirm-sheet-graphics) > .command-composer-dock-bar {
@@ -1457,4 +1426,46 @@ label.graphics-field > span:first-child {
 .graphics-focus-map {
   margin: 6px 0;
   cursor: crosshair;
+}
+
+@media (min-width: 1200px) {
+  .command-composer[data-resizable-review='true'] > .command-composer-dock-body:has(> .confirm-sheet-graphics):has(> .composer-history-panel[data-history-open='true']) {
+    display: grid;
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .command-composer[data-resizable-review='true'] .command-composer-dock-body:has(> .composer-history-panel[data-history-open='true']) > .confirm-sheet.confirm-sheet-graphics {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: 0;
+    max-height: none;
+    grid-template-rows: minmax(40px, auto) minmax(0, 1fr) auto;
+  }
+
+  .command-composer .command-composer-dock-body:has(> .composer-history-panel[data-history-open='true']) > .confirm-sheet-graphics > .pane-resize-handle-bottom,
+  .command-composer .command-composer-dock-body:has(> .composer-history-panel[data-history-open='true']) > .confirm-sheet-graphics > .confirm-sheet-head > .section-label {
+    display: none;
+  }
+
+  .command-composer .command-composer-dock-body:has(> .confirm-sheet-graphics) > .composer-history-panel[data-history-open='true'] {
+    grid-column: 1;
+    grid-row: 1;
+    max-height: none;
+    border-right: 1px solid var(--line);
+  }
+
+  .command-composer .command-composer-dock-body:has(> .confirm-sheet-graphics) > .composer-history-panel[data-history-open='true'] > .composer-history {
+    max-height: none;
+  }
+
+  .command-composer .command-composer-dock-body:has(> .confirm-sheet-graphics):has(> .composer-history-panel[data-history-open='true']) > :not(.confirm-sheet, .composer-history-panel) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1200px) and (max-width: 1439px) {
+  .command-composer .command-composer-dock-body:has(> .composer-history-panel[data-history-open='true']) > .confirm-sheet-graphics .confirm-sheet-effect:not(.confirm-sheet-effect-warning) {
+    display: none;
+  }
 }

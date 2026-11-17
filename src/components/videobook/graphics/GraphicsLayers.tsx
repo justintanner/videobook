@@ -333,7 +333,10 @@ export function GraphicsLayers(props: LayersProps) {
             ))}
           </div>
         </div>
-        <Ruler clock={clock} />
+        <div className="graphics-ruler-row">
+          <span className="graphics-ruler-gutter" aria-hidden="true" />
+          <Ruler clock={clock} />
+        </div>
       </div>
       {picking && (
         <ImagePicker

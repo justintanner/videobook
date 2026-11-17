@@ -13,6 +13,7 @@ import {
   graphicsClearSpotMessage,
   graphicsOpenEdits,
   graphicsRenderQueuedMessage,
+  graphicsReopenEdits,
   graphicsSlotText,
   graphicsTemplateMessage,
   graphicsToolError,
@@ -290,13 +291,19 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
   }, [commit, edit, fetchRead])
 
   const open = useCallback((target: GraphicsTarget) => {
+    const current = stateRef.current
+    const inPlace = graphicsReopenEdits({ ...current, editable: current.save !== 'conflict' && !current.rendering }, target)
+    if (inPlace) {
+      if (inPlace.length > 0) edit(inPlace)
+      return
+    }
     epoch.current += 1
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = null
     renderRequest.current = null
     commit(() => ({ ...EMPTY, target, loading: true, output: defaultOutput(target) }))
     void load(epoch.current)
-  }, [commit, load])
+  }, [commit, edit, load])
 
   const close = useCallback(() => {
     void flush()

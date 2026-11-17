@@ -353,6 +353,17 @@ export function graphicsOpenEdits(document: GraphicsDocument, target: Pick<Graph
   return [...graphicsImageEdits(document, target.image), ...graphicsTextEdits(document, target.text), ...watermarkOpenEdits(document, target.watermark, read)]
 }
 
+type OpenGraphics = { target: GraphicsTarget | null; document: GraphicsDocument | null; read: GraphicsRead | null; editable: boolean }
+
+function sameGraphicsTarget(current: GraphicsTarget, next: GraphicsTarget): boolean {
+  return current.artifactId === next.artifactId && (current.watermark?.platform ?? null) === (next.watermark?.platform ?? null)
+}
+
+export function graphicsReopenEdits(open: OpenGraphics, next: GraphicsTarget): GraphicsEdit[] | null {
+  if (!open.target || !open.document || !open.editable || !sameGraphicsTarget(open.target, next)) return null
+  return graphicsOpenEdits(open.document, next, open.read)
+}
+
 export function graphicsWatermarkSwitchEdits(document: GraphicsDocument, read: GraphicsRead): GraphicsEdit[] {
   const look = read.watermark?.look
   if (!look) return []

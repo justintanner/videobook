@@ -26,6 +26,7 @@ import {
   graphicsQuickFields,
   graphicsRenderBlocker,
   graphicsRenderQueuedMessage,
+  graphicsReopenEdits,
   graphicsSelectionAfterRemove,
   graphicsSlotHolder,
   graphicsSuggestionLabel,
@@ -300,6 +301,20 @@ describe('graphics text from chat and voice', () => {
     expect(opened.document.layers.filter((layer) => layer.kind === 'image')).toHaveLength(1)
     expect(graphicsSlotText(opened.document, 'headline')).toBe(THAI_TITLE)
     expect(graphicsSlotText(stepGraphicsHistory(opened, 'undo')!.document, 'headline')).toBe('')
+  })
+
+  it('applies chat text to the video already open instead of reloading it', () => {
+    const target = { artifactId: 'video-1', kind: 'video' as const, label: 'red light', mediaUrl: '/v.mp4', address: 'a1', notebookId: 'nb', image: null, text: null, watermark: null }
+    const open = { target, document: titled(), read: read(), editable: true }
+    const edits = graphicsReopenEdits(open, { ...target, text: { headline: THAI_TITLE, secondary: 'Bangkok' } })
+    expect(edits?.map((edit) => edit.op)).toEqual(['set_slot_text', 'set_slot_text'])
+    expect(graphicsSlotText(apply(open.document, edits!), 'headline')).toBe(THAI_TITLE)
+    expect(graphicsReopenEdits(open, target)).toEqual([])
+    expect(graphicsReopenEdits(open, { ...target, artifactId: 'video-2' })).toBeNull()
+    expect(graphicsReopenEdits(open, { ...target, watermark: { platform: 'tiktok', handle: null, includeQr: null } })).toBeNull()
+    expect(graphicsReopenEdits({ ...open, editable: false }, target)).toBeNull()
+    expect(graphicsReopenEdits({ ...open, document: null }, target)).toBeNull()
+    expect(graphicsReopenEdits({ ...open, target: null }, target)).toBeNull()
   })
 })
 
