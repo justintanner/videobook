@@ -9,7 +9,7 @@ import express from 'express'
 import sharp from 'sharp'
 import { v7 as uuidv7 } from 'uuid'
 import { chromium } from 'playwright'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Locator, Page } from 'playwright'
 import type { Engine } from 'videobook-engine'
 import { firstEmptyNotebookGridSlot, notebookGridTag, notebookOccupiedSlots } from 'videobook-engine/notebook-grid'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -65,6 +65,7 @@ describe('goal mode in the browser', () => {
   const status = () => page.locator('.goal-status-button')
   const panel = () => page.locator('.goal-panel')
   const tile = (goal: GoalSnapshot) => page.locator(`.react-flow__node[data-id="${goal.cellId}"]`)
+  const stepNames = (tabs: Locator) => tabs.getByRole('button').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label')))
   const screenshot = async (name: string) => {
     if (process.env.VIDEOBOOK_GOAL_SCREENSHOTS) await page.screenshot({ path: join(process.env.VIDEOBOOK_GOAL_SCREENSHOTS, `${name}.png`) })
   }
@@ -209,7 +210,7 @@ describe('goal mode in the browser', () => {
       expect(stub.plannerRequests).toHaveLength(1)
       if (savedKeys.OPENAI_API_KEY === undefined) delete process.env.OPENAI_API_KEY
       else process.env.OPENAI_API_KEY = savedKeys.OPENAI_API_KEY
-      const tabs = panel().getByRole('navigation', { name: 'Short stages' })
+      const tabs = panel().getByRole('navigation', { name: 'Goal steps' })
       const openTab = async (name: string) => {
         if (!(await panel().isVisible())) {
           await tile(short).click()
@@ -223,15 +224,16 @@ describe('goal mode in the browser', () => {
         await tile(short).click()
         await panel().waitFor({ state: 'visible', timeout: testBudget(15_000) })
       }
-      expect(await tabs.getByRole('button', { name: 'Frame', exact: true }).getAttribute('aria-pressed')).toBe('true')
-      expect(await tabs.getByRole('button').allTextContents()).toEqual(['Frame', 'Video', 'Finish'])
-      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review frame · $0.21')
+      expect(await tabs.getByRole('button', { name: 'Frame', exact: true }).getAttribute('aria-current')).toBe('step')
+      expect(await stepNames(tabs)).toEqual(['Recipe', 'Frame', 'Video', 'Finish'])
+      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Generate the frame · $0.21')
+      expect(await panel().locator('.goal-panel-status').textContent()).toBe('Generate the frame · $0.21')
       expect(await primary(/^Generate frame/).isDisabled()).toBe(false)
       expect(await panel().getByText('No reference image for Main character, so the frame is generated from the description.').count()).toBe(0)
       await screenshot('goal-frame-first')
       await expect.poll(() => primary(/^Generate frame · \$0\.21$/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
       await primary(/^Generate frame/).click()
-      await expect.poll(() => status().textContent(), { timeout: testBudget(90_000) }).toContain('Review clip 1 of 1 · at least $')
+      await expect.poll(() => status().textContent(), { timeout: testBudget(90_000) }).toContain('Generate clip 1 of 1 · at least $')
 
       await openTab('Video')
       await panel().getByLabel('New beat', { exact: true }).fill('He steps back from a splash and boards the bus.')
@@ -240,11 +242,11 @@ describe('goal mode in the browser', () => {
       await expect.poll(async () => shortGoal(await current(short)).shortPlan?.segments.map(segment => segment.seconds), { timeout: testBudget(15_000) }).toEqual([12, 5])
       await openTab('Video')
       await primary(/^Generate clip · at least \$/).click()
-      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review clip 2 of 2 · at least $')
+      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Generate clip 2 of 2 · at least $')
       await openTab('Video')
       expect(await panel().getByLabel('Current clip', { exact: true }).isVisible()).toBe(true)
       await primary(/^Continue · clip 2 · at least \$/).click()
-      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review finish · 0:17')
+      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Ready to finish · 0:17')
 
       await openTab('Finish')
       const writeTitle = panel().getByRole('button', { name: /^Write title · \$\d+\.\d\d$/u })
@@ -351,7 +353,7 @@ describe('goal mode in the browser', () => {
       expect(stub.plannerRequests).toHaveLength(1)
       if (savedKeys.OPENAI_API_KEY === undefined) delete process.env.OPENAI_API_KEY
       else process.env.OPENAI_API_KEY = savedKeys.OPENAI_API_KEY
-      const tabs = panel().getByRole('navigation', { name: 'Short stages' })
+      const tabs = panel().getByRole('navigation', { name: 'Goal steps' })
       const openTab = async (name: string) => {
         if (!(await panel().isVisible())) {
           await tile(short).click()
@@ -365,28 +367,29 @@ describe('goal mode in the browser', () => {
         await tile(short).click()
         await panel().waitFor({ state: 'visible', timeout: testBudget(15_000) })
       }
-      await expect.poll(() => tabs.getByRole('button').allTextContents(), { timeout: testBudget(15_000) }).toEqual(['Replace character', 'Twist', 'Video', 'Finish'])
-      expect(await tabs.getByRole('button', { name: 'Replace character', exact: true }).getAttribute('aria-pressed')).toBe('true')
-      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Review character replacement · $0.21')
+      await expect.poll(() => stepNames(tabs), { timeout: testBudget(15_000) }).toEqual(['Character', 'Twist', 'Video', 'Finish'])
+      expect(await tabs.getByRole('button', { name: 'Character', exact: true }).getAttribute('aria-current')).toBe('step')
+      await expect.poll(() => status().textContent(), { timeout: testBudget(15_000) }).toContain('Replace the character · $0.21')
       expect(await tile(short).locator('.goal-tile-row-title').allTextContents()).toEqual(['Extract frame', 'Replace character'])
       expect(await panel().getByRole('button', { name: /^Open Extracted source frame/ }).count()).toBe(1)
       await openTab('Twist')
-      expect(await primary(/^Add twist/).isDisabled()).toBe(true)
+      expect(await primary(/^Add twist/).count()).toBe(0)
+      await panel().getByRole('button', { name: /^Go to Character/ }).click()
+      expect(await tabs.getByRole('button', { name: 'Character', exact: true }).getAttribute('aria-current')).toBe('step')
       await screenshot('goal-replace-first')
-      await openTab('Replace character')
       await primary(/^Replace character/).click()
-      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review twist · $0.21')
+      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Add the twist · $0.21')
       expect(await tile(short).locator('.goal-tile-row-title').allTextContents()).toEqual(['Twist'])
       await page.reload()
       await tile(short).waitFor({ state: 'visible', timeout: testBudget(15_000) })
-      await openTab('Replace character')
+      await openTab('Character')
       expect(await panel().getByRole('button', { name: 'Replacement v1', exact: true }).count()).toBe(1)
       await openTab('Twist')
       expect(await panel().getByRole('button', { name: 'Open Reviewed replacement', exact: true }).count()).toBe(1)
       await screenshot('goal-twist-review')
       await expect.poll(() => primary(/^Add twist/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
       await primary(/^Add twist/).click()
-      await expect.poll(() => status().textContent(), { timeout: testBudget(90_000) }).toContain('Review clip 1 of 1 · at least $')
+      await expect.poll(() => status().textContent(), { timeout: testBudget(90_000) }).toContain('Generate clip 1 of 1 · at least $')
       await openTab('Video')
       const references = panel().getByLabel('Video references', { exact: true })
       const sourceVideo = references.getByRole('button', { name: /^Open @video1 · Source video/ })
@@ -395,7 +398,7 @@ describe('goal mode in the browser', () => {
       expect(await references.getByRole('button', { name: 'Open @image1 · Reviewed twist', exact: true }).count()).toBe(1)
       await screenshot('goal-video-references')
       await primary(/^Generate clip · at least \$/).click()
-      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Review finish · 0:12')
+      await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Ready to finish · 0:12')
       await openTab('Finish')
       await expect.poll(() => primary(/^Finish$/).isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
       await primary(/^Finish$/).click()
@@ -474,8 +477,7 @@ describe('goal mode in the browser', () => {
       await page.reload()
       await tile(goal).waitFor({ state: 'visible', timeout: testBudget(30_000) })
       if (!(await panel().isVisible())) await tile(goal).click()
-      const sections = panel().getByRole('group', { name: 'Goal sections' })
-      await sections.getByRole('button', { name: 'History', exact: true }).click()
+      await panel().getByRole('button', { name: /^\d+ takes?$/u }).click()
       const history = panel().locator('.goal-take-history')
       const take = history.locator('.goal-take-entry').filter({ has: page.getByText(manualPrompt, { exact: true }) })
       await take.locator(':scope > summary').click()
@@ -489,13 +491,15 @@ describe('goal mode in the browser', () => {
       await take.getByLabel('I reviewed this take for the current brief', { exact: true }).check()
       await adopt.click()
       await expect.poll(async () => shortGoal(await current(goal)).finish?.sourceArtifactId, { timeout: testBudget(30_000) }).toBe(manual.outputArtifactId)
-      const tabs = panel().getByRole('navigation', { name: 'Short stages' })
+      const tabs = panel().getByRole('navigation', { name: 'Goal steps' })
       await tabs.getByRole('button', { name: 'Video', exact: true }).click()
       expect(await panel().getByLabel('Changed action prompt', { exact: true }).isVisible()).toBe(true)
       expect(await panel().getByRole('button', { name: 'Add beat', exact: true }).count()).toBe(0)
       await tabs.getByRole('button', { name: 'Finish', exact: true }).click()
       const finish = panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: /^Finish$/ })
-      expect(await finish.isDisabled()).toBe(true)
+      expect(await finish.count()).toBe(0)
+      expect(await panel().locator('.goal-next').textContent()).toContain('Choose which part of the take goes into the short')
+      await panel().getByRole('button', { name: /^Go to Video/ }).click()
       const window = panel().getByRole('group', { name: 'Retained action window' })
       for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
         await page.setViewportSize(viewport)
@@ -503,12 +507,12 @@ describe('goal mode in the browser', () => {
         expect(await window.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
       }
       await window.getByLabel('Retained action start seconds').fill('1')
-      await window.getByLabel('The whole action and payoff are inside this window').check()
       await screenshot('goal-action-window-mobile')
-      await window.getByRole('button', { name: 'Use this action window', exact: true }).click()
+      await panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: /^Use this window$/ }).click()
       await expect.poll(async () => shortGoal(await current(goal)).actionWindow?.startFrame, { timeout: testBudget(30_000) }).toBe(12)
-      await sections.getByRole('button', { name: 'Plan', exact: true }).click()
-      const initial = panel().locator('.goal-initial-analysis')
+      await expect.poll(() => window.getByText('Saved for the short').count(), { timeout: testBudget(15_000) }).toBe(1)
+      await tabs.getByRole('button', { name: 'Recipe', exact: true }).click()
+      const initial = panel().locator('.goal-recipe')
       for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
         await page.setViewportSize(viewport)
         await initial.scrollIntoViewIfNeeded()
@@ -516,7 +520,7 @@ describe('goal mode in the browser', () => {
         expect(widths.content, `${viewport.width}px: ${JSON.stringify(widths)}`).toBeLessThanOrEqual(widths.available + 1)
       }
       await initial.getByLabel('Apply saved branding', { exact: true }).uncheck()
-      await initial.getByRole('group', { name: 'Remix audio', exact: true }).getByRole('button', { name: 'Generated sound', exact: true }).click()
+      await initial.getByRole('group', { name: 'Remix audio', exact: true }).getByRole('button', { name: 'Generated', exact: true }).click()
       await initial.getByLabel('Offer automatic continuation for this recipe', { exact: true }).check()
       await initial.getByLabel('Default continuation allowance USD', { exact: true }).fill('0')
       await initial.getByRole('button', { name: 'Use current book branding', exact: true }).click()
@@ -526,7 +530,9 @@ describe('goal mode in the browser', () => {
       }, { timeout: testBudget(30_000) }).toBe(false)
       expect(goal.actionWindow?.startFrame).toBe(12)
       expect(goal.stages.videos!.outputs[0]).toMatchObject({ artifactId: manual.outputArtifactId, stale: null })
+      await tabs.getByRole('button', { name: 'Finish', exact: true }).click()
       await expect.poll(() => finish.isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
+      await panel().getByRole('button', { name: 'Run the rest…', exact: true }).click()
       const automatic = panel().getByRole('region', { name: 'Automatic continuation', exact: true })
       for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
         await page.setViewportSize(viewport)
@@ -583,7 +589,8 @@ describe('goal mode in the browser', () => {
       if (!(await panel().isVisible())) await tile(goal).click()
       const preparation = panel().locator('.goal-source-preparation')
       await preparation.waitFor({ state: 'visible', timeout: testBudget(15_000) })
-      expect(await panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: /^Insert character/ }).isDisabled()).toBe(true)
+      expect(await panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: /^Insert character/ }).count()).toBe(0)
+      expect(await panel().locator('.goal-next').textContent()).toContain('Prepare the source: mark the on-screen graphics to remove.')
       await preparation.getByLabel('Goal removal method').selectOption('fill')
       await preparation.getByRole('button', { name: 'Add region', exact: true }).click()
       for (const size of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
@@ -604,7 +611,8 @@ describe('goal mode in the browser', () => {
       const preparedId = recipe.analysis.recipe.preparedArtifactId
       expect(preparedId).not.toBe(video.value.artifactId)
       await expect.poll(() => preparation.getByLabel('Prepared source video').getAttribute('src'), { timeout: testBudget(30_000) }).toContain(preparedId)
-      expect(await panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: /^Insert character/ }).isDisabled()).toBe(true)
+      expect(await panel().locator('.goal-panel-bar .goal-panel-primary', { hasText: /^Insert character/ }).count()).toBe(0)
+      await expect.poll(() => panel().locator('.goal-next').textContent(), { timeout: testBudget(15_000) }).toContain('Watch the cleaned source, then press Use reviewed source.')
       await screenshot('goal-cleaned-source-review')
       await preparation.getByLabel('The graphics are removed, the fill looks acceptable, and the sound is intact.').check()
       await preparation.getByRole('button', { name: 'Use reviewed source', exact: true }).click()
@@ -651,7 +659,7 @@ describe('goal mode in the browser', () => {
       await tile(earlier).click()
       await panel().waitFor({ state: 'visible', timeout: testBudget(15_000) })
       expect(await panel().getByText('Made by an earlier /goal.', { exact: false }).isVisible()).toBe(true)
-      expect(await panel().getByRole('navigation', { name: 'Short stages' }).count()).toBe(0)
+      expect(await panel().getByRole('navigation', { name: 'Goal steps' }).count()).toBe(0)
       const outputs = panel().getByRole('list', { name: 'Outputs' }).getByRole('button')
       expect(await outputs.allTextContents()).toEqual(earlier.outputs.map(output => output.address))
       const target = earlier.outputs[1]!

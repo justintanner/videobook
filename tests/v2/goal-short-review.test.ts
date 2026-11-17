@@ -10,7 +10,8 @@ import type { NodeProps } from '@xyflow/react'
 import { GoalCellNode } from '../../src/components/videobook/GoalCellNode'
 import { GoalTileContext } from '../../src/components/videobook/notebook-canvas-context'
 import type { CanvasNode } from '../../src/videobook/notebook-canvas'
-import { defaultShortTab, defaultShortView, goalTileView, LEGACY_GOAL_NOTE, type GoalSnapshot, type ShortGoalSnapshot, type ShortView } from '../../src/videobook/goals'
+import { goalTileView, LEGACY_GOAL_NOTE, type GoalSnapshot, type ShortGoalSnapshot, type ShortView } from '../../src/videobook/goals'
+import { goalNextStep } from '../../src/videobook/goal-next'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
 import { goalRemixAnalysisSchema, remixRules } from '../../server/src/goal-remix-model'
 import { goalShortPlanSchema, withShortFinishTitle, type ShortFinishTitle } from '../../server/src/goal-short-plan'
@@ -24,13 +25,20 @@ function asset(artifactId: string): AssetRecord | null {
   return { type: 'video', mediaUrl: `/media/${artifactId}.mp4`, thumbnailUrl: null, duration: 20, fps: 24, objectHash: `${artifactId}-hash` } as unknown as AssetRecord
 }
 
-function render(goal: ShortGoalSnapshot, view: ShortView = defaultShortTab(goal, goal.shortPlan!), titleOptions: readonly ShortFinishTitle[] = []): string {
+function render(goal: ShortGoalSnapshot, view: ShortView = goalNextStep(goal, goal.shortPlan!), titleOptions: readonly ShortFinishTitle[] = []): string {
   return renderToStaticMarkup(createElement(GoalShortReview, {
-    goal, plan: goal.shortPlan!, view, stage: defaultShortTab(goal, goal.shortPlan!), disabled: false,
-    resolveAsset: asset, onView: () => undefined, onPreviewCell: () => undefined, onRun: () => undefined, onAction: noop,
+    goal, plan: goal.shortPlan!, view, disabled: false, connected: true, error: null,
+    resolveAsset: asset, onView: () => undefined, onDismissError: () => undefined, onPreviewCell: () => undefined, onRun: () => undefined, onAction: noop,
     titleOptions, onWriteTitle: async () => undefined,
   }))
 }
+
+function steps(html: string): [string, string, boolean][] {
+  return [...html.matchAll(/class="goal-step" data-tone="(\w+)"( aria-current="step")? aria-label="([^"]+)"/gu)].map(match => [match[3]!, match[1]!, Boolean(match[2])])
+}
+
+const stepNames = (html: string) => steps(html).map(([name]) => name)
+const currentStep = (html: string) => steps(html).find(([, , current]) => current)?.[0]
 
 function button(html: string, label: string): string {
   const match = new RegExp(`<button[^>]*>(?:(?!</button>).)*${label.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(?:(?!</button>).)*</button>`, 'u').exec(html)
@@ -69,27 +77,32 @@ describe('GoalShortReview', () => {
     })
     const plan = goalShortPlanSchema.parse({ ...remixPlanFixture(), rules: remixRules(analysis.intent), analysis })
     const html = render(shortGoalFixture({}, plan))
-    expect(html).not.toContain('Initial analysis')
-    expect(button(html, 'Plan')).toContain('aria-pressed="false"')
-    expect(defaultShortView(shortGoalFixture({}, plan), plan)).toBe(defaultShortTab(shortGoalFixture({}, plan), plan))
+    expect(html).not.toContain('class="goal-recipe"')
+    expect(steps(html)[0]).toEqual(['Recipe', 'done', false])
+    expect(goalNextStep(shortGoalFixture({}, plan), plan)).toBe('replacement')
     const unprepared = goalShortPlanSchema.parse({ ...plan, analysis: { ...analysis, intent: { ...analysis.intent, cleanup: 'remove' }, recipe: { ...analysis.recipe, cleanupConfirmed: false },
       source: { artifactId: 'video-source', mediaHash: 'source-hash', durationSeconds: 14, fps: 24, width: 1080, height: 1920, hasAudio: true, cuts: [4, 9], sampleTimes: [1, 6, 12], observations: null, semanticStatus: 'missing', transcript: null, evidenceKey: 'evidence' } } })
-    expect(defaultShortView(shortGoalFixture({}, unprepared), unprepared)).toBe('plan')
+    expect(goalNextStep(shortGoalFixture({}, unprepared), unprepared)).toBe('plan')
     const blocked = render(shortGoalFixture({}, unprepared), 'replacement')
-    expect(blocked).toContain('Prepare and review the source in Plan before generating.')
-    expect(button(blocked, 'Insert character ·')).toContain('disabled')
-    expect(render(shortGoalFixture({}, unprepared), 'plan')).toContain('Source · 2 cuts · reference 0.00–14.00s')
+    expect(blocked).toContain('Prepare the source: mark the on-screen graphics to remove.')
+    expect(button(blocked, 'Insert character ·')).toBe('')
+    expect(button(blocked, 'Go to Recipe')).not.toBe('')
+    expect(steps(blocked)[0]).toEqual(['Recipe', 'next', false])
+    const unpreparedView = render(shortGoalFixture({}, unprepared), 'plan')
+    expect(unpreparedView).toContain('Source · 14 s · 2 cuts')
+    expect(unpreparedView).toContain('Source · 14 s · 2 cuts: Reference 0–14 s')
+    expect(button(unpreparedView, 'Go to Recipe')).toBe('')
     const planView = render(shortGoalFixture({}, plan), 'plan')
-    expect(planView).toContain('Initial analysis')
-    expect(planView).toContain('keep 0.00–12.00s')
-    expect(planView).toContain('generate 2s')
-    expect(planView).toMatch(/role="group" aria-label="Remix audio">.*?aria-pressed="true">Original audio<\/button>/u)
+    expect(planView).toContain('class="goal-recipe"')
+    expect(planView).toContain('The short · 14 s: Source 0–12 s, Generated 12–14 s')
+    expect(planView).toContain('2 s generated')
+    expect(planView).toMatch(/role="group" aria-label="Remix audio">.*?aria-pressed="true">Original<\/button>/u)
     expect(planView).not.toContain('aria-label="Default continuation allowance USD"')
     expect(planView).not.toContain('aria-label="Insertion prompt"')
-    expect(button(planView, 'Insert character ·')).not.toContain('disabled')
+    expect(button(planView, 'Go to Character')).not.toBe('')
     expect(button(planView, 'Use these defaults for this book')).not.toContain('disabled')
     expect(html).toContain('aria-label="Insertion prompt"')
-    expect(html).toContain('>Action setup</button>')
+    expect(stepNames(html)).toEqual(['Recipe', 'Character', 'Action setup', 'Video', 'Finish'])
     expect(html).not.toMatch(/<button[^>]*>Save<\/button>/u)
     expect(button(html, 'Insert character ·')).not.toContain('disabled')
   })
@@ -99,11 +112,15 @@ describe('GoalShortReview', () => {
     const first = shortGoalFixture({}, plan)
     expect(goalTileView(first, undefined).rows.map(row => row.title)).toEqual(['Extract frame', 'Replace character'])
     const replacement = render(first)
-    for (const tab of ['Replace character', 'Twist', 'Video', 'Finish']) expect(replacement).toContain(`>${tab}</button>`)
+    expect(stepNames(replacement)).toEqual(['Character', 'Twist', 'Video', 'Finish'])
+    expect(currentStep(replacement)).toBe('Character')
     expect(replacement).toContain('Extracted source frame · 3.0 s')
     expect(replacement).toContain('aria-label="Replacement prompt"')
     expect(button(replacement, 'Replace character · $0.21')).not.toContain('disabled')
-    expect(button(render(first, 'frame'), 'Add twist')).toContain('disabled')
+    const waiting = render(first, 'frame')
+    expect(button(waiting, 'Add twist')).toBe('')
+    expect(button(waiting, 'Go to Character')).not.toBe('')
+    expect(waiting).toContain('Review the character replacement before adding the twist.')
     const replaced = shortGoalFixture({ stage: 'frame', stages: { replacement: shortStage('replacement', [{ index: 0, artifactId: 'photo-replaced' }]) } }, plan)
     const twist = render(replaced)
     expect(goalTileView(replaced, undefined).rows.map(row => row.title)).toEqual(['Twist'])
@@ -114,8 +131,10 @@ describe('GoalShortReview', () => {
     const outdated = shortGoalFixture({ stage: 'videos', stages: {
       ...replaced.stages, frame: shortStage('frame', [{ index: 0, artifactId: 'photo-twist', stale: 'The replacement changed.' }]),
     } }, plan)
-    expect(button(render(outdated, 'video'), 'Generate clip')).toContain('disabled')
     const video = render(outdated, 'video')
+    expect(button(video, 'Generate clip')).toBe('')
+    expect(button(video, 'Go to Twist')).not.toBe('')
+    expect(video).toContain('The replacement changed.')
     expect(video).toContain('aria-label="Video references"')
     expect(video).toContain('@video1 · Source video')
     expect(video).toContain('@image1 · Reviewed twist')
@@ -136,9 +155,8 @@ describe('GoalShortReview', () => {
 
   it('opens a new short on Frame, the first of Frame, Video and Finish', () => {
     const html = render(shortGoalFixture())
-    expect([...html.matchAll(/aria-pressed="(true|false)">(\w+)<\/button>/gu)].map(match => [match[2], match[1]]).slice(0, 3))
-      .toEqual([['Frame', 'true'], ['Video', 'false'], ['Finish', 'false']])
-    expect(html).not.toContain('>Character</button>')
+    expect(steps(html)).toEqual([['Frame', 'next', true], ['Video', 'waiting', false], ['Finish', 'waiting', false]])
+    expect(html).not.toContain('aria-label="Character"')
     expect(html).toContain('aria-label="Short title"')
     expect(html).toContain('aria-label="Source images"')
     expect(button(html, 'Generate frame')).toContain('Generate frame · $0.21')
@@ -146,8 +164,8 @@ describe('GoalShortReview', () => {
 
   it('shows a saved version 4 character read-only', () => {
     const html = render(shortGoalFixture({}, legacyShortPlanFixture([12], [])), 'character')
-    expect([...html.matchAll(/aria-pressed="(true|false)">(\w+)<\/button>/gu)].map(match => [match[2], match[1]]).slice(0, 4))
-      .toEqual([['Character', 'true'], ['Frame', 'false'], ['Video', 'false'], ['Finish', 'false']])
+    expect(stepNames(html)).toEqual(['Character', 'Frame', 'Video', 'Finish'])
+    expect(currentStep(html)).toBe('Character')
     expect(html).toContain('This short was saved with a character. The name, description and pictures stay as they were.')
     expect(html).toContain('No reference image was saved with this short.')
     expect(html).toContain('aria-label="Character name">Main character</p>')
@@ -160,8 +178,7 @@ describe('GoalShortReview', () => {
 
   it('shows the frame tab with its estimate and the read-only rule lines', () => {
     const html = render(shortGoalFixture(), 'frame')
-    for (const tab of ['Frame', 'Video', 'Finish']) expect(html).toContain(`>${tab}</button>`)
-    expect(html).not.toContain('>Character</button>')
+    expect(stepNames(html)).toEqual(['Frame', 'Video', 'Finish'])
     expect(button(html, 'Generate frame')).toContain('Generate frame · $0.21')
     expect(button(html, 'Generate frame')).not.toContain('disabled')
     expect(html).toContain('aria-label="Always added"')
@@ -232,14 +249,15 @@ describe('GoalShortReview', () => {
   it('checks the frame and each clip for AI tells on request and lists warnings first', () => {
     const findings = [{ severity: 'note' as const, text: 'Rain streaks repeat.' }, { severity: 'warn' as const, text: 'Six fingers on the right hand.' }]
     const checked = { status: 'completed' as const, checkedAt: '2026-11-12T00:00:00Z', findings, error: null }
-    const frameHtml = render(shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', realism: checked }]) } }))
+    const frameHtml = render(shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', realism: checked }]) } }), 'frame')
     expect(frameHtml).toMatch(/aria-label="AI tells in the frame"><li data-severity="warn"><strong>Warn<\/strong> <span>Six fingers on the right hand\.<\/span><\/li><li data-severity="note">/u)
     expect(button(frameHtml, 'Check again for AI tells')).not.toContain('disabled')
     expect(frameHtml).toContain('billed like planning and never blocks a step')
-    expect(button(frameHtml, 'Regenerate frame')).not.toContain('disabled')
-    const unchecked = render(shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]) } }))
+    expect(button(frameHtml, 'New take · $0.21')).not.toContain('disabled')
+    expect(button(frameHtml, 'Revise · $0.21')).toContain('disabled')
+    const unchecked = render(shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]) } }), 'frame')
     expect(button(unchecked, 'Check for AI tells')).toContain('>Check for AI tells<')
-    expect(render(shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', realism: { ...checked, findings: [] } }]) } }))).toContain('No AI tells found in the frame.')
+    expect(render(shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', realism: { ...checked, findings: [] } }]) } }), 'frame')).toContain('No AI tells found in the frame.')
     const running = render(shortGoalFixture({ stage: 'videos', stages: { ...withFrame, videos: shortStage('videos', [{ index: 0, artifactId: 'clip-a', realism: { status: 'running', checkedAt: null, findings: [], error: null } }]) } }))
     expect(button(running, 'Checking for AI tells')).toContain('disabled=""')
     expect(running).toContain('Looking at the clip 1 for AI tells')
@@ -255,7 +273,8 @@ describe('GoalShortReview', () => {
     const html = render(goal)
     expect(html).toContain('aria-label="Reviewed take"')
     expect(html).toContain('class="goal-panel-primary">Finish</button>')
-    expect(html).toContain('burns the saved watermark')
+    expect(html).toContain('Burn the title, if any, and the saved watermark')
+    expect(html).toContain('Finish the short: burn the title and the saved watermark onto the reviewed take.')
     expect(html).not.toContain('Cold-open')
     expect(html).not.toContain('type="number"')
     const running = render({ ...goal, finish: { ...goal.finish!, status: 'running' } })
@@ -298,7 +317,7 @@ describe('GoalShortReview', () => {
     expect(html).toContain('aria-pressed="false"><strong>ฝนตกแต่รถเมล์ไม่มา</strong><span>The rain came, the bus did not</span></button>')
     expect(html).toContain('class="goal-panel-primary">Finish</button>')
     expect(button(html, 'Save')).toBe('')
-    expect(html).toContain('Each paid step needs its own approval.')
+    expect(html).toContain('Free · runs on this computer.')
   })
 
   it('disables the title with one line when the TikTok watermark template has no headline, and the English line when it has no line under it', () => {
@@ -324,13 +343,13 @@ describe('GoalShortReview', () => {
     const html = render(goal)
     expect(html).toContain('aria-label="Finished short"')
     expect(html).toContain('src="/media/final-a.mp4"')
-    expect(button(html, 'Finish')).toContain('>Finish<')
+    expect(button(html, 'Finish again')).not.toContain('disabled')
+    expect(html).toContain('Short ready · 0:20.')
     expect(html).not.toContain('Cold-open')
     expect(html).not.toContain('type="number"')
   })
 })
 
-const tabsOf = (html: string) => [...html.matchAll(/aria-pressed="(true|false)">(\w+)<\/button>/gu)].map(match => [match[2], match[1]])
 const boardGoal = (extra: Partial<ShortGoalSnapshot> = {}) => shortGoalFixture({ stage: 'storyboards', ...extra }, storyboardPlanFixture())
 const cleaned = (versions = 1) => ({
   storyboards: shortStage('storyboards', [0, 1, 2, 3].map(index => ({ index, artifactId: `clean-${index + 1}`, versions: index === 2 ? versions : 1 }))),
@@ -339,10 +358,11 @@ const cleaned = (versions = 1) => ({
 describe('GoalShortReview with a storyboard', () => {
   it('opens a short made from a video on Storyboard, the first of Storyboard, Frame, Video and Finish', () => {
     const html = render(boardGoal())
-    expect(tabsOf(html).slice(0, 4)).toEqual([['Storyboard', 'true'], ['Frame', 'false'], ['Video', 'false'], ['Finish', 'false']])
-    expect(html).toContain('Seedream 5.5 storyboard clean-up · GPT Image 2.6 frame · H3 Max video')
+    expect(stepNames(html)).toEqual(['Storyboard', 'Frame', 'Video', 'Finish'])
+    expect(currentStep(html)).toBe('Storyboard')
+    expect(html).toContain('Clean-up runs on Seedream 5.5.')
     expect(render(shortGoalFixture({ stage: 'storyboards' }, storyboardPlanFixture(undefined, undefined, undefined, 'fal:google/nano-banana-2.1/edit'))))
-      .toContain('Nano Banana 2.1 storyboard clean-up · GPT Image 2.6 frame · H3 Max video')
+      .toContain('Clean-up runs on Nano Banana 2.1.')
     expect(html).toContain('4 frames of Umbrella walk (@d1), in order.')
     expect(html).toContain('aria-label="Storyboard frames"')
     for (const index of [1, 2, 3, 4]) expect(html).toContain(`aria-label="Open Storyboard ${index} before · @a${index + 2}"`)
@@ -360,7 +380,8 @@ describe('GoalShortReview with a storyboard', () => {
 
   it('keeps Generate frame disabled, saying why, until the storyboard is clean', () => {
     const html = render(boardGoal(), 'frame')
-    expect(button(html, 'Generate frame')).toContain('disabled=""')
+    expect(button(html, 'Generate frame')).toBe('')
+    expect(button(html, 'Go to Storyboard')).not.toBe('')
     expect(html).toContain('Remove the on-screen graphics from the storyboard first: the frame is made from clean storyboard frame 1.')
     const clean = render(boardGoal({ stage: 'frame', stages: cleaned() }), 'frame')
     expect(button(clean, 'Generate frame')).toContain('Generate frame · $0.21')
@@ -430,23 +451,27 @@ describe('GoalShortReview with a storyboard', () => {
 const panelProps = { connected: true, onAction: noop, onWriteTitle: async () => [], onSelectCell: () => undefined, onPreviewCell: () => undefined, resolveAsset: asset }
 
 describe('GoalPanel with a short', () => {
-  it('opens a new short on Frame and a saved version 4 short on Character', () => {
+  it('opens each short on the step that holds its next action, with the same status as the composer', () => {
     const fresh = renderToStaticMarkup(createElement(GoalPanel, { ...panelProps, goal: shortGoalFixture() }))
-    expect(fresh).toContain('aria-pressed="true">Frame</button>')
-    expect(fresh).not.toContain('>Character</button>')
+    expect(currentStep(fresh)).toBe('Frame')
+    expect(fresh).not.toContain('aria-label="Character"')
+    expect(fresh).toContain('title="Generate the frame · $0.21">Generate the frame · $0.21</span>')
+    expect(fresh).toContain('Est. at least $1.41')
+    expect(fresh).toContain('aria-label="More goal actions"')
+    expect(fresh).toContain('>Discard goal</button>')
     const saved = renderToStaticMarkup(createElement(GoalPanel, { ...panelProps, goal: shortGoalFixture({}, legacyShortPlanFixture()) }))
-    expect(saved).toContain('aria-pressed="true">Character</button>')
-    expect(saved).toContain('This short was saved with a character.')
+    expect(stepNames(saved)).toEqual(['Character', 'Frame', 'Video', 'Finish'])
+    expect(currentStep(saved)).toBe('Frame')
     const framed = renderToStaticMarkup(createElement(GoalPanel, { ...panelProps, goal: shortGoalFixture({ stages: { frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a' }]) } }) }))
-    expect(framed).toContain('aria-pressed="true">Frame</button>')
+    expect(currentStep(framed)).toBe('Video')
     const boarded = renderToStaticMarkup(createElement(GoalPanel, { ...panelProps, goal: boardGoal() }))
-    expect(boarded).toContain('aria-pressed="true">Storyboard</button>')
+    expect(currentStep(boarded)).toBe('Storyboard')
     expect(button(boarded, 'Remove on-screen graphics')).toContain('Remove on-screen graphics · $0.84')
   })
 
   it('opens the short review for a current short and the older reviews for earlier goals', () => {
     const props = panelProps
-    expect(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture() }))).toContain('aria-label="Short stages"')
+    expect(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture() }))).toContain('aria-label="Goal steps"')
     expect(renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture({ status: 'planning', shortPlan: undefined }) }))).toContain('Planning the frame and the beats of your short')
     const failed = renderToStaticMarkup(createElement(GoalPanel, { ...props, goal: shortGoalFixture({ status: 'failed', shortPlan: undefined, error: 'OpenAI API error 500' }) }))
     expect(failed).toContain('>Short<')
@@ -469,7 +494,7 @@ describe('GoalPanel with an earlier goal', () => {
     expect(html).toMatch(/<span>Video<\/span><span class="goal-panel-muted">Removed from the notebook<\/span>/u)
     expect(button(html, 'Dismiss')).not.toContain('disabled')
     for (const label of ['Generate', 'Retry', 'Finish', 'Approve', 'Discard goal']) expect(html).not.toContain(`>${label}`)
-    expect(html).not.toContain('aria-label="Short stages"')
+    expect(html).not.toContain('aria-label="Goal steps"')
   })
 
   it('plays the finished video of a version-3 goal and keeps an already dismissed goal from dismissing again', () => {

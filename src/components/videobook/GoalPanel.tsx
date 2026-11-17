@@ -1,12 +1,14 @@
 import { useRef, useState, type ReactNode } from 'react'
 import type { ShortFinishTitle } from '../../../server/src/goal-short-plan'
-import { Flag } from 'lucide-react'
+import { Flag, History } from 'lucide-react'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
-  defaultShortTab, defaultShortView, goalCanRetry, goalProgress, goalStatusLine, goalStopLabel, goalTileView, LEGACY_GOAL_NOTE, shortPlanOf,
-  type GoalSnapshot, type LegacyGoalSnapshot, type ShortTab, type ShortView,
+  goalCanRetry, goalProgress, goalStatusLine, goalStopLabel, goalTileView, LEGACY_GOAL_NOTE, shortEstimateText, shortPlanOf,
+  type GoalSnapshot, type LegacyGoalSnapshot, type ShortGoalSnapshot, type ShortView,
 } from '@/videobook/goals'
+import { goalNextStep } from '@/videobook/goal-next'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
+import { GoalMoreMenu, type GoalMenuItem } from './GoalMoreMenu'
 import { GoalShortReview } from './GoalShortReview'
 import './GoalPanel.css'
 
@@ -38,22 +40,26 @@ function LegacyGoalSummary({ goal, onSelectCell, resolveAsset }: { goal: LegacyG
   </div>
 }
 
+function goalMenu(goal: ShortGoalSnapshot, disabled: boolean, act: (args: GoalAction) => void): GoalMenuItem[] {
+  const reviewing = goalProgress(goal).phase === 'review' && goal.finish?.status !== 'running'
+  const finished = ['completed', 'failed', 'interrupted', 'cancelled'].includes(goal.status)
+  return [
+    ...(reviewing ? [{ label: 'Discard goal', danger: true, disabled, onSelect: () => act({ action: 'cancel' }) }] : []),
+    ...(finished ? [{ label: 'Dismiss', disabled: disabled || Boolean(goal.dismissedAt), onSelect: () => act({ action: 'dismiss' }) }] : []),
+  ]
+}
+
 export function GoalPanel({ goal, connected, onAction, onWriteTitle, onSelectCell, onPreviewCell, resolveAsset }: GoalPanelProps) {
   const [pending, setPending] = useState(false)
   const [titleOptions, setTitleOptions] = useState<ShortFinishTitle[]>([])
   const pendingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<ShortView | null>(null)
-  const [stageTab, setStageTab] = useState<ShortTab | null>(null)
   const shortPlan = shortPlanOf(goal)
-  const shortView = goal.legacy || !shortPlan ? null : tab ?? defaultShortView(goal, shortPlan)
+  const shortView = goal.legacy || !shortPlan ? null : tab ?? goalNextStep(goal, shortPlan)
   const line = goalStatusLine(goal)
   const view = goalTileView(goal, undefined)
   const disabled = pending || !connected
-  const showView = (next: ShortView) => {
-    setTab(next)
-    if (next !== 'plan' && next !== 'history') setStageTab(next)
-  }
   const perform = async (work: () => Promise<unknown>) => {
     if (!connected || pendingRef.current) return
     pendingRef.current = true
@@ -66,13 +72,14 @@ export function GoalPanel({ goal, connected, onAction, onWriteTitle, onSelectCel
     }
   }
   const act = (args: GoalAction) => { void perform(() => onAction({ ...args, goal_id: goal.goalId })) }
-  const header = (actions: ReactNode) => <header>
-    <span className="inspector-cell-title goal-panel-title"><Flag size={14} className="goal-panel-flag" /><strong>GOAL</strong>{goal.address && <code className="inspector-cell-address">{goal.address}</code>}<span className="goal-panel-name" title={view.title}>{view.title}</span><span className="goal-tile-chip" data-tone={view.chip.tone}>{view.chip.label}</span></span>
+  const header = (status: ReactNode, actions: ReactNode) => <header>
+    <span className="inspector-cell-title goal-panel-title"><Flag size={14} className="goal-panel-flag" /><strong>GOAL</strong>{goal.address && <code className="inspector-cell-address">{goal.address}</code>}<span className="goal-panel-name" title={view.title}>{view.title}</span>{status}</span>
     <div className="inspector-header-actions"><div className="inspector-generation-header-actions">{actions}</div><ComposerDockClose /></div>
   </header>
   if (goal.legacy) {
     return <div className="composer-notebook-dock inspector goal-panel" data-tone={line.tone}>
-      {header(<button type="button" disabled={disabled || Boolean(goal.dismissedAt) || ['planning', 'review', 'running'].includes(goal.status)} onClick={() => act({ action: 'dismiss' })}>Dismiss</button>)}
+      {header(<span className="goal-tile-chip" data-tone={view.chip.tone}>{view.chip.label}</span>,
+        <button type="button" disabled={disabled || Boolean(goal.dismissedAt) || ['planning', 'review', 'running'].includes(goal.status)} onClick={() => act({ action: 'dismiss' })}>Dismiss</button>)}
       <div className="goal-panel-body">
         {!connected && <p role="status" className="goal-panel-muted">Reconnecting. The goal's images and videos stay in the notebook.</p>}
         {error && <p role="alert" className="goal-panel-error">{error}</p>}
@@ -81,37 +88,43 @@ export function GoalPanel({ goal, connected, onAction, onWriteTitle, onSelectCel
     </div>
   }
   const progress = goalProgress(goal)
-  const active = goal.status === 'planning' || goal.status === 'running'
-  const finished = ['completed', 'failed', 'interrupted', 'cancelled'].includes(goal.status)
   const retry = goalCanRetry(goal)
+  const reviewing = Boolean(shortPlan) && goal.status !== 'planning'
+  const takes = goal.generationHistory?.length ?? 0
+  const total = goal.estimate.total
   return <div className="composer-notebook-dock inspector goal-panel" data-tone={line.tone}>
-    {header(<>
-      {progress.phase === 'review' && <button type="button" disabled={disabled} onClick={() => act({ action: 'cancel' })}>{goal.finish?.status === 'running' ? 'Stop finishing' : 'Discard goal'}</button>}
-      {active && <button type="button" disabled={disabled} onClick={() => act({ action: 'cancel' })}>{goalStopLabel(goal)}</button>}
-      {finished && <button type="button" disabled={disabled || Boolean(goal.dismissedAt)} onClick={() => act({ action: 'dismiss' })}>Dismiss</button>}
+    {header(<span className="goal-panel-status" data-tone={line.tone} title={line.text}>{line.text}</span>, <>
+      {reviewing && total.usd !== null && <span className="goal-panel-estimate" title="Estimated total for this short">Est. {shortEstimateText(total)}</span>}
+      {reviewing && takes > 0 && <button type="button" className="goal-panel-takes" aria-pressed={shortView === 'history'} onClick={() => setTab(shortView === 'history' ? null : 'history')}>
+        <History size={13} aria-hidden="true" />{takes} {takes === 1 ? 'take' : 'takes'}
+      </button>}
+      <GoalMoreMenu items={goalMenu(goal, disabled, act)} />
     </>)}
     <div className="goal-panel-body">
-      {shortPlan && shortView && goal.status !== 'planning' && <GoalShortReview
+      {reviewing && shortPlan && shortView && <GoalShortReview
         key={`${goal.goalId}:${goal.revision}`}
         goal={goal}
         plan={shortPlan}
         view={shortView}
-        stage={stageTab ?? defaultShortTab(goal, shortPlan)}
         disabled={disabled}
+        connected={connected}
+        error={error}
         resolveAsset={resolveAsset}
-        onView={showView}
+        onView={setTab}
+        onDismissError={() => setError(null)}
         onPreviewCell={onPreviewCell}
         onRun={work => { void perform(work) }}
         onAction={args => onAction({ ...args, goal_id: goal.goalId })}
         titleOptions={titleOptions}
         onWriteTitle={async () => setTitleOptions(await onWriteTitle())}
       />}
-      {!connected && <p role="status" className="goal-panel-muted">Reconnecting. Your goal is saved; generation continues on the server.</p>}
-      {error && <p role="alert" className="goal-panel-error">{error}</p>}
-      {goal.error && (progress.phase === 'failed' || progress.phase === 'interrupted') && <p role="alert" className="goal-panel-error">{goal.error}</p>}
+      {!reviewing && !connected && <p role="status" className="goal-panel-muted">Reconnecting. Your goal is saved; generation continues on the server.</p>}
+      {!reviewing && error && <p role="alert" className="goal-panel-error">{error}</p>}
+      {!reviewing && goal.error && (progress.phase === 'failed' || progress.phase === 'interrupted') && <p role="alert" className="goal-panel-error">{goal.error}</p>}
       {progress.phase === 'planning' && <div className="goal-panel-planning"><p className="goal-panel-brief">{goal.brief}</p><p className="goal-panel-muted" role="status">{goal.preparation?.status === 'running'
         ? goal.preparation.progress ? `Preparing the source · ${goal.preparation.progress.completedFrames}/${goal.preparation.progress.totalFrames} frames · ${Math.round(goal.preparation.progress.elapsedSeconds)}s elapsed` : 'Preparing the source references…'
-        : 'Planning the frame and the beats of your short…'}</p><span className="goal-tile-placeholder" aria-hidden="true"><i /><i /><i /></span></div>}
+        : 'Planning the frame and the beats of your short…'}</p><span className="goal-tile-placeholder" aria-hidden="true"><i /><i /><i /></span>
+        <button type="button" className="goal-panel-button goal-panel-stop" disabled={disabled} onClick={() => act({ action: 'cancel' })}>{goalStopLabel(goal)}</button></div>}
       {!shortPlan && progress.phase !== 'planning' && <div className="goal-panel-planning">
         <p className="goal-panel-brief">{goal.brief}</p>
         <div className="goal-panel-bar"><div className="goal-panel-bar-copy"><span>{retry ? 'Planning writes the frame and beat prompts again. Nothing is generated until you approve it.' : 'Planning stopped before the short had a plan.'}</span></div>{retry && <button type="button" className="goal-panel-primary" disabled={disabled} onClick={() => act({ action: 'retry' })}>Retry planning</button>}</div>

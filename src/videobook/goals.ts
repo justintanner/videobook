@@ -1,5 +1,6 @@
 import type { GoalSnapshot, LegacyGoalSnapshot, ShortGoalSnapshot } from '../../server/src/tools/goal'
 import type { GoalGenerationStage } from '../../server/src/goal-store'
+import { remixAssemblyReviewKey, type GoalRemixAnalysis } from '../../server/src/goal-remix-model'
 import {
   SHORT_STORYBOARD_MODEL_TITLES, shortGenerationSegments, shortRemixOf, shortStoryboardOf, storyboardFallbackModel, type GoalShortPlan, type ShortFinishTitle, type ShortStoryboardModel,
 } from '../../server/src/goal-short-plan'
@@ -9,7 +10,13 @@ import { lowerBoundEstimate } from './provider-payload-preview'
 export type { GoalSnapshot, LegacyGoalSnapshot, ShortGoalSnapshot }
 export type ShortTab = 'storyboard' | 'character' | 'replacement' | 'frame' | 'video' | 'finish'
 export type ShortView = ShortTab | 'plan' | 'history'
-export type ShortStageState = 'done' | 'review' | 'todo'
+export type GoalReviewTarget =
+  | { kind: 'storyboard' }
+  | { kind: 'replacement', stale: string | null }
+  | { kind: 'frame', stale: string | null }
+  | { kind: 'clip', index: number, stale: string | null }
+  | { kind: 'window', seconds: number }
+  | { kind: 'finish' }
 export type GoalShotState = 'planned' | 'waiting' | 'submitting' | 'generating' | 'done' | 'failed' | 'skipped' | 'stopped'
 export type GoalPhase = 'planning' | 'review' | 'storyboards' | 'replacement' | 'frame' | 'videos' | 'complete' | 'failed' | 'interrupted' | 'stopped'
 export type GoalShotView = {
@@ -70,14 +77,6 @@ export function goalNextSegment(goal: ShortGoalSnapshot, plan: GoalShortPlan): n
   return index < 0 ? null : index
 }
 
-export function defaultShortTab(goal: ShortGoalSnapshot, plan: GoalShortPlan): ShortTab {
-  if (goal.finish && goalNextSegment(goal, plan) === null) return 'finish'
-  if (goal.stage === 'videos') return 'video'
-  if (goal.stage === 'storyboards') return 'storyboard'
-  if (goal.stage === 'replacement') return 'replacement'
-  return plan.version === 4 && !goal.stages.frame ? 'character' : 'frame'
-}
-
 export function goalStoryboardClean(goal: ShortGoalSnapshot): boolean {
   return (goal.storyboard?.frames ?? []).every(frame => frame.clean)
 }
@@ -89,30 +88,47 @@ export function goalSourceReady(plan: GoalShortPlan): boolean {
   return recipe.cleanupConfirmed && Boolean(recipe.preparedArtifactId) && recipe.cleanupReviewedHash === recipe.preparedMediaHash
 }
 
-function sourceNeedsPreparation(plan: GoalShortPlan): boolean {
-  return plan.version === 5 && plan.analysis?.intent.cleanup !== 'keep' && !goalSourceReady(plan)
+export function goalRemixAnalysisOf(plan: GoalShortPlan | null): GoalRemixAnalysis | undefined {
+  return plan?.version === 5 ? plan.analysis : undefined
 }
 
-export function defaultShortView(goal: ShortGoalSnapshot, plan: GoalShortPlan): ShortView {
-  return sourceNeedsPreparation(plan) ? 'plan' : defaultShortTab(goal, plan)
+export function goalFrameName(plan: GoalShortPlan, analysis = goalRemixAnalysisOf(plan)): string {
+  if (!shortRemixOf(plan)) return 'Frame'
+  return analysis ? 'Action setup' : 'Twist'
 }
 
-function stageOutputReady(goal: ShortGoalSnapshot, stage: 'replacement' | 'frame'): boolean {
+export function goalAssemblyClip(goal: ShortGoalSnapshot) {
+  return goal.stages.videos?.outputs.find(output => output.index === 0) ?? null
+}
+
+function goalActionSeconds(analysis: GoalRemixAnalysis): number | null {
+  const assembly = analysis.recipe.assembly
+  return assembly ? (assembly.changeEndFrame - assembly.changeStartFrame) / assembly.fps : null
+}
+
+export function goalActionWindowReviewed(goal: ShortGoalSnapshot, analysis: GoalRemixAnalysis, mediaHash?: string | null): boolean {
+  const window = goal.actionWindow
+  const clip = goalAssemblyClip(goal)
+  if (!window || !clip || window.artifactId !== clip.artifactId) return false
+  return window.recipeKey === remixAssemblyReviewKey(analysis) && (mediaHash === undefined || window.mediaHash === mediaHash)
+}
+
+function stillTarget(goal: ShortGoalSnapshot, stage: 'replacement' | 'frame'): GoalReviewTarget | null {
   const output = goal.stages[stage]?.outputs[0]
-  return Boolean(output && !output.stale)
+  if (output && !output.stale) return null
+  const stale = output?.stale ?? null
+  return stage === 'replacement' ? { kind: 'replacement', stale } : { kind: 'frame', stale }
 }
 
-function shortStageDone(goal: ShortGoalSnapshot, plan: GoalShortPlan, tab: ShortTab): boolean {
-  if (tab === 'storyboard') return goalStoryboardClean(goal)
-  if (tab === 'character') return true
-  if (tab === 'replacement' || tab === 'frame') return stageOutputReady(goal, tab)
-  if (tab === 'video') return goalNextSegment(goal, plan) === null
-  return Boolean(goal.finalArtifactId)
-}
-
-export function shortStageState(goal: ShortGoalSnapshot, plan: GoalShortPlan, tab: ShortTab): ShortStageState {
-  if (shortStageDone(goal, plan, tab)) return 'done'
-  return defaultShortTab(goal, plan) === tab ? 'review' : 'todo'
+export function goalReviewTarget(goal: ShortGoalSnapshot, plan: GoalShortPlan, analysis = goalRemixAnalysisOf(plan), actionReviewed?: boolean): GoalReviewTarget {
+  if (goal.storyboard && !goalStoryboardClean(goal)) return { kind: 'storyboard' }
+  const still = (shortRemixOf(plan) ? stillTarget(goal, 'replacement') : null) ?? stillTarget(goal, 'frame')
+  if (still) return still
+  const next = goalNextSegment(goal, plan)
+  if (next !== null) return { kind: 'clip', index: next, stale: goalStillStale(goal, 'videos', next) }
+  const seconds = analysis ? goalActionSeconds(analysis) : null
+  if (analysis && seconds !== null && !(actionReviewed ?? goalActionWindowReviewed(goal, analysis))) return { kind: 'window', seconds }
+  return { kind: 'finish' }
 }
 
 function goalStoryboardFailures(goal: ShortGoalSnapshot): number {
@@ -165,6 +181,15 @@ function stillName(stage: GoalGenerationStage, index: number): string {
 function revisionLabel(goal: ShortGoalSnapshot): string | null {
   const attempt = revisionAttempt(goal)
   return attempt ? stillName(attempt.stage, attempt.index) : null
+}
+
+export function goalRevisionLabel(goal: ShortGoalSnapshot): string | null {
+  return goal.status === 'running' ? revisionLabel(goal) : null
+}
+
+export function formatGoalSeconds(seconds: number): string {
+  const rounded = Math.round(seconds * 10) / 10
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
 }
 
 function capitalized(text: string): string {
@@ -303,6 +328,44 @@ function legacyStatusLine(goal: LegacyGoalSnapshot): GoalStatusLine {
   return statusLine(`Earlier goal · ${state}`, 'Earlier', 'Open', 'quiet', false)
 }
 
+function frameVerb(plan: GoalShortPlan, analysis: GoalRemixAnalysis | undefined): string {
+  if (!shortRemixOf(plan)) return 'Generate the frame'
+  return analysis ? 'Set up the action' : 'Add the twist'
+}
+
+function recipeStatusLine(goal: ShortGoalSnapshot, short: GoalShortPlan, analysis: GoalRemixAnalysis | undefined): GoalStatusLine | null {
+  if (!analysis) return null
+  if (goal.preparation?.status === 'running') return statusLine('Preparing the source', 'Preparing', null, 'live', true)
+  if (!goalSourceReady(short)) {
+    if (goal.preparation?.status === 'failed') return statusLine('Preparing the source failed', 'Recipe', 'Review', 'attention', false)
+    return statusLine(analysis.recipe.preparedArtifactId ? 'Check the cleaned source' : 'Prepare the source', 'Recipe', 'Review', 'review', false)
+  }
+  const blocked = analysis.findings.some(finding => finding.severity === 'error' && !finding.code.startsWith('conflicting-'))
+  return blocked ? statusLine('Fix the recipe', 'Recipe', 'Review', 'attention', false) : null
+}
+
+function reviewStatusLine(goal: ShortGoalSnapshot, short: GoalShortPlan, analysis: GoalRemixAnalysis | undefined): GoalStatusLine {
+  const recipe = recipeStatusLine(goal, short, analysis)
+  if (recipe) return recipe
+  const target = goalReviewTarget(goal, short, analysis)
+  const review = (text: string, compact: string) => statusLine(text, compact, 'Review', 'review', false)
+  if (target.kind === 'storyboard') {
+    if (goalStoryboardFailures(goal) > 0) return statusLine(storyboardFailureText(goal), 'Storyboard', 'Review', 'attention', false)
+    return review(`Clean the storyboard · ${shortEstimateText(goalStoryboardEstimate(goal))}`, 'Storyboard')
+  }
+  if (target.kind === 'replacement') {
+    const verb = analysis?.intent.character === 'insert' ? 'Insert' : 'Replace'
+    return review(`${verb} the character · ${shortEstimateText(goal.estimate.replacement)}`, 'Character')
+  }
+  if (target.kind === 'frame') return review(`${frameVerb(short, analysis)} · ${shortEstimateText(goal.estimate.frame)}`, goalFrameName(short, analysis))
+  if (target.kind === 'clip') {
+    const total = shortGenerationSegments(short).length
+    return review(`Generate clip ${target.index + 1} of ${total} · ${shortEstimateText(goal.estimate.segments?.[target.index])}`, `Clip ${target.index + 1}`)
+  }
+  if (target.kind === 'window') return review(`Pick the ${formatGoalSeconds(target.seconds)} s to keep`, 'Pick')
+  return review(`Ready to finish · ${formatGoalClock(goalPlanSeconds(short))}`, 'Finish')
+}
+
 export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null = null): GoalStatusLine {
   if (goal.legacy) return legacyStatusLine(goal)
   const short = shortPlanOf(goal)
@@ -315,15 +378,7 @@ export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null
   if (progress.phase === 'planning') return statusLine(goal.preparation?.status === 'running' ? 'Preparing source' : 'Planning', goal.preparation?.status === 'running' ? 'Preparing' : 'Planning', null, 'live', true)
   if (finish?.status === 'running') return statusLine(analysis?.recipe.assembly ? 'Assembling and finishing the reviewed edit' : 'Burning the saved watermark', 'Finishing', null, 'live', true)
   if (finish?.status === 'failed') return statusLine('Finishing failed', 'Finishing failed', 'Finish', 'attention', false)
-  if (progress.phase === 'review') {
-    if (goal.stage === 'storyboards' && goalStoryboardFailures(goal) > 0) return statusLine(storyboardFailureText(goal), 'Review', 'Review', 'attention', false)
-    if (goal.stage === 'storyboards') return statusLine(`Review storyboard · ${shortEstimateText(goalStoryboardEstimate(goal))}`, 'Review', 'Review', 'review', false)
-    if (goal.stage === 'replacement') return statusLine(`Review ${characterName} · ${shortEstimateText(goal.estimate.replacement)}`, 'Review', 'Review', 'review', false)
-    if (goal.stage !== 'videos') return statusLine(`Review ${frameName} · ${shortEstimateText(goal.estimate.frame)}`, 'Review', 'Review', 'review', false)
-    const next = progress.shots.find(shot => shot.state !== 'done' || goalStillStale(goal, 'videos', shot.index))?.index
-    if (next === undefined) return statusLine(`Review finish · ${formatGoalClock(goalPlanSeconds(short))}`, 'Review', 'Review', 'review', false)
-    return statusLine(`Review clip ${next + 1} of ${total} · ${shortEstimateText(goal.estimate.segments?.[next])}`, 'Review', 'Review', 'review', false)
-  }
+  if (progress.phase === 'review' && short) return reviewStatusLine(goal, short, analysis)
   if (progress.phase === 'storyboards' || progress.phase === 'replacement' || progress.phase === 'frame' || progress.phase === 'videos') {
     const activity = progress.active?.state === 'generating' ? `Generating${elapsedSeconds === null ? '' : ` ${formatGoalClock(elapsedSeconds)}`}` : 'Submitting'
     const revised = revisionLabel(goal)
