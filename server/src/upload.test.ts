@@ -57,6 +57,9 @@ describe("free-host media uploads", () => {
   let delayMs: number;
   let hold: boolean;
   let failures: number;
+  let falInitiations: number;
+  let falStorageStatus: number;
+  let falStorageBody: string;
   const timers = new Set<ReturnType<typeof setTimeout>>();
 
   async function serve(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -74,6 +77,12 @@ describe("free-host media uploads", () => {
       return;
     }
     if (request.url === `/${FAL_STORAGE_HOST}/storage/upload/initiate`) {
+      falInitiations += 1;
+      if (falStorageStatus !== 200) {
+        response.writeHead(falStorageStatus, { "content-type": "application/json" });
+        response.end(falStorageBody);
+        return;
+      }
       const { file_name: filename } = JSON.parse(body.toString()) as { file_name: string };
       response.setHeader("content-type", "application/json");
       response.end(JSON.stringify({ file_url: `${baseURL}/files/${filename}`, upload_url: `${baseURL}/fal-storage/${filename}` }));
@@ -128,6 +137,9 @@ describe("free-host media uploads", () => {
     delayMs = 0;
     hold = false;
     failures = 0;
+    falInitiations = 0;
+    falStorageStatus = 200;
+    falStorageBody = "";
     server = createServer((request, response) => {
       void serve(request, response).catch((error: unknown) => {
         errors.push(error);
@@ -245,6 +257,46 @@ describe("free-host media uploads", () => {
     expect(source.ok && Buffer.from(source.value).equals(oversized)).toBe(true);
     const task = engine.jobs.pending.read(job.assetId);
     expect(task.ok && task.value).toMatchObject({ taskId: FAL_TASK_ID, taskType: "fal_media" });
+  });
+
+  it.each([
+    [403, "User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing"],
+    [401, "Invalid API key"],
+  ])("reports Fal storage %i details without uploading elsewhere or submitting a generation", async (status, detail) => {
+    falStorageStatus = status;
+    falStorageBody = JSON.stringify({ detail, input: "private input", context: "private context" });
+    const { job, context, sourceId } = await generation(new AbortController().signal, FAL_EXTEND);
+    await expect(runGenerateMedia(engine, job, context)).rejects.toMatchObject({
+      message: `Fal storage error: ${status}: ${detail}`, status,
+    });
+    expect(falInitiations).toBe(1);
+    expect(uploads).toEqual([]);
+    expect(submissions).toEqual([]);
+    const source = await engine.files.read(sourceId, "original.mp4");
+    expect(source.ok && Buffer.from(source.value)).toEqual(video);
+    const task = engine.jobs.pending.read(job.assetId);
+    expect(task.ok && task.value).toBeNull();
+  });
+
+  it("keeps a non-JSON Fal authorization failure readable without exposing its response body", async () => {
+    falStorageStatus = 403;
+    falStorageBody = "<html>private gateway response</html>";
+    const { job, context } = await generation(new AbortController().signal, FAL_EXTEND);
+    await expect(runGenerateMedia(engine, job, context)).rejects.toMatchObject({ message: "Fal storage error: 403", status: 403 });
+    expect(falInitiations).toBe(1);
+    expect(uploads).toEqual([]);
+    expect(submissions).toEqual([]);
+  });
+
+  it("retains the free-host fallback for a temporary Fal storage outage", async () => {
+    falStorageStatus = 503;
+    falStorageBody = JSON.stringify({ detail: "Storage temporarily unavailable" });
+    const { job, context } = await generation(new AbortController().signal, FAL_EXTEND);
+    await expect(runGenerateMedia(engine, job, context)).resolves.toMatchObject({ status: "pending", taskId: FAL_TASK_ID });
+    expect(falInitiations).toBe(1);
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]?.bytes).toEqual(video);
+    expect(submissions).toEqual([expect.objectContaining({ video_url: `${baseURL}/files/source.mp4` })]);
   });
 
   it("keeps a video within the cap byte-for-byte and explains when a clip is too long to fit", async () => {

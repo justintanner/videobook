@@ -23,6 +23,23 @@ export function describeFalError(cause: unknown): string {
   return `${message}: ${detail.slice(0, 2000)}`;
 }
 
+export function withFalStorageErrors(base: typeof fetch): typeof fetch {
+  return async (input, init) => {
+    const response = await base(input, init);
+    if (response.ok) return response;
+    const body: unknown = await response.clone().json().catch(() => undefined);
+    const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+    const prefix = method === "PUT" ? "Fal storage PUT failed" : "Fal storage error";
+    const detail = falErrorDetail(body).slice(0, 2000);
+    throw new FalError(
+      `${prefix}: ${response.status}${detail ? `: ${detail}` : ""}`,
+      response.status,
+      response.status === 401 || response.status === 403 ? "authorization_error" : "server_error",
+      undefined, undefined, body,
+    );
+  };
+}
+
 export function falRefusalCategories(body: unknown): string[] | null {
   if (!body || typeof body !== "object" || !("detail" in body) || !Array.isArray(body.detail)) return null;
   const refusals = body.detail.filter((item: unknown): item is Record<string, unknown> =>

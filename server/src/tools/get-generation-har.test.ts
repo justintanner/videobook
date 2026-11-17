@@ -10,6 +10,7 @@ import { withBookContext } from "../book-context.js";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { flushHarCaptures, withHarCapture } from "../har-capture.js";
 import { harDirectory, writeHarSettings } from "../har-settings.js";
+import { uploadFalFile } from "../usage-providers.js";
 import { generationPayloadDef } from "./generation-payload.js";
 import { getGenerationHarDef } from "./get-generation-har.js";
 import { listCellGenerationsDef, type ListCellGenerationsResponse } from "./list-cell-generations.js";
@@ -23,6 +24,7 @@ type GenerationHarResult = {
 };
 
 const SECRETS = ["sk-live-secret-123", "cookie-secret-value", "sk-input-secret"];
+const FAL_BALANCE_ERROR = "User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing";
 
 describe("generation HAR captures", () => {
   let root: string;
@@ -47,6 +49,11 @@ describe("generation HAR captures", () => {
       req.on("end", () => {
         res.setHeader("content-type", "application/json");
         res.setHeader("set-cookie", "session=cookie-secret-value; HttpOnly");
+        if (req.url?.startsWith("/storage/upload/initiate")) {
+          res.statusCode = 403;
+          res.end(JSON.stringify({ detail: FAL_BALANCE_ERROR }));
+          return;
+        }
         if (req.url?.startsWith("/fail")) {
           res.statusCode = 422;
           res.end(JSON.stringify({ error: "image_url is required" }));
@@ -146,6 +153,41 @@ describe("generation HAR captures", () => {
     const saved = JSON.parse(await readFile(status.path!, "utf8")) as Har;
     expect(saved.log._apicity?.context).toMatchObject({ bookId: bookId(), artifactId: captured });
     expect(await inspect(plain)).toEqual({ mode: "failures", hasCapture: false, captures: 0, path: null, outcome: null });
+  });
+
+  it("recovers the reason for an older opaque Fal storage failure from its captured response", async () => {
+    await writeHarSettings({ mode: "failures" });
+    const assetId = await createAsset("fal-storage-failure");
+    await expect(withBookContext({ bookId: bookId(), engine, operation: "generate_media", artifactId: assetId }, () =>
+      uploadFalFile({ apiKey: SECRETS[0]!, restBaseURL: url }, { data: new Uint8Array([1, 2]), filename: "video.mp4", contentType: "video/mp4" }),
+    )).rejects.toThrow("Fal storage error: 403");
+    await flushHarCaptures();
+
+    for (const [message, expected] of [
+      ["Fal storage error: 403", `Fal storage error: 403: ${FAL_BALANCE_ERROR}`],
+      ["Fal storage error: 401", "Fal storage error: 401"],
+      ["Fal storage error: 403: Already explained", "Fal storage error: 403: Already explained"],
+    ]) {
+      expect((await engine.jobs.pending.forceFail(assetId, { message: message! })).ok).toBe(true);
+      const result = await generationPayloadDef(engine).handler({ book_id: bookId(), asset_id: assetId });
+      const inspected = JSON.parse(result.content[0]!.text) as { error: { message: string }; har: HarStatus };
+      expect(inspected.error.message).toBe(expected);
+      expect(inspected.har).toMatchObject({ hasCapture: true, outcome: "provider_error", captures: 1 });
+      const persisted = engine.jobs.failures.read(assetId);
+      expect(persisted.ok && persisted.value?.message).toBe(message);
+      for (const secret of SECRETS) expect(JSON.stringify(inspected)).not.toContain(secret);
+    }
+
+    const other = await createAsset("no-capture");
+    await engine.jobs.pending.forceFail(other, { message: "Fal storage error: 403" });
+    const result = await generationPayloadDef(engine).handler({ book_id: bookId(), asset_id: other });
+    expect(JSON.parse(result.content[0]!.text)).toMatchObject({ error: { message: "Fal storage error: 403" } });
+
+    await writeHarSettings({ mode: "all" });
+    await capture({ artifactId: assetId }, "/ok");
+    await engine.jobs.pending.forceFail(assetId, { message: "Fal storage error: 403" });
+    const newer = await generationPayloadDef(engine).handler({ book_id: bookId(), asset_id: assetId });
+    expect(JSON.parse(newer.content[0]!.text)).toMatchObject({ error: { message: "Fal storage error: 403" } });
   });
 
   it("falls back to the provider task id kept in the provider-task metadata", async () => {

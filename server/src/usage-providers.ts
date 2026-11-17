@@ -17,6 +17,7 @@ import { createMachGen as machgen } from "@apicity/machgen";
 import { createWaveSpeed as wavespeed } from "@apicity/wavespeed";
 import { capturedProvider, withHarCapture, withProviderCall } from "./har-capture.js";
 import { providerUsageFetch } from "./provider-usage.js";
+import { withFalStorageErrors } from "./jobs/_fal-shared.js";
 
 export function createOpenAi(options: Parameters<typeof openai>[0]): ReturnType<typeof openai> {
   return capturedProvider("openai", (fetch) => {
@@ -82,7 +83,7 @@ export function createFreeMediaUpload(options: Parameters<typeof freemediaupload
 
 export function uploadFalFile(options: Parameters<typeof fal>[0], input: Parameters<typeof falUpload>[1]): Promise<string> {
   return withHarCapture({ provider: "fal", endpoint: "storage.upload.initiate", input },
-    (fetch) => falUpload(fal({ ...options, fetch }), input), providerUsageFetch("fal", options.fetch));
+    (fetch) => falUpload(fal({ ...options, fetch: withFalStorageErrors(fetch) }), input), providerUsageFetch("fal", options.fetch));
 }
 
 export function uploadAlibabaFile(options: Parameters<typeof alibaba>[0], input: Parameters<typeof alibabaUpload>[1]): Promise<string> {

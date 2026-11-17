@@ -3,6 +3,7 @@ import type { Engine } from "videobook-engine";
 import { captureFileExists, captureFilePath, readCaptureFile, readHarIndex, type HarIndexRow, type HarOutcome } from "./har-index.js";
 import { harDirectory, type HarSettings } from "./har-settings.js";
 import { readProviderTaskRecord } from "./provider-task-record.js";
+import { falErrorDetail } from "./jobs/_fal-shared.js";
 
 export interface HarCaptureKeys {
   bookId: string | null;
@@ -95,6 +96,29 @@ export async function generationHarStatus(
     path: primary ? captureFilePath(dir, primary.file) : null,
     outcome: primary?.outcome ?? null,
   };
+}
+
+export async function capturedGenerationError(
+  keys: HarCaptureKeys,
+  message: string,
+  dir: string = harDirectory(),
+): Promise<string> {
+  const match = /^Fal storage error: (\d{3})$/u.exec(message);
+  if (!match) return message;
+  const status = Number(match[1]);
+  const latest = (await attemptCaptureRows(keys, undefined, dir)).at(-1);
+  if (latest?.provider !== "fal" || latest.endpoint !== "storage.upload.initiate"
+    || latest.outcome !== "provider_error" || latest.status !== status) return message;
+  const capture = await readCaptureFile(dir, latest.file);
+  const response = capture && scrubHar(capture.har).log.entries.at(-1)?.response;
+  if (!response || response.status !== status || !response.content.mimeType.includes("json")) return message;
+  try {
+    const body: unknown = JSON.parse(response.content.text ?? "");
+    const detail = falErrorDetail(body).slice(0, 2000);
+    return detail ? `${message}: ${detail}` : message;
+  } catch {
+    return message;
+  }
 }
 
 function combineCaptures(captures: ReadonlyArray<{ row: HarIndexRow; har: Har }>, generationId: string): Har | null {

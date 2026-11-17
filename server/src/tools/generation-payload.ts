@@ -1,6 +1,6 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { captureKeys, generationHarStatus, type GenerationHarStatus } from "../generation-har.js";
+import { capturedGenerationError, captureKeys, generationHarStatus, type GenerationHarStatus } from "../generation-har.js";
 import { readHarSettings } from "../har-settings.js";
 import { logger } from "../logger.js";
 import { readProviderTaskStatus } from "../provider-task-status.js";
@@ -30,13 +30,22 @@ type GenerationPayloadResponse = {
   har: GenerationHarStatus | null;
 };
 
-async function inspectionHar(engine: Engine, assetId: string): Promise<GenerationHarStatus | null> {
+async function inspectionDiagnostics(
+  engine: Engine,
+  assetId: string,
+  error: GenerationErrorOut | null,
+): Promise<Pick<GenerationPayloadResponse, "har" | "error">> {
   try {
     const { mode } = await readHarSettings();
-    return await generationHarStatus(await captureKeys(engine, [assetId]), mode);
-  } catch (error) {
-    logger.warn("har-capture-failed", { error });
-    return null;
+    const keys = await captureKeys(engine, [assetId]);
+    const [har, message] = await Promise.all([
+      generationHarStatus(keys, mode),
+      error ? capturedGenerationError(keys, error.message) : null,
+    ]);
+    return { har, error: error && message ? { ...error, message } : error };
+  } catch (cause) {
+    logger.warn("har-capture-failed", { error: cause });
+    return { har: null, error };
   }
 }
 
@@ -51,12 +60,11 @@ export function generationPayloadDef(engine: Engine): ToolDef {
     handler: async (args) => {
       const { book_id: _book_id, asset_id } = args as { book_id: string; asset_id: string };
 
-      const [payloadRes, taskRes, errorRes, providerTask, har] = await Promise.all([
+      const [payloadRes, taskRes, errorRes, providerTask] = await Promise.all([
         engine.metadata.artifacts.read<unknown>(asset_id, "generation-payload"),
         engine.jobs.pending.read(asset_id),
         engine.jobs.failures.read(asset_id),
         readProviderTaskStatus(engine, asset_id),
-        inspectionHar(engine, asset_id),
       ]);
 
       const task = taskRes.ok ? taskRes.value : null;
@@ -73,10 +81,9 @@ export function generationPayloadDef(engine: Engine): ToolDef {
       const response: GenerationPayloadResponse = {
         payload: payloadRes.ok ? payloadRes.value : null,
         meta: task ? task.meta : null,
-        error,
+        ...await inspectionDiagnostics(engine, asset_id, error),
         taskType: task ? task.taskType : null,
         providerTask,
-        har,
         task: task
           ? {
               taskId: task.taskId,
