@@ -1,7 +1,9 @@
 import type { Engine } from "videobook-engine";
-import { registerJobHandler, queue } from "../queue.js";
+import { registerJobHandler } from "../queue.js";
 import { cropRegion, probeImage } from "../image.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { deriveImageVariants } from "./process-image.js";
+import { withTransientStorageRetry } from "./_storage-retry.js";
 import { cropGeometry, type CropRect, type CropRatio } from "../crop-geometry.js";
 
 const LOCK_DURATION_MS = 300_000;
@@ -22,7 +24,7 @@ export function registerCropImageJob(engine: Engine): void {
       assetId, assetDir, bookId,
     } = payload as unknown as CropImagePayload;
 
-    const result = await withLockedLocalLease(
+    await withLockedLocalLease(
       engine,
       assetId,
       assetDir,
@@ -64,18 +66,15 @@ export function registerCropImageJob(engine: Engine): void {
           await engine.files.delete(assetId, inputFilename);
         }
 
-        return { extension: ".jpg" as const };
+        await withTransientStorageRetry(() => deriveImageVariants(engine, {
+          assetId,
+          bookId,
+          extension: ".jpg",
+          provenance: { origin: "crop", ratio, cropped_at: new Date().toISOString() },
+        }), ctx.signal);
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
     );
-
-    await queue.enqueueAndWait(`process-image-${assetId}-${Date.now()}`, {
-      type: "process_image",
-      assetId,
-      bookId,
-      extension: result.extension,
-      provenance: { origin: "crop", ratio, cropped_at: new Date().toISOString() },
-    } as unknown as Record<string, unknown>);
 
     return { success: true };
   });

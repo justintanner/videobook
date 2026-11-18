@@ -15,6 +15,74 @@ type ProcessImagePayload = {
   provenance: Record<string, unknown>;
 };
 
+type ProcessImageInput = Omit<ProcessImagePayload, "type">;
+
+export async function deriveImageVariants(
+  engine: Engine,
+  { assetId, bookId, extension, provenance }: ProcessImageInput,
+): Promise<{ width: number; height: number }> {
+  const readResult = await engine.files.read(assetId, `original${extension}`);
+  if (!readResult.ok) throw new Error(`Failed to read original: ${readResult.error.message}`);
+
+  let buffer = Buffer.isBuffer(readResult.value) ? readResult.value : Buffer.from(readResult.value);
+  if (extension === ".heic" || extension === ".heif") {
+    buffer = await decodeHeicToPng(buffer);
+    const converted = await engine.files.write(assetId, "original.png", buffer);
+    if (!converted.ok) throw new Error(converted.error.message);
+  }
+  const { width, height } = await probeImage(buffer);
+
+  const metadata = await engine.metadata.artifacts.write(
+    assetId,
+    "original",
+    { ...provenance, width, height },
+  );
+  if (!metadata.ok) throw new Error(metadata.error.message);
+
+  if (!SKIP_CROP_EXTENSIONS.has(extension)) {
+    const [landscape, portrait, square] = await Promise.all([
+      cropToFill(buffer, 1920, 1080),
+      cropToFill(buffer, 1080, 1920),
+      cropToFill(buffer, 1080, 1080),
+    ]);
+
+    const landscapeWrite = await engine.files.write(
+      assetId,
+      "landscape.jpg",
+      landscape,
+    );
+    if (!landscapeWrite.ok) throw new Error(landscapeWrite.error.message);
+    const portraitWrite = await engine.files.write(
+      assetId,
+      "portrait.jpg",
+      portrait,
+    );
+    if (!portraitWrite.ok) throw new Error(portraitWrite.error.message);
+    const squareWrite = await engine.files.write(
+      assetId,
+      "square.jpg",
+      square,
+    );
+    if (!squareWrite.ok) throw new Error(squareWrite.error.message);
+  }
+
+  if (process.env.NODE_ENV !== "test") {
+    await queue.enqueue(`semantic-index-${assetId}-${Date.now()}`, {
+      type: "semantic_index",
+      assetId,
+      bookId,
+    } as unknown as Record<string, unknown>);
+  }
+
+  // Tagging is not gated on timeline placement: an image that never
+  // reaches a timeline still has to be findable in the Library, and the
+  // tag job asks for the analysis it needs once per content hash.
+  if (process.env.NODE_ENV !== "test") {
+    await enqueueAssetTagging(engine, assetId);
+  }
+  return { width, height };
+}
+
 export function registerProcessImageJob(engine: Engine): void {
   registerJobHandler("process_image", async (payload, ctx) => {
     const {
@@ -22,67 +90,9 @@ export function registerProcessImageJob(engine: Engine): void {
     } = payload as ProcessImagePayload;
 
     return withLocalLease(engine, assetId, ctx, "process", async () =>
-      withTransientStorageRetry(async () => {
-        const readResult = await engine.files.read(assetId, `original${extension}`);
-        if (!readResult.ok) throw new Error(`Failed to read original: ${readResult.error.message}`);
-
-        let buffer = Buffer.isBuffer(readResult.value) ? readResult.value : Buffer.from(readResult.value);
-        if (extension === ".heic" || extension === ".heif") {
-          buffer = await decodeHeicToPng(buffer);
-          const converted = await engine.files.write(assetId, "original.png", buffer);
-          if (!converted.ok) throw new Error(converted.error.message);
-        }
-        const { width, height } = await probeImage(buffer);
-
-        const metadata = await engine.metadata.artifacts.write(
-          assetId,
-          "original",
-          { ...provenance, width, height },
-        );
-        if (!metadata.ok) throw new Error(metadata.error.message);
-
-        if (!SKIP_CROP_EXTENSIONS.has(extension)) {
-          const [landscape, portrait, square] = await Promise.all([
-            cropToFill(buffer, 1920, 1080),
-            cropToFill(buffer, 1080, 1920),
-            cropToFill(buffer, 1080, 1080),
-          ]);
-
-          const landscapeWrite = await engine.files.write(
-            assetId,
-            "landscape.jpg",
-            landscape,
-          );
-          if (!landscapeWrite.ok) throw new Error(landscapeWrite.error.message);
-          const portraitWrite = await engine.files.write(
-            assetId,
-            "portrait.jpg",
-            portrait,
-          );
-          if (!portraitWrite.ok) throw new Error(portraitWrite.error.message);
-          const squareWrite = await engine.files.write(
-            assetId,
-            "square.jpg",
-            square,
-          );
-          if (!squareWrite.ok) throw new Error(squareWrite.error.message);
-        }
-
-        if (process.env.NODE_ENV !== "test") {
-          await queue.enqueue(`semantic-index-${assetId}-${Date.now()}`, {
-            type: "semantic_index",
-            assetId,
-            bookId,
-          } as unknown as Record<string, unknown>);
-        }
-
-        // Tagging is not gated on timeline placement: an image that never
-        // reaches a timeline still has to be findable in the Library, and the
-        // tag job asks for the analysis it needs once per content hash.
-        if (process.env.NODE_ENV !== "test") {
-          await enqueueAssetTagging(engine, assetId);
-        }
-        return { success: true, width, height };
-      }, ctx.signal));
+      withTransientStorageRetry(async () => ({
+        success: true,
+        ...await deriveImageVariants(engine, { assetId, bookId, extension, provenance }),
+      }), ctx.signal));
   });
 }
