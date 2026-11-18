@@ -4,6 +4,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
 import { BOOK_SLUG_ERROR, normalizeBookSlug } from "videobook-engine/book-slug";
 import { bookObjectScope, scopedContentStore, type BookObjectScope } from "./book-object-scope.js";
+import { markBookImported } from "./book-import.js";
 import { logger } from "./logger.js";
 import {
   createEngine,
@@ -239,6 +240,7 @@ export class BookManager {
       }
       const paused = engine.settings.set(BOOK_AUTOMATION_PAUSED_KEY, true);
       if (!paused.ok) throw new Error(paused.error.message);
+      markBookImported(engine);
       engine.close();
       engine = undefined;
       const destination = this.bookRoot(actual.bookId);

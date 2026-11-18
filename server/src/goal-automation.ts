@@ -4,7 +4,8 @@ import type { Engine } from "videobook-engine";
 import { getChainRun, recoverAutomaticChainOutput } from "./chain-executor.js";
 import { captionMediaSource } from "./captions/source.js";
 import { probeVideo } from "./ffmpeg.js";
-import { assertAutomaticEstimate, assertGoalAccountReady, goalAutomationPlanKey } from "./goal-automation-guard.js";
+import { approvedInThisLibrary, assertApprovedInThisLibrary, assertAutomaticEstimate, assertGoalAccountReady, goalAutomationPlanKey, IMPORTED_GOAL_REASON } from "./goal-automation-guard.js";
+import { bookImportId } from "./book-import.js";
 import { goalAutomationTotals, type GoalAutomation, type GoalReservation } from "./goal-automation-model.js";
 import { reviewedGoalOutput } from "./goal-generation-history.js";
 import { makeGoalQualityRequest, readGoalQualityResult, reconcileGoalQuality } from "./goal-quality.js";
@@ -67,7 +68,7 @@ export async function startGoalAutomation(engine: Engine, goal: GoalRecord, args
   if (content.revision !== args.revision) throw new Error("The goal changed. Review its current revision before continuing.");
   const plan = content.plan;
   if (plan?.version !== 5 || !plan.analysis || shortStoryboardOf(plan)) throw new Error("Automatic continuation requires a current analyzed short. Saved storyboard goals keep their stage reviews.");
-  if (goal.automation?.status === "running") return goal;
+  if (goal.automation?.status === "running" && approvedInThisLibrary(engine, goal.automation)) return goal;
   if (!["review", "completed"].includes(goal.status) || goal.finish?.status === "running") throw new Error("Wait for current work or recover the existing attempt before resuming. Failed creative requests need an explicit manual retry.");
   if (args.confirmed !== true) throw new Error("Confirm the saved recipe and any selected images were reviewed before starting automatic continuation.");
   const allowance = args.allowance_usd ?? goal.automation?.allowanceUsd ?? plan.analysis.preferences.allowanceUsd;
@@ -78,7 +79,7 @@ export async function startGoalAutomation(engine: Engine, goal: GoalRecord, args
   const approvedImages = await approvedSelection(engine, goal, ["replacement", "frame"], args.reviewed_images, goal.automation?.approvedImages ?? []);
   const approvedAudio = await approvedSelection(engine, goal, ["videos"], args.reviewed_audio, goal.automation?.approvedAudio ?? []);
   const automation: GoalAutomation = { version: 1, id: goal.automation?.id ?? uuidv7(), status: "running", planKey: goalAutomationPlanKey(engine, goal), allowanceUsd: allowance,
-    approvedAt: new Date().toISOString(), approvedImages, approvedAudio, accountReviewedAt: args.account_reviewed === true ? new Date().toISOString() : goal.automation?.accountReviewedAt ?? null,
+    approvedAt: new Date().toISOString(), approvedImportId: bookImportId(engine), approvedImages, approvedAudio, accountReviewedAt: args.account_reviewed === true ? new Date().toISOString() : goal.automation?.accountReviewedAt ?? null,
     step: "Check approved recipe", reason: null, jobId: null, reservations: goal.automation?.reservations ?? [] };
   return enqueueContinuation(engine, saveGoal(engine, { ...goal, automation }));
 }
@@ -119,6 +120,7 @@ async function requireOutputChecks(engine: Engine, goal: GoalRecord): Promise<st
 }
 
 async function advance(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
+  assertApprovedInThisLibrary(engine, goal.automation!);
   goal = reconcileReservations(engine, goal);
   const automation = goal.automation!;
   if (automation.planKey !== goalAutomationPlanKey(engine, goal)) throw new Error("The approved recipe changed. Review it and resume explicitly.");
@@ -182,6 +184,10 @@ export async function sweepGoalAutomation(engine: Engine): Promise<void> {
     await withNotebookMutation(`goal:${stored.goalId}`, async () => {
       let goal = readGoal(engine, stored.goalId);
       if (goal.automation?.status !== "running") return;
+      if (!approvedInThisLibrary(engine, goal.automation)) {
+        pauseGoalAutomation(engine, goal, IMPORTED_GOAL_REASON);
+        return;
+      }
       const active = goal.automation.jobId ? engine.jobs.queue.get(goal.automation.jobId) : null;
       if (active && ACTIVE_JOBS.includes(active.state)) return;
       try {

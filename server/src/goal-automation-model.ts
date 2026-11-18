@@ -23,6 +23,7 @@ export type GoalAutomation = {
   planKey: string;
   allowanceUsd: number;
   approvedAt: string;
+  approvedImportId?: string | null;
   approvedImages: { artifactId: string; mediaHash: string }[];
   approvedAudio: { artifactId: string; mediaHash: string }[];
   accountReviewedAt: string | null;

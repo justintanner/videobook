@@ -458,6 +458,11 @@ and history but start paused. Explicitly resume them with:
 videobook run set_book_automation book_id=<imported-book-id> paused=false
 ```
 
+Resuming schedules does not resume automatic goal spending. A goal approved
+for automatic continuation in the source library pauses on import and keeps
+its allowance, reservations and usage; approve it again in the new library
+with the goal's `auto_continue` action before it can spend.
+
 The source stays intact. Delete it separately after checking the imported book.
 Interrupted commands clean their staging; abandoned workspaces are recovered
 when their owning process has exited.

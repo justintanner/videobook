@@ -1,6 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { analysisComponentKey } from "./analysis-components.js";
-import { goalAutomationTotals } from "./goal-automation-model.js";
+import { bookImportId } from "./book-import.js";
+import { goalAutomationTotals, type GoalAutomation } from "./goal-automation-model.js";
 import { goalGenerationHistory, goalHistoryFailure } from "./goal-generation-history.js";
 import type { GoalGenerationOrigin } from "./goal-generation-provenance.js";
 import { shortStageProposal } from "./goal-short-runtime.js";
@@ -11,6 +12,16 @@ import { withNotebookMutation } from "./notebook-mutations.js";
 export function goalAutomationPlanKey(engine: Engine, goal: GoalRecord): string {
   const { plan, brief } = requireGoalShortContent(engine, goal);
   return analysisComponentKey({ component: "goal-automation", version: 1, jobType: "continue_goal" }, { sourceHash: brief, options: { plan } });
+}
+
+export const IMPORTED_GOAL_REASON = "This goal was imported from another library. Review it and resume automatic continuation to approve spending here.";
+
+export function approvedInThisLibrary(engine: Engine, automation: GoalAutomation): boolean {
+  return (automation.approvedImportId ?? null) === bookImportId(engine);
+}
+
+export function assertApprovedInThisLibrary(engine: Engine, automation: GoalAutomation): void {
+  if (!approvedInThisLibrary(engine, automation)) throw new Error(IMPORTED_GOAL_REASON);
 }
 
 export function assertAutomaticEstimate(estimate: GoalEstimate): number {
@@ -42,6 +53,7 @@ export async function guardGoalSubmission(engine: Engine, input: { goalOrigin?: 
     const notebook = engine.notebooks.read(goal.notebookId);
     if (!automation || automation.id !== origin.automation!.id || automation.status !== "running" || goal.status === "cancelled"
       || !notebook.ok || !findGoalCell(notebook.value, goal)) throw new Error("Automatic continuation stopped before submission.");
+    assertApprovedInThisLibrary(engine, automation);
     if (automation.planKey !== goalAutomationPlanKey(engine, goal)) throw new Error("The approved recipe changed before submission. Review it and resume explicitly.");
     const reservation = automation.reservations.find(value => value.id === origin.automation!.reservationId);
     if (!reservation || reservation.status !== "reserved" || reservation.submittedArtifactIds.length || origin.fingerprint !== reservation.inputKey) {
