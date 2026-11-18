@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (216)
+## MCP endpoints (217)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
@@ -167,6 +167,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `rename_book` — Rename a book. Project names are normalized to lowercase slugs with hyphens.
 - `rename_notebook` — Rename a notebook
 - `render_video` — Render a video artifact into landscape.mp4, portrait.mp4, or square.mp4. Renders all 3 orientations when orientation is omitted.
+- `reopen_books` — Rescan the library and retry books that could not open, for example after moving a catalog back to its own book directory. Returns the books opened and those still unavailable, each with its directory and cause.
 - `reorder_character_images` — Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).
 - `repair_library_search_indexes` — Index ready visual media that is missing Similar-search coverage across books
 - `replace_sequence_clip_with_search_moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment
@@ -227,7 +228,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 - `zoom_video` — Zoom in on parts of a video toward a focus point, easing in, holding and returning, with an optional built-in sound. Local and free: one FFmpeg encode in place, with history.
 
-## Slash actions (268; 108 dedicated command routes)
+## Slash actions (269; 108 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
@@ -422,6 +423,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/rename-book` — Rename a book. Project names are normalized to lowercase slugs with hyphens.; MCP: `rename_book`
 - `/rename-notebook` — Rename a notebook; MCP: `rename_notebook`
 - `/render-video` (aliases: `/render`) — Render a video asset; MCP: `render_video`
+- `/reopen-books` — Rescan the library and retry books that could not open, for example after moving a catalog back to its own book directory. Returns the books opened and those still unavailable, each with its directory and cause.; MCP: `reopen_books`
 - `/reorder-character-images` — Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).; MCP: `reorder_character_images`
 - `/repair-library-search-indexes` — Index ready visual media that is missing Similar-search coverage across books; MCP: `repair_library_search_indexes`
 - `/replace-audio` — Replace the audio track of a video asset with an audio asset's audio; MCP: `replace_video_audio`

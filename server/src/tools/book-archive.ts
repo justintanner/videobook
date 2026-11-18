@@ -57,5 +57,18 @@ export function bookArchiveDefs(books: BookManager): ToolDef[] {
       if (args.paused === false) await loadAndArmAll(String(args.book_id));
       return { content: [{ type: "text", text: JSON.stringify({ book_id: args.book_id, paused: args.paused }) }] };
     },
+  }, {
+    name: "reopen_books",
+    scope: "global",
+    description: "Rescan the library and retry books that could not open, for example after moving a catalog back to its own book directory. Returns the books opened and those still unavailable, each with its directory and cause.",
+    schema: {},
+    handler: async () => {
+      const result = await books.reopen();
+      for (const book of result.opened) {
+        await queue.startBook(book.bookId);
+        await loadAndArmAll(book.bookId);
+      }
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    },
   }];
 }

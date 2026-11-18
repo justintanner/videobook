@@ -1,16 +1,18 @@
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { access, mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdtemp, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from '@dolthub/doltlite'
 import sharp from 'sharp'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import type { Result } from 'videobook-engine'
+import { v7 as uuidv7 } from 'uuid'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager'
 import { placeChainGeneration } from '../../server/src/chain-generation'
 import { callTool, startServer, stopServer } from './mcp-http-test-server'
+import { cliEnv, runCli } from './cli-harness.js'
 import type { StartedServer } from './mcp-http-test-server'
 import { testBudget } from '../../server/src/test-budget.js'
 
@@ -139,6 +141,53 @@ describe('server startup', () => {
       expect(health.ok).toBe(true)
       expect(running.child.exitCode).toBeNull()
       expect(running.output.join('')).not.toContain('[startup-failed]')
+    } finally {
+      await client.close()
+    }
+  })
+
+  it('keeps healthy books open when another catalog sits in the wrong book directory, then reopens it after repair', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-misfiled-book-'))
+    const libraryDir = join(rootDir, 'books')
+    const manager = new BookManager({ libraryDir })
+    const healthy = value(await manager.create('healthy-book'))
+    const misfiled = value(await manager.create('misfiled-book'))
+    await manager.close()
+    const wrongDirectory = uuidv7()
+    await rename(join(libraryDir, misfiled.bookId), join(libraryDir, wrongDirectory))
+
+    const running = await startServer(rootDir)
+    servers.push(running)
+    const client = new Client({ name: 'startup-test', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    try {
+      await client.connect(new StreamableHTTPClientTransport(new URL(running.url)))
+      expect(await callTool<Array<{ bookId: string }>>(client, 'list_books', {})).toEqual([expect.objectContaining({ bookId: healthy.bookId })])
+      expect(await callTool<unknown[]>(client, 'list_notebooks', { book_id: healthy.bookId })).toHaveLength(1)
+      const cause = expect.stringContaining(misfiled.bookId)
+      expect(await callTool(client, 'reopen_books', {})).toEqual({
+        opened: [], unavailable: [{ directory: wrongDirectory, rootDir: join(libraryDir, wrongDirectory), error: cause }],
+      })
+      const health = await (await fetch(new URL('/healthz', running.url))).json() as Record<string, unknown>
+      expect(health).toMatchObject({ ok: true, unavailableBooks: [{ directory: wrongDirectory, error: cause }] })
+      expect(running.child.exitCode).toBeNull()
+      expect(running.output.join('')).not.toContain('[startup-failed]')
+      expect(running.output.join('')).toContain('[book-open-failed]')
+      const doctor = await runCli(['doctor', '--json', '--home', join(rootDir, 'home'), '--library', libraryDir], cliEnv())
+      const checks = (JSON.parse(doctor.stdout) as { checks: Array<{ id: string; status: string; detail: string }> }).checks
+      expect(checks.find((check) => check.id === 'owner')).toMatchObject({
+        status: 'warn', detail: expect.stringContaining(`${wrongDirectory}: Directory ${wrongDirectory} holds the catalog of book ${misfiled.bookId}`),
+      })
+
+      await rename(join(libraryDir, wrongDirectory), join(libraryDir, misfiled.bookId))
+      expect(await callTool(client, 'reopen_books', {})).toEqual({
+        opened: [expect.objectContaining({ bookId: misfiled.bookId, name: 'misfiled-book' })], unavailable: [],
+      })
+      expect((await callTool<Array<{ bookId: string }>>(client, 'list_books', {})).map((book) => book.bookId).sort())
+        .toEqual([healthy.bookId, misfiled.bookId].sort())
+      expect(await callTool<unknown[]>(client, 'list_notebooks', { book_id: misfiled.bookId })).toHaveLength(1)
+      expect(await (await fetch(new URL('/healthz', running.url))).json()).not.toHaveProperty('unavailableBooks')
     } finally {
       await client.close()
     }

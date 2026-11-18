@@ -319,10 +319,31 @@ function providerKeysCheck(): DoctorCheck {
   return check({ id: "provider-keys", label: "Provider keys", status: "ok", detail: shown.join(", "), required: false });
 }
 
+async function unavailableBooks(url: string): Promise<Array<{ directory: string; error: string }>> {
+  try {
+    const response = await fetch(new URL("/healthz", url), { signal: AbortSignal.timeout(2_000) });
+    const body = await response.json() as { unavailableBooks?: unknown };
+    if (!Array.isArray(body.unavailableBooks)) return [];
+    return body.unavailableBooks.flatMap((entry: unknown) => {
+      const book = entry as { directory?: unknown; error?: unknown };
+      return typeof book.directory === "string" && typeof book.error === "string" ? [{ directory: book.directory, error: book.error }] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
 async function ownerCheck(port: number): Promise<DoctorCheck> {
   const owner = await inspectServerOwner(bookManager.rootDir);
   if (owner.kind === "running") {
-    return check({ id: "owner", label: "Server", status: "ok", detail: `running at ${owner.record.url} (pid ${owner.record.pid})`, required: false });
+    const running = `running at ${owner.record.url} (pid ${owner.record.pid})`;
+    const unavailable = await unavailableBooks(owner.record.url);
+    if (unavailable.length > 0) {
+      const books = unavailable.map((book) => `${book.directory}: ${book.error}`).join("; ");
+      return check({ id: "owner", label: "Server", status: "warn", required: false,
+        detail: `${running}; ${unavailable.length} book(s) could not open: ${books}. Fix each directory, then run videobook run reopen_books` });
+    }
+    return check({ id: "owner", label: "Server", status: "ok", detail: running, required: false });
   }
   if (owner.kind === "unresponsive") {
     return check({ id: "owner", label: "Server", status: "warn", detail: `pid ${owner.record.pid} holds the library but does not answer at ${owner.record.url}`, required: false });

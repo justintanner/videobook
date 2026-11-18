@@ -71,12 +71,16 @@ async function engineForBook(
 }
 
 function sendHealth(_req: Request, res: Response): void {
+  const unavailable = bookManager.unavailable();
   res.json({
     ok: true,
     service: "videobook",
     version: SERVER_VERSION,
     engineVersion: enginePackage.version,
     schemaVersion: SCHEMA_VERSION,
+    ...(unavailable.length > 0
+      ? { unavailableBooks: unavailable.map(({ directory, error }) => ({ directory, error })) }
+      : {}),
   });
 }
 

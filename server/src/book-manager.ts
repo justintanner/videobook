@@ -46,6 +46,12 @@ interface BookManagerOptions {
   catalogBackupName?: string;
 }
 
+export interface UnavailableBook {
+  directory: string;
+  rootDir: string;
+  error: string;
+}
+
 interface DeleteBookOptions {
   confirmName: string;
   beforeDelete?: (book: ManagedBook) => Promise<void>;
@@ -122,6 +128,7 @@ export class BookManager {
   private readonly books = new Map<string, ManagedBook>();
   private readonly knownRoots = new Set<string>();
   private readonly opening = new Map<string, Promise<void>>();
+  private readonly failures = new Map<string, UnavailableBook>();
   private readonly reservedNames = new Set<string>();
   private readonly reservedBookIds = new Set<string>();
   private readonly imports = new Map<string, { rootDir: string; book: Book; head: string; ownerPid: number }>();
@@ -156,18 +163,37 @@ export class BookManager {
       await this.ready();
       return this.get(bookId);
     }
+    if (!this.knownRoots.has(bookId) && isUuidV7(bookId)) await this.discoverRoots();
     if (!this.knownRoots.has(bookId)) {
       return err(engineError("NOT_FOUND", `Book not found: ${bookId}`));
     }
     await this.openRoot(bookId);
+    const unnamed = this.books.get(bookId);
+    if (unnamed && normalizeBookSlug(unnamed.name) !== unnamed.name) await this.ready();
+    if (this.books.has(bookId)) await this.settleNames([bookId]);
     const opened = this.books.get(bookId);
-    if (opened && normalizeBookSlug(opened.name) !== opened.name) {
-      await this.ready();
-      return this.get(bookId);
-    }
+    const failure = this.failures.get(bookId);
+    if (!opened && failure) return err(engineError("IO_ERROR", `Book ${bookId} could not open: ${failure.error}`));
     return opened
       ? ok(opened)
       : err(engineError("NOT_FOUND", `Book not found: ${bookId}`));
+  }
+
+  unavailable(): UnavailableBook[] {
+    return [...this.failures.values()].sort((left, right) => left.directory.localeCompare(right.directory));
+  }
+
+  async reopen(): Promise<{ opened: BookSummary[]; unavailable: UnavailableBook[] }> {
+    await this.ready();
+    await this.discoverRoots();
+    const pending = [...this.knownRoots].filter((bookId) => !this.books.has(bookId)).sort();
+    await Promise.all(pending.map((bookId) => this.openRoot(bookId)));
+    await this.settleNames(pending);
+    const opened = pending.flatMap((bookId) => {
+      const book = this.books.get(bookId);
+      return book ? [this.summary(book)] : [];
+    });
+    return { opened, unavailable: this.unavailable() };
   }
 
   list(options: { sort?: "newest" | "oldest" } = {}): BookSummary[] {
@@ -421,6 +447,7 @@ export class BookManager {
     this.books.clear();
     this.knownRoots.clear();
     this.opening.clear();
+    this.failures.clear();
     this.scanPromise = null;
     this.readyPromise = null;
   }
@@ -428,9 +455,31 @@ export class BookManager {
   private async load(): Promise<void> {
     await this.scan();
     await Promise.all([...this.knownRoots].map((bookId) => this.openRoot(bookId)));
-    for (const book of [...this.books.values()].sort((left, right) => left.bookId.localeCompare(right.bookId))) {
-      this.assertUnique(await this.normalizeStoredBookName(book));
+    await this.settleNames([...this.books.keys()]);
+  }
+
+  private async settleNames(bookIds: string[]): Promise<void> {
+    const unsettled = new Set(bookIds);
+    for (const bookId of [...bookIds].sort()) {
+      const book = this.books.get(bookId);
+      if (!book) continue;
+      try {
+        const named = await this.normalizeStoredBookName(book);
+        const holder = [...this.books.values()].find((other) =>
+          !unsettled.has(other.bookId) && other.name.toLowerCase() === named.name.toLowerCase());
+        if (holder) throw new Error(`Duplicate book name: ${named.name} (already used by book ${holder.bookId})`);
+        unsettled.delete(bookId);
+      } catch (cause) {
+        this.books.delete(bookId);
+        book.engine.close();
+        this.recordFailure(bookId, book.rootDir, cause);
+      }
     }
+  }
+
+  private recordFailure(directory: string, rootDir: string, cause: unknown): void {
+    this.failures.set(directory, { directory, rootDir, error: cause instanceof Error ? cause.message : String(cause) });
+    logger.error("book-open-failed", { bookId: directory, error: cause });
   }
 
   private async normalizeStoredBookName(book: ManagedBook): Promise<ManagedBook> {
@@ -462,12 +511,22 @@ export class BookManager {
     await mkdir(this.libraryDir, { recursive: true });
     await cleanupBookImportWorkspaces(this.libraryDir);
     await cleanupBookSnapshots();
-    const entries = await readdir(this.libraryDir, { withFileTypes: true });
-    for (const entry of entries) {
+    await this.discoverRoots();
+  }
+
+  private async discoverRoots(): Promise<void> {
+    const present = new Set<string>();
+    for (const entry of await readdir(this.libraryDir, { withFileTypes: true })) {
       if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
       const root = this.bookRoot(entry.name);
       if (!isUuidV7(entry.name) || !isInside(this.libraryDir, root)) continue;
+      present.add(entry.name);
       this.knownRoots.add(entry.name);
+    }
+    for (const bookId of [...this.knownRoots]) {
+      if (present.has(bookId) || this.books.has(bookId) || this.opening.has(bookId)) continue;
+      this.knownRoots.delete(bookId);
+      this.failures.delete(bookId);
     }
   }
 
@@ -508,16 +567,16 @@ export class BookManager {
       }
       const managed = this.toManagedBook(engine, root, book);
       if (managed.bookId !== bookId) {
-        engine.close();
-        throw new Error(`Book root ${bookId} has mismatched book identity`);
+        throw new Error(`Directory ${bookId} holds the catalog of book ${managed.bookId} (${managed.name}); move it to ${this.bookRoot(managed.bookId)}`);
       }
       this.books.set(managed.bookId, managed);
+      this.failures.delete(bookId);
     } catch (cause) {
       engine?.close();
       if (isSchemaIncompatible(cause)) {
         return;
       }
-      throw cause;
+      this.recordFailure(bookId, root, cause);
     }
   }
 

@@ -4,7 +4,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
   Workspace: [
     "trending_research",
     "list_books", "create_book", "rename_book", "delete_book", "get_book", "get_book_usage",
-    "book_archive", "set_book_automation",
+    "book_archive", "set_book_automation", "reopen_books",
     "slash_commands", "list_workspace_actions", "chat", "chain", "video_goal",
   ],
   Notebook: [

@@ -219,6 +219,31 @@ describe('v2 book manager', () => {
     }
   })
 
+  it('keeps other books open when two catalogs claim the same name, and reports the later one', async () => {
+    const kept = await books.create('kept-name')
+    const clashing = await books.create('clashing-name')
+    if (!kept.ok || !clashing.ok) throw new Error('Could not create books')
+    const clashingRoot = join(rootDir, 'books', clashing.value.bookId)
+    await books.close()
+    const catalog = new DatabaseSync(join(clashingRoot, 'data', 'videobook.db'))
+    try {
+      catalog.prepare('UPDATE book SET name=?').run('kept-name')
+      catalog.prepare("SELECT dolt_add('book')").get()
+      catalog.prepare("SELECT dolt_commit('-m', 'Copied project name')").get()
+    } finally { catalog.close() }
+
+    await books.ready()
+
+    expect(books.list().map((book) => book.bookId)).toEqual([kept.value.bookId])
+    expect(books.unavailable()).toEqual([{
+      directory: clashing.value.bookId, rootDir: clashingRoot, error: `Duplicate book name: kept-name (already used by book ${kept.value.bookId})`,
+    }])
+    expect(await books.ensure(clashing.value.bookId)).toMatchObject({
+      ok: false, error: { message: `Book ${clashing.value.bookId} could not open: Duplicate book name: kept-name (already used by book ${kept.value.bookId})` },
+    })
+    expect(books.get(kept.value.bookId).ok).toBe(true)
+  })
+
   it('skips books whose catalog schema the engine no longer supports', async () => {
     const current = await books.create('current-schema')
     const stale = await books.create('stale-schema')
