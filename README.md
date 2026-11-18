@@ -587,6 +587,15 @@ B2_BUCKET
 B2_ENDPOINT
 ```
 
+With B2 configured, each book stores its media under
+`<VIDEOBOOK_OBJECT_PREFIX>/books/<bookId>/`, so forgetting media in one book
+never removes another book's backup. Books backed up before this layout keep
+reading the shared prefix. Their next `storage_sync` copies every object into
+the book's own prefix, from local bytes or the shared copy; when neither exists,
+storage status reports `incomplete` with `missingObjects`. Forget deletes a
+shared copy only after every other book in the library that holds the same
+bytes has its own.
+
 Provider credentials continue to use the existing `@apicity` integrations.
 See `.env.tpl` for the complete set.
 `VIDEOBOOK_ENV_PATH` selects the local environment file used by Settings.

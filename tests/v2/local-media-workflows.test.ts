@@ -164,7 +164,7 @@ async function runWorkflow(operation: string) {
     await expect(stat(cas)).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(stat(join(manifest.path, sourceName))).rejects.toMatchObject({ code: 'ENOENT' })
     expect(value(await engine.files.read(id, sourceName))).toEqual(bytes)
-    expect(requests).toEqual([`GET /fixture-bucket/media/${hash.slice(0, 2)}/${hash}`])
+    expect(requests).toEqual([`GET /fixture-bucket/media/books/${summary.bookId}/${hash.slice(0, 2)}/${hash}`])
   } finally {
     await queue.stop()
     runtime.env.remoteHost = originalModelHost

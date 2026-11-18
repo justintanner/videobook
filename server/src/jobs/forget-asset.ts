@@ -1,4 +1,6 @@
 import type { Engine } from "videobook-engine";
+import type { BookManager } from "../book-manager.js";
+import { releaseSharedObject } from "../book-object-scope.js";
 import { forgetAsset, type ForgetAssetOutcome } from "../forget-asset.js";
 import { registerJobHandler } from "../queue.js";
 
@@ -14,7 +16,7 @@ interface ForgetAssetPayload {
   clearReferences: boolean;
 }
 
-export function registerForgetAssetJob(engine: Engine): void {
+export function registerForgetAssetJob(engine: Engine, books: BookManager): void {
   registerJobHandler(
     "forget_asset",
     async (payload): Promise<ForgetAssetOutcome> => {
@@ -22,7 +24,7 @@ export function registerForgetAssetJob(engine: Engine): void {
       return await forgetAsset(engine, {
         assetId: input.forgetArtifactId,
         clearReferences: input.clearReferences === true,
-      });
+      }, (hash) => releaseSharedObject(books, input.bookId, hash));
     },
   );
 }

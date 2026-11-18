@@ -24,6 +24,7 @@ import { openNotebookRow } from "../notebook-lanes.js";
 import { z } from "zod";
 import { v7 as uuidv7 } from "uuid";
 import type { BookManager } from "../book-manager.js";
+import { backupBook, bookStorageStatus } from "../book-object-scope.js";
 import {
   ensureGenerateAudioOutput,
   normalizeLegacyExtractCells,
@@ -2601,14 +2602,14 @@ export function videobookDomainDefs(
       description: "Read catalog and object publication status",
       scope: "book",
       schema: bookSchema,
-      handler: async () => json(engine.storage.status()),
+      handler: async (args) => json(bookStorageStatus(engine, books.objectScope(String(args.book_id)))),
     },
     {
       name: "storage_sync",
       description: "Publish a book's pending content-addressed objects and catalog",
       scope: "book",
       schema: bookSchema,
-      handler: async () => json(await engine.storage.backup()),
+      handler: async (args) => json(await backupBook(engine, books.objectScope(String(args.book_id)))),
     },
     ...entityDefs(engine),
   ];

@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { cp, lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
 import { BOOK_SLUG_ERROR, normalizeBookSlug } from "videobook-engine/book-slug";
+import { bookObjectScope, scopedContentStore, type BookObjectScope } from "./book-object-scope.js";
 import { logger } from "./logger.js";
 import {
   createEngine,
@@ -518,14 +519,20 @@ export class BookManager {
     }
   }
 
+  objectScope(bookId: string): BookObjectScope | undefined {
+    const remote = this.options.remoteObjects;
+    if (!remote || !isUuidV7(bookId)) return undefined;
+    return bookObjectScope(remote, this.options.objectPrefix ?? "videobook/sha256", this.bookRoot(bookId), bookId);
+  }
+
   private createEngine(rootDir: string, initialBookName?: string): Engine {
+    const scope = this.objectScope(basename(rootDir));
     const engine = createEngine({
       rootDir,
       ...(initialBookName ? { initialBookName } : {}),
-      ...(this.options.remoteObjects
-        ? { remoteObjects: this.options.remoteObjects }
+      ...(scope
+        ? { remoteObjects: scopedContentStore(scope), objectPrefix: scope.bookPrefix }
         : {}),
-      objectPrefix: this.options.objectPrefix ?? "videobook/sha256",
       ...(this.catalogBackup(rootDir) ? { catalogBackup: this.catalogBackup(rootDir)! } : {}),
     });
     return engine;

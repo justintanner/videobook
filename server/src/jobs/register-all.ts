@@ -186,7 +186,7 @@ export function registerAllJobHandlers(
   registerSemanticIndexJob(engine);
   registerTagAssetJob(engine);
   registerBackfillAssetTagsJob(engine);
-  registerForgetAssetJob(engine);
+  registerForgetAssetJob(engine, books);
   registerRepairSearchIndexesJob(engine);
   registerPrepareSearchReferenceJob(engine);
   registerPrepareTemporalSearchJob(engine);

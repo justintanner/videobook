@@ -208,6 +208,7 @@ function inUseOutcome(artifactId: string, label: string | null, references: Forg
 export async function forgetAsset(
   engine: Engine,
   input: { assetId: string; clearReferences: boolean },
+  releaseObject?: (hash: string) => Promise<void>,
 ): Promise<ForgetAssetOutcome> {
   const artifact = engine.artifacts.get(input.assetId);
   if (!artifact.ok) throw new Error(artifact.error.message);
@@ -246,6 +247,7 @@ export async function forgetAsset(
   for (const hash of hashes) {
     const result = await engine.storage.deleteObject(hash);
     if (result.ok) {
+      await releaseObject?.(hash);
       forgottenObjects += 1;
       if (result.value.deletedLocal) reclaimedBytes += result.value.sizeBytes;
       continue;
