@@ -8,6 +8,7 @@ export interface FailedDownload {
   message: string;
   tiktokUrl?: string;
   chromeRetryAvailable?: boolean;
+  signInRequired?: boolean;
 }
 
 export function isTikTokUrl(url: string): boolean {
@@ -19,8 +20,13 @@ export function isTikTokUrl(url: string): boolean {
   }
 }
 
-export function downloadFailureMessage(url: unknown, reason: string): string {
-  if (typeof url === "string" && isTikTokUrl(url) && /^login-required:.*\b(?:log ?in|sign in|for the authentication)\b/iu.test(reason)) {
+export function isTikTokSignInFailure(reason: string): boolean {
+  return /^(?:login-required|private):[\s\S]*\b(?:(?:log|sign)[ -]?in(?:to)?|for the authentication)\b/iu.test(reason)
+    || /^TikTok (?:sign-in required|requires sign-in for this post)\./u.test(reason);
+}
+
+export function downloadFailureMessage(url: unknown, reason: string, signInRequired = isTikTokSignInFailure(reason)): string {
+  if (typeof url === "string" && isTikTokUrl(url) && signInRequired) {
     return "TikTok sign-in required.\nRetry with an account that can view this post, or choose a saved video file.";
   }
   return reason;
@@ -35,11 +41,14 @@ export function failedDownloadForArtifact(engine: Engine, artifactId: string): F
   const [latest] = engine.jobs.queue.list({ artifactId, limit: 1 });
   if (latest?.type !== "download_video" || (latest.state !== "failed" && latest.state !== "aborted")) return null;
   const url = latest.payload.url;
+  const reason = latest.error?.message ?? "The download stopped before the video was saved.";
+  const signInRequired = isTikTokSignInFailure(reason);
   return {
     jobId: latest.id,
-    message: downloadFailureMessage(url, latest.error?.message ?? "The download stopped before the video was saved."),
+    message: downloadFailureMessage(url, reason, signInRequired),
     ...(typeof url === "string" && isTikTokUrl(url) ? {
       tiktokUrl: url,
+      ...(signInRequired ? { signInRequired: true } : {}),
       ...(ytdlpChromeProfile() ? { chromeRetryAvailable: true } : {}),
     } : {}),
   };

@@ -589,6 +589,7 @@ function asAsset(value: unknown): AssetRecord | null {
       failedDownload: {
         jobId: failedJobId, message: failureMessage, ...(tiktokUrl ? { tiktokUrl } : {}),
         ...(failedDownload?.chromeRetryAvailable === true ? { chromeRetryAvailable: true } : {}),
+        ...(failedDownload?.signInRequired === true ? { signInRequired: true } : {}),
       },
     } : {}),
     origin: asString(item.origin),

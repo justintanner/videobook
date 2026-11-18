@@ -47,7 +47,7 @@ export type CellActionsContextValue = {
   deleteCell: (cellId: string) => Promise<void>
   repairCell: (cellId: string) => Promise<void>
   retryCell: (cellId: string) => Promise<void>
-  retryDownload: (jobId: number) => Promise<void>
+  retryDownload: (jobId: number, useChromeProfile?: boolean) => Promise<void>
 }
 
 export const CellActionsContext = createContext<CellActionsContextValue>({

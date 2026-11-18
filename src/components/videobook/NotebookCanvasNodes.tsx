@@ -341,6 +341,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const runCell = useContext(CellRunContext)
   const cellActions = useContext(CellActionsContext)
   const failedDownload = data.asset?.failedDownload
+  const downloadRetry = failedDownload && (failedDownload.signInRequired && failedDownload.chromeRetryAvailable ? 'chrome' : 'standard')
   const primaryCellId = useContext(PrimaryCellContext)
   const generationTitles = useContext(GenerationTitlesContext)
   const contextMenu = useContext(CellContextMenuContext)
@@ -735,10 +736,10 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           onRepair={generationRun ? () => {
             void cellActions.repairCell(id)
           } : undefined}
-          onRetry={data.inputs?.producerCellId ? () => {
-            void cellActions.retryCell(id)
-          } : undefined}
-          onRetryDownload={failedDownload ? () => void cellActions.retryDownload(failedDownload.jobId) : undefined}
+          downloadRetry={downloadRetry}
+          onRetry={failedDownload
+            ? () => void cellActions.retryDownload(failedDownload.jobId, downloadRetry === 'chrome')
+            : data.inputs?.producerCellId ? () => void cellActions.retryCell(id) : undefined}
           disabled={!cellActions.ready}
           onDelete={() => {
             void cellActions.deleteCell(id)

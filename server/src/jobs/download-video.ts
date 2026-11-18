@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { setTimeout as sleepFor } from "node:timers/promises";
 import { YtDlp } from "ytdlp-nodejs";
 import { ytdlpChromeProfile, ytdlpCookiesSetting, ytdlpImpersonateTargets, ytdlpRunOptions } from "../ytdlp-binary.js";
-import { clearDownloadFailure, DOWNLOAD_FAILURE_METADATA_KEY, downloadFailureMessage, isTikTokUrl } from "../download-recovery.js";
+import { clearDownloadFailure, DOWNLOAD_FAILURE_METADATA_KEY, downloadFailureMessage, isTikTokSignInFailure, isTikTokUrl } from "../download-recovery.js";
 import { extractOpenGraph } from "@devmehq/open-graph-extractor";
 import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
@@ -43,6 +43,7 @@ export interface DownloadFailure {
   class: DownloadFailureClass;
   reason: string;
   transient: boolean;
+  signInRequired?: true;
 }
 
 export interface YtdlpSession {
@@ -58,7 +59,7 @@ const FAILURE_PATTERNS: ReadonlyArray<readonly [DownloadFailureClass, RegExp]> =
   ["private", /\bprivate\b|permission to view/iu],
   ["removed", /\b(?:removed|deleted)\b|no longer available|HTTP Error 410/iu],
   ["geo-blocked", /geo[- ]?(?:restrict|block)|available (?:in|from) your (?:country|location|region)|IP address is blocked/iu],
-  ["login-required", /\blog ?in\b|\bsign in\b|cookies/iu],
+  ["login-required", /\b(?:log|sign)[ -]?in(?:to)?\b|cookies/iu],
   ["unavailable", /(?:video|post|content|media)(?: is)? (?:not |un)available|not available|HTTP Error 404|Unsupported URL|No video formats found/iu],
   ["rate-limited", /HTTP Error 429|Too Many Requests|rate[- ]?limit/iu],
   ["forbidden", /HTTP Error 403|403 Forbidden/iu],
@@ -104,6 +105,7 @@ export function classifyDownloadFailure(message: string): DownloadFailure {
     class: failureClass,
     reason: `${failureClass}: ${failureTail(message)}`,
     transient: TRANSIENT_FAILURES.has(failureClass),
+    ...(isTikTokSignInFailure(`${failureClass}: ${message}`) ? { signInRequired: true } : {}),
   };
 }
 
@@ -129,38 +131,50 @@ async function stageCookiesCopy(): Promise<string | null> {
   }
 }
 
-export async function openYtdlpSession(input: {
+interface YtdlpSessionInput {
   url: string;
   bookId: string;
   binaryPath: string;
   useChromeProfile?: boolean;
+  userAddedLink?: boolean;
   signal?: AbortSignal;
-}): Promise<YtdlpSession> {
+}
+
+export async function openYtdlpSession(input: YtdlpSessionInput): Promise<YtdlpSession> {
   const tiktok = isTikTokUrl(input.url);
-  const profile = input.useChromeProfile && tiktok ? ytdlpChromeProfile() : null;
+  const autoChrome = input.userAddedLink && process.env.VIDEOBOOK_YTDLP_CHROME_ON_LOGIN === "1";
+  const profile = tiktok && (input.useChromeProfile || autoChrome) ? ytdlpChromeProfile() : null;
   if (input.useChromeProfile && !profile) throw new Error("Retry with Chrome requires a TikTok URL and a configured Chrome profile.");
   if (tiktok) await waitForTikTokTurn(input.bookId, input.signal);
   const impersonate = tiktok && (await ytdlpImpersonateTargets(input.binaryPath)).includes("chrome");
-  const cookies = tiktok && !profile ? await stageCookiesCopy() : null;
+  const baseArgs = impersonate ? ["--impersonate", "chrome"] : [];
+  const chromeArgs = profile ? [...baseArgs, "--ignore-config", "--cookies-from-browser", `chrome:${profile}`] : null;
+  const cookies = tiktok && !input.useChromeProfile ? await stageCookiesCopy() : null;
+  let args = input.useChromeProfile && chromeArgs ? chromeArgs : [...baseArgs, ...(cookies ? ["--cookies", cookies] : [])];
   let attempts = 0;
   return {
-    args: [
-      ...(impersonate ? ["--impersonate", "chrome"] : []),
-      ...(profile ? ["--ignore-config", "--cookies-from-browser", `chrome:${profile}`] : []),
-      ...(cookies ? ["--cookies", cookies] : []),
-    ],
+    get args() {
+      return args;
+    },
     get attempts() {
       return attempts;
     },
     async run<T>(step: () => Promise<T>): Promise<T> {
       attempts = 0;
+      let transientRetries = 0;
       for (;;) {
+        input.signal?.throwIfAborted();
         attempts += 1;
         try {
           return await step();
         } catch (error) {
-          const delayMs = tiktok ? YTDLP_RETRY_DELAYS_MS[attempts - 1] : undefined;
-          if (delayMs === undefined || !classifyDownloadFailure(errorMessage(error)).transient) throw error;
+          const failure = classifyDownloadFailure(errorMessage(error));
+          if (chromeArgs && args !== chromeArgs && failure.signInRequired) {
+            args = chromeArgs;
+            continue;
+          }
+          const delayMs = tiktok && failure.transient ? YTDLP_RETRY_DELAYS_MS[transientRetries++] : undefined;
+          if (delayMs === undefined) throw error;
           await downloadSleep(delayMs, input.signal);
         }
       }
@@ -209,12 +223,12 @@ async function recordDownloadFailure(
     url: input.url,
     failedAt: new Date().toISOString(),
   });
-  return new Error(downloadFailureMessage(input.url, failure.reason), { cause: error });
+  return new Error(downloadFailureMessage(input.url, failure.reason, failure.signInRequired), { cause: error });
 }
 
 async function withDownloadSession<T>(
   engine: Engine,
-  input: { url: string; assetId: string; bookId: string; binaryPath: string; signal: AbortSignal; useChromeProfile?: boolean },
+  input: YtdlpSessionInput & { assetId: string; signal: AbortSignal },
   run: (session: YtdlpSession) => Promise<T>,
 ): Promise<T> {
   const session = await openYtdlpSession(input);
@@ -372,6 +386,8 @@ type DownloadVideoPayload = {
   bookId?: string;
   exportVideos: boolean;
   useChromeProfile?: boolean;
+  userAddedLink?: boolean;
+  _playlistItem?: number;
   full: boolean;
   sourcePrefix: string;
   requestedRange?: { start?: number; end?: number };
@@ -454,7 +470,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
     const {
       url,
       assetId, assetDir, exportVideos,
-      sourcePrefix, requestedRange, research, useChromeProfile,
+      sourcePrefix, requestedRange, research, useChromeProfile, userAddedLink, _playlistItem,
     } = payload as DownloadVideoPayload;
     const bookId = (payload as DownloadVideoPayload).bookId ?? "";
     const outputPath = join(assetDir, "original.mp4");
@@ -466,7 +482,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
       ctx,
       "download",
       { durationMs: LOCK_DURATION_MS, data: { state: "downloading" } },
-      () => withDownloadSession(engine, { url, assetId, bookId, binaryPath: ytdlp.binaryPath, signal: ctx.signal, useChromeProfile }, async (session) => {
+      () => withDownloadSession(engine, { url, assetId, bookId, binaryPath: ytdlp.binaryPath, signal: ctx.signal, useChromeProfile, userAddedLink }, async (session) => {
       // (a) Pre-stage OG image as a hidden file. The b2 fallback (yt-dlp
       // returns "no video") promotes this to original.jpg on a fresh image
       // asset; a successful video download promotes it after step (d).
@@ -537,8 +553,8 @@ export function registerDownloadVideoJob(engine: Engine): void {
       }
 
       // (c) Handle playlists — if multiple entries, create additional assets + jobs for entries 2+
-      let playlistItem: number | undefined;
-      if (info._type === "playlist" && Array.isArray(info.entries) && info.entries.length > 1) {
+      let playlistItem = _playlistItem;
+      if (playlistItem === undefined && info._type === "playlist" && Array.isArray(info.entries) && info.entries.length) {
         // Current job handles entry 1
         playlistItem = 1;
 
@@ -568,17 +584,11 @@ export function registerDownloadVideoJob(engine: Engine): void {
             sourcePrefix,
             ...(requestedRange ? { requestedRange } : {}),
             _playlistItem: i + 1,
+            ...(userAddedLink ? { userAddedLink } : {}),
+            ...(useChromeProfile ? { useChromeProfile } : {}),
             ...(research ? { research } : {}),
           } as unknown as Record<string, unknown>);
         }
-      } else if (info._type === "playlist" && Array.isArray(info.entries) && info.entries.length === 1) {
-        playlistItem = 1;
-      }
-
-      // Check for internal _playlistItem (set when this job was spawned for a playlist entry)
-      const internalPlaylistItem = (payload as Record<string, unknown>)._playlistItem as number | undefined;
-      if (internalPlaylistItem !== undefined) {
-        playlistItem = internalPlaylistItem;
       }
 
       // (d0) Detect image-only content — retype asset and route to process_image

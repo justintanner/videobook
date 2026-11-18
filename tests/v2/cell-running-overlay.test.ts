@@ -55,6 +55,16 @@ describe('CellStateOverlay', () => {
     expect(html).toContain('disabled=""')
   })
 
+  it('names the Chrome retry on a sign-in-required download', () => {
+    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
+      kind: 'video', address: 'a3', status: 'error', statusError: 'TikTok sign-in required.',
+      icon: null, downloadRetry: 'chrome', onRetry: () => undefined,
+    }))
+    expect(html).toContain('DOWNLOAD FAILED')
+    expect(html).toContain('aria-label="Retry @a3 with Chrome"')
+    expect(html).toContain('USE CHROME')
+  })
+
   it.each([
     ['queued', 'QUEUED'],
     ['running', 'GENERATING'],

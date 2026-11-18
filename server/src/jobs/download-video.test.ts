@@ -373,6 +373,7 @@ describe("TikTok yt-dlp session", () => {
   const previousPath = process.env.VIDEOBOOK_YTDLP_PATH;
   const previousCookies = process.env.VIDEOBOOK_YTDLP_COOKIES;
   const previousChromeProfile = process.env.VIDEOBOOK_YTDLP_CHROME_PROFILE;
+  const previousChromeOnLogin = process.env.VIDEOBOOK_YTDLP_CHROME_ON_LOGIN;
   let dir: string;
   let fake: string;
   let sleeps: number[];
@@ -391,6 +392,7 @@ describe("TikTok yt-dlp session", () => {
     });
     delete process.env.VIDEOBOOK_YTDLP_COOKIES;
     delete process.env.VIDEOBOOK_YTDLP_CHROME_PROFILE;
+    delete process.env.VIDEOBOOK_YTDLP_CHROME_ON_LOGIN;
   });
 
   afterEach(async () => {
@@ -398,6 +400,7 @@ describe("TikTok yt-dlp session", () => {
     restoreEnv("VIDEOBOOK_YTDLP_PATH", previousPath);
     restoreEnv("VIDEOBOOK_YTDLP_COOKIES", previousCookies);
     restoreEnv("VIDEOBOOK_YTDLP_CHROME_PROFILE", previousChromeProfile);
+    restoreEnv("VIDEOBOOK_YTDLP_CHROME_ON_LOGIN", previousChromeOnLogin);
     await rm(dir, { recursive: true, force: true });
   });
 
@@ -410,6 +413,57 @@ describe("TikTok yt-dlp session", () => {
   function open(url: string, bookId: string = randomUUID()) {
     return openYtdlpSession({ url, bookId, binaryPath: fake });
   }
+
+  const signInError = "[TikTok] This post may not be comfortable for some audiences. Log in for access.";
+
+  it.each([
+    ["sign-in required", signInError],
+    ["asked to log into an account", "Please log into your account to view this post."],
+    ["an account with access is required", `You do not have permission to view this post. Log into an account that has access. ${"x".repeat(400)}`],
+  ])("switches to the dedicated profile once across a user-added TikTok download when %s", async (_label, prompt) => {
+    await writeFile(join(dir, "Preferences"), "{}");
+    process.env.VIDEOBOOK_YTDLP_CHROME_PROFILE = dir;
+    process.env.VIDEOBOOK_YTDLP_CHROME_ON_LOGIN = "1";
+    const cookies = join(dir, "cookies.txt");
+    await writeFile(cookies, "# Netscape HTTP Cookie File\n");
+    process.env.VIDEOBOOK_YTDLP_COOKIES = cookies;
+    const session = await openYtdlpSession({ url: TIKTOK_URL, bookId: randomUUID(), binaryPath: ytdlpRunOptions().binaryPath, userAddedLink: true });
+    try {
+      expect(await session.run(async () => session.args)).toContain("--cookies");
+      expect(session.args).not.toContain("--cookies-from-browser");
+      await session.run(async () => {
+        if (!session.args.includes("--cookies-from-browser")) throw new Error(prompt);
+      });
+      expect(session.attempts).toBe(2);
+      expect(session.args).toContain(`chrome:${dir}`);
+      expect(session.args).not.toContain("--cookies");
+      await expect(session.run(async () => { throw new Error(prompt); })).rejects.toThrow(prompt);
+      expect(session.attempts).toBe(1);
+    } finally {
+      await session.close();
+    }
+  });
+
+  it.each([
+    ["automatic research", TIKTOK_URL, false, "1", signInError],
+    ["an operator who opted out", TIKTOK_URL, true, "0", signInError],
+    ["another site", OTHER_URL, true, "1", signInError],
+    ["a removed post", TIKTOK_URL, true, "1", "This post has been removed"],
+    ["a private post with no sign-in prompt", TIKTOK_URL, true, "1", "This account is private"],
+    ["an invalid cookie file", TIKTOK_URL, true, "1", "cookies file does not look like a Netscape format cookies file"],
+  ] as const)("keeps Chrome out of the retry for %s", async (_case, url, userAddedLink, setting, error) => {
+    await writeFile(join(dir, "Preferences"), "{}");
+    process.env.VIDEOBOOK_YTDLP_CHROME_PROFILE = dir;
+    process.env.VIDEOBOOK_YTDLP_CHROME_ON_LOGIN = setting;
+    const session = await openYtdlpSession({ url, bookId: randomUUID(), binaryPath: ytdlpRunOptions().binaryPath, userAddedLink });
+    try {
+      await expect(session.run(async () => { throw new Error(error); })).rejects.toThrow(error);
+      expect(session.attempts).toBe(1);
+      expect(session.args).not.toContain("--cookies-from-browser");
+    } finally {
+      await session.close();
+    }
+  });
 
   it("uses only the explicit Chrome profile for a requested TikTok retry", async () => {
     const binaryPath = ytdlpRunOptions().binaryPath;

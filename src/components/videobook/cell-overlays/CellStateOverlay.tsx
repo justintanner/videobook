@@ -7,7 +7,7 @@ import {
   notebookCellStateFromStatus,
 } from '@/videobook/notebook-cell-presentation'
 import { CellClockOverlay } from './CellClockOverlay'
-import { CellFailedOverlay } from './CellFailedOverlay'
+import { CellFailedOverlay, type DownloadRetry } from './CellFailedOverlay'
 
 export function CellStateOverlay({
   kind,
@@ -20,7 +20,7 @@ export function CellStateOverlay({
   generation = false,
   onRepair,
   onRetry,
-  onRetryDownload,
+  downloadRetry,
   onDelete,
   disabled,
 }: {
@@ -34,7 +34,7 @@ export function CellStateOverlay({
   generation?: boolean
   onRepair?: () => void
   onRetry?: () => void
-  onRetryDownload?: () => void
+  downloadRetry?: DownloadRetry
   onDelete?: () => void
   disabled?: boolean
 }) {
@@ -62,14 +62,14 @@ export function CellStateOverlay({
     return (
       <CellFailedOverlay
         error={presentation.error}
-        label={onRetryDownload ? 'DOWNLOAD FAILED' : isNotebookMediaPresentationCellType(kind)
+        label={downloadRetry ? 'DOWNLOAD FAILED' : isNotebookMediaPresentationCellType(kind)
           ? 'MEDIA FAILED'
           : 'GENERATION FAILED'}
         address={address}
         meta={generator}
         onRepair={creditFailure ? undefined : onRepair}
-        onRetry={onRetryDownload ?? (creditFailure ? onRetry : undefined)}
-        download={Boolean(onRetryDownload)}
+        onRetry={downloadRetry || creditFailure ? onRetry : undefined}
+        downloadRetry={downloadRetry}
         onDelete={onDelete}
         disabled={disabled}
       />

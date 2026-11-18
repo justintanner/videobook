@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
+import { isTikTokUrl } from "../download-recovery.js";
 import { parseTime } from "../time-parse.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -110,6 +111,7 @@ export function downloadVideoDef(engine: Engine): ToolDef {
         exportVideos: export_videos ?? false,
         full: true,
         sourcePrefix: prefix,
+        ...(isTikTokUrl(normalizedUrl) ? { userAddedLink: true } : {}),
         ...(requestedRange ? { requestedRange } : {}),
       } as unknown as Record<string, unknown>);
 

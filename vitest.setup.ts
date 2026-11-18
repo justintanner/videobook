@@ -65,6 +65,8 @@ const ACESTEP_ENV_VARS = [
 for (const name of [...SECRET_ENV_VARS, ...ACESTEP_ENV_VARS, "VIDEOBOOK_HAR_CAPTURE"]) {
   delete process.env[name];
 }
+process.env.VIDEOBOOK_YTDLP_CHROME_PROFILE = "";
+process.env.VIDEOBOOK_YTDLP_CHROME_ON_LOGIN = "0";
 
 for (const [name, value] of Object.entries(process.env)) {
   if (value?.trim().startsWith("op://")) delete process.env[name];

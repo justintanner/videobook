@@ -627,6 +627,11 @@ permission to read Chrome's encrypted cookies. **Retry download** uses the norma
 download configuration, including `VIDEOBOOK_YTDLP_COOKIES` when set. Each
 recovery keeps the original cell and artifact ID.
 
+Set `VIDEOBOOK_YTDLP_CHROME_ON_LOGIN=1` alongside the dedicated profile to
+enable automatic recovery for TikTok links you add to Videobook. If TikTok asks
+for sign-in, the same import tries the profile once and continues in the
+original cell. Scheduled TikTok research uses its own download settings.
+
 Chat and voice URL downloads start immediately without an approval preview and
 keep the whole source clip. Chat accepts only the URL for an import; trimming
 is a separate edit after downloading. Audio extraction also starts immediately
