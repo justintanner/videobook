@@ -12,6 +12,7 @@ export function CellFailedOverlay({
   meta = null,
   onRepair,
   onRetry,
+  download = false,
   onDelete,
   disabled = false,
 }: {
@@ -21,6 +22,7 @@ export function CellFailedOverlay({
   meta?: string | null
   onRepair?: () => void
   onRetry?: () => void
+  download?: boolean
   onDelete?: () => void
   disabled?: boolean
 }) {
@@ -41,7 +43,7 @@ export function CellFailedOverlay({
       <div className="cell-state-failed-wash" aria-hidden="true" />
       <div className="cell-state-overlay-body cell-state-failed-body">
         <strong>{label}</strong>
-        <p className="cell-state-failed-message">{error}</p>
+        <p className="cell-state-failed-message">{download ? error.split('\n', 1)[0] : error}</p>
         {meta && <span className="cell-state-meta" title={meta}>{meta}</span>}
         {(onRepair || onRetry || onDelete) && (
           <div className="cell-state-actions">
@@ -50,7 +52,7 @@ export function CellFailedOverlay({
                 type="button"
                 className="cell-state-action cell-state-retry nodrag"
                 aria-label={`Retry @${address}`}
-                title="Delete this failed output and generate again with the saved settings"
+                title={download ? 'Retry the download in this cell' : 'Delete this failed output and generate again with the saved settings'}
                 disabled={disabled}
                 onPointerDown={keepPressOnButton}
                 onClick={act(onRetry)}

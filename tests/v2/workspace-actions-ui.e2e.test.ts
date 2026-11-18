@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { createServer } from 'node:http'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -139,9 +140,9 @@ describe('workspace action launcher with real endpoints', () => {
       commandResponses.push({ request: payload, response: await response.text().catch(() => 'unavailable') })
     })
     await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
-    await page.goto(appUrl)
-    await expect.poll(() => page.getByLabel('Open actions', { exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
-  })
+    await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: testBudget(60_000) })
+    await expect.poll(() => page.getByLabel('Open actions', { exact: true }).isEnabled(), { timeout: testBudget(MCP_ROUNDTRIP_MS) }).toBe(true)
+  }, testBudget(90_000))
 
   afterEach(async ({ task }) => {
     if (task.result?.state === 'fail') {
@@ -160,6 +161,72 @@ describe('workspace action launcher with real endpoints', () => {
     await stopProcess(server)
     if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3 })
   })
+
+  it('recovers failed downloads in place by retrying the URL or choosing a saved video', async () => {
+    const video = await readFile(join(rootDir, 'video.mp4'))
+    let available = false
+    const source = createServer((_request, response) => {
+      if (!available) {
+        response.writeHead(404).end()
+        return
+      }
+      response.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': video.length }).end(video)
+    })
+    await new Promise<void>(resolve => source.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = source.address()
+      if (!address || typeof address === 'string') throw new Error('Missing video source port')
+      const url = `http://127.0.0.1:${address.port}/clip.mp4`
+      const notebook = await call('create_notebook', { name: 'Download recovery' }) as { id: string }
+      const cells: Array<{ id: string; output_artifact_id: string }> = []
+      for (const column of [0, 1]) {
+        const download = await call('download_video', { url }) as { artifact_id: string; job_id: string }
+        const cell = await call('create_notebook_cell', { notebook_id: notebook.id, cell: {
+          type: 'video', slot: { row: 0, column }, output_artifact_id: download.artifact_id,
+          inputs: { sourceOperation: 'download_video', sourceUrl: url, jobId: download.job_id },
+        } }) as { id: string; output_artifact_id: string }
+        cells.push(cell)
+      }
+      const rows = async () => (await call('list_assets') as {
+        assets: Array<{ artifact_id: string; status: string; failedDownload?: { jobId: number } }>
+      }).assets.filter(row => cells.some(cell => cell.output_artifact_id === row.artifact_id))
+      await expect.poll(async () => (await rows()).filter(row => row.failedDownload).length, { timeout: testBudget(60_000) }).toBe(2)
+      const fileCell = cells[1]!
+      const oldJobId = (await rows()).find(row => row.artifact_id === fileCell.output_artifact_id)!.failedDownload!.jobId
+      await page.evaluate(([book, id]) => localStorage.setItem(`videobook.active-notebook:${book}`, id!), [bookId, notebook.id])
+      await page.reload()
+      available = true
+      await page.getByRole('button', { name: 'Retry @a1', exact: true }).click()
+      await page.locator(`[data-id="${fileCell.id}"] .cell-node-footer strong`).click()
+      const recovery = page.getByRole('region', { name: 'Download recovery' })
+      await recovery.waitFor({ state: 'visible' })
+      await expect.poll(() => recovery.getByRole('button', { name: 'Retry download' }).isEnabled(), { timeout: testBudget(MCP_ROUNDTRIP_MS) }).toBe(true)
+      const choose = async (buffer: Buffer) => {
+        const [chooser] = await Promise.all([
+          page.waitForEvent('filechooser'),
+          recovery.getByRole('button', { name: 'Choose video file' }).click(),
+        ])
+        const result = page.waitForResponse(response => response.url().includes(`failedDownloadJobId=${oldJobId}`))
+        await chooser.setFiles({ name: 'saved.mp4', mimeType: 'video/mp4', buffer })
+        return (await result).status()
+      }
+      expect(await choose(Buffer.from('invalid video bytes'))).toBe(400)
+      expect(await choose(video)).toBe(200)
+      await expect.poll(async () => (await rows()).map(row => row.status), { timeout: testBudget(60_000) }).toEqual(['ready', 'ready'])
+      await recovery.waitFor({ state: 'hidden' })
+      const graph = await call('get_notebook', { notebook_id: notebook.id }) as { cells: Array<{ id: string; output_artifact_id: string }> }
+      expect(graph.cells.map(cell => [cell.id, cell.output_artifact_id])).toEqual(cells.map(cell => [cell.id, cell.output_artifact_id]))
+      for (const cell of graph.cells) {
+        const original = await fetch(`${origin}/files/${bookId}/${cell.output_artifact_id}/original.mp4`)
+        expect(Buffer.from(await original.arrayBuffer()).equals(video)).toBe(true)
+      }
+      const query = new URLSearchParams({ targetAssetId: fileCell.output_artifact_id, filename: 'repeat.mp4', failedDownloadJobId: String(oldJobId) })
+      expect((await fetch(`${origin}/api/books/${bookId}/upload?${query}`, { method: 'POST', body: video })).status).toBe(409)
+      await expect(call('retry_job', { job_id: oldJobId })).rejects.toThrow('download has changed')
+    } finally {
+      await new Promise<void>(resolve => source.close(() => resolve()))
+    }
+  }, testBudget(120_000))
 
   it('lists the complete endpoint catalog and traverses past twelve options with the keyboard', async () => {
     await openActions()

@@ -340,6 +340,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const slotContext = useContext(MediaSlotContext)
   const runCell = useContext(CellRunContext)
   const cellActions = useContext(CellActionsContext)
+  const failedDownload = data.asset?.failedDownload
   const primaryCellId = useContext(PrimaryCellContext)
   const generationTitles = useContext(GenerationTitlesContext)
   const contextMenu = useContext(CellContextMenuContext)
@@ -668,7 +669,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           )}
         </header>
         <div className="cell-node-body">
-        {data.kind === 'post' ? (
+        {failedDownload ? null : data.kind === 'post' ? (
           <PostTile post={data.post} source={data.postSource} />
         ) : emptyMediaSlot && slotKind ? (
           <MediaSlotTile
@@ -737,6 +738,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           onRetry={data.inputs?.producerCellId ? () => {
             void cellActions.retryCell(id)
           } : undefined}
+          onRetryDownload={failedDownload ? () => void cellActions.retryDownload(failedDownload.jobId) : undefined}
           disabled={!cellActions.ready}
           onDelete={() => {
             void cellActions.deleteCell(id)

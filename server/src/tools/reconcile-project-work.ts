@@ -27,6 +27,7 @@ import {
 import { logger } from "../logger.js";
 import { appendDiagnostic } from "../diagnostics.js";
 import { queue } from "../queue.js";
+import { failedDownloadForArtifact, type FailedDownload } from "../download-recovery.js";
 import { getApiKey } from "../api-key.js";
 import {
   findVideoFile,
@@ -134,6 +135,7 @@ export type ProjectAsset = {
    *  prefer assetWork.status + assetWork.meta when present; the legacy
    *  `status` string remains for back-compat with older clients. */
   assetWork: AssetWorkProjection | null;
+  failedDownload?: FailedDownload;
   width: number | null;
   height: number | null;
   origin: string | null;
@@ -636,6 +638,10 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
             : null,
       });
 
+      const failedDownload = a.kind === "video" && status === "error" && !mediaFile
+        ? failedDownloadForArtifact(engine, a.artifactId)
+        : null;
+
       await scheduleMissingVideoPoster(engine, {
         bookId: book_id,
         artifact: a,
@@ -709,6 +715,7 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
         object_hash: mediaFile?.objectHash ?? null,
         status,
         assetWork,
+        ...(failedDownload ? { failedDownload } : {}),
         width: (meta?.width as number) ?? null,
         height: (meta?.height as number) ?? null,
         origin: (meta?.origin as string) ?? null,

@@ -47,6 +47,7 @@ export type CellActionsContextValue = {
   deleteCell: (cellId: string) => Promise<void>
   repairCell: (cellId: string) => Promise<void>
   retryCell: (cellId: string) => Promise<void>
+  retryDownload: (jobId: number) => Promise<void>
 }
 
 export const CellActionsContext = createContext<CellActionsContextValue>({
@@ -54,6 +55,7 @@ export const CellActionsContext = createContext<CellActionsContextValue>({
   deleteCell: async () => undefined,
   repairCell: async () => undefined,
   retryCell: async () => undefined,
+  retryDownload: async () => undefined,
 })
 
 export const PrimaryCellContext = createContext<string | null>(null)

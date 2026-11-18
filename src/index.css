@@ -6038,6 +6038,26 @@ textarea:focus-visible {
   line-height: 1.65;
 }
 
+.inspector-download-recovery h3 {
+  margin: 0 0 8px;
+}
+
+.inspector-download-recovery p {
+  max-width: 66ch;
+  margin: 0 0 16px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.inspector-download-recovery .inspector-generation-action {
+  min-height: 32px;
+  font-size: 12px;
+}
+
+.inspector-download-recovery .inspector-generating-actions {
+  flex-wrap: wrap;
+}
+
 .inspector-compact-actions {
   display: flex;
   justify-content: flex-end;

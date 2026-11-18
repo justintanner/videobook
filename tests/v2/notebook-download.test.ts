@@ -86,6 +86,17 @@ describe('notebook download placement', () => {
     })
   })
 
+  it('watches a retried download or a saved video being processed past the original failure', () => {
+    const failed = { artifactId: 'artifact-01', error: { message: 'Login required' }, result: null, state: 'failed', type: 'download_video' }
+    for (const type of ['download_video', 'process_video']) {
+      const active = { ...failed, error: null, state: 'queued', type }
+      expect(downloadWatchStep('artifact-01', { artifactId: 'artifact-01', status: 'processing' }, [active, failed]))
+        .toEqual({ kind: 'continue' })
+      expect(downloadWatchStep('artifact-01', { artifactId: 'artifact-01', status: 'ready' }, [{ ...active, state: 'done' }, failed]))
+        .toEqual({ kind: 'completed' })
+    }
+  })
+
   it('keeps watching while process_image is still active', () => {
     expect(mediaAssetWatchStep('artifact-01', {
       artifactId: 'artifact-01',

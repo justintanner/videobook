@@ -44,6 +44,8 @@ import { cellInputParams, withInputParams } from "../generation-input-params.js"
 import type { NotebookRunAccepted } from "../notebook-run-enqueue.js";
 import { enqueueNotebookRun } from "../notebook-run-enqueue.js";
 import { jobIdForKey, queue, stopBookQueue } from "../queue.js";
+import { withMediaOutputLock } from "../media-output-path.js";
+import { failedDownloadForArtifact } from "../download-recovery.js";
 import {
   claimNotebookGenerationPlan,
   failQueuedNotebookCells,
@@ -2526,6 +2528,7 @@ export function videobookDomainDefs(
       schema: {
         ...bookSchema,
         job_id: z.number().int().positive(),
+        use_chrome_profile: z.boolean().optional().describe("Use the server's configured Chrome profile for this TikTok download retry"),
       },
       handler: async (args) => {
         const jobId = Number(args.job_id);
@@ -2534,12 +2537,37 @@ export function videobookDomainDefs(
         if (job.state !== "failed" && job.state !== "aborted") {
           return failure(`Job ${jobId} is ${job.state}, not retryable`);
         }
+        const useChromeProfile = args.use_chrome_profile === true;
+        if (useChromeProfile && (job.type !== "download_video" || !job.artifactId)) {
+          return failure("Retry with Chrome is available for TikTok downloads only.");
+        }
         const retryId = `retry-${job.type}-${uuidv7()}`;
-        await queue.enqueue(retryId, {
+        const enqueue = () => queue.enqueue(retryId, {
           ...job.payload,
+          ...(job.type === "download_video" ? { useChromeProfile } : {}),
           type: job.type,
           bookId: engine.book.get().bookId,
         });
+        if (job.type === "download_video" && job.artifactId) {
+          const artifact = engine.artifacts.get(job.artifactId);
+          if (!artifact.ok) return failure(artifact.error.message);
+          try {
+            await withMediaOutputLock(engine, artifact.value.path, undefined, async () => {
+              const download = failedDownloadForArtifact(engine, artifact.value.artifactId);
+              if (download?.jobId !== job.id) {
+                throw new Error("This download has changed. Refresh the cell before retrying.");
+              }
+              if (useChromeProfile && !download.chromeRetryAvailable) {
+                throw new Error("Retry with Chrome requires a TikTok URL and a configured Chrome profile.");
+              }
+              await enqueue();
+            });
+          } catch (error) {
+            return failure(error instanceof Error ? error.message : String(error));
+          }
+        } else {
+          await enqueue();
+        }
         return json({ status: "enqueued", retry_job_id: retryId, source_job_id: jobId });
       },
     },

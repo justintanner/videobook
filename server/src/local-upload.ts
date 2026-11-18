@@ -7,6 +7,9 @@ import * as path from "node:path";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { queue } from "./queue.js";
+import { clearDownloadFailure, failedDownloadForArtifact } from "./download-recovery.js";
+import { probeVideo } from "./ffmpeg.js";
+import { findAssetMediaFile } from "./asset-media-projection.js";
 
 const extensionToKind: Record<string, string> = {
   ".mp4": "video",
@@ -42,9 +45,8 @@ interface LocalUploadResult {
   processingError?: string;
 }
 
-type LocalUploadOutcome =
-  | { ok: true; value: LocalUploadResult }
-  | { ok: false; statusCode: number; message: string };
+type UploadError = { ok: false; statusCode: number; message: string };
+type LocalUploadOutcome = { ok: true; value: LocalUploadResult } | UploadError;
 
 interface UploadLocalBytesArgs {
   bookId: string;
@@ -62,6 +64,7 @@ interface UploadLocalStreamArgs {
   origin?: string;
   waitForProcessing?: boolean;
   targetAssetId?: string;
+  failedDownloadJobId?: number;
 }
 
 function statusCodeForFsError(error: EngineError): number {
@@ -122,47 +125,48 @@ export async function uploadLocalBytes(
   });
 }
 
-export async function uploadLocalStream(
-  engine: Engine,
-  args: UploadLocalStreamArgs,
-): Promise<LocalUploadOutcome> {
-  return uploadLocal(engine, {
-    bookId: args.bookId,
-    filename: args.filename,
-    origin: args.origin,
-    waitForProcessing: args.waitForProcessing,
-    targetAssetId: args.targetAssetId,
-    write: async (assetId, writtenFilename) => {
-      let uploadRoot: string | undefined;
-      try {
-        uploadRoot = await mkdtemp(path.join(tmpdir(), "videobook-media-upload-"));
-        const uploadPath = path.join(uploadRoot, "input");
-        await pipeline(args.stream, createWriteStream(uploadPath, { flags: "wx" }));
-        const written = await engine.files.writeFromPath(assetId, writtenFilename, uploadPath);
-        if (!written.ok) {
-          return {
-            ok: false,
-            statusCode: statusCodeForFsError(written.error),
-            message: written.error.message,
-          };
-        }
-        return { ok: true };
-      } catch (error) {
-        return {
-          ok: false,
-          statusCode: 500,
-          message: error instanceof Error ? error.message : String(error),
-        };
-      } finally {
-        if (uploadRoot) await rm(uploadRoot, { recursive: true, force: true, maxRetries: 3 });
+async function withUploadPath<T>(
+  stream: Readable,
+  consume: (uploadPath: string) => Promise<T>,
+): Promise<T | UploadError> {
+  let root: string | undefined;
+  try {
+    root = await mkdtemp(path.join(tmpdir(), "videobook-media-upload-"));
+    const input = path.join(root, "input");
+    await pipeline(stream, createWriteStream(input, { flags: "wx" }));
+    return await consume(input);
+  } catch (error) {
+    return { ok: false, statusCode: 500, message: error instanceof Error ? error.message : String(error) };
+  } finally {
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 });
+  }
+}
+
+export async function uploadLocalStream(engine: Engine, args: UploadLocalStreamArgs): Promise<LocalUploadOutcome> {
+  const persist = async (assetId: string, filename: string, input: string): Promise<UploadWriteResult> => {
+    const written = await engine.files.writeFromPath(assetId, filename, input);
+    if (written.ok) return { ok: true };
+    return { ok: false, statusCode: statusCodeForFsError(written.error), message: written.error.message };
+  };
+  if (args.failedDownloadJobId !== undefined) {
+    if (!args.targetAssetId || extensionToKind[path.extname(args.filename).toLowerCase()] !== "video") {
+      return { ok: false, statusCode: 400, message: "Choose a video file for the failed download." };
+    }
+    return withUploadPath<LocalUploadOutcome>(args.stream, async (input) => {
+      const probe = await probeVideo(input).catch(() => null);
+      if (!probe?.videoCodec || probe.width <= 0 || probe.height <= 0) {
+        return { ok: false, statusCode: 400, message: "Choose a readable video file with a video track." };
       }
-    },
+      return uploadLocal(engine, { ...args, write: (assetId, name) => persist(assetId, name, input) });
+    });
+  }
+  return uploadLocal(engine, {
+    ...args,
+    write: (assetId, name) => withUploadPath(args.stream, (input) => persist(assetId, name, input)),
   });
 }
 
-type UploadWriteResult =
-  | { ok: true }
-  | { ok: false; statusCode: number; message: string };
+type UploadWriteResult = { ok: true } | UploadError;
 
 interface UploadLocalArgs {
   bookId: string;
@@ -170,6 +174,7 @@ interface UploadLocalArgs {
   origin?: string;
   waitForProcessing?: boolean;
   targetAssetId?: string;
+  failedDownloadJobId?: number;
   write: (assetId: string, writtenFilename: string) => Promise<UploadWriteResult>;
 }
 
@@ -237,7 +242,9 @@ async function uploadLocal(
         message: artifact.error.message,
       };
     }
-    if (artifact.value.kind !== "character") {
+    if (args.failedDownloadJobId !== undefined) {
+      if (artifact.value.kind !== "video") return { ok: false, statusCode: 400, message: "Download recovery requires a video asset." };
+    } else if (artifact.value.kind !== "character") {
       return { ok: false, statusCode: 400, message: "Target asset must be a character folder" };
     }
     const resolveResult = await engine.workspaces.resolveArtifact(args.targetAssetId);
@@ -295,7 +302,14 @@ async function uploadLocal(
           message: manifest.error.message,
         };
       }
-      writtenFilename = availableUploadFilename(filename, manifest.value.files.map((file) => file.name));
+      if (args.failedDownloadJobId !== undefined) {
+        if (findAssetMediaFile(manifest.value.files, { kind: "video" }) || failedDownloadForArtifact(engine, assetId)?.jobId !== args.failedDownloadJobId) {
+          return { ok: false, statusCode: 409, message: "This download has changed. Refresh the cell before retrying." };
+        }
+        writtenFilename = `original${ext}`;
+      } else {
+        writtenFilename = availableUploadFilename(filename, manifest.value.files.map((file) => file.name));
+      }
     }
     const writeResult = await args.write(assetId, writtenFilename);
     if (!writeResult.ok) {
@@ -325,7 +339,13 @@ async function uploadLocal(
           bookId: args.bookId,
           provenance,
         } as unknown as Record<string, unknown>;
-        processingError = await runProcessingJob(jobId, payload, args.waitForProcessing);
+        try {
+          processingError = await runProcessingJob(jobId, payload, args.waitForProcessing);
+        } catch (error) {
+          if (args.failedDownloadJobId !== undefined) await engine.files.delete(assetId, writtenFilename);
+          throw error;
+        }
+        if (args.failedDownloadJobId !== undefined) await clearDownloadFailure(engine, assetId);
       } else if (assetKind === "image") {
         const jobId = `process-image-${assetId}-${Date.now()}`;
         const payload = {
@@ -366,7 +386,7 @@ async function uploadLocal(
   } finally {
     // deleteAsset refuses while the lock is held, so always release before
     // any cleanup branch below runs.
-    engine.jobs.locks.release(assetPath);
+    engine.jobs.locks.release(assetPath, lockResult.value.ownerId);
   }
 
   if (!outcome.ok && isNewAsset) {

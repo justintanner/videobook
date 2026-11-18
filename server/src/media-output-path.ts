@@ -4,14 +4,14 @@ import { normalizeFilePath, type Engine } from "videobook-engine";
 export async function withMediaOutputLock<T>(
   engine: Engine,
   assetDir: string,
-  signal: AbortSignal,
+  signal: AbortSignal | undefined,
   fn: () => Promise<T>,
 ): Promise<T> {
-  signal.throwIfAborted();
+  signal?.throwIfAborted();
   const lock = await engine.jobs.locks.acquire(assetDir, { durationMs: 120_000 });
   if (!lock.ok) throw new Error(`Asset is locked: ${lock.error.message}`);
   try {
-    signal.throwIfAborted();
+    signal?.throwIfAborted();
     return await fn();
   } finally {
     engine.jobs.locks.release(assetDir, lock.value.ownerId);

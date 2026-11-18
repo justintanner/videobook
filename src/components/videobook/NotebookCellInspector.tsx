@@ -8,6 +8,7 @@ import {
   CircleAlert,
   CircleX,
   Copy,
+  ExternalLink,
   History,
   Layers2,
   Maximize2,
@@ -36,6 +37,8 @@ import type {
   NotebookEdge,
 } from 'videobook-engine'
 import { ArtifactThumb } from './ArtifactThumb'
+import type { FailedDownload } from '../../../server/src/download-recovery'
+import { mediaFileAccept } from '@/videobook/notebook-media-drop'
 import { CellWaveform, CellWaveformSkeleton } from './CellWaveform'
 import { MediaLibraryAssetPreview } from './MediaLibraryAssetPreview'
 import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
@@ -401,6 +404,7 @@ export type NotebookCellInspectorAsset = {
   objectHash?: string | null
   type: string
   mediaUrl: string | null
+  failedDownload?: FailedDownload
   thumbnailUrl: string | null
   width: number | null
   height: number | null
@@ -479,6 +483,8 @@ type NotebookCellInspectorProps = {
   jobs?: readonly NotebookRunJobView[]
   /** Cancel a queued or running job by its numeric id, when available. */
   onCancelJob?: (jobId: number) => void
+  onRetryDownload?: (jobId: number, useChromeProfile?: boolean) => void
+  onUseSavedVideo?: (file: File) => void
   sourceVisible: boolean
   historyVisible?: boolean
   generationsVisible?: boolean
@@ -4116,6 +4122,45 @@ function CellSourceView({
   )
 }
 
+function DownloadRecovery({ download, busy, onRetryDownload, onUseSavedVideo }: {
+  download: FailedDownload
+} & Pick<NotebookCellInspectorProps, 'busy' | 'onRetryDownload' | 'onUseSavedVideo'>) {
+  const input = useRef<HTMLInputElement>(null)
+  return (
+    <section className="inspector-body inspector-download-recovery" aria-label="Download recovery">
+      <h3>Download failed</h3>
+      <p>{download.message}</p>
+      <div className="inspector-generating-actions">
+        {download.chromeRetryAvailable && onRetryDownload && (
+          <button type="button" className="inspector-generation-action" disabled={busy} onClick={() => onRetryDownload(download.jobId, true)}>
+            <RotateCcw size={13} aria-hidden="true" /> Retry with Chrome
+          </button>
+        )}
+        {download.tiktokUrl && (
+          <a className="inspector-generation-action" href={download.tiktokUrl} target="_blank" rel="noreferrer">
+            <ExternalLink size={13} aria-hidden="true" /> Open TikTok post
+          </a>
+        )}
+        {onUseSavedVideo && (
+          <button type="button" className="inspector-generation-action" disabled={busy} onClick={() => input.current?.click()}>
+            Choose video file
+          </button>
+        )}
+        {onRetryDownload && (
+          <button type="button" className="inspector-generation-action" disabled={busy} onClick={() => onRetryDownload(download.jobId)}>
+            <RotateCcw size={13} aria-hidden="true" /> Retry download
+          </button>
+        )}
+      </div>
+      <input type="file" ref={input} hidden accept={mediaFileAccept.video} aria-label="Saved video file" onChange={event => {
+        const file = event.currentTarget.files?.[0]
+        event.currentTarget.value = ''
+        if (file) onUseSavedVideo?.(file)
+      }} />
+    </section>
+  )
+}
+
 export function NotebookCellInspector({
   headerActionHost,
   notebookId,
@@ -4163,6 +4208,8 @@ export function NotebookCellInspector({
   runErrors,
   jobs,
   onCancelJob,
+  onRetryDownload,
+  onUseSavedVideo,
 }: NotebookCellInspectorProps) {
   const artifactAssets = inspectorArtifactAssets(
     asset,
@@ -4237,6 +4284,11 @@ export function NotebookCellInspector({
         onDelete={onDelete}
       />
     )
+  }
+
+  if (cell.type === 'video' && asset?.failedDownload) {
+    return <DownloadRecovery download={asset.failedDownload} busy={busy || deleting || !assetTools}
+      onRetryDownload={onRetryDownload} onUseSavedVideo={onUseSavedVideo} />
   }
 
   const dockKind = mediaDockKind(cell.type)

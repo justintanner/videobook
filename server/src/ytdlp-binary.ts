@@ -97,6 +97,11 @@ export function ytdlpCookiesSetting(env: NodeJS.ProcessEnv = process.env): Ytdlp
   return path ? { path, readable: isAccessibleFile(path, constants.R_OK) } : null;
 }
 
+export function ytdlpChromeProfile(env: NodeJS.ProcessEnv = process.env): string | null {
+  const profile = env.VIDEOBOOK_YTDLP_CHROME_PROFILE?.trim();
+  return profile && isAbsolute(profile) && isAccessibleFile(join(profile, "Preferences"), constants.R_OK) ? profile : null;
+}
+
 export function parseImpersonateTargets(output: string): string[] {
   const lines = output.split(/\r?\n/u);
   const header = lines.findIndex((line) => /^-{3,}$/u.test(line.trim()));

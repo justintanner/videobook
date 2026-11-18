@@ -4,7 +4,8 @@ import { chmod, copyFile, mkdtemp, rm, stat, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { setTimeout as sleepFor } from "node:timers/promises";
 import { YtDlp } from "ytdlp-nodejs";
-import { ytdlpCookiesSetting, ytdlpImpersonateTargets, ytdlpRunOptions } from "../ytdlp-binary.js";
+import { ytdlpChromeProfile, ytdlpCookiesSetting, ytdlpImpersonateTargets, ytdlpRunOptions } from "../ytdlp-binary.js";
+import { clearDownloadFailure, DOWNLOAD_FAILURE_METADATA_KEY, downloadFailureMessage, isTikTokUrl } from "../download-recovery.js";
 import { extractOpenGraph } from "@devmehq/open-graph-extractor";
 import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
@@ -25,8 +26,6 @@ const LOCK_DURATION_MS = 600_000;
 const TIKTOK_DOWNLOAD_SPACING_MS = 5_000;
 const YTDLP_RETRY_DELAYS_MS = [2_000, 4_000, 8_000];
 const FAILURE_TAIL_CHARS = 240;
-
-export const DOWNLOAD_FAILURE_METADATA_KEY = "download-failure";
 
 export type DownloadFailureClass =
   | "private"
@@ -108,15 +107,6 @@ export function classifyDownloadFailure(message: string): DownloadFailure {
   };
 }
 
-export function isTikTokUrl(url: string): boolean {
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    return host === "tiktok.com" || host.endsWith(".tiktok.com");
-  } catch {
-    return false;
-  }
-}
-
 async function waitForTikTokTurn(bookId: string, signal?: AbortSignal): Promise<void> {
   const now = downloadNow();
   const start = Math.max(now, tiktokTurns.get(bookId) ?? now);
@@ -143,16 +133,20 @@ export async function openYtdlpSession(input: {
   url: string;
   bookId: string;
   binaryPath: string;
+  useChromeProfile?: boolean;
   signal?: AbortSignal;
 }): Promise<YtdlpSession> {
   const tiktok = isTikTokUrl(input.url);
+  const profile = input.useChromeProfile && tiktok ? ytdlpChromeProfile() : null;
+  if (input.useChromeProfile && !profile) throw new Error("Retry with Chrome requires a TikTok URL and a configured Chrome profile.");
   if (tiktok) await waitForTikTokTurn(input.bookId, input.signal);
   const impersonate = tiktok && (await ytdlpImpersonateTargets(input.binaryPath)).includes("chrome");
-  const cookies = tiktok ? await stageCookiesCopy() : null;
+  const cookies = tiktok && !profile ? await stageCookiesCopy() : null;
   let attempts = 0;
   return {
     args: [
       ...(impersonate ? ["--impersonate", "chrome"] : []),
+      ...(profile ? ["--ignore-config", "--cookies-from-browser", `chrome:${profile}`] : []),
       ...(cookies ? ["--cookies", cookies] : []),
     ],
     get attempts() {
@@ -215,17 +209,12 @@ async function recordDownloadFailure(
     url: input.url,
     failedAt: new Date().toISOString(),
   });
-  return new Error(failure.reason, { cause: error });
-}
-
-async function clearDownloadFailure(engine: Engine, assetId: string): Promise<void> {
-  const recorded = await engine.metadata.artifacts.read(assetId, DOWNLOAD_FAILURE_METADATA_KEY);
-  if (recorded.ok) await engine.metadata.artifacts.delete(assetId, DOWNLOAD_FAILURE_METADATA_KEY);
+  return new Error(downloadFailureMessage(input.url, failure.reason), { cause: error });
 }
 
 async function withDownloadSession<T>(
   engine: Engine,
-  input: { url: string; assetId: string; bookId: string; binaryPath: string; signal: AbortSignal },
+  input: { url: string; assetId: string; bookId: string; binaryPath: string; signal: AbortSignal; useChromeProfile?: boolean },
   run: (session: YtdlpSession) => Promise<T>,
 ): Promise<T> {
   const session = await openYtdlpSession(input);
@@ -382,6 +371,7 @@ type DownloadVideoPayload = {
   assetDir: string;
   bookId?: string;
   exportVideos: boolean;
+  useChromeProfile?: boolean;
   full: boolean;
   sourcePrefix: string;
   requestedRange?: { start?: number; end?: number };
@@ -464,7 +454,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
     const {
       url,
       assetId, assetDir, exportVideos,
-      sourcePrefix, requestedRange, research,
+      sourcePrefix, requestedRange, research, useChromeProfile,
     } = payload as DownloadVideoPayload;
     const bookId = (payload as DownloadVideoPayload).bookId ?? "";
     const outputPath = join(assetDir, "original.mp4");
@@ -476,7 +466,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
       ctx,
       "download",
       { durationMs: LOCK_DURATION_MS, data: { state: "downloading" } },
-      () => withDownloadSession(engine, { url, assetId, bookId, binaryPath: ytdlp.binaryPath, signal: ctx.signal }, async (session) => {
+      () => withDownloadSession(engine, { url, assetId, bookId, binaryPath: ytdlp.binaryPath, signal: ctx.signal, useChromeProfile }, async (session) => {
       // (a) Pre-stage OG image as a hidden file. The b2 fallback (yt-dlp
       // returns "no video") promotes this to original.jpg on a fresh image
       // asset; a successful video download promotes it after step (d).

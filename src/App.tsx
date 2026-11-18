@@ -2595,6 +2595,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return next.map((node) => {
       const liveError = cellRunErrors[node.id]
       if (!liveError) return node
+      if (node.data.asset && node.data.inputs?.sourceOperation === 'download_video') return node
       return {
         ...node,
         data: {
@@ -5371,16 +5372,55 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const retryJob = async (jobId: number) => {
-    if (!bookId) return
+  const retryJob = async (jobId: number, useChromeProfile = false) => {
+    if (!bookId || busy || mcp.state !== 'ready') return
     setBusy(true)
     try {
       await call('retry_job', {
         book_id: bookId,
         job_id: jobId,
+        ...(useChromeProfile ? { use_chrome_profile: true } : {}),
       })
-      await refreshBookData(bookId, notebook?.id)
+      const cell = notebook?.cells.find((candidate) =>
+        assetById.get(candidate.outputArtifactId ?? '')?.failedDownload?.jobId === jobId)
+      if (notebook && cell?.outputArtifactId) {
+        setCellRunError(cell.id, null)
+        void watchDownloadedAsset({
+          bookId, notebookId: notebook.id, cellId: cell.id,
+          address: notebookGridAddress(cell.slot), artifactId: cell.outputArtifactId,
+        })
+      } else {
+        await refreshBookData(bookId, notebook?.id)
+      }
       setNotice(`Job ${jobId} retry queued`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const restoreDownloadFromFile = async (cell: NotebookCell, file: File) => {
+    const artifactId = cell.outputArtifactId
+    const download = artifactId && assetById.get(artifactId)?.failedDownload
+    if (!bookId || !notebook || !artifactId || !download || busy || mcp.state !== 'ready') return
+    if (mediaKindForFile(file) !== 'video') {
+      setNotice('Choose a video file for this download.', 'error')
+      return
+    }
+    setBusy(true)
+    try {
+      const query = new URLSearchParams({ filename: file.name, targetAssetId: artifactId, failedDownloadJobId: String(download.jobId) })
+      const response = await fetch(`/api/books/${encodeURIComponent(bookId)}/upload?${query}`, { method: 'POST', body: file })
+      if (!response.ok) {
+        const payload = recordValue(await response.json())
+        throw new Error(asString(payload?.error) ?? 'Could not use this video file.')
+      }
+      setCellRunError(cell.id, null)
+      setNotice(`Processing ${file.name} in ${notebookGridTag(cell.slot)}`)
+      void watchUploadedMediaAsset({
+        bookId, notebookId: notebook.id, cellId: cell.id, address: notebookGridAddress(cell.slot), artifactId,
+      })
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
@@ -9585,6 +9625,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     },
     repairCell,
     retryCell: retryCreditFailedCell,
+    retryDownload: retryJob,
   }
   const fullscreenImageEditor = mediaFullscreen?.asset.type === 'image'
     ? mediaFullscreen
@@ -10571,6 +10612,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           runErrors={cellRunErrors}
           jobs={inspectorJobViews}
           onCancelJob={cancelJob}
+          onRetryDownload={retryJob}
+          onUseSavedVideo={file => void restoreDownloadFromFile(selectedNotebookCell, file)}
           generationActions={generationActions}
           generationSettingsMemory={(notebook as NotebookSnapshot | null)?.generationSettingsMemory}
           mentionAssets={commandMentionAssets}

@@ -5,6 +5,7 @@ type MediaWorkAsset = {
   artifactId: string
   createdAt: string
   status: string
+  failedDownload?: { message: string }
 }
 
 type MediaWorkJob = {
@@ -43,10 +44,10 @@ export function notebookMediaWorkState(
     || job.state === 'completing')
   const failedJob = artifactJobs.find((job) =>
     job.state === 'failed' || job.state === 'aborted')
-  if (asset.status === 'error' || (!activeJob && failedJob)) {
+  if (asset.status === 'error' || (!activeJob && failedJob && failedJob === artifactJobs[0])) {
     return {
       status: 'error',
-      error: failedJob?.error?.message
+      error: asset.failedDownload?.message ?? failedJob?.error?.message
         ?? fallback.error
         ?? 'Media processing failed',
     }

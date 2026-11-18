@@ -148,11 +148,17 @@ async function receiveUpload(req: Request, res: Response): Promise<void> {
     return;
   }
   const targetAssetId = typeof req.query.targetAssetId === "string" ? req.query.targetAssetId : undefined;
+  const recoveryJobId = req.query.failedDownloadJobId === undefined ? undefined : Number(req.query.failedDownloadJobId);
+  if (recoveryJobId !== undefined && (!targetAssetId || !Number.isSafeInteger(recoveryJobId) || recoveryJobId < 1)) {
+    res.status(400).json({ error: "A download recovery requires a target asset and a positive job id" });
+    return;
+  }
   const result = await uploadLocalStream(book.value.engine, {
     bookId: book.value.bookId,
     filename,
     stream: req,
     targetAssetId,
+    failedDownloadJobId: recoveryJobId,
   });
   if (!result.ok) {
     res.status(result.statusCode).json({ error: result.message });

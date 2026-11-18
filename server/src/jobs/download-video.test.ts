@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 import { YtDlp } from "ytdlp-nodejs";
+import { DOWNLOAD_FAILURE_METADATA_KEY, downloadFailureMessage, isTikTokUrl } from "../download-recovery.js";
 import {
-  DOWNLOAD_FAILURE_METADATA_KEY,
   applyRequestedDownloadRange,
   classifyDownloadFailure,
   configureDownloadClockForTests,
@@ -15,7 +15,6 @@ import {
   fetchVideoInfo,
   isImageContent,
   imageExtension,
-  isTikTokUrl,
   openYtdlpSession,
 } from "./download-video.js";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
@@ -355,13 +354,25 @@ describe("download failure reasons", () => {
       "https://example.com/www.tiktok.com/video/1",
       "https://nottiktok.com/@creator/video/1",
       "not a url",
-    ].map(isTikTokUrl)).toEqual([true, true, true, false, false, false]);
+      "javascript://www.tiktok.com/1",
+    ].map(isTikTokUrl)).toEqual([true, true, true, false, false, false, false]);
+  });
+
+  it("explains TikTok sign-in for both new and previously clipped download errors", () => {
+    const reason = classifyDownloadFailure("This post may not be comfortable for some audiences. Log in for access. Use --cookies-from-browser or --cookies for the authentication.").reason;
+    const clipped = "login-required: …st may not be comfortable for some audiences. Log in for access. Use --cookies-from-browser or --cookies for the authentication.";
+    expect(downloadFailureMessage(TIKTOK_URL, reason)).toMatch(/^TikTok sign-in required\.\n.*choose a saved video file/u);
+    expect(downloadFailureMessage(TIKTOK_URL, clipped)).toBe(downloadFailureMessage(TIKTOK_URL, reason));
+    expect(downloadFailureMessage(OTHER_URL, reason)).toBe(reason);
+    const badFile = "login-required: cookies file does not look like a Netscape format cookies file";
+    expect(downloadFailureMessage(TIKTOK_URL, badFile)).toBe(badFile);
   });
 });
 
 describe("TikTok yt-dlp session", () => {
   const previousPath = process.env.VIDEOBOOK_YTDLP_PATH;
   const previousCookies = process.env.VIDEOBOOK_YTDLP_COOKIES;
+  const previousChromeProfile = process.env.VIDEOBOOK_YTDLP_CHROME_PROFILE;
   let dir: string;
   let fake: string;
   let sleeps: number[];
@@ -379,12 +390,14 @@ describe("TikTok yt-dlp session", () => {
       },
     });
     delete process.env.VIDEOBOOK_YTDLP_COOKIES;
+    delete process.env.VIDEOBOOK_YTDLP_CHROME_PROFILE;
   });
 
   afterEach(async () => {
     configureDownloadClockForTests(null);
     restoreEnv("VIDEOBOOK_YTDLP_PATH", previousPath);
     restoreEnv("VIDEOBOOK_YTDLP_COOKIES", previousCookies);
+    restoreEnv("VIDEOBOOK_YTDLP_CHROME_PROFILE", previousChromeProfile);
     await rm(dir, { recursive: true, force: true });
   });
 
@@ -397,6 +410,29 @@ describe("TikTok yt-dlp session", () => {
   function open(url: string, bookId: string = randomUUID()) {
     return openYtdlpSession({ url, bookId, binaryPath: fake });
   }
+
+  it("uses only the explicit Chrome profile for a requested TikTok retry", async () => {
+    const binaryPath = ytdlpRunOptions().binaryPath;
+    const bookId = randomUUID();
+    const withChrome = (url: string) => openYtdlpSession({ url, bookId, binaryPath, useChromeProfile: true });
+    process.env.VIDEOBOOK_YTDLP_CHROME_PROFILE = "Default";
+    await expect(withChrome(TIKTOK_URL)).rejects.toThrow("configured Chrome profile");
+    process.env.VIDEOBOOK_YTDLP_CHROME_PROFILE = dir;
+    await expect(withChrome(TIKTOK_URL)).rejects.toThrow("configured Chrome profile");
+    await writeFile(join(dir, "Preferences"), "{}");
+    await expect(withChrome(OTHER_URL)).rejects.toThrow("TikTok URL");
+    const regular = await openYtdlpSession({ url: TIKTOK_URL, bookId, binaryPath });
+    expect(regular.args).not.toContain("--cookies-from-browser");
+    await regular.close();
+    const cookieFile = join(dir, "cookies.txt");
+    await writeFile(cookieFile, "# Netscape HTTP Cookie File\n");
+    process.env.VIDEOBOOK_YTDLP_COOKIES = cookieFile;
+    const authenticated = await withChrome(TIKTOK_URL);
+    expect(authenticated.args).toContain(`chrome:${dir}`);
+    expect(authenticated.args).toContain("--cookies-from-browser");
+    expect(authenticated.args).not.toContain("--cookies");
+    await authenticated.close();
+  });
 
   it("impersonates chrome and hands yt-dlp a private cookies copy for TikTok only", async () => {
     const ytdlp = await useFake();

@@ -11,6 +11,7 @@ type DownloadVideoCellInput = {
 type DownloadWatchAsset = {
   artifactId: string
   status: string
+  failedDownload?: { message: string }
 }
 
 type DownloadWatchJob = {
@@ -87,10 +88,11 @@ export function mediaAssetWatchStep(
     return { kind: 'redirected', artifactId: replacementArtifactId }
   }
   if (asset?.status === 'ready') return { kind: 'completed' }
-  const failed = jobs.find((job) =>
+  const latest = jobs.find((job) =>
     job.artifactId === artifactId
-    && (job.state === 'failed' || job.state === 'aborted')
     && MEDIA_FAILURE_JOB_TYPES.has(job.type))
+  if (latest && ['queued', 'running', 'completing'].includes(latest.state)) return { kind: 'continue' }
+  const failed = latest?.state === 'failed' || latest?.state === 'aborted' ? latest : undefined
   if (asset?.status === 'error' || failed) {
     const renderFailure = asset?.status === 'error'
       ? jobs.find((job) =>
@@ -100,7 +102,7 @@ export function mediaAssetWatchStep(
       : undefined
     return {
       kind: 'failed',
-      message: failed?.error?.message
+      message: asset?.failedDownload?.message ?? failed?.error?.message
         ?? renderFailure?.error?.message
         ?? nonBlankStringValue(recordedError)
         ?? 'Media processing failed',

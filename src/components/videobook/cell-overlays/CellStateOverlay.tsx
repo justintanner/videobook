@@ -20,6 +20,7 @@ export function CellStateOverlay({
   generation = false,
   onRepair,
   onRetry,
+  onRetryDownload,
   onDelete,
   disabled,
 }: {
@@ -33,6 +34,7 @@ export function CellStateOverlay({
   generation?: boolean
   onRepair?: () => void
   onRetry?: () => void
+  onRetryDownload?: () => void
   onDelete?: () => void
   disabled?: boolean
 }) {
@@ -60,13 +62,14 @@ export function CellStateOverlay({
     return (
       <CellFailedOverlay
         error={presentation.error}
-        label={isNotebookMediaPresentationCellType(kind)
+        label={onRetryDownload ? 'DOWNLOAD FAILED' : isNotebookMediaPresentationCellType(kind)
           ? 'MEDIA FAILED'
           : 'GENERATION FAILED'}
         address={address}
         meta={generator}
         onRepair={creditFailure ? undefined : onRepair}
-        onRetry={creditFailure ? onRetry : undefined}
+        onRetry={onRetryDownload ?? (creditFailure ? onRetry : undefined)}
+        download={Boolean(onRetryDownload)}
         onDelete={onDelete}
         disabled={disabled}
       />

@@ -32,6 +32,7 @@ import type { ChainStepReviewValue, ChainRunValue } from '@/videobook/chat-actio
 import { NOTEBOOK_GRID_ROW_COUNT, NOTEBOOK_GRID_COLUMN_COUNT } from 'videobook-engine/notebook-grid'
 import type { ForgetAssetOutcome, ForgetAssetReference } from '@/videobook/forget-asset'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
+import type { FailedDownload } from '../../server/src/download-recovery'
 import { parseStickySettings, type StickySettings } from '../../server/src/media/preferred-defaults'
 
 type ToolResponse = {
@@ -49,6 +50,7 @@ export type AssetRecord = {
   mediaUrl: string | null
   thumbnailUrl: string | null
   status: string
+  failedDownload?: FailedDownload
   origin: string | null
   prompt: string | null
   width: number | null
@@ -479,6 +481,10 @@ function asAsset(value: unknown): AssetRecord | null {
   const type = item && asString(item.type)
   if (!item || !id || !artifactId || !type) return null
   const audio = recordValue(item.audio_info)
+  const failedDownload = recordValue(item.failedDownload)
+  const failedJobId = asNumber(failedDownload?.jobId)
+  const failureMessage = asString(failedDownload?.message)
+  const tiktokUrl = asString(failedDownload?.tiktokUrl)
   const codec = audio && asString(audio.codec)
   const sampleRateHz = audio && asNumber(audio.sample_rate_hz)
   const channels = audio && asNumber(audio.channels)
@@ -579,6 +585,12 @@ function asAsset(value: unknown): AssetRecord | null {
     mediaUrl: asString(item.media_url ?? item.mediaUrl),
     thumbnailUrl: asString(item.thumbnail_url ?? item.thumbnailUrl),
     status: asString(item.status) ?? 'ready',
+    ...(failedJobId && failureMessage ? {
+      failedDownload: {
+        jobId: failedJobId, message: failureMessage, ...(tiktokUrl ? { tiktokUrl } : {}),
+        ...(failedDownload?.chromeRetryAvailable === true ? { chromeRetryAvailable: true } : {}),
+      },
+    } : {}),
     origin: asString(item.origin),
     prompt: asString(item.prompt),
     width: asNumber(item.width),

@@ -616,6 +616,16 @@ downloads use `--impersonate chrome` when available, start at least 5 seconds
 apart within a book, and retry HTTP 403, 429, 5xx and network failures up to
 three times with backoff. A failed download keeps its reason, the failure class
 and the tail of yt-dlp's message, in the artifact's `download-failure` metadata.
+If TikTok requires sign-in, select the failed cell. **Open TikTok post** opens the
+original post, and **Choose video file** imports a saved copy into that cell.
+To use a dedicated Chrome sign-in, launch Chrome with its own `--user-data-dir`,
+sign in to TikTok there, and set `VIDEOBOOK_YTDLP_CHROME_PROFILE` to the absolute
+path of its profile directory (for example, `/path/to/videobook-chrome/Default`).
+Restart Videobook after changing the setting. **Retry with Chrome** uses that
+profile for the selected TikTok download. On macOS, Keychain may ask for
+permission to read Chrome's encrypted cookies. **Retry download** uses the normal
+download configuration, including `VIDEOBOOK_YTDLP_COOKIES` when set. Each
+recovery keeps the original cell and artifact ID.
 
 Chat and voice URL downloads start immediately without an approval preview and
 keep the whole source clip. Chat accepts only the URL for an import; trimming
