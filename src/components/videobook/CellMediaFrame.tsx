@@ -62,28 +62,31 @@ export function CellMediaFrame({
         </span>
       )}
 
-      {badges.length > 0 && (
+      {(badges.length > 0 || meter) && (
         <div className="cell-media-rail" role="group" aria-label={metadataLabel}>
-          {badges.map((badge) => (
-            <span
-              key={badge.key}
-              className={`cell-media-badge${badge.emphasis === 'generator' ? ' cell-media-badge-wide' : ''}`}
-              title={badge.title}
+          {badges.length > 0 && (
+            <div className="cell-media-badges">
+              {badges.map((badge) => (
+                <span
+                  key={badge.key}
+                  className={`cell-media-badge${badge.emphasis === 'generator' ? ' cell-media-badge-wide' : ''}`}
+                  title={badge.title}
+                >
+                  {badge.label}
+                </span>
+              ))}
+            </div>
+          )}
+          {meter && (
+            <time
+              className="cell-media-meter"
+              dateTime={`PT${meter.seconds}S`}
+              title="Duration"
             >
-              {badge.label}
-            </span>
-          ))}
+              {meter.label}
+            </time>
+          )}
         </div>
-      )}
-
-      {meter && (
-        <time
-          className="cell-media-meter"
-          dateTime={`PT${meter.seconds}S`}
-          title="Duration"
-        >
-          {meter.label}
-        </time>
       )}
 
       {children}

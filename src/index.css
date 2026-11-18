@@ -2731,6 +2731,7 @@ textarea:focus-visible {
   letter-spacing: 0;
 }
 
+.cell-media-badges,
 .cell-node-footer-meta {
   display: flex;
   flex: 1 1 0;
@@ -2746,18 +2747,12 @@ textarea:focus-visible {
   line-height: 1.5;
 }
 
+.cell-media-badges::before,
 .cell-node-footer-meta::before {
   flex: none;
   width: 0;
   margin-right: -8px;
   content: '';
-}
-
-.cell-node-footer-meta > .cell-media-badge,
-.cell-node-footer-meta > .cell-node-footer-meter {
-  flex: none;
-  max-width: none;
-  line-height: 1.5;
 }
 
 .cell-node-footer-meter {
@@ -2767,9 +2762,11 @@ textarea:focus-visible {
   font-size: var(--cell-label-font-size);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
+  line-height: 1.5;
   white-space: nowrap;
 }
 
+.cell-media-badges > * + *::before,
 .cell-node-footer-meta > * + *::before {
   margin-right: 8px;
   color: rgba(185, 223, 203, 0.45);
@@ -3012,9 +3009,8 @@ textarea:focus-visible {
   display: flex;
   min-height: 1.85em;
   align-items: center;
-  justify-content: flex-start;
-  flex-wrap: nowrap;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 0.25em;
   padding: 0 var(--cell-gutter);
   overflow: hidden;
   background: rgba(2, 10, 7, 0.9);
@@ -3022,23 +3018,12 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
-/* Leave the meter its corner: the last badge ellipsises rather than running
-   under it. The meter's right padding is the gutter, so its corner grows
-   with it. */
-.cell-media:has(.cell-media-meter) .cell-media-rail {
-  padding-right: calc(3.35em + var(--cell-gutter));
-}
-
 /* No pill: the strip under them carries the contrast, so the badges are
    plain text separated by a middot. */
 .cell-media-badge {
   display: block;
-  min-width: 0;
-  max-width: 100%;
-  flex: 0 1 auto;
-  align-items: center;
+  flex: none;
   padding: 0;
-  overflow: hidden;
   border: 0;
   color: #b9dfcb;
   background: none;
@@ -3046,22 +3031,12 @@ textarea:focus-visible {
   font-size: var(--cell-label-font-size);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
-  line-height: 1;
-  text-overflow: ellipsis;
+  line-height: 1.5;
   white-space: nowrap;
   pointer-events: auto;
 }
 
-.cell-media-badge + .cell-media-badge::before {
-  margin-right: 8px;
-  color: rgba(185, 223, 203, 0.45);
-  content: '·';
-}
-
-/* The generator name is the one badge long enough to need truncating, so it
-   is the one that gives way. */
 .cell-media-badge-wide {
-  flex: 0 1 auto;
   color: var(--cell-accent-bright);
 }
 
@@ -3462,17 +3437,9 @@ textarea:focus-visible {
    solid strip rather than a pill of its own — and still reads when a cell
    has a meter and no badges. */
 .cell-media-meter {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  z-index: 2;
-  display: inline-flex;
-  min-height: 1.85em;
-  align-items: center;
-  padding: 0 var(--cell-gutter) 0 1.6em;
-  border: 0;
+  flex: none;
+  pointer-events: auto;
   color: #b9dfcb;
-  background: rgba(2, 10, 7, 0.9);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
   font-size: var(--cell-label-font-size);
   font-variant-numeric: tabular-nums;

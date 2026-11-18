@@ -97,10 +97,6 @@ describe('notebook chrome tokens', () => {
       .toBe('12px var(--cell-gutter)')
     expect(declaration(rule(css, '.cell-media-rail'), 'padding'))
       .toBe('0 var(--cell-gutter)')
-    // The meter is padded by the gutter too, so the corner the rail leaves
-    // it has to grow with the gutter.
-    expect(declaration(rule(css, '.cell-media:has(.cell-media-meter) .cell-media-rail'), 'padding-right'))
-      .toBe('calc(3.35em + var(--cell-gutter))')
   })
 
   it('draws cells flat, with no resting drop shadow and no scrim over media', () => {
@@ -110,7 +106,6 @@ describe('notebook chrome tokens', () => {
     expect(pixelCount(declaration(cell, 'width'))).toBe(notebookGrid.cellWidth)
     expect(css).not.toContain('.cell-node-media-tile .cell-media::after')
     expect(declaration(rule(css, '.cell-media-rail'), 'background')).not.toContain('gradient')
-    expect(declaration(rule(css, '.cell-media-meter'), 'background')).not.toContain('gradient')
     const tileFooter = rule(css, '.cell-node-media-tile .cell-node-footer')
     expect(declaration(tileFooter, 'position')).toBe('relative')
     expect(declaration(tileFooter, 'background')).toBe('var(--surface)')
@@ -131,15 +126,16 @@ describe('notebook chrome tokens', () => {
       .toBe('calc(26px * var(--notebook-detail-scale, 1) - var(--route-overhang) + 3px)')
   })
 
-  it('shows footer metadata as whole items, dropping the ones that do not fit', () => {
-    const meta = rule(css, '.cell-node-footer-meta')
+  it('shows whole metadata items in the footer and beside the audio duration', () => {
+    const meta = rule(css, '.cell-media-badges,\n.cell-node-footer-meta')
     expect(declaration(meta, 'flex')).toBe('1 1 0')
     expect(declaration(meta, 'flex-wrap')).toBe('wrap')
     expect(declaration(meta, 'height')).toBe('1.5em')
     expect(declaration(meta, 'overflow')).toBe('hidden')
-    expect(declaration(rule(css, '.cell-node-footer-meta > .cell-media-badge,\n.cell-node-footer-meta > .cell-node-footer-meter'), 'flex'))
-      .toBe('none')
-    expect(declaration(rule(css, '.cell-node-footer-meta::before'), 'width')).toBe('0')
+    expect(declaration(rule(css, '.cell-media-badge'), 'flex')).toBe('none')
+    expect(declaration(rule(css, '.cell-media-meter'), 'flex')).toBe('none')
+    expect(declaration(rule(css, '.cell-node-footer-meter'), 'flex')).toBe('none')
+    expect(declaration(rule(css, '.cell-media-badges::before,\n.cell-node-footer-meta::before'), 'width')).toBe('0')
     const status = rule(css, '.cell-status-slot')
     expect(declaration(status, 'flex-wrap')).toBe('wrap')
     expect(declaration(status, 'overflow')).toBe('hidden')
