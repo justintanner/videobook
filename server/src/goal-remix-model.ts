@@ -186,7 +186,7 @@ export function resolveRemixIntent(input: {
   const structure = regenerate ? "regenerate" : single ? "single-take" : montage && source ? "preserve-source"
     : preferences.structure !== "auto" ? preferences.structure : understanding?.structure ?? (source && action ? "preserve-source" : source ? "regenerate" : "single-take");
   origins.structure = regenerate || single || montage ? "brief" : preferences.structure !== "auto" ? "preset" : understanding ? "analysis" : "default";
-  const replace = /\breplace\s+(?:the\s+)?(?:person|man|woman|character|driver|subject)\b/iu.test(brief);
+  const replace = /\breplace\s+(?:the\s+)?(?:person|people|m[ae]n|wom[ae]n|characters?|drivers?|subjects?)\b/iu.test(brief);
   const insert = /\b(?:insert|enters?|arrives?|appears?|walks? in)\b/iu.test(brief);
   const character = replace ? "replace" : insert ? "insert" : preferences.character !== "auto" ? preferences.character : understanding?.character ?? "insert";
   origins.character = replace || insert ? "brief" : preferences.character !== "auto" ? "preset" : understanding ? "analysis" : "default";

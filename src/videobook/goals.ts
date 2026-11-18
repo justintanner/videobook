@@ -260,10 +260,16 @@ function rowNumber(index: number): string {
   return String(index + 1).padStart(2, '0')
 }
 
+export function characterActionLabel(plan: GoalShortPlan, analysis = goalRemixAnalysisOf(plan), sentence = false): string {
+  if (plan.version === 5 && plan.sourceImages.length > 1) return 'Apply character edit'
+  const verb = analysis?.intent.character === 'insert' ? 'Insert' : 'Replace'
+  return sentence ? `${verb} the character` : `${verb} character`
+}
+
 function shortRows(short: GoalShortPlan | null, stage: GoalGenerationStage) {
   if (!short) return []
   const analysis = short.version === 5 ? short.analysis : undefined
-  if (stage === 'replacement') return shortRemixOf(short) ? [{ index: 0, number: '01', title: analysis?.intent.character === 'insert' ? 'Insert character' : 'Replace character', prompt: shortRemixOf(short)!.replacement.prompt, seconds: 0 }] : []
+  if (stage === 'replacement') return shortRemixOf(short) ? [{ index: 0, number: '01', title: characterActionLabel(short, analysis), prompt: shortRemixOf(short)!.replacement.prompt, seconds: 0 }] : []
   if (stage === 'storyboards') {
     return (shortStoryboardOf(short)?.frames ?? []).map(frame => ({ index: frame.index, number: rowNumber(frame.index), title: `Storyboard ${frame.index + 1}`, prompt: frame.prompt, seconds: 0 }))
   }
@@ -354,8 +360,7 @@ function reviewStatusLine(goal: ShortGoalSnapshot, short: GoalShortPlan, analysi
     return review(`Clean the storyboard · ${shortEstimateText(goalStoryboardEstimate(goal))}`, 'Storyboard')
   }
   if (target.kind === 'replacement') {
-    const verb = analysis?.intent.character === 'insert' ? 'Insert' : 'Replace'
-    return review(`${verb} the character · ${shortEstimateText(goal.estimate.replacement)}`, 'Character')
+    return review(`${characterActionLabel(short, analysis, true)} · ${shortEstimateText(goal.estimate.replacement)}`, 'Character')
   }
   if (target.kind === 'frame') return review(`${frameVerb(short, analysis)} · ${shortEstimateText(goal.estimate.frame)}`, goalFrameName(short, analysis))
   if (target.kind === 'clip') {

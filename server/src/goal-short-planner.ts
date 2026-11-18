@@ -108,10 +108,10 @@ export function shortBriefPlan(brief: string, authored: ShortAuthoredCopy, analy
   const filler = prose || quoted || "Short";
   return {
     ...(remix ? { replacement: authored.replacement ?? (analysis?.intent.character === "insert"
-      ? `Insert the person from the identity image into the scene for this action: ${filler}. Keep existing decorative figures and props. Prepare the setup; the video performs the action.`
-      : `Replace only the main person using the source images and this brief: ${filler}. Keep the pose, scene, animals and props unchanged; leave the funny twist for the next edit.`).slice(0, PROMPT_LIMIT) } : {}),
+      ? `Insert the characters described in the brief, using the source images for their identities: ${filler}. Keep existing decorative figures and props. Prepare the setup; the video performs the action.`
+      : `Use the source images to replace the characters specified in this brief: ${filler}. Keep the pose, scene, animals and props unchanged; leave the funny twist for the next edit.`).slice(0, PROMPT_LIMIT) } : {}),
     frame: authored.frame ?? (remix ? `Add one funny, physically believable visual twist to the reviewed frame. Follow this idea: ${filler}`.slice(0, PROMPT_LIMIT) : filler),
-    beats: authored.beats.map((beat) => beat ?? (remix ? "Animate the reviewed twist frame with one simple, natural action. Keep the same person, animals, props and setting. The camera gently follows the action; natural ambient sound." : filler)),
+    beats: authored.beats.map((beat) => beat ?? (remix ? "Animate the reviewed twist frame with one simple, natural action. Keep the same characters, animals, props and setting. The camera gently follows the action; natural ambient sound." : filler)),
     note: gaps ? PLANNED_FROM_BRIEF : null,
   };
 }
@@ -159,7 +159,7 @@ export function shortPlannerBrief(
 export function shortPlannerResponseSchema(segmentCount: number, remix = false, analyzeSource = false) {
   return z.object({
     title: z.string().describe(`At most ${SHORT_WORD_CEILINGS.title} words`),
-    ...(remix ? { replacement: z.string().describe(`Character replacement only, at most ${SHORT_WORD_CEILINGS.frame} words`) } : {}),
+    ...(remix ? { replacement: z.string().describe(`Character roles and placement, at most ${SHORT_WORD_CEILINGS.replacement} words`) } : {}),
     frame: z.string().describe(`The opening frame, at most ${SHORT_WORD_CEILINGS.frame} words`),
     beats: z.array(z.string().describe(`One beat, at most ${SHORT_WORD_CEILINGS.beat} words`)).min(segmentCount).max(segmentCount)
       .describe("One beat per segment, in order"),
@@ -189,7 +189,7 @@ export function shortPlannerIssues(response: ShortPlannerResponse, segmentCount:
   }
   const parts = [
     { name: "title", text: response.title, ceiling: SHORT_WORD_CEILINGS.title, fixed: false, prompt: false },
-    ...(authored && "replacement" in authored ? [{ name: "replacement", text: response.replacement ?? "", ceiling: SHORT_WORD_CEILINGS.frame, fixed: authored.replacement != null, prompt: true }] : []),
+    ...(authored && "replacement" in authored ? [{ name: "replacement", text: response.replacement ?? "", ceiling: SHORT_WORD_CEILINGS.replacement, fixed: authored.replacement != null, prompt: true }] : []),
     { name: "frame", text: response.frame, ceiling: SHORT_WORD_CEILINGS.frame, fixed: authored?.frame != null, prompt: true },
     ...response.beats.map((text, index) => ({ name: `beat ${index + 1}`, text, ceiling: SHORT_WORD_CEILINGS.beat, fixed: authored?.beats[index] != null, prompt: true })),
   ];
@@ -201,7 +201,7 @@ export function shortRevisionPart(plan: GoalShortPlan, stage: GoalGenerationStag
   if (stage === "replacement") {
     const remix = shortRemixOf(plan);
     if (!remix || index !== 0) throw new RangeError("This short has no character replacement at that index.");
-    return { name: "character replacement", ceiling: SHORT_WORD_CEILINGS.frame, prompt: remix.replacement.prompt };
+    return { name: "character replacement", ceiling: SHORT_WORD_CEILINGS.replacement, prompt: remix.replacement.prompt };
   }
   if (stage === "storyboards") {
     const storyboard = shortStoryboardOf(plan);
@@ -259,7 +259,7 @@ export async function shortPlannerInstructions(input: {
   const rules = input.analysis ? remixRules(input.analysis.intent) : SHORT_RULES;
   const analyzed = input.remix && input.analysis;
   return [
-    `Plan a short that looks like real phone footage filmed by someone off screen, starring ${shortStar(input.sourceImageCount)}. That person never speaks.`,
+    `Plan a short that looks like real phone footage filmed by someone off screen, ${input.remix ? "with the cast and roles specified in the brief." : `starring ${shortStar(input.sourceImageCount)}. That person never speaks.`}`,
     `Return JSON with a title, one opening frame prompt for GPT Image 2.6 and ${count === 1 ? "one beat" : `${count} beats`} for MiniMax H3 Max, one per segment: ${input.segmentSeconds.map((seconds, index) => `beat ${index + 1} lasts ${seconds} seconds`).join(", ")}. The aspect ratio is ${input.aspectRatio}.`,
     `Word ceilings, not targets: title ${SHORT_WORD_CEILINGS.title}, frame ${SHORT_WORD_CEILINGS.frame}, each beat ${SHORT_WORD_CEILINGS.beat}.`,
     `${input.remix ? "Beat 1 uses the source video and reviewed twist image as references; follow the brief's timing for entrances and the joke." : "Beat 1 starts from the opening frame."} ${analyzed ? "Preserve the requested absence, entrance, action window and shot changes." : "Each later beat continues from where the previous one ends, in the same place, and every beat ends with that person in frame."} One action per beat, in the present tense, with what the camera does and what is heard.`,
@@ -269,14 +269,14 @@ export async function shortPlannerInstructions(input: {
       "Analyze the timestamped source samples and cached evidence together with the brief. Return understanding with structure, insert versus replace, the requested action range in final-video seconds, a concrete action and target, a useful source-frame timestamp, source observations and material uncertainties. Do not invent details between samples or certify unseen frames.",
       "Source observations describe only the source, independently of the requested change. Distinguish added overlays from printing physically on objects. Regions use normalized 0-1 coordinates and source-video seconds; uncertain text remains uncertain. Reuse supplied cached observations when frames are not attached.",
       `Plan a character reference edit (${input.analysis!.intent.character}), an action-setup reference and the video. The replacement field describes inserting or replacing only as requested. Never replace a decorative figure merely to insert someone. The frame sets up the action and its target, without turning a future bite into a cookie already held or eaten.`,
-      "Identity images describe the person's appearance. Video samples describe the existing scene, shot order and action locations. Neither forces that person into the opening; reference images are not fixed first frames. The video performs the requested action at the requested time.",
+      "Identity images may depict different people or multiple views of one person. In the character edit prompt, assign each requested person to their role using @image1, @image2 and so on in source-image order. Video samples describe the existing scene, shot order and action locations. Neither forces that person into the opening; reference images are not fixed first frames. The video performs the requested action at the requested time.",
       "Keep explicitly authored prompts unchanged, but report contradictions as uncertainties. Explicit brief instructions override suggested defaults. Keep physical printing, and leave uncertain removal regions for review.",
     ] : input.remix ? [
       "Plan three separate steps: replace the character in one extracted source frame, add a funny but realistic twist to that replacement, then animate the resulting frame.",
-      "Return an additional replacement prompt of at most 40 words. It only replaces the main person with the person from the source images or the brief, retaining face, hair, build and clothes. Match the original pose and scene; leave its animals and props unchanged. Overlay removal is added automatically to this step.",
+      "Return a character edit prompt assigning each requested person to their role in the scene. Preserve individual faces, hair, build and clothes. Match the original pose and scene; leave its animals and props unchanged. Overlay removal is added automatically to this step.",
       "The frame prompt is the next edit, applied to the reviewed replacement, not the original frame. Make one simple visual joke that is already visible in this still. Follow the brief's twist when given; otherwise choose a surprising but physically plausible substitution or situation. Preserve the replaced person and surroundings, realistic anatomy, scale, support and gravity. Avoid fantasy, impossible stunts and extra story beats.",
       "The video receives both the original video as a motion and setting reference and the reviewed twist image as an appearance reference. The twist image is not a fixed first frame. Preserve any requested timing, including a character arriving or a joke happening near the end. Keep the same character and joke without reintroducing the original person or undoing the twist.",
-      "Images are labelled Source image 1, Source image 2 and so on, then Extracted source frame with its timestamp. The source images supply the replacement identity; the extracted frame supplies the composition and scene. Describe them in plain words without @tokens or image numbers.",
+      "Images are labelled Source image 1, Source image 2 and so on, then Extracted source frame with its timestamp. The source images supply the replacement identity; the extracted frame supplies the composition and scene. Use @image1, @image2 and so on in the character edit prompt when assigning roles.",
       `Ignore graphics drawn over the source frame, such as ${OVERLAYS}, including a WUT! sticker and its underline. Keep printing physically on objects.`,
     ] : plannerImageLines(input.sourceImageCount, input.storyboardFrameCount ?? 0)),
     "Write only the parts listed under write and keep the fixed parts exactly as given.",
@@ -314,7 +314,7 @@ export async function shortRevisionInstructions(plan: GoalShortPlan, stage: Goal
   const images = plan.version === 5 ? plan.sourceImages.length : plan.character.references.length;
   const analysis = plan.version === 5 ? plan.analysis : undefined;
   return [
-    `Revise one prompt of a short that looks like real phone footage filmed by someone off screen, starring ${shortStar(images)}.${!analysis || analysis.intent.noDialogue ? " That person never speaks, but natural mouth movement for the action is allowed." : " Follow the requested dialogue."}`,
+    `Revise one prompt of a short that looks like real phone footage filmed by someone off screen, ${shortRemixOf(plan) ? "with the cast and roles specified in the brief" : `starring ${shortStar(images)}`}.${!analysis || analysis.intent.noDialogue ? " That person never speaks, but natural mouth movement for the action is allowed." : " Follow the requested dialogue."}`,
     frame
       ? shortRemixOf(plan)
         ? `Rewrite the ${part.name} prompt for GPT Image 2.6 so it follows the operator's feedback. It describes one still picture.`
@@ -323,7 +323,7 @@ export async function shortRevisionInstructions(plan: GoalShortPlan, stage: Goal
     FOLLOW_FEEDBACK,
     DROP_CONTRADICTED,
     ...(analysis && shortRemixSourceOf(plan) ? [stage === "replacement"
-      ? `${analysis.intent.character === "insert" ? "Insert" : "Replace"} the requested person in the reviewed prepared scene. Keep unrelated people, decorative figures and physical props.`
+      ? `${analysis.intent.character === "insert" ? "Insert" : "Replace"} each requested character in their specified role in the prepared scene. Keep unrelated people, decorative figures and physical props.`
       : stage === "frame"
         ? "Prepare the starting pose for the requested action, keeping the reviewed identity and scene. Do not show a completed payoff in this setup image."
         : analysis.recipe.assembly

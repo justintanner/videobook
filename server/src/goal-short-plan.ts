@@ -70,7 +70,7 @@ export const GOAL_SHORT_DEFAULTS = {
   };
 };
 
-export const SHORT_WORD_CEILINGS = { title: 6, frame: 40, beat: 45, cleanup: 160 } as const;
+export const SHORT_WORD_CEILINGS = { title: 6, replacement: 200, frame: 40, beat: 45, cleanup: 160 } as const;
 
 const SHORT_MIN_SECONDS = 5;
 const SHORT_MAX_SECONDS = 60;
@@ -78,7 +78,7 @@ const SEGMENT_MAX_SECONDS = 15;
 const SEGMENT_LIMIT = 4;
 const CHARACTER_REFERENCE_LIMIT = 4;
 const FRAME_REFERENCE_LIMIT = 12;
-const SOURCE_IMAGE_LIMIT = 12;
+export const SOURCE_IMAGE_LIMIT = 12;
 const STORYBOARD_FRAME_LIMIT = 4;
 
 const goalShortImageRefSchema = z.object({
@@ -463,7 +463,7 @@ export function buildGoalShortPlan(input: {
     version: 5,
     ...shortPlanBody(input),
     sourceImages: slotted(input.sourceImages, 0),
-    ...(input.remix ? { remix: { ...input.remix, replacement: frameSettings(input.aspectRatio, input.replacementPrompt ?? "Replace the main person with the person in the source images, keeping the same pose and scene.") } } : {}),
+    ...(input.remix ? { remix: { ...input.remix, replacement: frameSettings(input.aspectRatio, input.replacementPrompt ?? "Match the characters to the roles described in the brief. Keep the scene and match the original poses.") } } : {}),
     ...(input.storyboard ? { storyboard: input.storyboard } : {}),
     frame: frameSettings(input.aspectRatio, input.framePrompt),
     rules: input.analysis ? remixRules(input.analysis.intent) : { ...SHORT_RULES },
@@ -580,11 +580,11 @@ export function compileShortReplacementStep(plan: GoalShortPlan): ChainStep {
   if (!remix || plan.version !== 5) throw new Error("This short has no character replacement step.");
   const images = addresses(plan.sourceImages);
   const sourceSlot = `@image${images.length + 1}`;
-  const insert = plan.analysis?.intent.character === "insert";
+  const placement = plan.analysis?.intent.character === "insert" ? "add them to the scene" : "replace the corresponding people in the scene";
   return frameStep({ ...plan, frame: remix.replacement }, paragraphs(
     boundRemixPrompt(plan, remix.replacement.prompt, "replacement"),
-    sourceImageLine(images.length, `use the person as the ${insert ? "inserted character" : "replacement"}, keeping their face, hair, build and clothes exactly.`),
-    `${sourceSlot} is the extracted source frame. ${insert ? "Insert the requested person at the action location, with realistic scale and contact. Keep existing decorative figures and props." : "Replace only its main person, matching their pose, position, scale and contact with objects."} Keep the camera angle, framing, place, light, animals and props. ${plan.analysis ? "Save the requested action for the video." : "Save the funny twist for the next edit."}`,
+    sourceImageLine(images.length, "use the references for the roles described above. Preserve each character's face, hair, build and clothing."),
+    `${sourceSlot} is the extracted source frame. Place each requested character in their specified role and position. Where the directions leave placement open, ${placement}. Match scale, pose and contact with objects. Preserve unrelated people. Keep the camera angle, framing, place, light, animals and props. ${plan.analysis ? "Save the requested action for the video." : "Save the funny twist for the next edit."}`,
     plan.analysis ? plan.analysis.intent.cleanup === "keep" ? "Preserve the source graphics and physical printing."
       : "Use the reviewed, prepared scene. Do not add captions, stickers, credits or watermarks. Keep printing physically on objects."
       : "Remove all graphics added on top of the camera picture, including text, captions, stickers and underlines, creator credits, icons, watermarks and shade gradients. Reconstruct the scene behind them. Keep printing physically on objects.",
@@ -618,8 +618,8 @@ export function compileShortFrameStep(plan: GoalShortPlan, storyboardFrameAddres
     return frameStep(plan, paragraphs(
       boundRemixPrompt(plan, plan.frame.prompt, "frame"),
       plan.version === 5 && plan.analysis
-        ? "@image1 is the reviewed character and scene reference. Prepare the appearance and physical setup for the requested action. This is a reference for the action, not a required opening frame or proof that the action already happened. Keep the person, face, hair, build, clothes and surroundings. Preserve the action's target and realistic contact."
-        : "@image1 is the reviewed character replacement. Make one funny but physically believable visual change to this frame. Keep the person, face, hair, build and clothes, camera angle, place and light. Preserve everything outside the change. Use realistic scale, anatomy, weight, support and contact shadows.",
+        ? "@image1 is the reviewed character and scene reference. Prepare the appearance and physical setup for the requested action. This is a reference for the action, not a required opening frame or proof that the action already happened. Keep each person's face, hair, build, clothes and surroundings. Preserve the action's target and realistic contact."
+        : "@image1 is the reviewed character replacement. Make one funny but physically believable visual change to this frame. Keep each person's face, hair, build and clothes, camera angle, place and light. Preserve everything outside the change. Use realistic scale, anatomy, weight, support and contact shadows.",
       plan.rules.frame,
     ), [storyboardFrameAddress]);
   }
@@ -703,7 +703,7 @@ export function compileShortClipStep(plan: GoalShortPlan, frameAddress: string):
   ), { video: [analysis!.recipe.referenceArtifactId ?? remix.video.artifactId], image: [frameAddress] });
   if (remix) return clipStep(plan, paragraphs(
     boundRemixPrompt(plan, segment.prompt, "videos"),
-    "@video1 is the source video: use its setting, camera movement and action as the reference. @image1 is the reviewed twist: keep its person, clothes, animals and changed props. Follow the beat's timing for when the person and visual joke appear; this image is a reference, not a fixed opening frame. Do not restore the original character or overlays from the video.",
+    "@video1 is the source video: use its setting, camera movement and action as the reference. @image1 is the reviewed twist: keep its characters, clothes, animals and changed props. Follow the beat's timing for when each character and the visual joke appear; this image is a reference, not a fixed opening frame. Do not restore the original character or overlays from the video.",
     plan.rules.video,
     plan.rules.silence,
   ), { video: [plan.version === 5 ? plan.analysis?.recipe.referenceArtifactId ?? remix.video.artifactId : remix.video.artifactId], image: [frameAddress] });

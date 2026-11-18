@@ -2,7 +2,7 @@ export function GoalPromptInput({ label, name = label, value, wordLimit, maxLeng
   label: string
   name?: string
   value: string
-  wordLimit: number
+  wordLimit?: number
   maxLength?: number
   disabled: boolean
   placeholder?: string
@@ -11,7 +11,7 @@ export function GoalPromptInput({ label, name = label, value, wordLimit, maxLeng
   const words = value.trim().split(/\s+/u).filter(Boolean).length
   return <label className="goal-prompt-input">
     <span>{label}</span>
-    <textarea aria-label={name} value={value} maxLength={maxLength} rows={Math.max(2, value.split('\n').length)} disabled={disabled} placeholder={placeholder} onChange={event => onChange(event.target.value)} />
-    <small className="goal-panel-muted">{words} / {wordLimit} words{words > wordLimit ? ' · Shorter prompts are easier to review' : ''}</small>
+    <textarea aria-label={name} value={value} maxLength={maxLength} rows={Math.max(wordLimit === undefined ? 4 : 2, value.split('\n').length)} disabled={disabled} placeholder={placeholder} onChange={event => onChange(event.target.value)} />
+    {wordLimit !== undefined && <small className="goal-panel-muted">{words} / {wordLimit} words{words > wordLimit ? ' · Shorter prompts are easier to review' : ''}</small>}
   </label>
 }

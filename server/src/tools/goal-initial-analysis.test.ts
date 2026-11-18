@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
+import { readableImage } from "../notebook-frame-cells.js";
 import { createEngineForTest } from "../engine.js";
 import { buildRemixAnalysis, readRemixPreferences } from "../goal-remix-analysis.js";
 import { waitForChainRun } from "../chain-executor.js";
@@ -203,6 +204,39 @@ describe("initial source-goal analysis", () => {
     expect(stub.submissions).toHaveLength(0);
     await invoke({ action: "status", goal_id: second.goalId });
     expect(stub.plannerRequests).toHaveLength(1);
+  });
+
+  it("changes an analyzed cast, pins each role and reopens character review when a reference is removed", async () => {
+    let goal = await settled(await invoke({ action: "create", brief: authored().replace("Remove all OSG", "Keep source graphics") }));
+    const plan = goal.shortPlan;
+    if (plan?.version !== 5 || !plan.remix) throw new Error("Expected a remix");
+    const extra = await engine.artifacts.create("image", "Second character");
+    if (!extra.ok) throw new Error(extra.error.message);
+    const artifactId = extra.value.artifactId;
+    await engine.files.write(artifactId, "original.png", await sharp({ create: { width: 80, height: 96, channels: 3, background: "yellow" } }).png().toBuffer());
+    const cell = engine.notebooks.createCell({ type: "image", slot: { row: 4, column: 7 }, outputArtifactId: artifactId });
+    const inserted = await engine.notebooks.insertCell(notebookId, cell);
+    if (!inserted.ok) throw new Error(inserted.error.message);
+    const image = await readableImage(engine, artifactId, cell);
+    if (!image) throw new Error("Missing second character");
+    const sourceImages = [...plan.sourceImages, { ...image, slot: "@image2" }];
+    const remix = { ...plan.remix, replacement: { ...plan.remix.replacement, prompt: "Seat @image1 on the scooter and @image2 on the surfboard." } };
+    const update = (images: typeof sourceImages) => ({ action: "update", goal_id: goal.goalId, revision: goal.revision, plan: { ...goal.shortPlan, remix, sourceImages: images } });
+    expect((await call(update([sourceImages[0]!, { ...sourceImages[1]!, objectHash: "changed" }]))).isError).toBe(true);
+    goal = await invoke(update(sourceImages));
+    const notebook = engine.notebooks.read(notebookId);
+    expect(notebook.ok && notebook.value.edges.some(edge => edge.source === cell.id && edge.target === goal.cellId && edge.targetInput === "character_2")).toBe(true);
+    goal = await invoke({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
+    await waitForChainRun(engine, goal.chainId!, testBudget(60_000));
+    goal = await invoke({ action: "status", goal_id: goal.goalId });
+    expect(goal.stages.replacement!.outputs[0]!.stale).toBeNull();
+    expect(stub.submissions[0]!.body.image_urls).toHaveLength(3);
+    expect(stub.submissions[0]!.body.prompt).toContain("Seat reference image 1 on the scooter and reference image 2 on the surfboard.");
+    goal = await invoke(update(plan.sourceImages));
+    expect(goal.stages.replacement!.outputs[0]!.stale).toContain("references");
+    expect((await call({ action: "approve", stage: "frame", goal_id: goal.goalId, revision: goal.revision })).isError).toBe(true);
+    const edited = engine.notebooks.read(notebookId);
+    expect(edited.ok && edited.value.edges.some(edge => edge.target === goal.cellId && edge.targetInput === "character_2")).toBe(false);
   });
 
   it("preflights retained-frame timing against the supported H3 range before submission", async () => {

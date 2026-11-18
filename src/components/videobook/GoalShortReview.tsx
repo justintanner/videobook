@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import {
-  shortGenerationSegments, shortFinishTitleInput, shortFinishTitleIssue, shortRemixOf, withShortFinishTitle, type GoalShortPlan, type ShortFinishTitle,
+  SOURCE_IMAGE_LIMIT, shortGenerationSegments, shortFinishTitleInput, shortFinishTitleIssue, shortRemixOf, withShortFinishTitle, type GoalShortPlan, type ShortFinishTitle,
 } from '../../../server/src/goal-short-plan'
 import type { GoalGenerationStage } from '../../../server/src/goal-store'
 import { remixPromptFindings } from '../../../server/src/goal-remix-model'
@@ -18,6 +18,7 @@ import { GoalTakeHistory } from './GoalTakeHistory'
 import { GoalAutomation } from './GoalAutomation'
 import { GoalStepStrip } from './GoalStepStrip'
 import { GoalNextBar, type GoalNextHandlers } from './GoalNextBar'
+import { GoalCharacterReferences, type CharacterInputs, type CharacterSource } from './GoalCharacterReferences'
 import { GoalImageStage } from './GoalImageStage'
 import { GoalVideoStage } from './GoalVideoStage'
 import { GoalFinishStage } from './GoalFinishStage'
@@ -27,6 +28,7 @@ import { GoalNotes, type GoalStageContext } from './GoalStageParts'
 type GoalAction = Record<string, unknown>
 type ShortReviewProps = {
   goal: ShortGoalSnapshot
+  characterInputs?: CharacterInputs
   plan: GoalShortPlan
   view: ShortView
   disabled: boolean
@@ -55,7 +57,7 @@ function GoalAlerts({ connected, error, onDismiss }: { connected: boolean, error
   </div>
 }
 
-export function GoalShortReview({ goal, plan, view, disabled, connected, error, resolveAsset, onView, onDismissError, onPreviewCell, onRun, onAction, titleOptions, onWriteTitle }: ShortReviewProps) {
+export function GoalShortReview({ goal, characterInputs, plan, view, disabled, connected, error, resolveAsset, onView, onDismissError, onPreviewCell, onRun, onAction, titleOptions, onWriteTitle }: ShortReviewProps) {
   const remix = shortRemixOf(plan)
   const automationNode = useRef<HTMLDivElement>(null)
   const [analysis, setAnalysis] = useState(plan.version === 5 ? plan.analysis : undefined)
@@ -64,6 +66,22 @@ export function GoalShortReview({ goal, plan, view, disabled, connected, error, 
   const [englishLine, setEnglishLine] = useState(plan.finish.title?.secondary ?? '')
   const [framePrompt, setFramePrompt] = useState(plan.frame.prompt)
   const [replacementPrompt, setReplacementPrompt] = useState(remix?.replacement.prompt ?? '')
+  const [characters, setCharacters] = useState<CharacterSource[]>(plan.version === 5 ? plan.sourceImages : [])
+  const sourceImages = characters.flatMap((source, index) => {
+    const matches = (image: CharacterSource) => image.cellId === source.cellId && image.artifactId === source.artifactId
+    const image = (plan.version === 5 ? plan.sourceImages.find(matches) : null) ?? characterInputs?.images.find(matches)
+    return image ? [{ ...image, slot: `@image${index + 1}` }] : []
+  })
+  const addCharacter = (source: CharacterSource) => setCharacters(current =>
+    current.length >= SOURCE_IMAGE_LIMIT || current.some(image => image.artifactId === source.artifactId) ? current : [...current, source])
+  const removeCharacter = (index: number) => {
+    setCharacters(current => current.filter((_, position) => position !== index))
+    setReplacementPrompt(current => current.replace(/(@image|\bimage\s+)(\d+)\b/giu, (match, prefix: string, number: string) => {
+      const slot = Number(number)
+      if (slot === index + 1) return '[removed image]'
+      return slot > index + 1 ? `${prefix}${slot - 1}` : match
+    }))
+  }
   const [beats, setBeats] = useState(() => plan.segments.map(segment => segment.prompt))
   const [feedback, setFeedback] = useState('')
   const [replacementFeedback, setReplacementFeedback] = useState('')
@@ -79,12 +97,13 @@ export function GoalShortReview({ goal, plan, view, disabled, connected, error, 
   const titleIssue = shortFinishTitleIssue(typedTitle)
   const edited: GoalShortPlan = plan.version === 4
     ? { ...plan, title: nextTitle, frame: { ...plan.frame, prompt: nextFrame }, segments: nextSegments }
-    : { ...plan, title: nextTitle, ...(plan.remix ? { remix: { ...plan.remix, replacement: { ...plan.remix.replacement, prompt: replacementPrompt.trim() } } } : {}), frame: { ...plan.frame, prompt: nextFrame }, segments: nextSegments, ...(analysis ? { analysis } : {}) }
+    : { ...plan, sourceImages, title: nextTitle, ...(plan.remix ? { remix: { ...plan.remix, replacement: { ...plan.remix.replacement, prompt: replacementPrompt.trim() } } } : {}), frame: { ...plan.frame, prompt: nextFrame }, segments: nextSegments, ...(analysis ? { analysis } : {}) }
   const draft = withShortFinishTitle(edited, typedTitle)
   const generationSegments = shortGenerationSegments(draft)
   const assembly = analysis?.recipe.assembly
   const dirty = JSON.stringify(draft) !== JSON.stringify(plan)
-  const promptsReady = Boolean(draft.title && draft.frame.prompt && (!remix || replacementPrompt.trim()) && draft.segments.every(segment => segment.prompt) && generationSegments.every(segment => segment.prompt)) && titleIssue === null
+  const characterIssue = remix && characters.length !== sourceImages.length ? 'Waiting for the character images to load.' : remix && replacementPrompt.includes('[removed image]') ? 'Edit the prompt where a character image was removed.' : null
+  const promptsReady = !characterIssue && Boolean(draft.title && draft.frame.prompt && (!remix || replacementPrompt.trim()) && draft.segments.every(segment => segment.prompt) && generationSegments.every(segment => segment.prompt)) && titleIssue === null
   const replacementOutput = goal.stages.replacement?.outputs[0]
   const frameOutput = goal.stages.frame?.outputs[0]
   const replacing = view === 'replacement'
@@ -112,7 +131,7 @@ export function GoalShortReview({ goal, plan, view, disabled, connected, error, 
       : start < 0 ? 'Choose a start of 0 s or later.' : null
   const finishIssue = !sourceId ? 'Generate every clip first.' : !sourceAsset?.mediaUrl ? 'The take is still loading.' : !windowAccepted ? 'Use an action window first.' : null
   const next = goalNextAction({
-    goal, plan, analysis, analysisError: analysisErrors[0]?.text ?? null, promptIssue: promptsReady ? null : titleIssue ?? 'Fill in the title and every prompt first.',
+    goal, plan: draft, analysis, analysisError: analysisErrors[0]?.text ?? null, promptIssue: promptsReady ? null : characterIssue ?? titleIssue ?? 'Fill in the title and every prompt first.',
     dirty, actionReviewed: windowAccepted, windowIssue, finishIssue,
   })
   const names = goalStepNames(plan, analysis)
@@ -205,6 +224,8 @@ export function GoalShortReview({ goal, plan, view, disabled, connected, error, 
         onRegenerate={(index, model) => generate('regenerate', 'storyboards', index, undefined, model)}
         onRevise={index => generate('revise', 'storyboards', index, boardFeedback[index]?.trim())} />}
       {(view === 'frame' || replacing && remix) && <GoalImageStage ctx={ctx} stage={imageStage} name={imageName} title={title} prompt={replacing ? replacementPrompt : framePrompt} feedback={imageFeedback}
+        characterReferences={replacing && characterInputs ? <GoalCharacterReferences ctx={ctx} inputs={characterInputs} selected={characters} onAdd={addCharacter} onRemove={removeCharacter}
+          disabled={disabled || running || finishing || goal.status === 'cancelled'} onRun={onRun} /> : undefined}
         notes={notes} isNext={next.kind === 'generate' && next.stage === imageStage} inputsReady={replacing || replacementReady && goalStoryboardClean(goal)} editable={!disabled && !finishing}
         onTitle={setTitle} onPrompt={replacing ? setReplacementPrompt : setFramePrompt} onFeedback={replacing ? setReplacementFeedback : setFeedback}
         onRegenerate={() => generate('regenerate', imageStage)} onRevise={() => generate('revise', imageStage, 0, imageFeedback.trim())} />}

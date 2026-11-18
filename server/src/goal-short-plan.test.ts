@@ -302,7 +302,7 @@ describe("buildGoalShortPlan", () => {
         extendOutput: "extended",
       },
     });
-    expect(SHORT_WORD_CEILINGS).toEqual({ title: 6, frame: 40, beat: 45, cleanup: 160 });
+    expect(SHORT_WORD_CEILINGS).toEqual({ title: 6, replacement: 200, frame: 40, beat: 45, cleanup: 160 });
   });
 });
 

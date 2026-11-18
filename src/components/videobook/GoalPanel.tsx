@@ -10,11 +10,13 @@ import { goalNextStep } from '@/videobook/goal-next'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
 import { GoalMoreMenu, type GoalMenuItem } from './GoalMoreMenu'
 import { GoalShortReview } from './GoalShortReview'
+import type { CharacterInputs } from './GoalCharacterReferences'
 import './GoalPanel.css'
 
 type GoalAction = Record<string, unknown>
 type GoalPanelProps = {
   goal: GoalSnapshot
+  characterInputs?: CharacterInputs
   connected: boolean
   onAction: (args: GoalAction) => Promise<GoalSnapshot>
   onWriteTitle: () => Promise<ShortFinishTitle[]>
@@ -49,7 +51,7 @@ function goalMenu(goal: ShortGoalSnapshot, disabled: boolean, act: (args: GoalAc
   ]
 }
 
-export function GoalPanel({ goal, connected, onAction, onWriteTitle, onSelectCell, onPreviewCell, resolveAsset }: GoalPanelProps) {
+export function GoalPanel({ goal, characterInputs, connected, onAction, onWriteTitle, onSelectCell, onPreviewCell, resolveAsset }: GoalPanelProps) {
   const [pending, setPending] = useState(false)
   const [titleOptions, setTitleOptions] = useState<ShortFinishTitle[]>([])
   const pendingRef = useRef(false)
@@ -105,6 +107,7 @@ export function GoalPanel({ goal, connected, onAction, onWriteTitle, onSelectCel
         key={`${goal.goalId}:${goal.revision}`}
         goal={goal}
         plan={shortPlan}
+        characterInputs={characterInputs}
         view={shortView}
         disabled={disabled}
         connected={connected}

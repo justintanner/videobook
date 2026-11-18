@@ -2,7 +2,7 @@ import { shortGenerationSegments, shortRemixOf, type GoalShortPlan } from '../..
 import type { GoalRemixAnalysis } from '../../server/src/goal-remix-model'
 import type { GoalGenerationStage } from '../../server/src/goal-store'
 import {
-  formatGoalClock, formatGoalSeconds, goalActionWindowReviewed, goalAssemblyClip, goalFrameName, goalNextSegment, goalPlanSeconds, goalProgress,
+  characterActionLabel, formatGoalClock, formatGoalSeconds, goalActionWindowReviewed, goalAssemblyClip, goalFrameName, goalNextSegment, goalPlanSeconds, goalProgress,
   goalRemixAnalysisOf, goalReviewTarget, goalRevisionLabel, goalSourceReady, goalStillVersions, goalStopLabel, goalStoryboardClean,
   goalStoryboardEstimate, shortEstimateText,
   type GoalReviewTarget, type ShortGoalSnapshot, type ShortView,
@@ -62,7 +62,7 @@ function runningText(goal: ShortGoalSnapshot, plan: GoalShortPlan, analysis: Goa
   if (revised) return `Revising the ${revised} with your feedback.`
   if (goal.status === 'planning') return 'Planning the short.'
   if (goal.stage === 'storyboards') return 'Removing the on-screen graphics from the storyboard.'
-  if (goal.stage === 'replacement') return analysis?.intent.character === 'insert' ? 'Putting the new person into the source frame.' : 'Replacing the person in the source frame.'
+  if (goal.stage === 'replacement') return 'Applying the character edit to the source frame.'
   if (goal.stage === 'frame') return shortRemixOf(plan) ? analysis ? 'Setting up the action.' : 'Adding the twist to the reviewed replacement.' : 'Generating the frame.'
   const number = (goalProgress(goal).active?.index ?? 0) + 1
   return `Generating clip ${number} of ${shortGenerationSegments(plan).length}.`
@@ -117,11 +117,11 @@ function stillNext(goal: ShortGoalSnapshot, plan: GoalShortPlan, analysis: GoalR
   const insert = analysis?.intent.character === 'insert'
   const replacing = target.kind === 'replacement'
   const name = replacing ? insert ? 'insertion' : 'replacement' : goalFrameName(plan, analysis).toLowerCase()
-  const fresh = replacing ? `${insert ? 'Insert' : 'Replace'} character` : remix ? analysis ? 'Prepare action' : 'Add twist' : 'Generate frame'
+  const fresh = replacing ? characterActionLabel(plan, analysis) : remix ? analysis ? 'Prepare action' : 'Add twist' : 'Generate frame'
   const text = replacing
-    ? insert ? 'Put the new person into the source frame.' : 'Replace the person in the source frame with the new character.'
+    ? 'Place the characters in the source frame as described in your prompt.'
     : remix ? analysis ? 'Set up the starting pose for the action.' : 'Add one funny, believable change to the reviewed replacement.' : 'Generate the first frame from the prompt.'
-  const detail = replacing ? analysis ? 'The scene and physical props stay as they are.' : 'Added text, stickers, credits and shade are removed too.' : remix ? 'The same person and surroundings stay.' : null
+  const detail = replacing ? analysis ? 'The scene and physical props stay as they are.' : 'Added text, stickers, credits and shade are removed too.' : remix ? 'Keep the cast and surroundings.' : null
   const price = shortEstimateText(replacing ? goal.estimate.replacement : goal.estimate.frame)
   return {
     kind: 'generate', step: replacing ? 'replacement' : 'frame', stage: target.kind, index: 0, action: target.stale ? 'regenerate' : 'approve',

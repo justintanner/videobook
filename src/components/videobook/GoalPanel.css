@@ -477,6 +477,48 @@ span.goal-media.goal-media-pending {
   font-size: 10px;
 }
 
+.goal-character-refs {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  font-size: 12px;
+}
+
+.goal-character-drop {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.goal-character-refs[data-hover] .goal-character-drop,
+.goal-character-drop:focus-visible {
+  border-color: currentColor;
+  background: rgba(130, 213, 157, 0.1);
+}
+
+.goal-character-ref { position: relative; min-width: 0; }
+.goal-character-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  background: #0c1710;
+  color: inherit;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
 .goal-reference-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));

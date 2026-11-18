@@ -376,8 +376,38 @@ describe('goal mode in the browser', () => {
       expect(await primary(/^Add twist/).count()).toBe(0)
       await panel().getByRole('button', { name: /^Go to Character/ }).click()
       expect(await tabs.getByRole('button', { name: 'Character', exact: true }).getAttribute('aria-current')).toBe('step')
+      const cast = panel().getByRole('region', { name: 'Character references' })
+      const second = before.value.cells.find(cell => cell.type === 'image' && labelOf(cell.outputArtifactId) === 'character-1')
+      if (!second) throw new Error('Missing character image')
+      const grip = page.locator(`.react-flow__node[data-id="${second.id}"] .cell-ref-grip`)
+      await grip.dragTo(cast.locator('.goal-character-drop'))
+      await expect.poll(() => cast.locator('.goal-character-ref').count()).toBe(2)
+      const uploads = await Promise.all(['green', 'yellow'].map(async background => ({
+        name: `${background}.png`,
+        bytes: [...await sharp({ create: { width: 96, height: 96, channels: 3, background } }).png().toBuffer()],
+      })))
+      const transfer = await page.evaluateHandle(images => {
+        const data = new DataTransfer()
+        for (const image of images) data.items.add(new File([new Uint8Array(image.bytes)], image.name, { type: 'image/png' }))
+        return data
+      }, uploads)
+      await cast.dispatchEvent('drop', { dataTransfer: transfer })
+      await transfer.dispose()
+      await expect.poll(() => cast.locator('.goal-character-ref').count(), { timeout: testBudget(30_000) }).toBe(4)
+      await cast.getByRole('button', { name: 'Remove @image3' }).click()
+      const directions = 'Place @image1 on the scooter, @image2 on the surfboard and @image3 on the sidewalk.'
+      await panel().getByLabel('Character directions').fill(directions)
+      await panel().getByRole('button', { name: 'Save', exact: true }).click()
+      await expect.poll(async () => {
+        const plan = shortGoal(await current(short)).shortPlan
+        return plan?.version === 5 && plan.sourceImages.map(image => image.artifactId)
+      }).toEqual([photo.outputArtifactId, second.outputArtifactId, expect.any(String)])
+      await page.reload()
+      await openTab('Character')
+      expect(await panel().getByLabel('Character directions').inputValue()).toBe(directions)
+      expect(await cast.locator('.goal-character-ref').count()).toBe(3)
       await screenshot('goal-replace-first')
-      await primary(/^Replace character/).click()
+      await primary(/^Apply character edit/).click()
       await expect.poll(() => status().textContent(), { timeout: testBudget(120_000) }).toContain('Add the twist · $0.21')
       expect(await tile(short).locator('.goal-tile-row-title').allTextContents()).toEqual(['Twist'])
       await page.reload()
@@ -406,6 +436,8 @@ describe('goal mode in the browser', () => {
       expect(stub.submissions.map(submission => submission.path)).toEqual([
         '/openai/gpt-image-2.6/sunburst/edit', '/openai/gpt-image-2.6/sunburst/edit', '/minimax/h3-max/reference-to-video',
       ])
+      expect(stub.submissions[0]!.body.image_urls).toHaveLength(4)
+      expect(stub.submissions[0]!.body.prompt).toContain('Place reference image 1 on the scooter, reference image 2 on the surfboard and reference image 3 on the sidewalk.')
       expect(stub.submissions.at(-1)!.body).toMatchObject({ reference_video_urls: [expect.any(String)], reference_image_urls: [expect.any(String)] })
       expect(stub.submissions.at(-1)!.body).not.toHaveProperty('image_url')
       expect(stub.unexpected).toEqual([])

@@ -312,17 +312,23 @@ export async function createGoalShortCell(engine: Engine, notebookId: string, go
   return placeGoalTile(engine, notebookId, goalId, shortTileText(content), shortTileInputs(goalId, content), shortTileSources(content));
 }
 
-async function writeGoalTile(engine: Engine, goal: GoalRecord, text: { label: string; prompt: string }, inputs: Record<string, unknown>): Promise<void> {
+export async function writeGoalShortContent(engine: Engine, goal: GoalRecord, content: GoalShortContent): Promise<void> {
   const result = await mutateNotebook(engine, goal.notebookId, "goal_plan", (document) => {
-    if (!findGoalCell(document, goal)) throw new Error(REMOVED_TILE_ERROR);
+    const tile = findGoalCell(document, goal);
+    if (!tile) throw new Error(REMOVED_TILE_ERROR);
+    const sources = shortTileSources(content);
+    const changed = JSON.stringify(shortTileSources(goalShortContent(tile))) !== JSON.stringify(sources);
+    let edges = document.edges;
+    if (changed) {
+      const characterEdge = (edge: typeof edges[number]) => edge.target === tile.id && /^character(?:_[2-8])?$/u.test(edge.targetInput ?? "");
+      const existing = edges.filter(characterEdge);
+      edges = [...edges.filter(edge => !characterEdge(edge)), ...sources.map(({ cellId, targetInput }) =>
+        existing.find(edge => edge.source === cellId && edge.targetInput === targetInput) ?? engine.notebooks.createEdge({ source: cellId, target: tile.id, targetInput }))];
+    }
     return {
-      ...document,
-      cells: document.cells.map((cell) => cell.id === goal.cellId ? { ...cell, ...text, inputs } : cell),
+      ...document, edges,
+      cells: document.cells.map(cell => cell.id === tile.id ? { ...cell, ...shortTileText(content), inputs: shortTileInputs(goal.goalId, content) } : cell),
     };
   }, { goalId: goal.goalId });
   if (!result.ok) throw new Error(result.error.message);
-}
-
-export async function writeGoalShortContent(engine: Engine, goal: GoalRecord, content: GoalShortContent): Promise<void> {
-  await writeGoalTile(engine, goal, shortTileText(content), shortTileInputs(goal.goalId, content));
 }

@@ -8,7 +8,7 @@ import {
 import { goalStageAttempts } from "./goal-stills.js";
 import { refreshGoalShortPlan, shortGenerationSegments, shortRemixOf, shortStoryboardOf, type GoalShortPlan, type ShortStoryboardModel } from "./goal-short-plan.js";
 import {
-  currentShortClip, nextShortSegment, shortFrameStale, shortSegmentStale, storyboardFrameFailure, storyboardReview, type StoryboardFrameFailure,
+  currentShortClip, nextShortSegment, replacementFingerprint, shortFrameStale, shortSegmentStale, storyboardFrameFailure, storyboardReview, type StoryboardFrameFailure,
 } from "./goal-short-runtime.js";
 import { goalTitleEstimate } from "./graphics/suggest.js";
 import { goalFinishTitleSlots } from "./goal-finish-settings.js";
@@ -206,6 +206,12 @@ function outputStale(goal: GoalRecord, plan: GoalShortPlan | null, stage: GoalGe
       return Boolean(attempt && attempt.basePrompt !== prompt);
     };
     if (changed("replacement", replacement.replacement.prompt)) return "The character replacement prompt changed. Regenerate the replacement before continuing.";
+    if (plan?.version === 5) {
+      const id = goal.stages.replacement?.outputs[0]?.artifactId;
+      const attempt = reviewedGoalOutput(goal, "replacement", 0, id) ?? goal.stages.replacement?.attempts?.find(candidate => candidate.artifactId === id);
+      const refs = [...plan.sourceImages, replacement.frame].map(({ artifactId, objectHash }) => ({ artifactId, objectHash }));
+      if (attempt?.fingerprint && attempt.fingerprint !== replacementFingerprint(plan, refs)) return "The character references or settings changed. Regenerate the character edit before continuing.";
+    }
     if (stage !== "replacement" && plan && changed("frame", plan.frame.prompt)) return "The twist prompt changed. Regenerate the twist before continuing.";
     if (stage === "frame" && shortFrameStale(goal)) return "The character replacement changed. Regenerate the twist before continuing.";
   }

@@ -116,9 +116,10 @@ import {
   stripNotebookMentions,
 } from 'videobook-engine/notebook-mentions'
 import {
+  firstEmptyNotebookGridSlot,
   notebookCellOccupiedSlots,
 } from 'videobook-engine/notebook-grid'
-import { resolveGeneratedVideoArtifact } from 'videobook-engine/notebook-media-artifact'
+import { resolveGeneratedVideoArtifact, resolveNotebookCellArtifactId } from 'videobook-engine/notebook-media-artifact'
 import {
   adaptCommandArgs,
   applyInjectedCommandArgs,
@@ -619,6 +620,7 @@ import {
 import { CellIcon, CellNode, TimelineNode } from '@/components/videobook/NotebookCanvasNodes'
 import { GoalCellNode } from '@/components/videobook/GoalCellNode'
 import { GoalComposerStatus } from '@/components/videobook/GoalComposerStatus'
+import type { CharacterInputs } from '@/components/videobook/GoalCharacterReferences'
 import { GoalPanel, GoalPanelPlaceholder } from '@/components/videobook/GoalPanel'
 import {
   CellContextMenuContext,
@@ -10449,11 +10451,43 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     </div>
   ) : null
   const selectedGoal = selectedNotebookCell?.type === 'goal' ? goalTiles.get(selectedNotebookCell.id) ?? null : null
+  const characterInputs: CharacterInputs | undefined = selectedGoal && !selectedGoal.legacy && selectedGoal.shortPlan?.version === 5 && selectedGoal.shortPlan.remix && notebook ? {
+    images: notebook.cells.flatMap(cell => {
+      const id = resolveNotebookCellArtifactId(notebook, cell)
+      const asset = id && assetById.get(id)
+      if (!asset || asset.type !== 'image' || !asset.objectHash) return []
+      return [{ kind: 'image', artifactId: asset.artifactId, cellId: cell.id, address: notebookGridTag(cell.slot), label: asset.label, objectHash: asset.objectHash }]
+    }),
+    importFiles: async (files, add) => {
+      if (!bookId || !notebook) throw new Error('Open a notebook to add character images.')
+      const scope = { bookId, notebookId: notebook.id }
+      const current = () => watchScopeRef.current.bookId === bookId && watchScopeRef.current.notebookId === notebook.id
+      const occupied = [...notebookOccupiedSlots]
+      const cells = new Map(notebook.cells.flatMap(cell => cell.outputArtifactId ? [[cell.outputArtifactId, cell.id] as const] : []))
+      try {
+        for (const file of files) {
+          if (!current()) break
+          const { artifactRef } = await resolveMediaFileArtifact(file, 'image')
+          let cellId = cells.get(artifactRef)
+          if (!cellId) {
+            const slot = firstEmptyNotebookGridSlot(occupied)
+            cellId = await attachArtifactToNewMediaCell(scope, artifactRef, 'image', slot, false)
+            occupied.push(slot)
+            cells.set(artifactRef, cellId)
+          }
+          add({ cellId, artifactId: artifactRef })
+        }
+      } finally {
+        await refreshBookData(bookId, notebook.id, current)
+      }
+    },
+  } : undefined
   const goalDockContent = !timelinePreviewOpen && selectedNotebookCell?.type === 'goal' ? (
     selectedGoal ? (
       <GoalPanel
         key={selectedGoal.goalId}
         goal={selectedGoal}
+        characterInputs={characterInputs}
         connected={mcp.state === 'ready'}
         onAction={runGoalAction}
         onWriteTitle={() => writeGoalTitle(selectedGoal.goalId)}

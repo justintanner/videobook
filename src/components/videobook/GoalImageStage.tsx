@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { formatShortSeconds, shortRemixOf, SHORT_WORD_CEILINGS } from '../../../server/src/goal-short-plan'
 import { goalStoryboardClean, shortEstimateText } from '@/videobook/goals'
 import { GoalPromptInput } from './GoalPromptInput'
@@ -6,6 +7,7 @@ import { AlwaysAdded, GoalChecks, GoalNotes, GoalVersions, REALISM_NOTE, type Go
 
 type Props = {
   ctx: GoalStageContext
+  characterReferences?: ReactNode
   stage: 'replacement' | 'frame'
   name: string
   title: string
@@ -27,12 +29,10 @@ const STORYBOARD_FIRST = 'Remove the on-screen graphics from the storyboard firs
 
 function guidance(ctx: GoalStageContext, replacing: boolean, inputsReady: boolean): string | null {
   if (!shortRemixOf(ctx.plan)) return null
-  const inserting = ctx.analysis?.intent.character === 'insert'
+  if (replacing) return 'Describe who goes where. Use @image1, @image2 and the other reference labels to assign roles or combine views of the same character.'
   if (ctx.analysis) {
-    if (replacing) return `${inserting ? 'Insert' : 'Replace'} the person while keeping the scene and physical props. The video performs the planned action.`
     return inputsReady ? 'Prepare the starting pose for the action. Keep the reviewed identity and surroundings.' : 'Review the character image before preparing the action.'
   }
-  if (replacing) return 'Replace the main person and remove added text, stickers, credits and shade. Keep the scene and props for the next edit.'
   return inputsReady ? 'Add one funny, physically believable change to the reviewed replacement. Keep the same person and surroundings.' : 'Review the character replacement before adding the twist.'
 }
 
@@ -44,7 +44,7 @@ function beforeStill(ctx: GoalStageContext, replacing: boolean): Still | null {
   return replacement ? { artifactId: replacement.artifactId, cellId: replacement.cellId, label: 'Reviewed replacement' } : null
 }
 
-export function GoalImageStage({ ctx, stage, name, title, prompt, feedback, notes, isNext, inputsReady, editable, onTitle, onPrompt, onFeedback, onRegenerate, onRevise }: Props) {
+export function GoalImageStage({ ctx, characterReferences, stage, name, title, prompt, feedback, notes, isNext, inputsReady, editable, onTitle, onPrompt, onFeedback, onRegenerate, onRevise }: Props) {
   const { goal, plan, analysis } = ctx
   const replacing = stage === 'replacement'
   const remix = shortRemixOf(plan)
@@ -70,7 +70,7 @@ export function GoalImageStage({ ctx, stage, name, title, prompt, feedback, note
     <div className="goal-stage-form">
       <GoalNotes notes={notes} />
       <label><span>Title</span><input aria-label="Short title" value={title} maxLength={120} disabled={!editable} onChange={event => onTitle(event.target.value)} /></label>
-      <GoalPromptInput label={`${name} prompt`} value={prompt} wordLimit={SHORT_WORD_CEILINGS.frame} disabled={!editable} onChange={onPrompt} />
+      <GoalPromptInput label={replacing ? 'Character directions' : `${name} prompt`} value={prompt} wordLimit={replacing ? undefined : SHORT_WORD_CEILINGS.frame} maxLength={2000} disabled={!editable} onChange={onPrompt} />
       {!replacing && <AlwaysAdded lines={[plan.rules.frame]} />}
       {note && <p className="goal-panel-muted">{note}</p>}
     </div>
@@ -84,10 +84,10 @@ export function GoalImageStage({ ctx, stage, name, title, prompt, feedback, note
       </div>}
       {output && <GoalChecks ctx={ctx} stage={stage} index={0} artifactId={output.artifactId} name={name.toLowerCase()} />}
       {output && !replacing && !analysis?.recipe.outputAssertions && <p className="goal-panel-muted">{REALISM_NOTE}</p>}
-      <div className="goal-reference-grid" role="group" aria-label={plan.version === 4 || storyboard ? 'Frame references' : 'Source images'}>
+      {characterReferences ?? <div className="goal-reference-grid" role="group" aria-label={plan.version === 4 || storyboard ? 'Frame references' : 'Source images'}>
         {(!remix || replacing) && frameImages.map(ref => <GoalMedia key={ref.slot} artifactId={ref.artifactId} cellId={ref.cellId} label={`${ref.slot} · ${ref.address}`} resolveAsset={ctx.resolveAsset} onOpen={ctx.onPreviewCell} />)}
         {cleanFirst && <GoalMedia artifactId={cleanFirst.artifactId} cellId={cleanFirst.cellId} label={`@image${frameImages.length + 1} · storyboard 1`} resolveAsset={ctx.resolveAsset} onOpen={ctx.onPreviewCell} />}
-      </div>
+      </div>}
       {storyboard && !goalStoryboardClean(goal) && <p role="note" className="goal-panel-muted">{STORYBOARD_FIRST}</p>}
     </aside>
   </div>
