@@ -691,66 +691,6 @@ export async function captureFrame(
   }
 }
 
-export async function normalizeSceneVideo(
-  engine: Engine,
-  videoArtifactId: string,
-  audioArtifactId: string,
-  title: string,
-  durationSeconds = 15,
-): Promise<{ artifactId: string; durationSeconds: number }> {
-  const video = await materializeArtifactFile(engine, videoArtifactId, [
-    "original_audio_replaced.mp4",
-    "original.mp4",
-  ]);
-  const audio = await materializeArtifactFile(engine, audioArtifactId, [
-    "original.m4a",
-    "original.wav",
-    "original.mp3",
-    "original.mp4",
-  ]);
-  const outDir = await mkdtemp(join(tmpdir(), "vb-normalize-scene-"));
-  const outPath = join(outDir, "scene.mp4");
-  try {
-    await runFfmpeg([
-      "-y",
-      "-i",
-      video.path,
-      "-i",
-      audio.path,
-      "-filter_complex",
-      `[0:v]setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration=${durationSeconds},scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v];[1:a]atrim=duration=${durationSeconds},asetpts=PTS-STARTPTS,apad=pad_dur=${durationSeconds}[a]`,
-      "-map",
-      "[v]",
-      "-map",
-      "[a]",
-      ...H264_MEDIUM,
-      ...AUDIO_OPTS,
-      "-t",
-      String(durationSeconds),
-      "-movflags",
-      "+faststart",
-      outPath,
-    ]);
-    const probe = await probeVideo(outPath);
-    const artifactId = await ingestOutput(
-      engine,
-      "video",
-      title,
-      "original.mp4",
-      outPath,
-    );
-    await registerMediaProbe(engine, artifactId, "original.mp4", probe);
-    return {
-      artifactId,
-      durationSeconds: probe.duration || durationSeconds,
-    };
-  } finally {
-    await video.cleanup();
-    await audio.cleanup();
-    await rm(outDir, { recursive: true, force: true });
-  }
-}
-
 function burnInSrt(captions: BurnInCaption[]): string {
   return srtContent(captions.map((caption) => ({
     startSeconds: caption.startSeconds,

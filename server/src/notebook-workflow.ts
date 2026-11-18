@@ -54,7 +54,7 @@ function retainedAnalysisPrompt(existing: NotebookCell | undefined): string {
     : prompt;
 }
 
-export const MULTYCULTY_FEATURES = [
+const MULTYCULTY_FEATURES = [
   {
     ordinal: 1,
     id: "import-analyze",
