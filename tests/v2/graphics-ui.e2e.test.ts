@@ -483,6 +483,89 @@ describe('graphics editor in the composer', () => {
     expect(errors).toEqual([])
   })
 
+  it('saves a pending headline to its own video when another video opens before autosave or during a save, and keeps a rejected save to retry', async () => {
+    const notebookCells = (await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells
+    const secondCellId = notebookCells.find((cell) => cell.output_artifact_id === secondId)!.id
+    const opened = async (label: string) => {
+      await expect.poll(async () => (await sheet().locator('.confirm-sheet-head').textContent()) ?? '', { timeout: testBudget(30_000) }).toContain(label)
+      await expect.poll(() => field('Headline').isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
+    }
+    const editThenOpen = async (text: string, cellId: string) => {
+      const input = await field('Headline').elementHandle()
+      const cell = await page.locator(`.react-flow__node[data-id="${cellId}"] .cell-node`).elementHandle()
+      const switched = await page.evaluate(async ([target, node, value]) => {
+        const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+        const prototype = target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+        Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(target, value)
+        target.dispatchEvent(new Event('input', { bubbles: true }))
+        await pause(30)
+        const rect = node.getBoundingClientRect()
+        node.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.x + 20, clientY: rect.y + 20, button: 2 }))
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          const item = [...document.querySelectorAll<HTMLElement>('[role=menuitem]')].find((element) => element.textContent?.trim() === 'Graphics')
+          if (item) {
+            item.click()
+            return true
+          }
+          await pause(10)
+        }
+        return false
+      }, [input!, cell!, text] as const)
+      expect(switched).toBe(true)
+    }
+    const thirdBefore = slotText(await read(thirdId), 'headline')
+
+    await command('/osg @a2')
+    await opened('Second take')
+    await editThenOpen('Second take, switched away', thirdCellId)
+    await opened('Third take')
+    await expect.poll(async () => slotText(await read(secondId), 'headline'), { timeout: testBudget(15_000) }).toBe('Second take, switched away')
+    expect(slotText(await read(thirdId), 'headline')).toBe(thirdBefore)
+
+    let held = 0
+    await page.route('**/mcp', async (route) => {
+      const body = route.request().postData() ?? ''
+      if (held === 0 && body.includes('"op":"update"') && body.includes(thirdId)) {
+        held += 1
+        await new Promise((resolve) => setTimeout(resolve, 2_000))
+      }
+      await route.continue()
+    })
+    await field('Headline').fill('Third take, first edit')
+    await expect.poll(() => held, { timeout: testBudget(10_000) }).toBe(1)
+    await editThenOpen('Third take, latest edit', secondCellId)
+    await opened('Second take')
+    await expect.poll(async () => slotText(await read(thirdId), 'headline'), { timeout: testBudget(15_000) }).toBe('Third take, latest edit')
+    await page.unroute('**/mcp')
+    expect(await field('Headline').inputValue()).toBe('Second take, switched away')
+
+    let rejected = 0
+    await page.route('**/mcp', async (route) => {
+      const body = route.request().postData() ?? ''
+      if (rejected > 0 || !body.includes('"op":"update"') || !body.includes(secondId)) {
+        await route.continue()
+        return
+      }
+      rejected += 1
+      const request = JSON.parse(body) as { params: { arguments: { document: { layers: unknown[] } } } }
+      request.params.arguments.document.layers = [{ kind: 'unknown-layer' }]
+      await route.continue({ postData: JSON.stringify(request) })
+    })
+    await editThenOpen('Second take, kept after a rejected save', thirdCellId)
+    await opened('Third take')
+    await expect.poll(() => rejected, { timeout: testBudget(10_000) }).toBe(1)
+    await page.unroute('**/mcp')
+    expect(slotText(await read(secondId), 'headline')).toBe('Second take, switched away')
+    await command('/osg @a2')
+    await opened('Second take')
+    expect(await field('Headline').inputValue()).toBe('Second take, kept after a rejected save')
+    expect(await sheet().locator('.graphics-status').textContent()).toContain('Not saved')
+    await sheet().getByRole('button', { name: 'Retry', exact: true }).click()
+    await saved()
+    expect(slotText(await read(secondId), 'headline')).toBe('Second take, kept after a rejected save')
+    expect(errors).toEqual([])
+  })
+
   it('rebuilds the reference frame from the layer list and inspector, and every change previews, autosaves and undoes', async () => {
     const layers = sheet().getByRole('region', { name: 'Layers' })
     const layer = async (name: string) => (await read(thirdId)).document.layers.find((entry) => entry.name === name)

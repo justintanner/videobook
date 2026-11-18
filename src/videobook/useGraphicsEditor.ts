@@ -6,6 +6,7 @@ import type { GraphicsDocument, GraphicsTextSlot } from '../../server/src/graphi
 import { GRAPHICS_SUGGEST_SLOTS, type GraphicsSuggestKind, type GraphicsSuggestLanguage } from '../../server/src/graphics/slots'
 import type { WatermarkPlatform } from '../../server/src/watermark-platform'
 import type { ChatExecution } from './chat-turns'
+import { createGraphicsDraftKeeper, graphicsTargetArgs, type KeptGraphicsDraft } from './graphics-drafts'
 import {
   editGraphicsHistory,
   editGraphicsFrame,
@@ -37,6 +38,13 @@ import {
 type GraphicsCall = (tool: string, args: Record<string, unknown>, options?: { background?: boolean; chat?: ChatExecution }) => Promise<unknown>
 
 export type GraphicsSaveState = 'saved' | 'dirty' | 'saving' | 'error' | 'conflict'
+
+interface GraphicsSaveOutcome {
+  ok: boolean
+  revision: string | null
+  document: GraphicsDocument
+  frame: GraphicsFraming
+}
 
 export interface GraphicsEditorState {
   target: GraphicsTarget | null
@@ -115,6 +123,11 @@ function withRead(current: GraphicsEditorState, read: GraphicsRead): GraphicsEdi
   }
 }
 
+function withKeptDraft(state: GraphicsEditorState, kept: KeptGraphicsDraft): GraphicsEditorState {
+  return { ...state, document: kept.document, frame: kept.frame, revision: kept.revision, save: kept.save,
+    saveError: kept.saveError, conflictRevision: kept.conflictRevision, past: [], future: [] }
+}
+
 function historyOf(state: GraphicsEditorState): GraphicsHistory | null {
   return state.document ? { document: state.document, frame: state.frame, past: state.past, future: state.future, coalesceKey: state.coalesceKey } : null
 }
@@ -157,7 +170,9 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
   const stateRef = useRef<GraphicsEditorState>(EMPTY)
   const epoch = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const saving = useRef<Promise<boolean> | null>(null)
+  const saving = useRef<Promise<GraphicsSaveOutcome> | null>(null)
+  const targetBook = useRef<string | null>(null)
+  const [drafts] = useState(createGraphicsDraftKeeper)
   const renderRequest = useRef<{ revision: string; output: GraphicsRenderOutput; id: string; subtitles: string | null } | null>(null)
 
   const commit = useCallback((update: (current: GraphicsEditorState) => GraphicsEditorState) => {
@@ -174,15 +189,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     if (saveTimer.current) clearTimeout(saveTimer.current)
   }, [])
 
-  const baseArgs = useCallback(() => {
-    const target = stateRef.current.target
-    return {
-      book_id: bookId,
-      asset_id: target?.artifactId,
-      ...(target?.notebookId ? { notebook_id: target.notebookId } : {}),
-      ...(target?.watermark ? { watermark: true, platform: target.watermark.platform } : {}),
-    }
-  }, [bookId])
+  const baseArgs = useCallback(() => graphicsTargetArgs(bookId, stateRef.current.target), [bookId])
 
   const fetchRead = useCallback(async (): Promise<GraphicsRead> => {
     return parseGraphicsRead(await call('video_graphics', baseArgs(), { background: true }))
@@ -208,27 +215,28 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     const snapshot = current.document
     const frame = current.frame
     const ticket = epoch.current
-    const run = (async () => {
+    const run = (async (): Promise<GraphicsSaveOutcome> => {
       commit((value) => ({ ...value, save: 'saving' }))
       try {
         const result = await call('video_graphics', { ...baseArgs(), op: 'update', expected_revision: current.revision, document: snapshot, frame }, { background: true }) as { revision?: unknown }
-        if (ticket !== epoch.current) return false
         const revision = typeof result.revision === 'string' ? result.revision : current.revision
+        if (ticket !== epoch.current) return { ok: false, revision, document: snapshot, frame }
         const latest = commit((value) => ({ ...value, revision, save: value.document === snapshot && value.frame === frame ? 'saved' : 'dirty', saveError: null }))
         if (missingImages(latest)) void refreshImages(ticket)
-        return latest.save === 'saved'
+        return { ok: latest.save === 'saved', revision, document: snapshot, frame }
       } catch (error) {
-        if (ticket !== epoch.current) return false
-        const failure = graphicsToolError(error)
-        commit((value) => failure.status === 'conflict'
-          ? { ...value, save: 'conflict', conflictRevision: failure.revision, saveError: failure.message }
-          : { ...value, save: 'error', saveError: failure.message })
-        return false
+        if (ticket === epoch.current) {
+          const failure = graphicsToolError(error)
+          commit((value) => failure.status === 'conflict'
+            ? { ...value, save: 'conflict', conflictRevision: failure.revision, saveError: failure.message }
+            : { ...value, save: 'error', saveError: failure.message })
+        }
+        return { ok: false, revision: null, document: snapshot, frame }
       }
     })()
     saving.current = run
     try {
-      return await run
+      return (await run).ok
     } finally {
       saving.current = null
     }
@@ -278,17 +286,37 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     if (next) applyHistory(next)
   }, [applyHistory])
 
+  const keepOutgoing = useCallback(() => {
+    const outgoing = stateRef.current
+    const inflight = saving.current
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = null
+    const { target, document, frame, revision } = outgoing
+    if (!target || !document || !revision || (outgoing.save === 'saved' && !inflight)) return
+    void drafts.keep(call, graphicsTargetArgs(targetBook.current, target), async () => {
+      const saved = inflight ? await inflight : null
+      if (saved?.revision && saved.document === document && saved.frame === frame) return null
+      if (outgoing.save === 'conflict') {
+        return { document, frame, revision, save: 'conflict', saveError: outgoing.saveError ?? 'These graphics changed elsewhere.', conflictRevision: outgoing.conflictRevision }
+      }
+      return { document, frame, revision: saved?.revision ?? revision }
+    })
+  }, [call, drafts])
+
   const load = useCallback(async (ticket: number) => {
     try {
+      const args = baseArgs()
+      await drafts.settled(args)
       const read = await fetchRead()
       if (ticket !== epoch.current) return
-      const loaded = commit((current) => withRead(current, read))
+      const kept = drafts.take(args)
+      const loaded = commit((current) => (kept ? withKeptDraft(withRead(current, read), kept) : withRead(current, read)))
       const openEdits = loaded.document && loaded.target ? graphicsOpenEdits(loaded.document, loaded.target, loaded.read) : []
       if (openEdits.length > 0) edit(openEdits)
     } catch (error) {
       if (ticket === epoch.current) commit((current) => ({ ...current, loading: false, error: graphicsToolError(error).message }))
     }
-  }, [commit, edit, fetchRead])
+  }, [baseArgs, commit, drafts, edit, fetchRead])
 
   const open = useCallback((target: GraphicsTarget) => {
     const current = stateRef.current
@@ -297,20 +325,20 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
       if (inPlace.length > 0) edit(inPlace)
       return
     }
+    keepOutgoing()
     epoch.current += 1
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = null
+    targetBook.current = bookId
     renderRequest.current = null
     commit(() => ({ ...EMPTY, target, loading: true, output: defaultOutput(target) }))
     void load(epoch.current)
-  }, [commit, edit, load])
+  }, [bookId, commit, edit, keepOutgoing, load])
 
   const close = useCallback(() => {
-    void flush()
+    keepOutgoing()
     epoch.current += 1
     renderRequest.current = null
     commit(() => EMPTY)
-  }, [commit, flush])
+  }, [commit, keepOutgoing])
 
   const reload = useCallback(async () => {
     const ticket = epoch.current
