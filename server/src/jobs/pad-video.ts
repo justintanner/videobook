@@ -1,10 +1,12 @@
 import type { Engine } from "videobook-engine";
 import { rm } from "node:fs/promises";
 import { logger } from "../logger.js";
-import { registerJobHandler, queue } from "../queue.js";
+import { registerJobHandler } from "../queue.js";
 import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { join, basename } from "node:path";
 import { withLockedLocalLease } from "./_lease.js";
+import { processVideoFiles } from "./process-video.js";
+import { withTransientStorageRetry } from "./_storage-retry.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { SOUND_SIDECARS } from "../stale-sidecars.js";
 
@@ -25,7 +27,7 @@ export function registerPadVideoJob(engine: Engine): void {
     const { sourcePath, assetDir, sourceAssetId, bookId, targetSecs, hasAudio } = payload as PadVideoPayload;
     logger.debug("pad-video-started", { assetId: sourceAssetId, bookId });
     
-    const result = await withLockedLocalLease(
+    await withLockedLocalLease(
       engine,
       sourceAssetId,
       assetDir,
@@ -94,7 +96,16 @@ export function registerPadVideoJob(engine: Engine): void {
           await engine.metadata.artifacts.write(sourceAssetId, "original", provenance);
 
           const videoPath = join(assetDir, inputFilename);
-          return { videoPath, provenance };
+          await withTransientStorageRetry(() => processVideoFiles(engine, {
+            type: "process_video",
+            videoPath,
+            assetId: sourceAssetId,
+            assetDir,
+            bookId,
+            skipDownstreamJobs: true,
+            force: true,
+            provenance,
+          }, ctx.signal), ctx.signal);
         } catch (err) {
           await rm(outputPath, { force: true }).catch(() => {});
           throw err;
@@ -102,17 +113,6 @@ export function registerPadVideoJob(engine: Engine): void {
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 }
     );
-
-    await queue.enqueueAndWait(`process-video-${sourceAssetId}-${Date.now()}`, {
-      type: "process_video",
-      videoPath: result.videoPath,
-      assetId: sourceAssetId,
-      assetDir: assetDir,
-      bookId,
-      skipDownstreamJobs: true,
-      force: true,
-      provenance: result.provenance,
-    } as unknown as Record<string, unknown>);
 
     return { success: true };
   });
