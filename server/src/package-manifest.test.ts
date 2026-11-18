@@ -142,7 +142,7 @@ describe("published videobook package manifest", () => {
     const shipped = (await shippableSources()).map((file) => relative(serverRoot, file));
     expect(shipped).toContain("src/cli/entry.ts");
     expect(shipped).toContain("src/test-queue-cleanup.ts");
-    for (const helper of ["src/test-client.ts", "src/test-goals.ts", "src/test-media-fixtures.ts", "src/test-fetch-guard.ts", "src/tools/xai-realtime-endpoint.ts"]) {
+    for (const helper of ["src/test-client.ts", "src/test-content-store.ts", "src/test-goals.ts", "src/test-media-fixtures.ts", "src/test-fetch-guard.ts", "src/tools/xai-realtime-endpoint.ts"]) {
       expect(shipped).not.toContain(helper);
     }
     expect(shipped.filter((file) => /\.test\.tsx?$/u.test(file) || file.startsWith("src/quiet-probes/"))).toEqual([]);

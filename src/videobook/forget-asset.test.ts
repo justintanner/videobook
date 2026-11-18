@@ -5,6 +5,8 @@ import {
   forgetReferenceSummary,
   formatReclaimedBytes,
   forgottenNotice,
+  incompleteForgetNotice,
+  retryForgetConfirmation,
   type ForgetAssetOutcome,
 } from './forget-asset'
 
@@ -18,6 +20,8 @@ function outcome(patch: Partial<ForgetAssetOutcome> = {}): ForgetAssetOutcome {
     forgottenObjects: 1,
     sharedObjects: 0,
     reclaimedBytes: 0,
+    pendingObjects: 0,
+    error: null,
     ...patch,
   }
 }
@@ -97,5 +101,15 @@ describe('confirmations', () => {
     expect(clearReferencesConfirmation('@a1', [
       { kind: 'cell.outputArtifact', id: 'n/1' },
     ])).toContain('@a1 is still used by 1 notebook cell')
+  })
+})
+
+describe('incompleteForgetNotice', () => {
+  it('says what is left and why', () => {
+    const left = outcome({ status: 'incomplete', pendingObjects: 2, error: 'Remote storage unavailable' })
+    expect(incompleteForgetNotice('@a1', left))
+      .toBe('Forget @a1 did not finish: 2 stored files still need erasing (Remote storage unavailable)')
+    expect(retryForgetConfirmation('@a1', outcome({ status: 'incomplete', pendingObjects: 1 })))
+      .toBe('Forget @a1 did not finish: 1 stored file still needs erasing.\n\nTry again now?')
   })
 })

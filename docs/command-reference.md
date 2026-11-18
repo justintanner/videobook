@@ -55,7 +55,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `create_qrbtf` — Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) from the qrbtf library. Renders SVG and rasterizes to image assets. Black background with bright modules by default.
 - `create_watermark_card` — Make a transparent QR plus X or TikTok handle badge as an image asset, with optional platform icon, border, padding and rounding. Burn it in with apply_watermark.
 - `crop_asset` — Crop an image or video in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.
-- `delete_asset` — Delete an asset, dropping its sequence clips. forget also destroys its stored bytes (bytes another asset shares are kept)
+- `delete_asset` — Delete an asset, dropping its sequence clips. forget also destroys its stored bytes (bytes another asset shares are kept); a forget that returns status incomplete is finished by repeating it with the same asset_id
 - `delete_book` — Permanently delete a book after typed name confirmation
 - `delete_entity` — Delete a reusable prompt, scene or character
 - `delete_notebook` — Delete a notebook and its cells, edges, and runs

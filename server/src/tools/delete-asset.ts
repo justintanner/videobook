@@ -1,6 +1,6 @@
 import type { Artifact, Engine } from "videobook-engine";
 import { z } from "zod";
-import type { ForgetAssetOutcome } from "../forget-asset.js";
+import { hasPendingForget, type ForgetAssetOutcome } from "../forget-asset.js";
 import { queue } from "../queue.js";
 import {
   readTimeline,
@@ -91,6 +91,8 @@ async function forgetArtifact(bookId: string, artifactId: string, clearReference
       forgotten_objects: outcome.forgottenObjects,
       shared_objects: outcome.sharedObjects,
       reclaimed_bytes: outcome.reclaimedBytes,
+      pending_objects: outcome.pendingObjects,
+      ...(outcome.error ? { error: outcome.error } : {}),
     });
   } catch (cause) {
     return timelineFailure(cause instanceof Error ? cause.message : String(cause));
@@ -100,7 +102,7 @@ async function forgetArtifact(bookId: string, artifactId: string, clearReference
 export function deleteAssetDef(engine: Engine): ToolDef {
   return {
     name: "delete_asset",
-    description: "Delete an asset, dropping its sequence clips. forget also destroys its stored bytes (bytes another asset shares are kept)",
+    description: "Delete an asset, dropping its sequence clips. forget also destroys its stored bytes (bytes another asset shares are kept); a forget that returns status incomplete is finished by repeating it with the same asset_id",
     annotations: { destructiveHint: true, idempotentHint: false },
     schema: {
       asset_id: z.string(),
@@ -110,8 +112,13 @@ export function deleteAssetDef(engine: Engine): ToolDef {
         .describe("With forget: clear notebook cells and sequence clips holding the asset first"),
     },
     handler: async (args) => {
-      const artifact = engine.artifacts.get(String(args.asset_id));
-      if (!artifact.ok) return timelineFailure(artifact.error.message);
+      const assetId = String(args.asset_id);
+      const artifact = engine.artifacts.get(assetId);
+      if (!artifact.ok) {
+        return args.forget === true && hasPendingForget(engine, assetId)
+          ? forgetArtifact(String(args.book_id), assetId, false)
+          : timelineFailure(artifact.error.message);
+      }
       if (args.forget === true) {
         return forgetArtifact(String(args.book_id), artifact.value.artifactId, args.clear_references === true);
       }

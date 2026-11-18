@@ -157,6 +157,7 @@ export default defineConfig({
       'server/src/fs.test.ts',
       'server/src/book-manager.test.ts',
       'server/src/book-object-scope.test.ts',
+      'server/src/forget-asset-recovery.test.ts',
       'server/src/image-edit-models.test.ts',
       'server/src/chat-generation-settings.test.ts',
       'server/src/chat-prompt-rewrite.test.ts',

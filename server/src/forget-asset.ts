@@ -2,7 +2,9 @@ import type {
   Engine,
   NotebookCell,
   NotebookDocument,
+  Revision,
 } from "videobook-engine";
+import { currentCatalogRows, type CatalogRow } from "./catalog-rows.js";
 import { markDescendantsStale } from "./notebook-action-catalog.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { removeArtifactFromTimeline } from "./tools/delete-asset.js";
@@ -18,7 +20,7 @@ interface ForgetAssetReference {
 
 export interface ForgetAssetOutcome {
   /** `in_use` means nothing was destroyed: references still hold the asset. */
-  status: "forgotten" | "in_use";
+  status: "forgotten" | "in_use" | "incomplete";
   artifactId: string;
   label: string | null;
   references: ForgetAssetReference[];
@@ -29,7 +31,26 @@ export interface ForgetAssetOutcome {
   /** Objects left alone because another artifact stores the same bytes. */
   sharedObjects: number;
   reclaimedBytes: number;
+  pendingObjects: number;
+  error?: string;
 }
+
+interface PendingForget {
+  label: string | null;
+  hashes: string[];
+  clearedCells: number;
+  forgottenObjects: number;
+  sharedObjects: number;
+  reclaimedBytes: number;
+}
+
+const PENDING_FORGET_PREFIX = "forget_asset.pending.v1.";
+
+const OWNED_OBJECT_COLUMNS = [
+  ["artifact_files", "object_hash"],
+  ["artifact_streams", "object_hash"],
+  ["transcripts", "payload_hash"],
+] as const;
 
 const CELL_INPUT_ARTIFACT_KEYS = [
   "firstFrameArtifactId",
@@ -192,7 +213,101 @@ function remainingForgetReferences(engine: Engine, artifactId: string): ForgetAs
 
 function inUseOutcome(artifactId: string, label: string | null, references: ForgetAssetReference[], clearedCells = 0): ForgetAssetOutcome {
   return { status: "in_use", artifactId, label, references, clearedCells,
-    forgottenObjects: 0, sharedObjects: 0, reclaimedBytes: 0 };
+    forgottenObjects: 0, sharedObjects: 0, reclaimedBytes: 0, pendingObjects: 0 };
+}
+
+function pendingKey(artifactId: string): string {
+  return `${PENDING_FORGET_PREFIX}${artifactId}`;
+}
+
+function readPendingForget(engine: Engine, artifactId: string): PendingForget | null {
+  return engine.settings.get<PendingForget>(pendingKey(artifactId));
+}
+
+export function hasPendingForget(engine: Engine, artifactId: string): boolean {
+  return readPendingForget(engine, artifactId) !== null;
+}
+
+function savePendingForget(engine: Engine, artifactId: string, pending: PendingForget | null): void {
+  const saved = pending
+    ? engine.settings.set(pendingKey(artifactId), pending)
+    : engine.settings.delete(pendingKey(artifactId));
+  if (!saved.ok) throw new Error(saved.error.message);
+}
+
+function touchesArtifact(revision: Revision, artifactId: string): boolean {
+  if (revision.artifactId === artifactId) return true;
+  const writeSet = revision.details?.writeSet;
+  return Array.isArray(writeSet) && writeSet.some((entry) =>
+    entry === `artifact:${artifactId}`
+    || (typeof entry === "string" && entry.startsWith(`file:${artifactId}:`)));
+}
+
+function collectObjectHashes(rows: CatalogRow[], artifactId: string, column: string, hashes: Set<string>): void {
+  for (const row of rows) {
+    for (const side of ["from", "to"]) {
+      const hash = row[`${side}_${column}`];
+      if (row[`${side}_artifact_id`] === artifactId && isString(hash)) hashes.add(hash);
+    }
+  }
+}
+
+function artifactObjectHashes(engine: Engine, artifactId: string): string[] {
+  const hashes = new Set<string>();
+  const revisions = engine.history.revisions(Number.MAX_SAFE_INTEGER)
+    .filter((revision) => touchesArtifact(revision, artifactId));
+  for (const [table, column] of OWNED_OBJECT_COLUMNS) {
+    collectObjectHashes(currentCatalogRows(engine, table), artifactId, column, hashes);
+    for (const revision of revisions) {
+      collectObjectHashes(engine.history.diff(`${revision.hash}~1`, revision.hash, table), artifactId, column, hashes);
+    }
+  }
+  return [...hashes].sort();
+}
+
+async function eraseObjects(
+  engine: Engine,
+  artifactId: string,
+  pending: PendingForget,
+  releaseObject?: (hash: string) => Promise<void>,
+): Promise<ForgetAssetOutcome> {
+  let { forgottenObjects, sharedObjects, reclaimedBytes } = pending;
+  const remaining: string[] = [];
+  let error: string | undefined;
+  for (const hash of pending.hashes) {
+    const result = await engine.storage.deleteObject(hash);
+    if (!result.ok) {
+      if (result.error.code === "IN_USE") sharedObjects += 1;
+      else if (result.error.code !== "NOT_FOUND") {
+        remaining.push(hash);
+        error ??= result.error.message;
+      }
+      continue;
+    }
+    try {
+      await releaseObject?.(hash);
+    } catch (cause) {
+      remaining.push(hash);
+      error ??= cause instanceof Error ? cause.message : String(cause);
+      continue;
+    }
+    forgottenObjects += 1;
+    if (result.value.deletedLocal) reclaimedBytes += result.value.sizeBytes;
+  }
+  const next = { ...pending, hashes: remaining, forgottenObjects, sharedObjects, reclaimedBytes };
+  savePendingForget(engine, artifactId, remaining.length > 0 ? next : null);
+  return {
+    status: remaining.length > 0 ? "incomplete" : "forgotten",
+    artifactId,
+    label: pending.label,
+    references: [],
+    clearedCells: pending.clearedCells,
+    forgottenObjects,
+    sharedObjects,
+    reclaimedBytes,
+    pendingObjects: remaining.length,
+    ...(error ? { error } : {}),
+  };
 }
 
 /**
@@ -211,7 +326,11 @@ export async function forgetAsset(
   releaseObject?: (hash: string) => Promise<void>,
 ): Promise<ForgetAssetOutcome> {
   const artifact = engine.artifacts.get(input.assetId);
-  if (!artifact.ok) throw new Error(artifact.error.message);
+  if (!artifact.ok) {
+    const pending = readPendingForget(engine, input.assetId);
+    if (!pending) throw new Error(artifact.error.message);
+    return await eraseObjects(engine, input.assetId, pending, releaseObject);
+  }
   const artifactId = artifact.value.artifactId;
   const label = artifact.value.label ?? null;
   if (input.clearReferences) {
@@ -220,10 +339,7 @@ export async function forgetAsset(
     const timeline = await removeArtifactFromTimeline(engine, artifactId, { dryRun: true });
     if (timeline.error) throw new Error(timeline.error);
   }
-  const manifest = await engine.files.manifest(artifactId, { includeDotfiles: true });
-  const hashes = [...new Set(
-    manifest.ok ? manifest.value.files.map((file) => file.objectHash) : [],
-  )];
+  const hashes = artifactObjectHashes(engine, artifactId);
   const clearedCells = input.clearReferences
     ? await detachFromNotebooks(engine, artifactId)
     : 0;
@@ -231,43 +347,21 @@ export async function forgetAsset(
     const timeline = await removeArtifactFromTimeline(engine, artifactId);
     if (timeline.error) throw new Error(timeline.error);
   }
+  const previous = readPendingForget(engine, artifactId);
+  const pending: PendingForget = {
+    label, hashes, clearedCells, forgottenObjects: 0, sharedObjects: 0, reclaimedBytes: 0,
+  };
+  savePendingForget(engine, artifactId, pending);
   const deleted = await engine.artifacts.delete(artifactId, {
     deleteOwnedMedia: true,
   });
   if (!deleted.ok) {
+    savePendingForget(engine, artifactId, previous);
     if (deleted.error.code !== "IN_USE") throw new Error(deleted.error.message);
     return inUseOutcome(artifactId, label, referencesOf(deleted.error.details), clearedCells);
   }
   forgetCaptionState(engine, artifactId);
   forgetGraphicsState(engine, artifactId);
   forgetCleanupState(engine, artifactId);
-  let forgottenObjects = 0;
-  let sharedObjects = 0;
-  let reclaimedBytes = 0;
-  for (const hash of hashes) {
-    const result = await engine.storage.deleteObject(hash);
-    if (result.ok) {
-      await releaseObject?.(hash);
-      forgottenObjects += 1;
-      if (result.value.deletedLocal) reclaimedBytes += result.value.sizeBytes;
-      continue;
-    }
-    // Bytes another artifact stores, or an object row that never existed.
-    if (result.error.code === "IN_USE") {
-      sharedObjects += 1;
-      continue;
-    }
-    if (result.error.code === "NOT_FOUND") continue;
-    throw new Error(result.error.message);
-  }
-  return {
-    status: "forgotten",
-    artifactId,
-    label,
-    references: [],
-    clearedCells,
-    forgottenObjects,
-    sharedObjects,
-    reclaimedBytes,
-  };
+  return await eraseObjects(engine, artifactId, pending, releaseObject);
 }

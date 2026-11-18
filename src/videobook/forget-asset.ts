@@ -8,7 +8,7 @@ export type ForgetAssetReference = {
 }
 
 export type ForgetAssetOutcome = {
-  status: 'forgotten' | 'in_use'
+  status: 'forgotten' | 'in_use' | 'incomplete'
   artifactId: string
   label: string | null
   references: ForgetAssetReference[]
@@ -16,6 +16,8 @@ export type ForgetAssetOutcome = {
   forgottenObjects: number
   sharedObjects: number
   reclaimedBytes: number
+  pendingObjects: number
+  error: string | null
 }
 
 /** Engine reference kinds, singular and plural, in the order we report them. */
@@ -96,6 +98,24 @@ export function forgottenNotice(
   return parts.length > 0
     ? `Forgot ${name} · ${parts.join(' · ')}`
     : `Forgot ${name}`
+}
+
+export function incompleteForgetNotice(
+  name: string,
+  outcome: ForgetAssetOutcome,
+): string {
+  const left = outcome.pendingObjects === 1
+    ? '1 stored file still needs'
+    : `${outcome.pendingObjects} stored files still need`
+  return `Forget ${name} did not finish: ${left} erasing`
+    + (outcome.error ? ` (${outcome.error})` : '')
+}
+
+export function retryForgetConfirmation(
+  name: string,
+  outcome: ForgetAssetOutcome,
+): string {
+  return `${incompleteForgetNotice(name, outcome)}.\n\nTry again now?`
 }
 
 /** Confirmation copy: destructive, irreversible, and specific about it. */

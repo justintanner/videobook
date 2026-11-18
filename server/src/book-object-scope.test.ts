@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { copyFile, mkdir, mkdtemp, readdir, rm, stat, unlink } from "node:fs/promises";
+import { mkdtemp, rm, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, sep } from "node:path";
-import { createEngine, type ContentStore, type Engine } from "videobook-engine";
+import { join } from "node:path";
+import { createEngine, type Engine } from "videobook-engine";
 import { BookManager } from "./book-manager.js";
 import { scopedBookEngine, withBookContext } from "./book-context.js";
 import { forgetAsset } from "./forget-asset.js";
 import { registerForgetAssetJob } from "./jobs/forget-asset.js";
 import { queue, setEngineRoot } from "./queue.js";
+import { directoryContentStore } from "./test-content-store.js";
 import { deleteAssetDef } from "./tools/delete-asset.js";
 import type { ToolDef } from "./tools/tool-def.js";
 import { videobookDomainDefs } from "./tools/videobook-domain.js";
@@ -18,30 +19,6 @@ const SECOND_TAKE = Buffer.from("a second take both books imported");
 interface Asset {
   artifactId: string;
   hash: string;
-}
-
-function directoryStore(root: string): ContentStore {
-  const file = (key: string) => join(root, ...key.split("/"));
-  return {
-    head: async (key) => {
-      try {
-        return { exists: true, size: (await stat(file(key))).size };
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") return { exists: false };
-        throw error;
-      }
-    },
-    uploadFile: async (key, sourcePath) => {
-      await mkdir(dirname(file(key)), { recursive: true });
-      await copyFile(sourcePath, file(key));
-    },
-    downloadFile: async (key, destinationPath) => {
-      await copyFile(file(key), destinationPath);
-    },
-    delete: async (key) => {
-      await rm(file(key), { force: true });
-    },
-  };
 }
 
 function toolJson(result: Awaited<ReturnType<ToolDef["handler"]>>): Record<string, unknown> {
@@ -77,8 +54,7 @@ describe("remote media shared by books", () => {
 
   async function harness() {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-object-scope-"));
-    const remoteDir = join(rootDir, "remote");
-    const remote = directoryStore(remoteDir);
+    const remote = directoryContentStore(join(rootDir, "remote"));
     const libraryDir = join(rootDir, "books");
     const start = async () => {
       books = new BookManager({ libraryDir, remoteObjects: remote, objectPrefix: "media" });
@@ -107,13 +83,7 @@ describe("remote media shared by books", () => {
     };
 
     return {
-      async remoteKeys(): Promise<string[]> {
-        const entries = await readdir(remoteDir, { recursive: true, withFileTypes: true }).catch(() => []);
-        return entries
-          .filter((entry) => entry.isFile())
-          .map((entry) => relative(remoteDir, join(entry.parentPath, entry.name)).split(sep).join("/"))
-          .sort();
-      },
+      remoteKeys: () => remote.keys(),
       async book(name: string): Promise<string> {
         const created = await manager().create(name);
         if (!created.ok) throw new Error(created.error.message);

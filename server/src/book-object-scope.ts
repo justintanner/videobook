@@ -13,6 +13,7 @@ import {
 } from "videobook-engine";
 import { hashFile } from "./archive-b2.js";
 import type { BookManager } from "./book-manager.js";
+import { currentCatalogRows } from "./catalog-rows.js";
 
 const SCOPE_SETTING = "storage.object_scope.v1";
 const COPY_CONCURRENCY = 8;
@@ -70,24 +71,10 @@ export function scopedContentStore(scope: BookObjectScope): ContentStore {
   };
 }
 
-function* rootRevisions(engine: Engine, logCount: number): Generator<string> {
-  yield `HEAD~${logCount - 1}`;
-  const oldest = engine.history.revisions(Number.MAX_SAFE_INTEGER).at(-1);
-  if (oldest) yield `${oldest.hash}~1`;
-}
-
 function storedObjects(engine: Engine): Map<string, number> {
-  const integrity = engine.catalogIntegrity();
-  const expected = integrity.tableRowCounts.objects ?? 0;
-  for (const root of rootRevisions(engine, integrity.logCount)) {
-    const rows = engine.history.diff(root, "WORKING", "objects")
-      .filter((row) => row.diff_type !== "removed");
-    if (rows.length !== expected) continue;
-    return new Map(rows
-      .filter((row) => !row.to_forgotten_at && typeof row.to_object_hash === "string")
-      .map((row) => [row.to_object_hash as string, Number(row.to_size_bytes)]));
-  }
-  throw new Error("Could not list the media stored in this book");
+  return new Map(currentCatalogRows(engine, "objects")
+    .filter((row) => !row.to_forgotten_at && typeof row.to_object_hash === "string")
+    .map((row) => [row.to_object_hash as string, Number(row.to_size_bytes)]));
 }
 
 async function remoteMatches(remote: ContentStore, key: string, size: number): Promise<boolean> {

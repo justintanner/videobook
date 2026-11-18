@@ -109,6 +109,8 @@ import {
   clearReferencesConfirmation,
   forgetConfirmation,
   forgottenNotice,
+  incompleteForgetNotice,
+  retryForgetConfirmation,
 } from './videobook/forget-asset'
 import {
   NOTEBOOK_GRID_ADDRESS_SOURCE,
@@ -3914,6 +3916,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           'error',
         )
         return { ok: false, message: clearReferencesConfirmation(name, outcome.references).split('\n')[0]! }
+      }
+      if (outcome.status === 'incomplete' && window.confirm(retryForgetConfirmation(name, outcome))) {
+        outcome = asForgetAssetOutcome(await call('delete_asset', {
+          book_id: bookId,
+          asset_id: asset.artifactId,
+          forget: true,
+        }))
+      }
+      if (outcome.status === 'incomplete') {
+        const message = incompleteForgetNotice(name, outcome)
+        setNotice(message, 'error')
+        await refreshBookData(bookId, notebook?.id)
+        return { ok: false, message }
       }
       setNotice(forgottenNotice(name, outcome))
       await refreshBookData(bookId, notebook?.id)

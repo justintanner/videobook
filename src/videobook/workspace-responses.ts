@@ -683,7 +683,8 @@ export function asLibrarySearchResult(
 
 export function asForgetAssetOutcome(value: unknown): ForgetAssetOutcome {
   const item = recordValue(value)
-  const status = asString(item?.status) === 'in_use' ? 'in_use' : 'forgotten'
+  const reported = asString(item?.status)
+  const status = reported === 'in_use' || reported === 'incomplete' ? reported : 'forgotten'
   const references = Array.isArray(item?.references) ? item.references : []
   return {
     status,
@@ -699,6 +700,8 @@ export function asForgetAssetOutcome(value: unknown): ForgetAssetOutcome {
     forgottenObjects: asNumber(item?.forgotten_objects) ?? 0,
     sharedObjects: asNumber(item?.shared_objects) ?? 0,
     reclaimedBytes: asNumber(item?.reclaimed_bytes) ?? 0,
+    pendingObjects: asNumber(item?.pending_objects) ?? 0,
+    error: asString(item?.error),
   }
 }
 
