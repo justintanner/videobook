@@ -26,7 +26,7 @@ describe("frontier catalog coverage", () => {
     expect(modelFrontierRankings("machgen:MiniMax-H3")).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "t2v", rank: 3 }),
       expect.objectContaining({ type: "i2v", rank: 4 }),
-      expect.objectContaining({ type: "r2v", rank: 2 }),
+      expect.objectContaining({ type: "r2v", rank: 3 }),
     ]));
     expect(modelFrontierRankings("machgen:GPT-Image-2.5-Sunburst")).toEqual([
       expect.objectContaining({ type: "t2i", rank: 2 }),

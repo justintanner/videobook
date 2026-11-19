@@ -18,23 +18,41 @@ import {
   WaveSpeedBytedanceSeedance2p5ReferenceToVideoRequestSchema,
   WaveSpeedBytedanceSeedance2p5TextToVideoRequestSchema,
   WaveSpeedBytedanceSeedance2p5VideoEditRequestSchema,
+  WaveSpeedBytedanceSeedreamV5p5EditRequestSchema,
   WaveSpeedGoogleGeminiOmni1p1FlashImageToVideoRequestSchema,
   WaveSpeedGoogleGeminiOmni1p1FlashReferenceToVideoRequestSchema,
   WaveSpeedGoogleGeminiOmni1p1FlashTextToVideoRequestSchema,
   WaveSpeedGoogleGeminiOmni1p1FlashVideoEditRequestSchema,
+  WaveSpeedGoogleGeminiOmni1p2FlashReferenceToVideoRequestSchema,
+  WaveSpeedGoogleGeminiOmni1p2FlashTextToVideoRequestSchema,
+  WaveSpeedGoogleGeminiOmni1p2FlashVideoEditRequestSchema,
+  WaveSpeedGoogleNanoBanana2p1EditRequestSchema,
+  WaveSpeedGoogleNanoBanana2p1TextToImageRequestSchema,
+  WaveSpeedHeygenVideo1p0ImageToVideoRequestSchema,
   WaveSpeedHeygenVideo1p0ReferenceToVideoRequestSchema,
   WaveSpeedHeygenVideo1p0TextToVideoRequestSchema,
   WaveSpeedKwaivgiKlingVideoO3ProVideoEditRequestSchema,
   WaveSpeedMinimaxH3ImageToVideoRequestSchema,
   WaveSpeedMinimaxH3ReferenceToVideoRequestSchema,
   WaveSpeedMinimaxH3TextToVideoRequestSchema,
+  WaveSpeedOpenaiGptImage2p5FlareTextToImageRequestSchema,
+  WaveSpeedOpenaiGptImage2p5SunburstTextToImageRequestSchema,
+  WaveSpeedOpenaiGptImage2p6FlareEditRequestSchema,
+  WaveSpeedOpenaiGptImage2p6FlareTextToImageRequestSchema,
+  WaveSpeedOpenaiGptImage2p6SunburstEditRequestSchema,
+  WaveSpeedOpenaiGptImage2p6SunburstTextToImageRequestSchema,
+  WaveSpeedOpenaiGptImage2TextToImageRequestSchema,
+  WaveSpeedPrunaAiPVideo2ProImageToVideoRequestSchema,
   WaveSpeedRunwaymlAleph2RequestSchema,
+  WaveSpeedSkyworkAiSkyreelsV4TextToVideoRequestSchema,
   WaveSpeedWavespeedAiMinimaxH3VideoEditRequestSchema,
+  WaveSpeedXAiGrokImagineImageV2p0TextToImageRequestSchema,
   WaveSpeedXAiGrokImagineVideoV1p5ImageToVideoRequestSchema,
   WaveSpeedXAiGrokImagineVideoV1p5ReferenceToVideoRequestSchema,
 } from "@apicity/wavespeed/zod";
 import { z, type ZodObject, type ZodRawShape } from "zod";
-import type { ItemParamSpec, ModeSpec, ModelEntry, Operation, PromptDialect, PromptGuide, RefRole, WireSpec } from "./types.js";
+import { storedImageFormats } from "./stored-image-formats.js";
+import { OPERATIONS_BY_MEDIA, type ItemParamSpec, type Media, type ModeSpec, type ModelEntry, type Operation, type PromptDialect, type PromptGuide, type RefRole, type WireSpec } from "./types.js";
 
 type AnyObject = ZodObject<ZodRawShape>;
 
@@ -116,7 +134,44 @@ const ALEPH: EndpointExtras = {
   },
 };
 
+function gptImage26Input(schema: unknown): AnyObject {
+  return storedImageFormats((schema as AnyObject).omit({ frame_count: true, frame_duration_ms: true }));
+}
+
+function markupWithoutMask(schema: AnyObject): AnyObject {
+  return schema.superRefine((value, ctx) => {
+    const record = value as Record<string, unknown>;
+    if (record.markup_image && record.mask_image) {
+      ctx.addIssue({ code: "custom", path: ["markup_image"], message: "can't be combined with a mask" });
+    }
+  }) as unknown as AnyObject;
+}
+
+const GPT_IMAGE_26: EndpointExtras = { input: gptImage26Input(WaveSpeedOpenaiGptImage2p6SunburstTextToImageRequestSchema) };
+const GPT_IMAGE_26_FLARE: EndpointExtras = { input: gptImage26Input(WaveSpeedOpenaiGptImage2p6FlareTextToImageRequestSchema) };
+const GPT_IMAGE_26_EDIT: EndpointExtras = { input: markupWithoutMask(gptImage26Input(WaveSpeedOpenaiGptImage2p6SunburstEditRequestSchema)) };
+const GPT_IMAGE_26_FLARE_EDIT: EndpointExtras = { input: markupWithoutMask(gptImage26Input(WaveSpeedOpenaiGptImage2p6FlareEditRequestSchema)) };
+
+const SKYREELS_V4: EndpointExtras = {
+  input: WaveSpeedSkyworkAiSkyreelsV4TextToVideoRequestSchema.superRefine((value, ctx) => {
+    if (value.mode === "fast" && value.sound === true) {
+      ctx.addIssue({ code: "custom", path: ["sound"], message: "fast mode can't generate sound" });
+    }
+  }) as unknown as AnyObject,
+};
+
 const WAVESPEED_ENDPOINTS: Readonly<Record<string, WaveSpeedEndpoint>> = {
+  "openai/gpt-image-2.6-sunburst/text-to-image": endpoint("GPT Image 2.6 Sunburst", "openai.gptImage2p6Sunburst.textToImage", WaveSpeedOpenaiGptImage2p6SunburstTextToImageRequestSchema, GPT_IMAGE_26),
+  "openai/gpt-image-2.6-sunburst/edit": endpoint("GPT Image 2.6 Sunburst", "openai.gptImage2p6Sunburst.edit", WaveSpeedOpenaiGptImage2p6SunburstEditRequestSchema, GPT_IMAGE_26_EDIT),
+  "openai/gpt-image-2.6-flare/text-to-image": endpoint("GPT Image 2.6 Flare", "openai.gptImage2p6Flare.textToImage", WaveSpeedOpenaiGptImage2p6FlareTextToImageRequestSchema, GPT_IMAGE_26_FLARE),
+  "openai/gpt-image-2.6-flare/edit": endpoint("GPT Image 2.6 Flare", "openai.gptImage2p6Flare.edit", WaveSpeedOpenaiGptImage2p6FlareEditRequestSchema, GPT_IMAGE_26_FLARE_EDIT),
+  "openai/gpt-image-2.5-sunburst/text-to-image": endpoint("GPT Image 2.5 Sunburst", "openai.gptImage2p5Sunburst.textToImage", WaveSpeedOpenaiGptImage2p5SunburstTextToImageRequestSchema),
+  "openai/gpt-image-2.5-flare/text-to-image": endpoint("GPT Image 2.5 Flare", "openai.gptImage2p5Flare.textToImage", WaveSpeedOpenaiGptImage2p5FlareTextToImageRequestSchema),
+  "openai/gpt-image-2/text-to-image": endpoint("GPT Image 2", "openai.gptImage2.textToImage", WaveSpeedOpenaiGptImage2TextToImageRequestSchema),
+  "google/nano-banana-2.1/text-to-image": endpoint("Nano Banana 2.1", "google.nanoBanana2p1.textToImage", WaveSpeedGoogleNanoBanana2p1TextToImageRequestSchema),
+  "google/nano-banana-2.1/edit": endpoint("Nano Banana 2.1", "google.nanoBanana2p1.edit", WaveSpeedGoogleNanoBanana2p1EditRequestSchema),
+  "x-ai/grok-imagine-image-v2.0/text-to-image": endpoint("Grok Imagine Image 2.0", "xAi.grokImagineImageV2p0.textToImage", WaveSpeedXAiGrokImagineImageV2p0TextToImageRequestSchema),
+  "bytedance/seedream-v5.5/edit": endpoint("Seedream 5.5", "bytedance.seedreamV5p5.edit", WaveSpeedBytedanceSeedreamV5p5EditRequestSchema),
   "bytedance/seedance-2.5/text-to-video": endpoint("Seedance 2.5", "bytedance.seedance2p5.textToVideo", WaveSpeedBytedanceSeedance2p5TextToVideoRequestSchema),
   "bytedance/seedance-2.5/image-to-video": endpoint("Seedance 2.5", "bytedance.seedance2p5.imageToVideo", WaveSpeedBytedanceSeedance2p5ImageToVideoRequestSchema),
   "bytedance/seedance-2.5/reference-to-video": endpoint("Seedance 2.5", "bytedance.seedance2p5.referenceToVideo", WaveSpeedBytedanceSeedance2p5ReferenceToVideoRequestSchema),
@@ -141,10 +196,16 @@ const WAVESPEED_ENDPOINTS: Readonly<Record<string, WaveSpeedEndpoint>> = {
   "google/gemini-omni-1.1-flash/image-to-video": endpoint("Gemini Omni 1.1 Flash", "google.geminiOmni1p1Flash.imageToVideo", WaveSpeedGoogleGeminiOmni1p1FlashImageToVideoRequestSchema),
   "google/gemini-omni-1.1-flash/reference-to-video": endpoint("Gemini Omni 1.1 Flash", "google.geminiOmni1p1Flash.referenceToVideo", WaveSpeedGoogleGeminiOmni1p1FlashReferenceToVideoRequestSchema),
   "google/gemini-omni-1.1-flash/video-edit": endpoint("Gemini Omni 1.1 Flash", "google.geminiOmni1p1Flash.videoEdit", WaveSpeedGoogleGeminiOmni1p1FlashVideoEditRequestSchema),
+  "google/gemini-omni-1.2-flash/text-to-video": endpoint("Gemini Omni 1.2 Flash", "google.geminiOmni1p2Flash.textToVideo", WaveSpeedGoogleGeminiOmni1p2FlashTextToVideoRequestSchema),
+  "google/gemini-omni-1.2-flash/reference-to-video": endpoint("Gemini Omni 1.2 Flash", "google.geminiOmni1p2Flash.referenceToVideo", WaveSpeedGoogleGeminiOmni1p2FlashReferenceToVideoRequestSchema),
+  "google/gemini-omni-1.2-flash/video-edit": endpoint("Gemini Omni 1.2 Flash", "google.geminiOmni1p2Flash.videoEdit", WaveSpeedGoogleGeminiOmni1p2FlashVideoEditRequestSchema),
   "black-forest-labs/flux-3/text-to-video": endpoint("FLUX 3", "blackForestLabs.flux3.textToVideo", WaveSpeedBlackForestLabsFlux3TextToVideoRequestSchema),
   "black-forest-labs/flux-3/image-to-video": endpoint("FLUX 3", "blackForestLabs.flux3.imageToVideo", WaveSpeedBlackForestLabsFlux3ImageToVideoRequestSchema),
   "heygen/video-1.0/text-to-video": endpoint("HeyGen Video", "heygen.video1p0.textToVideo", WaveSpeedHeygenVideo1p0TextToVideoRequestSchema),
+  "heygen/video-1.0/image-to-video": endpoint("HeyGen Video", "heygen.video1p0.imageToVideo", WaveSpeedHeygenVideo1p0ImageToVideoRequestSchema),
   "heygen/video-1.0/reference-to-video": endpoint("HeyGen Video", "heygen.video1p0.referenceToVideo", WaveSpeedHeygenVideo1p0ReferenceToVideoRequestSchema),
+  "skywork-ai/skyreels-v4/text-to-video": endpoint("SkyReels V4", "skyworkAi.skyreelsV4.textToVideo", WaveSpeedSkyworkAiSkyreelsV4TextToVideoRequestSchema, SKYREELS_V4),
+  "pruna-ai/p-video-2-pro/image-to-video": endpoint("P-Video 2 Pro", "prunaAi.pVideo2Pro.imageToVideo", WaveSpeedPrunaAiPVideo2ProImageToVideoRequestSchema),
   "x-ai/grok-imagine-video-v1.5/image-to-video": endpoint("Grok Imagine Video 1.5", "xAi.grokImagineVideoV1p5.imageToVideo", WaveSpeedXAiGrokImagineVideoV1p5ImageToVideoRequestSchema),
   "x-ai/grok-imagine-video-v1.5/reference-to-video": endpoint("Grok Imagine Video 1.5", "xAi.grokImagineVideoV1p5.referenceToVideo", WaveSpeedXAiGrokImagineVideoV1p5ReferenceToVideoRequestSchema),
   "kwaivgi/kling-video-o3-pro/video-edit": endpoint("Kling o3 Pro", "kwaivgi.klingVideoO3Pro.videoEdit", WaveSpeedKwaivgiKlingVideoO3ProVideoEditRequestSchema),
@@ -152,6 +213,8 @@ const WAVESPEED_ENDPOINTS: Readonly<Record<string, WaveSpeedEndpoint>> = {
 };
 
 const OPERATION_BY_TASK: Readonly<Record<string, Operation>> = {
+  "text-to-image": "text_to_image",
+  edit: "edit_image",
   "text-to-video": "text_to_video",
   "image-to-video": "image_to_video",
   "reference-to-video": "reference_to_video",
@@ -160,7 +223,7 @@ const OPERATION_BY_TASK: Readonly<Record<string, Operation>> = {
 
 const TITLE_SUFFIX: Readonly<Record<Operation, string>> = {
   text_to_image: "",
-  edit_image: "",
+  edit_image: " Edit",
   layer_image: "",
   text_to_video: "",
   image_to_video: " Image",
@@ -228,7 +291,15 @@ function refsFor(shape: ZodRawShape): Partial<Record<RefRole, string | null>> {
   };
 }
 
+function mediaOf(operation: Operation): Media {
+  return (OPERATIONS_BY_MEDIA.image as readonly Operation[]).includes(operation) ? "image" : "video";
+}
+
 function guideFor(apiId: string): PromptGuide | undefined {
+  if (apiId.startsWith("openai/gpt-image-2.6-")) return "gpt_image_26";
+  if (apiId.startsWith("openai/gpt-image-")) return "gpt_image";
+  if (apiId.startsWith("google/nano-banana-")) return "nano_banana";
+  if (apiId.startsWith("x-ai/grok-imagine-image")) return "grok_image";
   if (apiId.startsWith("bytedance/seedance-2.5/")) return "seedance25";
   if (apiId.startsWith("bytedance/seedance-2.0/")) return "seedance2";
   if (apiId.startsWith("x-ai/grok-imagine-video")) return "grok_imagine";
@@ -236,10 +307,11 @@ function guideFor(apiId: string): PromptGuide | undefined {
   return undefined;
 }
 
-function dialectFor(apiId: string, refs: Partial<Record<RefRole, string | null>>): PromptDialect {
+function dialectFor(apiId: string, media: Media, refs: Partial<Record<RefRole, string | null>>): PromptDialect {
+  if (media === "image") return "natural";
   if (apiId.startsWith("bytedance/")) return "seedance";
   if (apiId.startsWith("kwaivgi/kling-video-o3")) return "kling_omni";
-  if (apiId === "google/gemini-omni-1.1-flash/reference-to-video") return "gemini_omni";
+  if (apiId.startsWith("google/gemini-omni-") && apiId.endsWith("/reference-to-video")) return "gemini_omni";
   if (apiId === "x-ai/grok-imagine-video-v1.5/reference-to-video") return "grok";
   if (apiId.startsWith("alibaba/happyhorse-") && refs.video) return "happyhorse_edit";
   if (apiId.startsWith("alibaba/happyhorse-") && refs.image) return "brackets";
@@ -248,14 +320,15 @@ function dialectFor(apiId: string, refs: Partial<Record<RefRole, string | null>>
 
 function wavespeedModel(apiId: string, found: WaveSpeedEndpoint): ModelEntry {
   const operation = operationFor(apiId, found);
+  const media = mediaOf(operation);
   const refs = refsFor((found.input ?? found.schema).shape);
   const guide = guideFor(apiId);
   return {
     id: `wavespeed:${apiId}`,
-    media: "video",
+    media,
     operations: [operation],
     title: `${found.family}${TITLE_SUFFIX[operation]} (WaveSpeed)`,
-    dialect: dialectFor(apiId, refs),
+    dialect: dialectFor(apiId, media, refs),
     refs,
     ...(guide ? { guide } : {}),
     ...(operation === "image_to_video" && refs.last_frame ? { modes: FRAME_MODES } : {}),

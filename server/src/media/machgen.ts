@@ -59,6 +59,7 @@ interface MachGenImageSpec {
   resolutions: readonly string[];
   configs: Readonly<Record<string, Readonly<Record<string, ImageConfig>>>>;
   quality: boolean;
+  outputQuality?: boolean;
   seed: boolean;
 }
 
@@ -231,11 +232,14 @@ export const MACHGEN_IMAGE_SPECS: Readonly<Record<string, MachGenImageSpec>> = {
   "GPT-Image-2": { ...GPT_IMAGE, quality: true },
   "GPT-Image-2.5-Sunburst": GPT_IMAGE,
   "GPT-Image-2.5-Flare": GPT_IMAGE,
+  "GPT-Image-2.6-Sunburst": { ...GPT_IMAGE, outputQuality: true },
+  "GPT-Image-2.6-Flare": { ...GPT_IMAGE, outputQuality: true },
   "Nano-Banana-2": { ...NANO_BANANA, seed: true },
   "Nano-Banana-2.1": NANO_BANANA,
 };
 
 const OPTIMIZATION_LEVELS: Readonly<Record<string, string>> = { high: "STANDARD", low: "EXPRESS" };
+const OUTPUT_QUALITIES = ["low", "medium", "high", "xhigh", "max"] as const;
 
 const MACHGEN_UPSCALES: Readonly<Record<string, MachGenUpscaleSpec>> = {
   "MiniMax-H3/upscale": {
@@ -562,6 +566,7 @@ function imageInput(apiId: string, spec: MachGenImageSpec): WireSpec["input"] {
     aspect_ratio: z.enum([firstAspect, ...otherAspects]).default("1:1").describe("Output aspect ratio"),
     resolution: z.enum([firstResolution, ...otherResolutions]).default(firstResolution).describe("Output resolution"),
     ...(spec.quality ? { quality: z.enum(["high", "low"]).default("high").describe("Image quality: high is MachGen's STANDARD level, low its far cheaper EXPRESS level") } : {}),
+    ...(spec.outputQuality ? { quality: z.enum(OUTPUT_QUALITIES).default("high").describe("Rendering quality; with the size it sets the output tokens MachGen bills") } : {}),
     ...(spec.seed ? { seed: SEED_FIELD } : {}),
   }).superRefine((value, ctx) => {
     if (imageConfig(spec, value)) return;
@@ -572,13 +577,15 @@ function imageInput(apiId: string, spec: MachGenImageSpec): WireSpec["input"] {
 
 function imageRequest(apiId: string, spec: MachGenImageSpec, value: Record<string, unknown>): Record<string, unknown> {
   const sources = list(value.image_urls);
-  const level = typeof value.quality === "string" ? OPTIMIZATION_LEVELS[value.quality] : undefined;
+  const level = spec.quality && typeof value.quality === "string" ? OPTIMIZATION_LEVELS[value.quality] : undefined;
+  const output = spec.outputQuality && typeof value.quality === "string" ? { quality: value.quality } : undefined;
   return {
     model: apiId,
     task_type: sources.length > 0 ? "I2I" : "T2I",
     prompt: typeof value.prompt === "string" ? value.prompt : "",
     image_config: imageConfig(spec, value),
     ...(level ? { optimization_level: level } : {}),
+    ...(output ? { image_output: output } : {}),
     ...(typeof value.seed === "number" ? { seed: value.seed } : {}),
     ...(sources.length > 0 ? { src_image_urls: sources } : {}),
   };

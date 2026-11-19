@@ -27,6 +27,7 @@ import {
 } from "@apicity/elevenlabs/zod";
 import { machgenWire } from "./machgen.js";
 import { wavespeedWire } from "./wavespeed.js";
+import { storedImageFormats } from "./stored-image-formats.js";
 import type { ParsedModelId, WireSpec } from "./types.js";
 import { evenKeyframeSeconds } from "./item-param-defaults.js";
 
@@ -86,14 +87,6 @@ function kieCreateTaskWire(apiId: string): WireSpec | null {
 function omitShape(schema: AnyObject, keys: readonly string[]): AnyObject {
   const shape = Object.fromEntries(Object.entries(schema.shape).filter(([key]) => !keys.includes(key)));
   return z.object(shape);
-}
-
-const STORED_IMAGE_FORMATS = ["jpeg", "png", "webp"] as const;
-
-function storedImageFormats(schema: AnyObject): AnyObject {
-  return schema.extend({
-    output_format: z.enum(STORED_IMAGE_FORMATS).default("png").describe("Output format for the images"),
-  });
 }
 
 function kieVeoWire(apiId: string): WireSpec | null {

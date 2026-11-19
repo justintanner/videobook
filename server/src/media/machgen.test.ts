@@ -428,7 +428,8 @@ function sweepVariants(apiId: string): SweepVariant[] {
 describe("MachGen image catalog", () => {
   it("catalogs every MachGen image model for text-to-image and edits of up to 16 GPT Image or 14 Nano Banana images", () => {
     const maxImages: Record<string, number> = {
-      "GPT-Image-2": 16, "GPT-Image-2.5-Sunburst": 16, "GPT-Image-2.5-Flare": 16, "Nano-Banana-2": 14, "Nano-Banana-2.1": 14,
+      "GPT-Image-2": 16, "GPT-Image-2.5-Sunburst": 16, "GPT-Image-2.5-Flare": 16, "GPT-Image-2.6-Sunburst": 16, "GPT-Image-2.6-Flare": 16,
+      "Nano-Banana-2": 14, "Nano-Banana-2.1": 14,
     };
     expect(Object.keys(MACHGEN_IMAGE_SPECS).sort()).toEqual([...MACHGEN_IMAGE_MODELS].sort());
     for (const apiId of MACHGEN_IMAGE_MODELS) {
@@ -448,6 +449,13 @@ describe("MachGen image catalog", () => {
       quality: { enumValues: ["high", "low"], defaultValue: "high" },
     });
     expect(Object.keys(options("machgen:GPT-Image-2.5-Sunburst")).sort()).toEqual(["aspect_ratio", "resolution"]);
+    for (const id of ["machgen:GPT-Image-2.6-Sunburst", "machgen:GPT-Image-2.6-Flare"]) {
+      expect(options(id)).toMatchObject({
+        aspect_ratio: { enumValues: ["1:1", "16:9", "21:9", "9:16", "4:3", "3:4", "3:2", "2:3"], defaultValue: "9:16" },
+        resolution: { enumValues: ["1024p", "1080p", "2048p", "4096p"], defaultValue: "2048p" },
+        quality: { enumValues: ["low", "medium", "high", "xhigh", "max"], defaultValue: "high" },
+      });
+    }
     expect(options("machgen:Nano-Banana-2")).toMatchObject({
       aspect_ratio: { enumValues: ["16:9", "21:9", "3:2", "4:3", "1:1", "4:5", "3:4", "2:3", "9:16"], defaultValue: "9:16" },
       resolution: { enumValues: ["1K", "2K", "4K"], defaultValue: "2K" },
@@ -487,8 +495,10 @@ describe("MachGen image catalog", () => {
       }
     }
     expect(failures).toEqual([]);
-    expect(accepted).toBe(284);
-    expect(refused).toEqual({ "GPT-Image-2": 40, "GPT-Image-2.5-Sunburst": 20, "GPT-Image-2.5-Flare": 20 });
+    expect(accepted).toBe(724);
+    expect(refused).toEqual({
+      "GPT-Image-2": 40, "GPT-Image-2.5-Sunburst": 20, "GPT-Image-2.5-Flare": 20, "GPT-Image-2.6-Sunburst": 100, "GPT-Image-2.6-Flare": 100,
+    });
   });
 
   it.each([
@@ -500,6 +510,12 @@ describe("MachGen image catalog", () => {
     }],
     ["machgen:GPT-Image-2.5-Flare", { prompt: "make it night", refUrls: { image: [FRAME, LAST] }, options: { aspect_ratio: "16:9", resolution: "4096p" } }, {
       model: "GPT-Image-2.5-Flare", task_type: "I2I", prompt: "make it night", image_config: { width: 3840, height: 2160 }, src_image_urls: [FRAME, LAST],
+    }],
+    ["machgen:GPT-Image-2.6-Sunburst", { prompt: "a red kite" }, {
+      model: "GPT-Image-2.6-Sunburst", task_type: "T2I", prompt: "a red kite", image_config: { width: 1152, height: 2048 }, image_output: { quality: "high" },
+    }],
+    ["machgen:GPT-Image-2.6-Flare", { prompt: "make it night", refUrls: { image: [FRAME] }, options: { aspect_ratio: "16:9", resolution: "1024p", quality: "low" } }, {
+      model: "GPT-Image-2.6-Flare", task_type: "I2I", prompt: "make it night", image_config: { width: 1280, height: 720 }, image_output: { quality: "low" }, src_image_urls: [FRAME],
     }],
     ["machgen:Nano-Banana-2", { prompt: "a lighthouse", options: { aspect_ratio: "4:5", resolution: "4K", seed: 7 } }, {
       model: "Nano-Banana-2", task_type: "T2I", prompt: "a lighthouse", image_config: { height: 4096, aspect_ratio: "4:5" }, seed: 7,
@@ -522,6 +538,9 @@ describe("MachGen image catalog", () => {
     ["machgen:GPT-Image-2.5-Sunburst", { prompt: "x", options: { aspect_ratio: "3:2", resolution: "1080p" } }, /^Resolution: 3:2 offers 1024p, 2048p$/],
     ["machgen:GPT-Image-2.5-Flare", { prompt: "x", options: { aspect_ratio: "4:5" } }, /^Aspect ratio: Invalid option/],
     ["machgen:GPT-Image-2.5-Flare", { prompt: "x", options: { quality: "low" } }, /not an option of machgen:GPT-Image-2.5-Flare/],
+    ["machgen:GPT-Image-2.6-Flare", { prompt: "x", options: { quality: "auto" } }, /^Quality: Invalid option/],
+    ["machgen:GPT-Image-2.6-Sunburst", { prompt: "x", options: { aspect_ratio: "4:3", resolution: "4096p" } }, /^Resolution: 4:3 offers 1024p, 2048p$/],
+    ["machgen:GPT-Image-2.6-Sunburst", { prompt: "x", refUrls: { image: images(17) } }, /accepts at most 16 image refs/],
     ["machgen:Nano-Banana-2.1", { prompt: "x", options: { seed: 7 } }, /not an option of machgen:Nano-Banana-2.1/],
     ["machgen:Nano-Banana-2.1", { refUrls: { image: [FRAME] } }, /requires a prompt/],
     ["machgen:Nano-Banana-2", { prompt: "x", refUrls: { image: images(15) } }, /accepts at most 14 image refs/],
@@ -537,6 +556,8 @@ describe("MachGen image catalog", () => {
     ["machgen:GPT-Image-2", { prompt: "x", options: { aspect_ratio: "21:9", resolution: "1024p", quality: "low" } }, 0.001385],
     ["machgen:GPT-Image-2.5-Sunburst", { prompt: "x", options: { aspect_ratio: "1:1", resolution: "2048p" } }, 0.353],
     ["machgen:GPT-Image-2.5-Flare", { prompt: "x", refUrls: { image: [FRAME] }, options: { aspect_ratio: "16:9", resolution: "4096p" } }, 0.33],
+    ["machgen:GPT-Image-2.6-Sunburst", { prompt: "x", options: { aspect_ratio: "16:9", resolution: "1024p", quality: "low" } }, 0.009345],
+    ["machgen:GPT-Image-2.6-Flare", { prompt: "x", refUrls: { image: [FRAME] }, options: { aspect_ratio: "9:16", resolution: "1024p", quality: "low" } }, 0.156849],
     ["machgen:Nano-Banana-2", { prompt: "x", options: { resolution: "4K" } }, 0.089],
     ["machgen:Nano-Banana-2.1", { prompt: "x", refUrls: { image: [FRAME] }, options: { resolution: "1K" } }, 0.04],
   ] as const)("%s is priced per image from the @apicity/cost machgen rows", async (id, call, usd) => {

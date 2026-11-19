@@ -6,6 +6,35 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- WaveSpeed image models: GPT Image 2.6 Sunburst and Flare for text-to-image
+  and edits, GPT Image 2.5 Sunburst and Flare and GPT Image 2 for
+  text-to-image, Nano Banana 2.1 for text-to-image and edits of up to 14
+  images, Grok Imagine Image 2.0 for text-to-image, and Seedream 5.5 edits of
+  up to 10 images. GPT Image 2.6 edits take up to 16 images plus a Mask or a
+  Markup image, not both, and return PNG, JPEG or WebP. Each is priced before
+  it runs and recorded as image usage.
+- WaveSpeed video models: Gemini Omni 1.2 Flash text-to-video, references (up
+  to 10 images and 3 videos) and video edit, SkyReels V4 text-to-video, P-Video
+  2 Pro with a first and optional last frame, and HeyGen Video 1.0
+  image-to-video. A Gemini Omni 1.2 edit follows its source video's length and
+  is priced on it. SkyReels V4 refuses sound in fast mode before creating work.
+- MachGen GPT Image 2.6 Sunburst and Flare for text-to-image and edits of up to
+  16 images, with a quality from low to max (default high) that sets the price.
+
+### Changed
+
+- Every @apicity package moves to 0.28.1.
+- The model pickers use the 2026-11-16 leaderboards. The new WaveSpeed and
+  MachGen models carry their ranks; Nano Banana 2 leaves the text-to-image
+  board, so fal's hidden Nano Banana 2 leaves the picker again, and Kie
+  Seedream 5.5 text-to-image and Runway Aleph 2 lose their ranks.
+- fal MiniMax H3 Max and H3 Max Turbo estimates use the card's list rates, so
+  they rise: a 12-second 1080P H3 Max clip now estimates $1.92 instead of
+  $1.344.
+- The GPT Image 2.6 prompting guide covers its WaveSpeed and MachGen controls.
+
 ## [0.8.0] - 2026-11-16
 
 ### Added

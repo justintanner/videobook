@@ -132,6 +132,8 @@ Kie Kling 4.0 reference-to-video and keyframe-to-video, PixVerse V6 Max text-to-
 
 Kie Kling 4.0 Flash, MiniMax H3 Image, KIE Image Upscale and KIE Video Upscale are on no top-10 board either. Kling 4.0 Flash renders 720p clips of 3-20 s: its keyframe endpoint takes at most a first frame (\`@first_frame\`), and its reference videos may total at most 20 s. MiniMax H3 Image edits name connected images \`<Picture 1>\`, \`<Picture 2>\` and so on, and size every image by resolution tier and aspect ratio. Kie Gemini Omni 1.2 Flash serves text, frames, reference images and a video edit from one model; an edit sends no duration and follows its source video's length.
 
+WaveSpeed serves images as well as video. Its GPT Image 2.6 Sunburst and Flare edits take a Mask (\`mask_image\`) or a Markup image (\`markup_image\`), never both, and WaveSpeed's GPT Image 2.6 entries offer PNG, JPEG or WebP output only. The WaveSpeed Gemini Omni 1.2 Flash edit is on no top-10 board; it sends no duration, follows its source video's length and is priced from that length. SkyReels V4 makes no sound in fast mode. MachGen GPT Image 2.6 takes a quality from low to max (default high), which with the size sets the output tokens MachGen bills.
+
 Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: ${unmapped.join(", ")}. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
 
 | Known endpoint gap | Reason |

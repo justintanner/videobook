@@ -304,6 +304,8 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:fal-ai/marigold-v2", media: "image", operations: ["edit_image"] },
   machgenImage("GPT-Image-2.5-Sunburst", "GPT Image 2.5 Sunburst", "gpt_image"),
   machgenImage("GPT-Image-2.5-Flare", "GPT Image 2.5 Flare", "gpt_image"),
+  machgenImage("GPT-Image-2.6-Sunburst", "GPT Image 2.6 Sunburst", "gpt_image_26"),
+  machgenImage("GPT-Image-2.6-Flare", "GPT Image 2.6 Flare", "gpt_image_26"),
   machgenImage("GPT-Image-2", "GPT Image 2", "gpt_image"),
   machgenImage("Nano-Banana-2.1", "Nano Banana 2.1", "nano_banana"),
   machgenImage("Nano-Banana-2", "Nano Banana 2", "nano_banana"),

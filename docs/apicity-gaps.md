@@ -947,6 +947,7 @@ packages moved version only.
 | **DECIDED**  | §50 WaveSpeed 0.27 reference and edit endpoints                     | Aleph 2 keyframe roles; plain-word references for Gemini Omni, Grok and Kling o3 |
 | **DECIDED**  | §51 MachGen native upload for local Topaz sources                   | owned outputs by task id, other book videos under 32 MiB by `@input/` upload |
 | **DECIDED**  | §54 Apicity 0.27.3 fal additions and frontier refresh               | raster-only GPT Image 2.6 output, markup or mask, 10 s Gemini Omni 1.2 end-frame cap |
+| **DECIDED**  | §56 Apicity 0.28.1 WaveSpeed and MachGen additions                  | WaveSpeed image entries, mask or markup, SkyReels fast mode without sound, MachGen 2.6 quality tiers |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |
@@ -1369,5 +1370,85 @@ are the only schema changes. All 14 are visible catalog entries.
 Evidence is offline: `server/src/media/kie-0280.test.ts`, `frontier.test.ts`,
 `catalog-contract.test.ts`, `prompt-dialects.test.ts`,
 `server/src/media/generate-media.test.ts` (local KIE stub),
+`tests/v2/generation-field-slots.test.ts` and the regenerated generation-input
+goldens. No provider was called.
+
+## 56. (decision) Apicity 0.28.1 WaveSpeed and MachGen additions — DECIDED 2026-11-19
+
+All 17 `@apicity` packages resolve 0.28.1 from npm (vb-d628g). Only
+`@apicity/cost`, `@apicity/har`, `@apicity/machgen` and `@apicity/wavespeed`
+changed beyond their version. The 32 WaveSpeed request schemas 0.28.0
+published convert to the same JSON schema in 0.28.1, so the 17 new WaveSpeed
+endpoints and MachGen's two GPT Image 2.6 models are the only schema changes.
+All 19 are visible catalog entries.
+
+- WaveSpeed now serves images. `server/src/media/wavespeed.ts` reads the
+  operation from the last path segment: `text-to-image` is `text_to_image` and
+  `edit` is `edit_image`, with an image entry's media set to `image`. The image
+  entries use the `natural` dialect and their family's prompt guide
+  (`gpt_image_26`, `gpt_image`, `nano_banana`, `grok_image`). WaveSpeed's
+  `images` list fills the image role. Completion is media-neutral, so a
+  finished prediction is stored and processed like any other image, and usage
+  is recorded as images.
+- GPT Image 2.6 Sunburst and Flare text-to-image and edits
+  (`wavespeed:openai/gpt-image-2.6-{sunburst,flare}/{text-to-image,edit}`)
+  mirror the fal and Kie entries of §54 and §55. Videobook drops the GIF
+  fields (`frame_count`, `frame_duration_ms`) and offers `output_format` as
+  `jpeg`, `png` or `webp` (the new `server/src/media/stored-image-formats.ts`,
+  shared with `wire.ts`). Edits take 1-16 images plus `mask_image` or
+  `markup_image`, now field slots labelled Mask and Markup
+  (`server/src/media/ref-fields.ts`). WaveSpeed's description says to use one
+  or the other, which Apicity's schema does not enforce, so Videobook refuses
+  the pair locally. `quality` defaults to high like the other hosts;
+  `complexity` is left to WaveSpeed's default. `@apicity/cost` prices them per
+  image by quality and resolution, plus each source image of an edit.
+- GPT Image 2.5 Sunburst and Flare and GPT Image 2 text-to-image, Nano Banana
+  2.1 text-to-image and edits of 1-14 images (web and image search priced as
+  extras), Grok Imagine Image 2.0 text-to-image and Seedream 5.5 edits of 1-10
+  images pass WaveSpeed's schemas through unchanged. A Seedream transparent
+  background returns a PNG whatever `output_format` says, which WaveSpeed
+  documents rather than refuses.
+- Gemini Omni 1.2 Flash text-to-video, references and edit
+  (`wavespeed:google/gemini-omni-1.2-flash/*`) mirror the 1.1 entries of §50:
+  references take up to 10 images and 3 videos named with the `gemini_omni`
+  markers of §52, and the edit takes one source video, sends no duration and
+  is priced from `costHints.inputDurationSeconds`, which a connected book
+  video supplies. The descriptions cap reference videos at 3 s each and the
+  edit's source at 10 s; like the other WaveSpeed entries, Videobook leaves
+  those limits to WaveSpeed's validation. The edit is on no top-10 board.
+- SkyReels V4 text-to-video takes 3-15 s. Its description says `fast` mode
+  needs `sound` off, which Apicity's schema does not enforce, so Videobook
+  refuses fast mode with sound locally. P-Video 2 Pro image-to-video takes a
+  first frame and an optional last frame (the Frames mode), and HeyGen Video
+  1.0 image-to-video a first frame; both run 5-15 s.
+- MachGen `GPT-Image-2.6-Sunburst` and `GPT-Image-2.6-Flare` use the GPT Image
+  2.5 sizes (eight aspect ratios, 1024p-4096p tiers) and up to 16 edit
+  sources. MachGen bills them by output tokens from the size and
+  `image_output.quality`; with `auto` or no quality it reserves the maximum
+  price, and `@apicity/cost` cannot price the request. Videobook therefore
+  offers `quality` as low, medium, high, xhigh or max (default high) and sends
+  it as `image_output.quality`. The recorded bills price exactly: $0.009345
+  for a 1280x720 low generation and $0.156849 for a 720x1280 low edit with one
+  source. The image combination sweep now builds 1,004 requests and its guards
+  allow 724.
+- Frontier: the registry holds the 2026-11-16 boards. The new WaveSpeed and
+  MachGen rows map to the new entries. Three gaps left the registry and
+  `FRONTIER_CATALOG_GAPS`: KIE Nano Banana 2, Google Flow Nano Banana 2 and
+  Google Gemini 3.1 Flash Image, with Nano Banana 2 off the text-to-image
+  board. The hidden `fal:fal-ai/nano-banana-2` entry leaves the picker again,
+  KIE Seedream 5.5 text-to-image and Runway Aleph 2 lose their ranks, and
+  MiniMax H3 is now #3 for references.
+- `@apicity/cost` now prices fal MiniMax H3 Max and H3 Max Turbo at the card's
+  list rates, so their estimates rise (a 12 s 1080P H3 Max clip from $1.344 to
+  $1.92). `@apicity/har` also strips the signed-URL credentials of the other
+  storage families from recordings; Videobook's captures go through it
+  unchanged. Videobook does not read the CLI discovery `paid` field (apicity
+  PR 718): it calls providers through the SDK, its own `paid` names its paid-tool
+  gate, and its only CLI references are the `apicity har report` and `har scrub`
+  hints.
+
+Evidence is offline: `server/src/media/wavespeed-0281.test.ts`,
+`wavespeed.test.ts` (a GPT Image 2.6 edit submitted, polled and stored through
+the local WaveSpeed stub), `machgen.test.ts`, `frontier.test.ts`,
 `tests/v2/generation-field-slots.test.ts` and the regenerated generation-input
 goldens. No provider was called.

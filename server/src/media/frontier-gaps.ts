@@ -4,8 +4,6 @@ export const FRONTIER_CATALOG_GAPS: Readonly<Record<string, string>> = {
   "kie:gpt-image-2-text-to-image": "This exact endpoint is not in the Videobook catalog.",
   "fal:xai.grokImagineImage.v2p0.textToImage": "This exact endpoint is not in the Videobook catalog.",
   "kie:grok-imagine-image-2-0/text-to-image": "This exact endpoint is not in the Videobook catalog.",
-  "kie:nano-banana-2": "This exact endpoint is not in the Videobook catalog.",
-  "googleflow:nano-banana-2": "Google Flow is not a catalog provider.",
   "fal:openai.gptImage2p5.sunburst.edit": "This exact endpoint is not in the Videobook catalog.",
   "fal:openai.gptImage2p5.flare.edit": "This exact endpoint is not in the Videobook catalog.",
   "kie:bytedance/seedance-2": "This exact endpoint is not in the Videobook catalog.",
@@ -16,5 +14,11 @@ export const FRONTIER_CATALOG_GAPS: Readonly<Record<string, string>> = {
   "openai:gpt-image-2": "OpenAI is not a catalog provider.",
   "openai:gpt-image-2.5-flare": "OpenAI is not a catalog provider.",
   "openai:gpt-image-2.5-sunburst": "OpenAI is not a catalog provider.",
-  "google:gemini-3.1-flash-image": "Google is not a catalog provider."
+  "nunchux:gemini-nano-banana-2.1": "Nunchux comes into the catalog with vb-bthaa.",
+  "nunchux:wan3.0-video": "Nunchux comes into the catalog with vb-bthaa.",
+  "nunchux:MiniMax-H3": "Nunchux comes into the catalog with vb-bthaa.",
+  "nunchux:dreamina-seedance-2-5-260628": "Nunchux comes into the catalog with vb-bthaa.",
+  "nunchux:dreamina-seedance-2-0-260128": "Nunchux comes into the catalog with vb-bthaa.",
+  "nunchux:happyhorse-1.0-video-edit": "Nunchux comes into the catalog with vb-bthaa.",
+  "nunchux:wan2.7-videoedit": "Nunchux comes into the catalog with vb-bthaa."
 };

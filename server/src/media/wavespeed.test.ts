@@ -80,13 +80,13 @@ async function estimateUnits(id: string, call: WireRequestInput, hints: CostHint
 describe("WaveSpeed catalog", () => {
   const wavespeed = MODEL_ENTRIES.filter((entry) => entry.id.startsWith("wavespeed:"));
 
-  it("catalogs every WaveSpeed video endpoint apicity publishes and prices each one", () => {
+  it("catalogs every WaveSpeed image and video endpoint apicity publishes and prices each one", () => {
     const published = submitPaths(createWaveSpeed({ apiKey: "offline" }).api, ["api"]);
     expect(wavespeed.map((entry) => wavespeedDotPath(entry.id.slice("wavespeed:".length))).sort()).toEqual(published.sort());
     for (const entry of wavespeed) {
       const model = resolveModel(entry.id);
       expect(model.title).toMatch(/\(WaveSpeed\)$/u);
-      expect(model.media).toBe("video");
+      expect(model.media, entry.id).toBe(/\/(text-to-image|edit)$/u.test(model.apiId) ? "image" : "video");
       const refs: NonNullable<WireRequestInput["refUrls"]> = {};
       for (const slot of model.slots) {
         if (slot.min > 0) refs[slot.role] = Array.from({ length: slot.min }, () => SAMPLE[slot.kind]);
@@ -227,6 +227,7 @@ describe("WaveSpeed provider tasks", () => {
   const PREDICTION_ID = "ws-prediction-0001";
   let fixtures: string;
   let mp4: Buffer;
+  let png: Buffer;
   let server: Server;
   let baseURL: string;
   let recorded: Recorded[];
@@ -241,6 +242,11 @@ describe("WaveSpeed provider tasks", () => {
     if (method === "GET" && path === "/outputs/clip.mp4") {
       response.writeHead(200, { "content-type": "video/mp4" });
       response.end(mp4);
+      return;
+    }
+    if (method === "GET" && path === "/outputs/image.png") {
+      response.writeHead(200, { "content-type": "image/png" });
+      response.end(png);
       return;
     }
     if (method === "GET" && path === `/api/v3/predictions/${PREDICTION_ID}/result`) return sendJson(response, prediction.code, prediction.body);
@@ -258,6 +264,8 @@ describe("WaveSpeed provider tasks", () => {
     fixtures = await mkdtemp(join(tmpdir(), "videobook-wavespeed-fixtures-"));
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-pix_fmt", "yuv420p", join(fixtures, "clip.mp4")]);
     mp4 = await readFile(join(fixtures, "clip.mp4"));
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=red:s=64x64", "-frames:v", "1", join(fixtures, "image.png")]);
+    png = await readFile(join(fixtures, "image.png"));
     server = createServer((incoming, response) => {
       void readBody(incoming).then((body) => {
         recorded.push({ method: incoming.method ?? "", path: incoming.url ?? "", authorization: incoming.headers.authorization, body });
@@ -345,6 +353,49 @@ describe("WaveSpeed provider tasks", () => {
     expect(stored.ok && Buffer.from(stored.value)).toEqual(mp4);
     expect(engine.jobs.pending.read(assetId)).toMatchObject({ ok: true, value: null });
     expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({ status: "completed" });
+  });
+
+  it("submits a GPT Image 2.6 edit with its markup image and stores the PNG as images usage", async () => {
+    const bookId = engine.book.get().bookId;
+    const model = "openai/gpt-image-2.6-sunburst/edit";
+    const result = await client.callTool({
+      name: "generate_image",
+      arguments: {
+        book_id: bookId,
+        model: `wavespeed:${model}`,
+        prompt: "follow the arrows",
+        refs: { image: [FRAME] },
+        field_refs: { markup_image: [KEYFRAME] },
+        options: { resolution: "1k", quality: "low" },
+      },
+    });
+    expect(result.isError, toolText(result)).toBeFalsy();
+    const enqueued = JSON.parse(toolText(result)) as { asset_id: string; job_id: string };
+    await resumeBookQueueForTests(bookId);
+    await waitForJob(enqueued.job_id, testBudget(30_000));
+    const assetId = enqueued.asset_id;
+    const submit = recorded.find((entry) => entry.method === "POST")!;
+    expect(submit.path).toBe(`/api/v3/${model}`);
+    const body = { prompt: "follow the arrows", images: [FRAME], markup_image: KEYFRAME, aspect_ratio: "9:16", resolution: "1k", quality: "low", output_format: "png" };
+    expect(JSON.parse(submit.body)).toEqual(body);
+    expect(engine.jobs.pending.read(assetId)).toMatchObject({
+      ok: true,
+      value: { taskId: PREDICTION_ID, taskType: "wavespeed_media", meta: { model: `wavespeed:${model}`, media: "image", wavespeedModel: model } },
+    });
+    const listPrice = computeEstimate({ provider: "wavespeed", payload: body, endpoint: model }).usd;
+    expect(listPrice).toBeGreaterThan(0);
+    expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({
+      provider: "wavespeed", model, activity: "images", status: "pending", basis: "estimated", costUsd: expect.closeTo(listPrice, 6), warnings: [],
+    });
+
+    prediction = predicted("completed", { outputs: [`${baseURL}/outputs/image.png`] });
+    const done = await pollPendingProviderTasks(engine, bookId);
+    expect(done.failed).toEqual([]);
+    expect(done.completed).toEqual([expect.objectContaining({ assetId, taskType: "wavespeed_media" })]);
+    await waitForJob(done.completed[0]!.jobId, testBudget(30_000));
+    const stored = await engine.files.read(assetId, "original.png");
+    expect(stored.ok && Buffer.from(stored.value)).toEqual(png);
+    expect(engine.jobs.pending.read(assetId)).toMatchObject({ ok: true, value: null });
   });
 
   it("submits a Runway Aleph 2 edit and its keyframes to WaveSpeed's task-less Aleph endpoint", async () => {

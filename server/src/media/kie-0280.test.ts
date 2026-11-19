@@ -278,7 +278,6 @@ describe("kie 0.28.0 catalog", () => {
     expect(boards("kie:gpt-image-2-6/flare-text-to-image")).toEqual(["t2i"]);
     expect(boards(SUNBURST_EDIT)).toEqual(["i2i"]);
     expect(boards("kie:gpt-image-2-6/flare-image-to-image")).toEqual(["i2i"]);
-    expect(boards("kie:seedream/5-5-text-to-image")).toEqual(["t2i"]);
     expect(boards("kie:seedream/5-5-image-to-image")).toEqual(["i2i"]);
     expect(boards(GEMINI)).toEqual(["t2v", "v2v", "r2v"]);
     for (const id of ["kie:wan/3-0-video", "kie:wan/3-0-video-prime", "kie:bytedance/seedance-2-5"]) expect(boards(id), id).toContain("v2v");
