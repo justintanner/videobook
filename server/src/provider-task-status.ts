@@ -33,14 +33,16 @@ export async function readProviderTaskStatus(
   const taskId = firstString(saved?.taskId, storedId.taskId, hints.taskId);
   const machgenTask = saved?.taskType === MEDIA_TASK_TYPES.machgen;
   const wavespeedTask = saved?.taskType === MEDIA_TASK_TYPES.wavespeed;
+  const nunchuxTask = saved?.taskType === MEDIA_TASK_TYPES.nunchux;
   if (saved && /^(?:xai|alibaba)_/u.test(saved.taskType)) return null;
-  if (saved && !machgenTask && !wavespeedTask && saved.taskType !== "media_kie" && saved.taskType !== "isolate_vocals"
+  if (saved && !machgenTask && !wavespeedTask && !nunchuxTask && saved.taskType !== "media_kie" && saved.taskType !== "isolate_vocals"
     && !saved.taskType.startsWith("fal_") && legacyMediaForTaskType(saved.taskType) === null) return null;
   const provider = endpoint || saved?.taskType.startsWith("fal_") ? "fal"
     : machgenTask ? "machgen"
       : wavespeedTask ? "wavespeed"
-        : catalogModel?.provider ?? hints.provider ?? (storedId.taskId || saved ? "kie" : null);
-  if (provider !== "kie" && provider !== "fal" && provider !== "machgen" && provider !== "wavespeed") return null;
+        : nunchuxTask ? "nunchux"
+          : catalogModel?.provider ?? hints.provider ?? (storedId.taskId || saved ? "kie" : null);
+  if (provider !== "kie" && provider !== "fal" && provider !== "machgen" && provider !== "wavespeed" && provider !== "nunchux") return null;
   return { provider, model, taskId: taskId === "queued" ? null : taskId };
 }
 

@@ -5,6 +5,7 @@ import { MEDIA_TASK_TYPES } from "./adapters/types.js";
 import { tryResolveModel } from "./descriptor.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { machgenTaskUrl, machgenTopaz, machgenUpscale, machgenUpscaleRequirement, type MachGenUpscaleSpec } from "./machgen.js";
+import { isNunchuxSeedance, nunchuxFamily } from "./nunchux.js";
 import { normalizeRefs, resolveRefInput } from "./refs.js";
 import type { MediaRefs, ResolvedModel } from "./types.js";
 
@@ -126,20 +127,43 @@ function positiveInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
-async function sourceImageSize(engine: Engine, refs: MediaRefs): Promise<CostHints> {
-  const raw = refs.image?.[0];
-  if (!raw || /^https?:\/\//u.test(raw)) return {};
+async function bookImageSize(engine: Engine, raw: string | undefined): Promise<{ width: number; height: number } | null> {
+  if (!raw || /^https?:\/\//u.test(raw)) return null;
   const input = await resolveRefInput(engine, "image", raw).catch(() => null);
-  if (!input?.filename.startsWith("original")) return {};
+  if (!input?.filename.startsWith("original")) return null;
   const metadata = await engine.metadata.artifacts.read<{ width?: unknown; height?: unknown }>(input.assetId, "original");
   const { width, height } = metadata.ok && metadata.value ? metadata.value : {};
-  return positiveInteger(width) && positiveInteger(height) ? { inputWidth: width, inputHeight: height } : {};
+  return positiveInteger(width) && positiveInteger(height) ? { width, height } : null;
+}
+
+async function sourceImageSize(engine: Engine, refs: MediaRefs): Promise<CostHints> {
+  const size = await bookImageSize(engine, refs.image?.[0]);
+  return size ? { inputWidth: size.width, inputHeight: size.height } : {};
+}
+
+const SEEDANCE_FRAME_RATIOS: Readonly<Record<string, number>> = { "21:9": 21 / 9, "16:9": 16 / 9, "4:3": 4 / 3, "1:1": 1, "3:4": 3 / 4, "9:16": 9 / 16 };
+
+async function frameAspectHint(engine: Engine, refs: MediaRefs): Promise<CostHints> {
+  const size = await bookImageSize(engine, refs.first_frame?.[0]);
+  if (!size) return {};
+  const shape = Math.log(size.width / size.height);
+  const [aspectRatio] = Object.entries(SEEDANCE_FRAME_RATIOS)
+    .reduce((best, entry) => Math.abs(Math.log(entry[1]) - shape) < Math.abs(Math.log(best[1]) - shape) ? entry : best);
+  return { aspectRatio };
+}
+
+async function resolveNunchuxSource(engine: Engine, model: ResolvedModel, refs: MediaRefs): Promise<GenerationSource> {
+  const url = nunchuxFamily(model.apiId) === "google" ? refs.image?.find((raw) => /^https?:\/\//u.test(raw)) : undefined;
+  if (url) return refused(`${model.title} takes images from this book, not a URL (${url}): Nunchux receives edit images as inline data`);
+  const costHints = isNunchuxSeedance(model.apiId) ? await frameAspectHint(engine, refs) : {};
+  return { ok: true, refs, sourceVideoIds: [], costHints, options: {} };
 }
 
 export async function resolveGenerationSource(engine: Engine, model: ResolvedModel, refs: MediaRefs, options: Record<string, unknown> = {}): Promise<GenerationSource> {
   if (model.provider === "machgen" && machgenTopaz(model.apiId)) return resolveMachGenTopaz(engine, model, refs, options);
   const upscale = model.provider === "machgen" ? machgenUpscale(model.apiId) : null;
   if (upscale) return resolveMachGenUpscale(engine, model, upscale, refs);
+  if (model.provider === "nunchux") return resolveNunchuxSource(engine, model, refs);
   const costHints = model.id === KIE_IMAGE_UPSCALE ? await sourceImageSize(engine, refs) : {};
   return { ok: true, refs, sourceVideoIds: [], costHints, options: {} };
 }

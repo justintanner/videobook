@@ -13,12 +13,5 @@ export const FRONTIER_CATALOG_GAPS: Readonly<Record<string, string>> = {
   "alibaba:wan2.7-videoedit": "This exact endpoint is not in the Videobook catalog.",
   "openai:gpt-image-2": "OpenAI is not a catalog provider.",
   "openai:gpt-image-2.5-flare": "OpenAI is not a catalog provider.",
-  "openai:gpt-image-2.5-sunburst": "OpenAI is not a catalog provider.",
-  "nunchux:gemini-nano-banana-2.1": "Nunchux comes into the catalog with vb-bthaa.",
-  "nunchux:wan3.0-video": "Nunchux comes into the catalog with vb-bthaa.",
-  "nunchux:MiniMax-H3": "Nunchux comes into the catalog with vb-bthaa.",
-  "nunchux:dreamina-seedance-2-5-260628": "Nunchux comes into the catalog with vb-bthaa.",
-  "nunchux:dreamina-seedance-2-0-260128": "Nunchux comes into the catalog with vb-bthaa.",
-  "nunchux:happyhorse-1.0-video-edit": "Nunchux comes into the catalog with vb-bthaa.",
-  "nunchux:wan2.7-videoedit": "Nunchux comes into the catalog with vb-bthaa."
+  "openai:gpt-image-2.5-sunburst": "OpenAI is not a catalog provider."
 };

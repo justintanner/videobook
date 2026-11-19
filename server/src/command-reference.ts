@@ -134,6 +134,8 @@ Kie Kling 4.0 Flash, MiniMax H3 Image, KIE Image Upscale and KIE Video Upscale a
 
 WaveSpeed serves images as well as video. Its GPT Image 2.6 Sunburst and Flare edits take a Mask (\`mask_image\`) or a Markup image (\`markup_image\`), never both, and WaveSpeed's GPT Image 2.6 entries offer PNG, JPEG or WebP output only. The WaveSpeed Gemini Omni 1.2 Flash edit is on no top-10 board; it sends no duration, follows its source video's length and is priced from that length. SkyReels V4 makes no sound in fast mode. MachGen GPT Image 2.6 takes a quality from low to max (default high), which with the size sets the output tokens MachGen bills.
 
+Nunchux (\`NUNCHUX_API_KEY\`) serves Nano Banana 2.1 text-to-image and edits of up to 14 images, Wan 3.0 text, frames and references, Wan 2.7 and HappyHorse 1.0 video edits, Seedance 2.5 and 2.0 text, frames and references, and MiniMax H3 text, frames and references. A Nano Banana edit sends its images inline, so it takes images from this book and refuses a URL. Frames and reference media never mix in one request. An edit follows its source video's length unless a duration is set, and is priced on that length. MiniMax H3 takes an aspect ratio for text-to-video only; frames and references keep their source shape.
+
 Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: ${unmapped.join(", ")}. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
 
 | Known endpoint gap | Reason |

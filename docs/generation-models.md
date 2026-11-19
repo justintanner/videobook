@@ -18,6 +18,8 @@ Kie Kling 4.0 Flash, MiniMax H3 Image, KIE Image Upscale and KIE Video Upscale a
 
 WaveSpeed serves images as well as video. Its GPT Image 2.6 Sunburst and Flare edits take a Mask (`mask_image`) or a Markup image (`markup_image`), never both, and WaveSpeed's GPT Image 2.6 entries offer PNG, JPEG or WebP output only. The WaveSpeed Gemini Omni 1.2 Flash edit is on no top-10 board; it sends no duration, follows its source video's length and is priced from that length. SkyReels V4 makes no sound in fast mode. MachGen GPT Image 2.6 takes a quality from low to max (default high), which with the size sets the output tokens MachGen bills.
 
+Nunchux (`NUNCHUX_API_KEY`) serves Nano Banana 2.1 text-to-image and edits of up to 14 images, Wan 3.0 text, frames and references, Wan 2.7 and HappyHorse 1.0 video edits, Seedance 2.5 and 2.0 text, frames and references, and MiniMax H3 text, frames and references. A Nano Banana edit sends its images inline, so it takes images from this book and refuses a URL. Frames and reference media never mix in one request. An edit follows its source video's length unless a duration is set, and is priced on that length. MiniMax H3 takes an aspect ratio for text-to-video only; frames and references keep their source shape.
+
 Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: Kling Image 4.0 (preview), MAI-Image-2.6, Canva Craft, MAI-Image-2.7-Preview, Utopai X, SkyReels V4, Hyperflow H3, Pika H3 Flex. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
 
 | Known endpoint gap | Reason |
@@ -37,15 +39,8 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | openai:gpt-image-2 | OpenAI is not a catalog provider. |
 | openai:gpt-image-2.5-flare | OpenAI is not a catalog provider. |
 | openai:gpt-image-2.5-sunburst | OpenAI is not a catalog provider. |
-| nunchux:gemini-nano-banana-2.1 | Nunchux comes into the catalog with vb-bthaa. |
-| nunchux:wan3.0-video | Nunchux comes into the catalog with vb-bthaa. |
-| nunchux:MiniMax-H3 | Nunchux comes into the catalog with vb-bthaa. |
-| nunchux:dreamina-seedance-2-5-260628 | Nunchux comes into the catalog with vb-bthaa. |
-| nunchux:dreamina-seedance-2-0-260128 | Nunchux comes into the catalog with vb-bthaa. |
-| nunchux:happyhorse-1.0-video-edit | Nunchux comes into the catalog with vb-bthaa. |
-| nunchux:wan2.7-videoedit | Nunchux comes into the catalog with vb-bthaa. |
 
-- Models: 392
+- Models: 399
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -418,6 +413,13 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `wavespeed:x-ai/grok-imagine-video-v1.5/reference-to-video` | Grok Imagine Video 1.5 References (WaveSpeed) | video | reference_to_video | image 1-7 |  | visible |
 | `wavespeed:kwaivgi/kling-video-o3-pro/video-edit` | Kling o3 Pro Edit (WaveSpeed) | video | edit_video | image 0-4, video 1-1 |  | visible |
 | `wavespeed:runwayml/aleph-2` | Runway Aleph 2 Edit (WaveSpeed) | video | edit_video | first_frame 0-1, last_frame 0-1, video 1-1, keyframe 0-5 |  | visible |
+| `nunchux:gemini-nano-banana-2.1` | Nano Banana 2.1 (Nunchux) | image | text_to_image, edit_image | image 0-14 |  | visible |
+| `nunchux:wan3.0-video` | Wan 3.0 (Nunchux) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-10, video 0-5, audio 0-5 | t2v, i2v, r2v | visible |
+| `nunchux:wan2.7-videoedit` | Wan 2.7 Edit (Nunchux) | video | edit_video | video 1-1 |  | visible |
+| `nunchux:happyhorse-1.0-video-edit` | HappyHorse 1.0 Edit (Nunchux) | video | edit_video | video 1-1 |  | visible |
+| `nunchux:dreamina-seedance-2-5-260628` | Seedance 2.5 (Nunchux) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-30, video 0-10, audio 0-10 | t2v, i2v, r2v | visible |
+| `nunchux:dreamina-seedance-2-0-260128` | Seedance 2.0 (Nunchux) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-3 | t2v, i2v, r2v | visible |
+| `nunchux:MiniMax-H3` | MiniMax H3 (Nunchux) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-1 | t2v, i2v, r2v | visible |
 | `elevenlabs:text-to-speech` | ElevenLabs Text to Speech | audio | speech | none |  | visible |
 | `elevenlabs:sound-generation` | ElevenLabs Sound Effects | audio | sfx | none |  | visible |
 | `elevenlabs:music` | ElevenLabs Music | audio | music | none |  | visible |

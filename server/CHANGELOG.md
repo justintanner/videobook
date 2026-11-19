@@ -22,6 +22,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
   is priced on it. SkyReels V4 refuses sound in fast mode before creating work.
 - MachGen GPT Image 2.6 Sunburst and Flare for text-to-image and edits of up to
   16 images, with a quality from low to max (default high) that sets the price.
+- Nunchux as a new provider, with its key `NUNCHUX_API_KEY` in Settings. It
+  brings Nano Banana 2.1 for text-to-image and edits of up to 14 book images,
+  Wan 3.0 for text, frames and references, Wan 2.7 and HappyHorse 1.0 video
+  edits, Seedance 2.5 and 2.0 for text, frames and references, and MiniMax H3
+  for text, frames and references. Each is priced before it runs, including a
+  Seedance first frame from the book, and appears in the pickers with its
+  leaderboard rank. A Nano Banana edit takes images from the book, not URLs.
+  Nunchux's other model ids have no published price yet and are not offered.
 
 ### Changed
 

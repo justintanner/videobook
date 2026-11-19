@@ -1,4 +1,5 @@
 import { wavespeedDotPath } from "./wavespeed.js";
+import { nunchuxDotPath } from "./nunchux.js";
 import { isKieVeoModel, isXaiImageModel } from "./wire.js";
 import type { MediaRefs, ParsedModelId } from "./types.js";
 
@@ -16,6 +17,7 @@ export function generationHarEndpoint(model: ParsedModelId, refs: MediaRefs): st
     case "alibaba": return "api.v1.services.aigc.multimodalGeneration.generation";
     case "machgen": return "api.v0.generate";
     case "wavespeed": return wavespeedDotPath(model.apiId);
+    case "nunchux": return nunchuxDotPath(model.apiId);
     case "elevenlabs":
       switch (model.apiId) {
         case "sound-generation": return "v1.soundGeneration";

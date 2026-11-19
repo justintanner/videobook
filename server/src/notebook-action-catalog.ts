@@ -333,6 +333,7 @@ const providerLabels: Record<ResolvedModel["provider"], string> = {
   elevenlabs: "ElevenLabs",
   machgen: "MachGen",
   wavespeed: "WaveSpeed",
+  nunchux: "Nunchux",
 };
 
 function hasDualFrame(model: ResolvedModel): boolean {

@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { Engine } from "videobook-engine";
 import type {
   ElevenLabsComposeMusicRequest,
@@ -8,9 +6,8 @@ import type {
 } from "@apicity/elevenlabs";
 import { requireApiKey } from "../../api-key.js";
 import { elevenLabsClient } from "../elevenlabs-client.js";
+import { assetRef, readAssetRef } from "./asset-ref.js";
 import type { ProviderAdapter, SubmitContext, SubmitResult } from "./types.js";
-
-const ASSET_SCHEME = "asset://";
 
 function elevenLabsProvider(): ReturnType<typeof elevenLabsClient> {
   return elevenLabsClient({
@@ -20,10 +17,7 @@ function elevenLabsProvider(): ReturnType<typeof elevenLabsClient> {
 }
 
 async function readAssetBlob(engine: Engine, ref: string): Promise<Blob> {
-  const [assetId, ...rest] = ref.slice(ASSET_SCHEME.length).split("/");
-  const dir = await engine.workspaces.resolveArtifact(assetId!);
-  if (!dir.ok) throw new Error(dir.error.message);
-  const bytes = await readFile(join(dir.value, rest.join("/")));
+  const { bytes } = await readAssetRef(engine, ref);
   return new Blob([bytes], { type: "video/mp4" });
 }
 
@@ -60,7 +54,7 @@ async function submit(request: Record<string, unknown>, context: SubmitContext):
 export const elevenLabsAdapter: ProviderAdapter = {
   provider: "elevenlabs",
   envKey: "ELEVENLABS_API_KEY",
-  upload: async (_engine, assetId, filename) => `${ASSET_SCHEME}${assetId}/${filename}`,
+  upload: async (_engine, assetId, filename) => assetRef(assetId, filename),
   uploadUrl: async (url) => {
     throw new Error(`ElevenLabs needs a project asset, not a URL: ${url}`);
   },

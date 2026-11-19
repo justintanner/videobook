@@ -4,6 +4,7 @@ import { applyPromptDialect } from "./prompt-dialects.js";
 import { buildWireRequest } from "./request.js";
 import { normalizeFieldRefs, normalizeRefParams, normalizeRefs } from "./refs.js";
 import { wavespeedDotPath } from "./wavespeed.js";
+import { nunchuxDotPath } from "./nunchux.js";
 import { hasXaiImageSources, isKieSunoModel, isKieVeoModel, isXaiImageModel } from "./wire.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "./types.js";
 
@@ -47,6 +48,8 @@ function providerPath(model: ResolvedModel, request: Record<string, unknown>): s
       return "machgen.api.v0.generate(request)";
     case "wavespeed":
       return `wavespeed.${wavespeedDotPath(model.apiId)}(request)`;
+    case "nunchux":
+      return `nunchux.${nunchuxDotPath(model.apiId)}(request)`;
   }
 }
 

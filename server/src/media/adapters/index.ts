@@ -6,6 +6,7 @@ import { kieAdapter } from "./kie.js";
 import { machgenAdapterFor } from "./machgen.js";
 import type { ProviderAdapter } from "./types.js";
 import { wavespeedAdapter } from "./wavespeed.js";
+import { nunchuxAdapterFor } from "./nunchux.js";
 import { xaiAdapter } from "./xai.js";
 
 export function adapterFor(model: ResolvedModel): ProviderAdapter {
@@ -24,6 +25,8 @@ export function adapterFor(model: ResolvedModel): ProviderAdapter {
       return machgenAdapterFor(model.apiId);
     case "wavespeed":
       return wavespeedAdapter;
+    case "nunchux":
+      return nunchuxAdapterFor(model.apiId);
   }
 }
 
@@ -35,4 +38,5 @@ export const PROVIDER_ENV_KEYS: Readonly<Record<ResolvedModel["provider"], strin
   elevenlabs: "ELEVENLABS_API_KEY",
   machgen: "MACHGEN_API_KEY",
   wavespeed: "WAVESPEED_API_KEY",
+  nunchux: "NUNCHUX_API_KEY",
 };

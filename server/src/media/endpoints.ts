@@ -5,6 +5,7 @@ export interface ProviderEndpoints {
   elevenlabsBaseURL?: string;
   machgenBaseURL?: string;
   wavespeedBaseURL?: string;
+  nunchuxBaseURL?: string;
   xaiBaseURL?: string;
   openaiBaseURL?: string;
   pollIntervalMs?: number;

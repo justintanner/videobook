@@ -36,4 +36,5 @@ export const MEDIA_TASK_TYPES = {
   xai: "xai_media",
   machgen: "machgen_media",
   wavespeed: "wavespeed_media",
+  nunchux: "nunchux_media",
 } as const;

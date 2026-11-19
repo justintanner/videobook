@@ -19,6 +19,7 @@ import { MachGenError } from "@apicity/machgen";
 import type { MachGenTaskStatusResponse } from "@apicity/machgen";
 import { WaveSpeedError } from "@apicity/wavespeed";
 import type { WaveSpeedPrediction } from "@apicity/wavespeed";
+import { NunchuxError } from "@apicity/nunchux";
 import {
   EMPTY_TAG_SUMMARY,
   readAssetTagSummaries,
@@ -55,6 +56,8 @@ import { planVideoTranscriptJobs } from "../jobs/process-video.js";
 import { providerEndpoints } from "../media/endpoints.js";
 import { machgenProvider } from "../media/adapters/machgen.js";
 import { wavespeedProvider } from "../media/adapters/wavespeed.js";
+import { nunchuxProvider } from "../media/adapters/nunchux.js";
+import { isNunchuxTaskModel, nunchuxFamily } from "../media/nunchux.js";
 import { MEDIA_TASK_TYPES } from "../media/adapters/types.js";
 import type { ToolDef } from "./tool-def.js";
 import { submitQueuedKieTask } from "../jobs/kie-paygate.js";
@@ -808,6 +811,7 @@ type PollPendingProviderTasksOptions = {
   falQueueBaseURL?: string;
   machgenBaseURL?: string;
   wavespeedBaseURL?: string;
+  nunchuxBaseURL?: string;
 };
 
 const MACHGEN_RETRYABLE_STATUSES = new Set([408, 429, 499]);
@@ -954,6 +958,96 @@ async function pollWaveSpeedTasks(
   })));
 }
 
+const NUNCHUX_RETRYABLE_STATUSES = new Set([408, 429, 499]);
+const NUNCHUX_FAILED_STATUSES = new Set(["failed", "canceled", "cancelled", "expired"]);
+
+interface NunchuxTaskState {
+  status: string;
+  videoUrl: string | null;
+  error: string | null;
+}
+
+function nunchuxPollFailureIsFinal(error: unknown): boolean {
+  if (!(error instanceof NunchuxError)) return false;
+  const status = (error as NunchuxError).status;
+  return status >= 400 && status < 500 && !NUNCHUX_RETRYABLE_STATUSES.has(status);
+}
+
+function nunchuxErrorText(error: Record<string, unknown> | undefined): string | null {
+  if (!error) return null;
+  const message = error.message ?? error.code;
+  return typeof message === "string" && message ? message : null;
+}
+
+async function readNunchuxTask(provider: ReturnType<typeof nunchuxProvider>, apiId: string, taskId: string): Promise<NunchuxTaskState> {
+  switch (nunchuxFamily(apiId)) {
+    case "alibaba": {
+      const { output } = await provider.v1.alibaba.tasks(taskId);
+      return { status: output.task_status.toLowerCase(), videoUrl: output.video_url ?? null, error: output.message ?? output.code ?? null };
+    }
+    case "bytedance": {
+      const task = await provider.v1.bytedance.contents.generations.tasks.retrieve(taskId);
+      return { status: task.status.toLowerCase(), videoUrl: task.content?.video_url ?? null, error: nunchuxErrorText(task.error) };
+    }
+    case "minimax": {
+      const { task } = await provider.v1.minimax.v2.query.videoGeneration(taskId);
+      return { status: task.status.toLowerCase(), videoUrl: task.content?.url ?? null, error: nunchuxErrorText(task.error) };
+    }
+    case "google":
+      throw new Error(`Nunchux ${apiId} does not run as a task`);
+  }
+}
+
+async function processNunchuxTask(
+  engine: Engine,
+  task: PendingTask,
+  state: NunchuxTaskState,
+  result: ProviderPollResult,
+  bookId: string,
+): Promise<void> {
+  const prompt = metaPrompt(task.meta);
+  const fail = async (failMsg: string) => {
+    result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+    await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+  };
+  if (NUNCHUX_FAILED_STATUSES.has(state.status)) return fail(`Nunchux task ${state.status}${state.error ? `: ${state.error}` : ""}`);
+  if (state.status !== "succeeded") {
+    result.pending.push({ assetId: task.artifactId, taskType: task.taskType, progress: 0, state: state.status, prompt, startedAt: task.createdAt });
+    return;
+  }
+  if (!state.videoUrl) return fail("Nunchux task succeeded without a video URL");
+  await enqueueTaskCompletion(engine, task, result, bookId, "nunchux", [state.videoUrl]);
+}
+
+async function pollNunchuxTasks(
+  engine: Engine,
+  tasks: readonly PendingTask[],
+  result: ProviderPollResult,
+  bookId: string,
+  baseURL: string | undefined,
+): Promise<void> {
+  const nunchuxTasks = tasks.filter((task) => task.taskType === MEDIA_TASK_TYPES.nunchux);
+  if (!getApiKey("NUNCHUX_API_KEY") || nunchuxTasks.length === 0) return;
+  const provider = nunchuxProvider(30_000, baseURL);
+  await Promise.all(nunchuxTasks.map(async (task) => withProviderTaskContext(engine, bookId, task, async () => {
+    const apiId = typeof task.meta.nunchuxModel === "string" ? task.meta.nunchuxModel : "";
+    const prompt = metaPrompt(task.meta);
+    if (!isNunchuxTaskModel(apiId)) {
+      const failMsg = `Unknown Nunchux task model ${apiId || "(none)"}`;
+      result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+      await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+      return;
+    }
+    try {
+      await processNunchuxTask(engine, task, await readNunchuxTask(provider, apiId, task.taskId), result, bookId);
+    } catch (error) {
+      const failMsg = error instanceof Error ? error.message : "Poll failed";
+      result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+      if (nunchuxPollFailureIsFinal(error)) await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+    }
+  })));
+}
+
 async function readMachGenReceipt(
   engine: Engine,
   bookId: string,
@@ -1002,7 +1096,7 @@ async function pollMachGenTasks(
 
 /**
  * Poll provider-pending tasks: submit queued KIE rows, age out stale tasks,
- * and poll kie/veo/xai/alibaba/fal/machgen/wavespeed recordInfo lanes that mark
+ * and poll kie/veo/xai/alibaba/fal/machgen/wavespeed/nunchux recordInfo lanes that mark
  * completing + enqueue complete_kie_task. Does NOT process external uploads,
  * auto-render, or auto-transcribe.
  */
@@ -1391,6 +1485,7 @@ export async function pollPendingProviderTasks(
 
   await pollMachGenTasks(engine, pollableTasks, result, book_id, options.machgenBaseURL ?? providerEndpoints().machgenBaseURL);
   await pollWaveSpeedTasks(engine, pollableTasks, result, book_id, options.wavespeedBaseURL ?? providerEndpoints().wavespeedBaseURL);
+  await pollNunchuxTasks(engine, pollableTasks, result, book_id, options.nunchuxBaseURL ?? providerEndpoints().nunchuxBaseURL);
 
   for (const task of expiredTasks) {
     if (options.signal?.aborted) break;

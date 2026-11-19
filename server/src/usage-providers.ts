@@ -15,6 +15,7 @@ import { createAlibaba as alibaba, uploadFile as alibabaUpload } from "@apicity/
 import { createElevenLabs as elevenlabs } from "@apicity/elevenlabs";
 import { createMachGen as machgen } from "@apicity/machgen";
 import { createWaveSpeed as wavespeed } from "@apicity/wavespeed";
+import { createNunchux as nunchux } from "@apicity/nunchux";
 import { capturedProvider, withHarCapture, withProviderCall } from "./har-capture.js";
 import { providerUsageFetch } from "./provider-usage.js";
 import { withFalStorageErrors } from "./jobs/_fal-shared.js";
@@ -59,6 +60,10 @@ export function createMachGen(options: NonNullable<Parameters<typeof machgen>[0]
 
 export function createWaveSpeed(options: NonNullable<Parameters<typeof wavespeed>[0]>): ReturnType<typeof wavespeed> {
   return capturedProvider("wavespeed", (fetch) => wavespeed({ ...options, fetch }), providerUsageFetch("wavespeed", options.fetch));
+}
+
+export function createNunchux(options: NonNullable<Parameters<typeof nunchux>[0]>): ReturnType<typeof nunchux> {
+  return capturedProvider("nunchux", (fetch) => nunchux({ ...options, fetch }), providerUsageFetch("nunchux", options.fetch));
 }
 
 export function createB2(options: Parameters<typeof b2>[0]): ReturnType<typeof b2> {

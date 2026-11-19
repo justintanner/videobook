@@ -948,6 +948,7 @@ packages moved version only.
 | **DECIDED**  | §51 MachGen native upload for local Topaz sources                   | owned outputs by task id, other book videos under 32 MiB by `@input/` upload |
 | **DECIDED**  | §54 Apicity 0.27.3 fal additions and frontier refresh               | raster-only GPT Image 2.6 output, markup or mask, 10 s Gemini Omni 1.2 end-frame cap |
 | **DECIDED**  | §56 Apicity 0.28.1 WaveSpeed and MachGen additions                  | WaveSpeed image entries, mask or markup, SkyReels fast mode without sound, MachGen 2.6 quality tiers |
+| **DECIDED**  | §57 Nunchux provider (apicity 0.28.1)                               | 7 priced models; 12 unpriced ids left out; inline Nano Banana images; Seedance frame-ratio hint |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |
@@ -1452,3 +1453,80 @@ Evidence is offline: `server/src/media/wavespeed-0281.test.ts`,
 the local WaveSpeed stub), `machgen.test.ts`, `frontier.test.ts`,
 `tests/v2/generation-field-slots.test.ts` and the regenerated generation-input
 goldens. No provider was called.
+
+## 57. (decision) Nunchux provider from apicity 0.28.1 — DECIDED 2026-11-19
+
+`@apicity/nunchux` 0.28.1 joins the server dependencies, and Nunchux is the
+eighth `ProviderId` (vb-bthaa). Its key is `NUNCHUX_API_KEY`, a managed key
+(`op://Apicity/NUNCHUX_API_KEY/password` in `.env.tpl`) listed with the other
+provider keys in Settings. Without it, generation stops before an asset is
+created and Nunchux tasks stay unpolled. Videobook adds no pay gate for
+Nunchux, and no preferred default moved to it.
+
+- Scope (mayor ruling on vb-8v36x): every model `@apicity/cost` 0.28.1 prices,
+  with every operation its schema allows. That is seven catalog entries, all
+  visible, each one model id whose connected inputs choose the task:
+  `nunchux:gemini-nano-banana-2.1` (text-to-image and edits of up to 14
+  images), `nunchux:wan3.0-video` (text, frames and references),
+  `nunchux:wan2.7-videoedit` and `nunchux:happyhorse-1.0-video-edit` (video
+  edits), `nunchux:dreamina-seedance-2-5-260628` and
+  `nunchux:dreamina-seedance-2-0-260128` (text, frames and references), and
+  `nunchux:MiniMax-H3` (text, frames and references). The seven frontier rows
+  Nunchux serves map to them, so `FRONTIER_CATALOG_GAPS` holds no Nunchux row.
+- Left out: the request schemas also accept `wan3.0-video-prime`, `wan2.7-t2v`,
+  `wan2.7-i2v`, `wan2.7-r2v`, `happyhorse-1.1-t2v`, `happyhorse-1.1-i2v`,
+  `happyhorse-1.1-r2v`, `happyhorse-1.0-t2v`, `happyhorse-1.0-i2v`,
+  `happyhorse-1.0-r2v`, `gemini-3.1-flash-image` and `gemini-3-pro-image`.
+  `@apicity/cost` has no Nunchux rate for them and apicity has no recording of
+  them, so Videobook could neither estimate nor settle their cost, and a local
+  price table is ruled out (vb-9ddrh). They are not catalogued, not even at
+  $0. The next adoption that prices them reconciles this gap.
+- `server/src/media/nunchux.ts` gives each model one flat input (the prompt,
+  `first_frame_url`, `last_frame_url`, `image_urls`, `video_urls`,
+  `audio_urls` or the edit's `video_url`, and its options) and builds the
+  family's native body: Wan and HappyHorse send `input.media` items with their
+  `type` and `parameters` with `watermark: false`; Seedance and MiniMax send a
+  `content` list that starts with the text and puts a role on every frame and
+  reference. Frames and reference media never mix, a last frame needs a first
+  frame, and MiniMax H3 takes at most 12 reference files, as the schema
+  descriptions say; Videobook refuses those requests locally. MiniMax H3 sends
+  `ratio` only on a text-only body, where Nunchux requires it, and its Frames
+  and References modes omit the aspect option. Reference clips follow the
+  documented windows (`rules.refDurationMs`): MiniMax H3 2-15 s each and 15 s
+  in all, Wan 3.0 reference audio 15 s in all, and a Wan 2.7 edit source of
+  2-10 s. Reference caps not in the Nunchux schema come from the same models
+  on Kie: Wan 3.0 takes 10 images, 5 videos and 5 audio clips; Seedance 2.5
+  30, 10 and 10; Seedance 2.0 9, 3 and 3, for 4-15 s (2.5 runs to 30 s as on
+  WaveSpeed). The Wan 2.7 and HappyHorse edits send only the source video,
+  the shape apicity recorded.
+- Prompts use `natural_strip_frames` like the MachGen multi-task models, the
+  HappyHorse edit names its source video (`happyhorse_edit`), Nano Banana uses
+  `natural`, and Seedance keeps the `seedance25` and `seedance2` guides.
+- Nano Banana 2.1 is synchronous and takes images as base64. Like the
+  ElevenLabs video-to-music source, a connected book image travels as an
+  `asset://` reference that the adapter reads and inlines at submit; the
+  request is then checked against apicity's schema. A URL is refused before
+  any work is created. The returned image is stored like any other. The
+  resolution is always sent, because omitting `image_size` bills at 4K.
+- Wan, HappyHorse, Seedance and MiniMax submissions become `nunchux_media`
+  provider tasks. The reconcile poll reads the family's task status, completes
+  a succeeded task from its video URL, fails `failed`, `canceled`,
+  `cancelled` and `expired` tasks with Nunchux's message, fails on a final
+  4xx `NunchuxError` (an unknown task handle answers 401), and keeps polling
+  through 408, 429 and 499. A submit error fails the job with the
+  `NunchuxError` message, such as `Nunchux API error 401: Invalid or revoked
+  API key.` Usage rows link to the task id (`output.task_id` now wins over an
+  Alibaba-style `request_id`) and follow the MiniMax `task.status`.
+- Costs come from `@apicity/cost`. Wan, HappyHorse and MiniMax reference or
+  source videos bill by length, from `inputDurationSeconds`. Seedance with a
+  first frame bills by the frame's shape, so for a connected book image
+  Videobook passes `costHints.aspectRatio`, the supported ratio (21:9, 16:9,
+  4:3, 1:1, 3:4 or 9:16) nearest the image's stored size, and the usage ledger
+  keeps it. A URL frame leaves that estimate at $0 with Apicity's warning.
+
+Evidence is offline: `server/src/media/nunchux.test.ts` runs a Wan, Seedance
+and MiniMax video through submit, poll and download, and a Nano Banana edit of
+a book image, against a local stub built from apicity's 19 Nunchux recordings,
+plus the submit and poll errors those recordings show;
+`frontier.test.ts`, the regenerated generation-input goldens and
+`docs/generation-models.md` cover the catalog. No provider was called.

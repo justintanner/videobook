@@ -47,6 +47,7 @@
     "@apicity/kie": "^0.28.1",
     "@apicity/kimicoding": "^0.28.1",
     "@apicity/machgen": "^0.28.1",
+    "@apicity/nunchux": "^0.28.1",
     "@apicity/omkar": "^0.28.1",
     "@apicity/openai": "^0.28.1",
     "@apicity/tiktok-creative-center": "^0.28.1",

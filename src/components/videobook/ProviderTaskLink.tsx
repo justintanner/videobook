@@ -6,6 +6,7 @@ import './ProviderTaskLink.css'
 const TASK_ONLY_LABELS: Partial<Record<ProviderTaskStatus['provider'], string>> = {
   machgen: 'MachGen task',
   wavespeed: 'WaveSpeed prediction',
+  nunchux: 'Nunchux task',
 }
 
 export function ProviderTaskLink({ task }: { task: ProviderTaskStatus }) {

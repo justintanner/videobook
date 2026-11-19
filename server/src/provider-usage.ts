@@ -19,7 +19,7 @@ import { httpDotPath, usageQuote, type UsageQuote } from "./usage-quote.js";
 
 const COST_PACKAGE_VERSION = installedPackageVersion("@apicity/cost");
 
-type Provider = "openai" | "xai" | "kie" | "fal" | "alibaba" | "elevenlabs" | "machgen" | "wavespeed";
+type Provider = "openai" | "xai" | "kie" | "fal" | "alibaba" | "elevenlabs" | "machgen" | "wavespeed" | "nunchux";
 type RecordValue = Record<string, unknown>;
 type Price = Pick<UsageEntry, "costUsd" | "basis" | "rateSource" | "pricingVersion" | "warnings" | "units" | "unit">;
 const incomplete = new WeakSet<Engine>();
@@ -123,6 +123,7 @@ async function priceRequest(provider: Provider, model: string, payload: RecordVa
 
 const MEDIA_ACTIVITY: Record<Media, UsageEntry["activity"]> = { image: "images", video: "video", audio: "audio" };
 const MACHGEN_IMAGE_TASKS = new Set(["T2I", "I2I"]);
+const NUNCHUX_SUBMIT_PATH = /^\/v1\/(alibaba\/services\/aigc\/video-generation\/video-synthesis|bytedance\/contents\/generations\/tasks|google\/v1beta\/interactions|minimax\/v2\/video_generation)$/u;
 
 function machgenActivity(payload: RecordValue): UsageEntry["activity"] {
   return MACHGEN_IMAGE_TASKS.has(String(payload.task_type)) ? "images" : "video";
@@ -165,6 +166,7 @@ function isBillable(provider: Provider, path: string, method: string): boolean {
   if (provider === "elevenlabs") return /\/(text-to-speech|speech-to-text|speech-to-speech|sound-generation|audio-isolation|music)(\/|$)/u.test(path);
   if (provider === "machgen") return path === "/api/v0/generate";
   if (provider === "wavespeed") return path.startsWith("/api/v3/") && !path.startsWith("/api/v3/predictions/");
+  if (provider === "nunchux") return NUNCHUX_SUBMIT_PATH.test(path);
   return /\/(videos|images)(\/|$)/u.test(path);
 }
 
@@ -190,16 +192,16 @@ function remoteId(body: RecordValue, url: URL, method: string): string | null {
   const data = object(body.data);
   const output = object(body.output);
   const pathId = url.searchParams.get("taskId") ?? url.searchParams.get("task_id")
-    ?? (/\/(requests|tasks|jobs|videos|predictions)\/([^/]+)(?:\/status|\/result)?$/u.exec(url.pathname)?.[2] ?? null);
+    ?? (/\/(requests|tasks|jobs|videos|predictions|video_generation)\/([^/]+)(?:\/status|\/result)?$/u.exec(url.pathname)?.[2] ?? null);
   if (method === "GET" && pathId) return decodeURIComponent(pathId);
-  return text(data.taskId) ?? text(data.task_id) ?? text(body.task_id) ?? text(body.request_id) ?? text(body.job_id)
-    ?? text(output.task_id) ?? text(body.id) ?? text(data.id);
+  return text(data.taskId) ?? text(data.task_id) ?? text(body.task_id) ?? text(output.task_id) ?? text(body.request_id)
+    ?? text(body.job_id) ?? text(body.id) ?? text(data.id);
 }
 
 function responseStatus(body: RecordValue, accepted: boolean): UsageEntry["status"] {
   const data = object(body.data);
   const output = object(body.output);
-  const state = String(body.status ?? data.state ?? data.status ?? output.task_status ?? "").toLowerCase();
+  const state = String(body.status ?? data.state ?? data.status ?? output.task_status ?? object(body.task).status ?? "").toLowerCase();
   if (body.error || data.failCode || (typeof body.code === "number" && body.code >= 400) || data.successFlag === 2 || data.successFlag === 3
     || ["failed", "fail", "error", "timeout", "create_task_failed", "generate_audio_failed", "sensitive_word_error"].includes(state)) return "failed";
   if (["cancelled", "canceled", "deleted"].includes(state)) return "cancelled";
@@ -346,10 +348,12 @@ async function costHints(engine: Engine, artifactId?: string): Promise<CostHints
   const inputDurationSeconds = number(hints.inputDurationSeconds) ?? number(hints.inputDuration);
   const inputWidth = number(hints.inputWidth);
   const inputHeight = number(hints.inputHeight);
+  const aspectRatio = text(hints.aspectRatio);
   return {
     ...(durationSeconds !== null ? { durationSeconds } : {}),
     ...(inputDurationSeconds !== null ? { inputDurationSeconds } : {}),
     ...(inputWidth !== null && inputHeight !== null ? { inputWidth, inputHeight } : {}),
+    ...(aspectRatio ? { aspectRatio } : {}),
   };
 }
 
@@ -433,7 +437,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
         responseHeaders: Object.fromEntries(response.headers.entries()),
       };
       if (entry) {
-        const accepted = !!externalId && (provider === "kie" || provider === "fal" || provider === "machgen" || provider === "wavespeed" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
+        const accepted = !!externalId && (provider === "kie" || provider === "fal" || provider === "machgen" || provider === "wavespeed" || provider === "nunchux" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
         const status = response.ok ? responseStatus(body, accepted) : "failed";
         safeRecord(engine, { ...entry, ...(externalId ? { externalId } : {}), ...await observedPatch(engine, entry, exchange, status) });
       } else if (method === "GET" && (response.ok || falResultFailed(provider, url, response))) {

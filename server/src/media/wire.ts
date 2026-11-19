@@ -27,6 +27,7 @@ import {
 } from "@apicity/elevenlabs/zod";
 import { machgenWire } from "./machgen.js";
 import { wavespeedWire } from "./wavespeed.js";
+import { nunchuxWire } from "./nunchux.js";
 import { storedImageFormats } from "./stored-image-formats.js";
 import type { ParsedModelId, WireSpec } from "./types.js";
 import { evenKeyframeSeconds } from "./item-param-defaults.js";
@@ -380,5 +381,7 @@ export function wireSpec(parsed: ParsedModelId): WireSpec | null {
       return machgenWire(parsed.apiId);
     case "wavespeed":
       return wavespeedWire(parsed.apiId);
+    case "nunchux":
+      return nunchuxWire(parsed.apiId);
   }
 }

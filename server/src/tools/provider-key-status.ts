@@ -27,6 +27,7 @@ type ProviderGroup =
   | "dashscope"
   | "machgen"
   | "wavespeed"
+  | "nunchux"
   | "b2";
 type LiveLookup = "kie-credits" | "elevenlabs-credits" | "openai-tokens" | "xai-tokens";
 
@@ -89,6 +90,7 @@ const KEY_REGISTRY: Record<ManagedEnvKey, KeyRegistryEntry> = {
   DASHSCOPE_API_KEY: { provider: "dashscope", label: "DashScope" },
   MACHGEN_API_KEY: { provider: "machgen", label: "MachGen" },
   WAVESPEED_API_KEY: { provider: "wavespeed", label: "WaveSpeed" },
+  NUNCHUX_API_KEY: { provider: "nunchux", label: "Nunchux" },
   B2_ACCESS_KEY_ID: { provider: "b2", label: "Backblaze B2" },
   B2_SECRET_ACCESS_KEY: { provider: "b2", label: "Backblaze B2" },
   B2_REGION: { provider: "b2", label: "Backblaze B2" },
@@ -110,6 +112,7 @@ const ROW_ORDER: readonly ManagedEnvKey[] = [
   "DASHSCOPE_API_KEY",
   "MACHGEN_API_KEY",
   "WAVESPEED_API_KEY",
+  "NUNCHUX_API_KEY",
   "B2_ACCESS_KEY_ID",
   "B2_SECRET_ACCESS_KEY",
   "B2_REGION",
