@@ -210,10 +210,8 @@ describe('library browse status over HTTP MCP', () => {
       const written = await thisManaged.value.engine.files.write(id, 'original.png', source.value)
       if (!written.ok) throw new Error(written.error.message)
     }
-    const activeLease = thisManaged.value.engine.jobs.artifactWork.begin(thisCatalog.processing[0]!, {
-      kind: 'upload', ownerKind: 'job', durationMs: 60 * 60_000,
-    })
-    if (!activeLease) throw new Error('Could not restore processing fixture after writing its source')
+    expect(thisManaged.value.engine.jobs.artifactWork.read(thisCatalog.processing[0]!))
+      .toMatchObject({ ok: true, value: { status: 'working', ownerKind: 'job' } })
     await books.close()
     server = await startServer(rootDir)
     client = new Client({ name: 'library-browse-e2e', version: '1' }, {

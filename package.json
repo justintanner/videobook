@@ -66,7 +66,7 @@
     "remotion": "4.0.494",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.0",
-    "videobook-engine": "5.9.2"
+    "videobook-engine": "5.9.3"
   },
   "overrides": {
     "adm-zip": "^0.6.0",

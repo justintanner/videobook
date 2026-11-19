@@ -40,8 +40,11 @@ npm config set allow-scripts=ffmpeg-static,ytdlp-nodejs,@dolthub/doltlite,usearc
 - `ffmpeg-static` downloads ffmpeg, which every media operation needs.
 - `ytdlp-nodejs` downloads yt-dlp, which downloading videos from URLs needs.
   Without it, videobook uses `yt-dlp` on `PATH` or `VIDEOBOOK_YTDLP_PATH`.
-- `@dolthub/doltlite`, `usearch` and `onnxruntime-node` use prebuilt native
-  binaries and only compile or fetch extras on unusual platforms.
+- `@dolthub/doltlite` and `usearch` use prebuilt native binaries on macOS
+  arm64 and x64, Linux x64 and arm64, and Windows x64, and build from source
+  elsewhere. A source build needs a C/C++ toolchain and the `node-gyp` that npm
+  puts on `PATH`.
+- `onnxruntime-node` only downloads optional CUDA libraries on Linux.
 - `esbuild` checks its platform binary for the Remotion renderer.
 
 npm also reports the install script of `@ffprobe-installer/<platform>`, for

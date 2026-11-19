@@ -6,6 +6,13 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- A job writing an asset's media files keeps the asset until it finishes: the
+  asset no longer shows as ready after the first file, and a retry cannot start
+  on it mid-work. Installs are smaller, as the storage engine no longer depends
+  on node-gyp.
+
 ## [0.8.1] - 2026-11-19
 
 ### Added
