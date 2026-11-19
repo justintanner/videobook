@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-11-19
+
 ### Fixed
 
 - A job writing an asset's media files keeps the asset until it finishes: the
