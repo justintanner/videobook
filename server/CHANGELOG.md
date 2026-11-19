@@ -30,6 +30,70 @@ and the package uses [Semantic Versioning](https://semver.org/).
   Seedance first frame from the book, and appears in the pickers with its
   leaderboard rank. A Nano Banana edit takes images from the book, not URLs.
   Nunchux's other model ids have no published price yet and are not offered.
+- `/goal` starts every new short with an initial analysis before anything is
+  generated. It reads the source video's scenes and sampled frames, applies
+  this book's saved goal defaults unless the brief says otherwise, picks a
+  frame where the action happens (`@a1 at 3s` still pins one), and saves a
+  recipe: keep the source shots, regenerate the video or make one continuous
+  take; add the character or replace someone; when the action starts and ends;
+  source graphics, sound, branding, estimates and open questions. The Recipe
+  step shows it with choices you can change. **Use these defaults for this
+  book** saves them for later goals without starting a paid run, and **Refresh
+  analysis** runs it again. Over MCP, `video_goal` gains `analyze` and
+  `save_defaults`, and the plan holds the recipe in `analysis`.
+- A remix goal can remove the source video's burned-in graphics before it
+  generates anything. The Recipe step proposes removal regions; review them and
+  run them locally with LaMa or fast fill, or reuse an earlier cleaned copy
+  made with the same regions and method. Physical signs and printing stay.
+  Once you have watched the prepared video and confirmed it with **Use reviewed
+  source**, both the image and the video references come from it, and a later
+  goal reuses a matching reviewed copy. `video_goal` gains `prepare` and
+  `review_source`.
+- A remix that keeps the source's shots generates only the interval that
+  changes. On the Video step, drag the window of the generated take until it
+  holds the whole action and payoff, then **Use this window**; Finish puts that
+  window back between the kept source frames, at the source's frame rate.
+  `video_goal` gains `review_action` with `start_seconds`.
+- A remix goal takes several character images: drag notebook images or image
+  files onto Character references, up to 12, and give each one its role in the
+  replacement prompt with `@image1`, `@image2` and so on. `video_goal` `update`
+  saves their order in `sourceImages`.
+- A goal keeps every take of its steps, from approvals, manual reruns and
+  related goals, with the prompt, references, model, outcome and cost behind
+  each. The takes button in the panel's header lists them, and **Use reviewed
+  take** (`video_goal` `adopt`) selects one, also from a cancelled goal; a
+  manual rerun never changes the selection by itself. Approving an image step
+  reuses an earlier reviewed image with the same prompt, settings and inputs
+  instead of paying for it again.
+- New goals check each selected frame, clip and final render locally when it is
+  ready: that it decodes, that its inputs are current, its duration and frames,
+  and the final assembly and sound. **Review against brief** is an optional
+  paid review of identity, added overlays, action and reveal timing on sampled
+  frames. Its full image-input price is unknown, so it runs only when you ask,
+  and unchanged media reuse the saved result. These checks replace **Check for
+  AI tells** on new goals; goals saved earlier keep it. `video_goal` gains
+  `check_output`, with `semantic` for the paid review.
+- Automatic continuation for a reviewed goal: turn on **Offer automatic
+  continuation for this recipe**, set a USD allowance and click **Run reviewed
+  recipe**. This approves the saved recipe and the selected images, then runs
+  the remaining steps with their checks, assembly, sound and branding up to a
+  final preview; it never posts. It stops for new images, source and action
+  reviews, failed or unverified checks, changed inputs, unknown or lower-bound
+  prices (an H3 Max video still needs a manual approval), account errors and an
+  allowance too small for the next step. **Pause automatic continuation** stops
+  further submissions, and spend, reservations and the remaining allowance
+  survive reloads. The allowance is checked against estimates, not a provider
+  billing cap. Importing a book pauses such a goal: it spends again only after
+  `auto_continue` in the new library, not when the book's schedules resume.
+  `video_goal` gains `auto_continue` and `pause_auto`.
+- A failed video download can be recovered in its own cell. Select the cell to
+  see why it failed, then **Retry download**, or **Choose video file** to
+  import a saved copy into the same cell; a TikTok post that needs sign-in also
+  offers **Open TikTok post**. Set `VIDEOBOOK_YTDLP_CHROME_PROFILE` to a
+  dedicated Chrome profile signed in to TikTok to get **Retry with Chrome**
+  (`retry_job` `use_chrome_profile`), and add
+  `VIDEOBOOK_YTDLP_CHROME_ON_LOGIN=1` to have a TikTok link you add try that
+  profile once by itself when TikTok asks for sign-in.
 
 ### Changed
 
@@ -42,6 +106,87 @@ and the package uses [Semantic Versioning](https://semver.org/).
   they rise: a 12-second 1080P H3 Max clip now estimates $1.92 instead of
   $1.344.
 - The GPT Image 2.6 prompting guide covers its WaveSpeed and MachGen controls.
+- The goal panel shows one next step at a time. A step strip (Recipe, the
+  stages, Finish) gives each step a thumbnail and its status in words, and a
+  NEXT bar says what to do next, why it is blocked and what it costs, and holds
+  the only primary button. The panel opens on that step and follows the goal as
+  it moves on. Stop, Retry and Save sit in the bar, the takes and a ⋯ menu
+  (Discard goal, Dismiss) in the header, and image steps show before and after
+  with Revise and New take priced beside them.
+- In a new remix goal the Twist step becomes Action setup: its image edit sets
+  up the people and props for the action the brief asks for, instead of adding
+  one funny visual change.
+- A goal finishes with the sound and branding saved in its recipe. A remix
+  keeps its original audio on the source's timeline, trimmed or padded with
+  silence to the final length, and mutes generated sound unless **Generated
+  sound** or **Mix original and generated** is chosen. The saved branding keeps
+  its template or starter, handle, image layers, placement and timing, and
+  **Use current book branding** adopts a look saved later. `video_goal` gains
+  `refresh_finish` for that, and with `audio_artifact_id` and
+  `audio_start_seconds` it picks another soundtrack. A sound or branding change
+  reruns only Finish, and a failed finish keeps its working copy so it can be
+  retried without making the video again. Goals saved earlier keep their
+  settings until they are edited or analyzed again.
+- Notebook cells are 240x200, and their rows resize so four fit in the window.
+  The from/to pills are gone: a cell's inputs hang off its top edge as a badge
+  with one segment per source, the slot it fills (I1, V1, FF) or, for a
+  producer link, the source's family icon, and its outputs hang off the
+  bottom-right corner, naming up to two targets. Media tiles keep the picture
+  clear and put the address, metadata and menu in a footer strip that drops
+  whole items when it is narrow, with audio badges whole beside the duration;
+  the producer chip leaves the media rail.
+- On a desktop 1200px or wider, the graphics editor's chat log sits beside the
+  sheet and the preview fills the middle column. Text, look, frame, layers and
+  the selected layer's settings share one scrolling column on the right, Guides
+  and Snap sit under the preview, and selecting a layer scrolls its settings
+  into view.
+- Local graphics removal runs in its own process instead of inside the server,
+  and the remover shows how many frames are done; `remove_video_graphics`
+  `status` returns `progress`.
+- fal MiniMax H3 Max reference-to-video measures each video reference before it
+  creates work and refuses one outside 2-15 seconds, or more than 15 seconds
+  together, so a video reference must be in the book, not a URL.
+- A fal upload refused for authorization, an insufficient balance or a blocked
+  account fails with that error instead of moving on to the free upload hosts.
+
+### Fixed
+
+- One book whose catalog cannot open, such as a book moved under another
+  book's directory, no longer stops the server from starting. The other books
+  open, a duplicate name fails only the later book, `/healthz` lists each
+  unavailable book with its directory and cause, and `videobook doctor` warns
+  about them. After repairing a directory, run `reopen_books`
+  (`/reopen-books`) to rescan the library and open it.
+- With B2 configured, each book keeps its media under
+  `<VIDEOBOOK_OBJECT_PREFIX>/books/<bookId>/`, so Forget in one book no longer
+  removes a file another book's backup still counts as published. A book
+  backed up earlier still reads the shared prefix, and its next `storage_sync`
+  copies each object into its own; `storage_status` reports `pending` until
+  then, and `incomplete` with `missingObjects` when the bytes exist nowhere.
+  Forget deletes a shared copy only after every other book holding the same
+  bytes has its own.
+- Forget erases every stored file of the asset, listed from the catalog
+  including older originals from its revisions; a missing thumbnail no longer
+  leaves the files in place while Forget reports success. A file it cannot
+  erase stays listed: `delete_asset` `forget` returns status `incomplete` with
+  `pending_objects` and the error, the app shows that as an error and offers to
+  try again, and repeating the call with the same `asset_id` finishes it.
+- Several crops or pads started at once in one book no longer stall until they
+  time out: a crop derives its image variants, and a pad reprocesses its video,
+  inside its own job, so each needs one worker.
+- Opening another video's graphics no longer drops an edit made just before
+  the switch. A save that fails or conflicts when you switch or close is kept,
+  and reopening that video restores it with Retry, Reload and Keep my version.
+- Chat text for the video already open in the graphics editor lands as one
+  undoable edit instead of reloading the editor and dropping unsaved changes.
+- A watermark burned from a saved template draws the template's image layers,
+  such as a logo, instead of leaving them out.
+- Downloading a finished generation from its provider retries a network error,
+  an attempt longer than two minutes, a 408, 429 or 5xx response, or an empty
+  file up to two more times.
+- A generation that fails because fal's file storage refused an upload shows
+  fal's reason after the status code, in the failure and in
+  `inspect_generation_request`.
 
 ## [0.8.0] - 2026-11-16
 
