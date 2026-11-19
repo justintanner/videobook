@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-19
+
 ### Added
 
 - WaveSpeed image models: GPT Image 2.6 Sunburst and Flare for text-to-image
