@@ -8,6 +8,23 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `/auto-edit @a1`, also **Auto-edit** in a video cell's menu and "auto edit
+  @a1" in chat or voice, turns one clip into a short built around its best
+  moment: a cold open, then the clip, with the moment replayed wide, punched
+  in, pushed in and once more at half speed under a colour-cycling crash look
+  with the sound pitched down. The sheet plays the planned edit on the source
+  before anything is rendered. Set the hook, the moment's start, peak and end
+  and where the subject is by hand, or press **Find the moment**, the one
+  paid step, which asks the OpenAI model after showing its estimate. Cold
+  open, Replays, Push-in, Crash and Sounds each switch off. **Render** makes
+  the edit locally with one FFmpeg encode into a new cell under the source,
+  and rendering the same video again adds a version to that cell. Over MCP
+  this is the `auto_edit` tool (`get`, `analyze`, `render`), which also
+  renders an explicit segment plan.
+- Two built-in sounds for `/sfx`, `apply_builtin_sfx`, `/zoom` and auto-edit:
+  `power_down`, a falling tone that fades as power drops, and `error`, two
+  short low tones.
+
 - The **Made with** card of a generated image or video lists the inputs its
   run sent under **Inputs**: each slot, such as `@firstframe` or `@image1`,
   with a thumbnail and the cell it came from, as in `@image1 from @c1`.
@@ -24,6 +41,12 @@ and the package uses [Semantic Versioning](https://semver.org/).
   in its footer, where the model was usually cut off. While it generates or
   after it fails, the line under its status names them the same way. The
   model no longer repeats the provider, as in `kie · kie:minimax-h3/refer…`.
+
+### Fixed
+
+- A cold open whose highlight comes late in a clip no longer keeps the clip
+  in memory up to that point while it renders. On a 30 s 1080x1920 clip with
+  the highlight at 20 s, peak memory went from about 1.7 GB to 860 MB.
 
 ## [0.8.3] - 2026-11-20
 
