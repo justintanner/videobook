@@ -6,6 +6,7 @@ import { RichJson } from './RichJson'
 import { ProviderTaskLink } from './ProviderTaskLink'
 import { formatMediaTime } from '@/videobook/notebook-cell-presentation'
 import { useElapsedSeconds } from '@/videobook/use-elapsed-seconds'
+import { generationPromptSegments } from '@/videobook/output-generation'
 import {
   generatingTimeline,
   generationPayloadSentPrompt,
@@ -238,7 +239,19 @@ function GeneratingRunFactsGrid({
   )
 }
 
-function GeneratingPrompt({
+function PromptText({ text, tokens }: { text: string; tokens: boolean }) {
+  if (!tokens) return <blockquote>{text}</blockquote>
+  return (
+    <blockquote>
+      {generationPromptSegments(text).map((segment, index) => segment.token
+        ? <code key={index} className="inspector-prompt-token">{segment.text}</code>
+        : segment.text)}
+    </blockquote>
+  )
+}
+
+/** The prompt as the cell wrote it, or as the provider received it. */
+export function GeneratingPrompt({
   written,
   sent,
 }: {
@@ -247,7 +260,8 @@ function GeneratingPrompt({
 }) {
   const [showSent, setShowSent] = useState(false)
   const canCompare = Boolean(written && sent && written !== sent)
-  const text = (showSent && canCompare ? sent : written ?? sent) ?? ''
+  const sentShown = canCompare ? showSent : !written
+  const text = (sentShown ? sent : written) ?? ''
   if (!text) return null
   return (
     <div className="inspector-generating-section inspector-media-generating-prompt">
@@ -263,8 +277,9 @@ function GeneratingPrompt({
             </button>
           </div>
         )}
+        <CopyButton text={text} label={sentShown ? 'Copy prompt as sent' : 'Copy prompt'} />
       </div>
-      <blockquote>{text}</blockquote>
+      <PromptText text={text} tokens={!sentShown} />
     </div>
   )
 }

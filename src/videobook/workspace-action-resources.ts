@@ -30,6 +30,10 @@ const PROVIDER_LABELS: Readonly<Record<string, string>> = {
   local: 'Local',
 }
 
+export function providerDisplayLabel(provider: string): string {
+  return PROVIDER_LABELS[provider] ?? provider
+}
+
 function stringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0) : []
 }
@@ -53,7 +57,7 @@ function generationModelChoice(model: Record<string, unknown>): ActionChoice | n
     label: title,
     ...(typeof model.available === 'boolean' ? { available: model.available } : {}),
     frontier: parseFrontierRankings(model.frontier),
-    ...(provider ? { provider, providerLabel: PROVIDER_LABELS[provider] ?? provider } : {}),
+    ...(provider ? { provider, providerLabel: providerDisplayLabel(provider) } : {}),
     ...(operations.length > 0 ? { operations } : {}),
     ...(familyId && familyTitle ? { family: { id: familyId, title: familyTitle } } : {}),
     ...(variant ? { variant } : {}),

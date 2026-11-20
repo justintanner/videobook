@@ -3347,12 +3347,17 @@ describe('NotebookCellInspector', () => {
       expect(html).toContain('QUEUED')
     })
 
-    it('renders the producer as a read-only From link in the ready layout', () => {
+    it('renders the producer in a read-only Made with card in the ready layout', () => {
       const html = renderGeneratedOutput({
         status: 'completed',
       })
 
+      expect(html).toContain('<section class="inspector-made-with" aria-label="Made with" aria-busy="false">')
       expect(html).toContain('<span class="inspector-generation-from-tag">@a2</span><span>Generate video</span>')
+      expect(html).toContain('<span class="inspector-made-with-provider">Kie</span>')
+      expect(html).toContain('Kling21RequestSchema')
+      expect(html).toContain('A slow dolly through a pine forest')
+      expect(html).toContain('No recorded run for this output. Showing @a2’s current settings.')
       expect(html).not.toContain('inspector-input-remove-button')
       expect(html).not.toContain('inspector-source-picker')
       expect(html).not.toContain('aria-label="Remove @a1 from media input"')

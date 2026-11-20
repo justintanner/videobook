@@ -13380,6 +13380,108 @@ textarea:focus-visible {
   font-size: 10px;
 }
 
+.inspector-media-row-inputs:has(> .inspector-made-with) {
+  flex: 1 1 300px;
+  max-width: 520px;
+}
+
+.inspector-made-with {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(7, 23, 15, 0.7);
+}
+
+.inspector-made-with-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inspector-made-with-head .inspector-media-field-label {
+  margin: 0;
+}
+
+.inspector-made-with-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.inspector-made-with-provider {
+  padding: 1px 6px;
+  border: 1px solid rgba(99, 199, 216, 0.5);
+  border-radius: 3px;
+  background: rgba(99, 199, 216, 0.1);
+  color: var(--cyan);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.inspector-made-with-model {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--control-fg-hover);
+  font-size: 13px;
+}
+
+.inspector-made-with-date {
+  margin-left: auto;
+  color: #84a894;
+  font-size: 11px;
+}
+
+.inspector-made-with-note {
+  margin: 0;
+  color: #84a894;
+  font-size: 11px;
+}
+
+.inspector-made-with .inspector-media-generating-prompt blockquote {
+  max-height: 132px;
+  overflow-y: auto;
+  color: #d5f8e4;
+  user-select: text;
+  scrollbar-width: thin;
+}
+
+.inspector-generating-prompt-head .inspector-generating-copy {
+  margin-left: auto;
+}
+
+.inspector-prompt-token {
+  padding: 0 4px;
+  border: 1px solid rgba(99, 199, 216, 0.45);
+  border-radius: 3px;
+  background: rgba(99, 199, 216, 0.12);
+  color: #93e4f1;
+  font: inherit;
+}
+
+.inspector-made-with-footer {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.inspector-made-with-footer:not(:has(.usage-cost, .inspector-made-with-duration)) {
+  display: none;
+}
+
+.inspector-made-with-duration {
+  color: var(--ink);
+  font-size: 11px;
+}
+
 .inspector-media-generation-inputs {
   display: grid;
   gap: 6px;

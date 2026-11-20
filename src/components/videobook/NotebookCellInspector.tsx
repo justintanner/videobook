@@ -147,6 +147,11 @@ import {
 import { GenerationBody, type GenerationReviewSource } from './confirm/bodies/GenerationBody'
 import { ProviderTaskLink } from './ProviderTaskLink'
 import { CellUsageCost } from './CellUsageCost'
+import {
+  GenerationMadeWith,
+  GenerationProducerLink,
+  type LoadCellGenerations,
+} from './GenerationMadeWith'
 import type { ProviderTaskStatus } from '../../../server/src/provider-status-link'
 import { useConfirmSheetKeys } from './confirm/useConfirmSheetKeys'
 import { ComposerDockContext } from './composer-dock-context'
@@ -526,6 +531,8 @@ type NotebookCellInspectorProps = {
   onInspectGenerationRequest?: InspectGenerationRequest
   onDownloadGenerationHar?: DownloadGenerationHar
   onOpenSettings?: () => void
+  /** Reads a cell's recorded generation attempts, for the run behind an output. */
+  onLoadCellGenerations?: LoadCellGenerations
   generations?: {
     attempts: readonly CellGenerationAttempt[]
     currentExecution: NotebookCellExecution | null
@@ -1562,7 +1569,7 @@ function GenerationMediaPlaceholder({
   )
 }
 
-function GenerationProducerLink({
+function GenerationProducerFrom({
   producer,
   onSelectSource,
 }: {
@@ -1572,19 +1579,7 @@ function GenerationProducerLink({
   return (
     <div className="inspector-media-from">
       <span className="inspector-media-field-label">From</span>
-      <button
-        type="button"
-        className="inspector-generation-from-link"
-        onClick={() => onSelectSource?.(producer.id)}
-      >
-        <span className="inspector-generation-from-tag">
-          {notebookGridTag(producer.slot)}
-        </span>
-        <span>
-          Generate {producer.type === 'generate_image' ? 'image' : 'video'}
-        </span>
-        <ArrowRight size={12} aria-hidden="true" />
-      </button>
+      <GenerationProducerLink producer={producer} onSelectSource={onSelectSource} />
     </div>
   )
 }
@@ -1838,7 +1833,7 @@ function GeneratingMediaLayout({
           />
         )}
         {producer && (
-          <GenerationProducerLink
+          <GenerationProducerFrom
             producer={producer}
             onSelectSource={onSelectSource}
           />
@@ -1935,6 +1930,7 @@ function MediaCellInspector({
   onInspectGenerationRequest,
   onDownloadGenerationHar,
   onOpenSettings,
+  onLoadCellGenerations,
 }: Pick<
   NotebookCellInspectorProps,
   | 'cell'
@@ -1961,6 +1957,7 @@ function MediaCellInspector({
   | 'onInspectGenerationRequest'
   | 'onDownloadGenerationHar'
   | 'onOpenSettings'
+  | 'onLoadCellGenerations'
 > & {
   /** Which dock this is; the caller has already ruled out every other type. */
   kind: MediaDockKind
@@ -2126,7 +2123,15 @@ function MediaCellInspector({
     ))
     : null
   const inputSources = producer ? (
-    <GenerationProducerLink producer={producer} onSelectSource={onSelectSource} />
+    <GenerationMadeWith
+      producer={producer}
+      outputCellId={cell.id}
+      outputArtifactId={previewAsset?.artifactId ?? cell.outputArtifactId ?? null}
+      bookId={bookId}
+      call={assetTools}
+      load={onLoadCellGenerations}
+      onSelectSource={onSelectSource}
+    />
   ) : (
     <InputSources
       cell={cell}
@@ -2206,9 +2211,6 @@ function MediaCellInspector({
                   asset={previewAsset}
                   inputs={cell.inputs}
                 />
-              )}
-              {producer && (
-                <CellUsageCost bookId={bookId} call={assetTools} cellId={producer.id} />
               )}
             </div>
             <div className="inspector-media-row-track inspector-media-row-details">
@@ -4215,6 +4217,7 @@ export function NotebookCellInspector({
   onInspectGenerationRequest,
   onDownloadGenerationHar,
   onOpenSettings,
+  onLoadCellGenerations,
   onTranscribeAsset,
   onOpenGraphics,
   onLoadTranscriptJson,
@@ -4351,6 +4354,7 @@ export function NotebookCellInspector({
         onInspectGenerationRequest={onInspectGenerationRequest}
         onDownloadGenerationHar={onDownloadGenerationHar}
         onOpenSettings={onOpenSettings}
+        onLoadCellGenerations={onLoadCellGenerations}
       />
     )
   }

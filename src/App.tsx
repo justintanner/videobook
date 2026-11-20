@@ -56,6 +56,7 @@ import {
   notebookCellRepairPrompt,
 } from '@/videobook/notebook-cell-repair'
 import { parseGenerationRequestInspection } from '@/videobook/generation-request-inspection'
+import { parseGenerationAttempts } from '@/videobook/output-generation'
 import { fetchGenerationHar, saveGenerationHar } from '@/videobook/generation-har-download'
 import { useChatTurns } from '@/videobook/use-chat-turns'
 import {
@@ -3359,6 +3360,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     return data.payload
   }, [bookId, call])
+
+  const notebookIdForGenerations = notebook?.id ?? null
+  const loadCellGenerations = useCallback(async (cellId: string) => {
+    if (!bookId || !notebookIdForGenerations) throw new Error('Notebook is not ready')
+    const value = await call('list_cell_generations', {
+      book_id: bookId,
+      notebook_id: notebookIdForGenerations,
+      cell_id: cellId,
+      limit: 100,
+    }, { background: true })
+    return parseGenerationAttempts(value)
+  }, [bookId, notebookIdForGenerations, call])
 
   const inspectGenerationRequest = useCallback(async (assetId: string) => {
     if (!bookId) throw new Error('Book is not ready')
@@ -10744,6 +10757,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onLoadGenerationPayload={loadGenerationPayload}
           onInspectGenerationRequest={inspectGenerationRequest}
           onDownloadGenerationHar={downloadGenerationHar}
+          onLoadCellGenerations={loadCellGenerations}
           onOpenSettings={() => navigate('settings')}
           mediaInsightWork={mediaInsightWork}
           onTranscribeAsset={transcribeAsset}

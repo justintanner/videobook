@@ -904,6 +904,65 @@ describe('chat composer browser flow', () => {
     }
   }, 120_000)
 
+  it('shows the provider, model and prompt behind a generated video in its inspector', async () => {
+    const page = await openApp()
+    const client = new Client({ name: 'made-with-browser-e2e', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const call = async <T,>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client.callTool({
+      name, arguments: { book_id: bookId, notebook_id: notebookId, ...args },
+    })) as T
+    const created: string[] = []
+    const createCell = async (cell: Record<string, unknown>): Promise<string> => {
+      const result = await call<{ id: string }>('create_notebook_cell', { cell })
+      created.push(result.id)
+      return result.id
+    }
+    try {
+      const generatorId = await createCell({
+        type: 'generate_video',
+        slot: { row: 2, column: 7 },
+        prompt: 'Keep the red umbrella from @image1 in frame on the rainy landing',
+        provider: 'kie',
+        model: 'kie:bytedance/seedance-2-5',
+        operation: 'generate_video',
+        tool: 'generate_video',
+        inputs: { generationMode: 'r2v', generationSettings: { duration: 10, aspect_ratio: '9:16' } },
+      })
+      const outputId = await createCell({
+        type: 'video',
+        slot: { row: 3, column: 7 },
+        output_artifact_id: videoArtifactId,
+        inputs: { mediaRole: 'generate-video-output', producerCellId: generatorId, state: 'completed' },
+      })
+      await call('connect_notebook_cells', {
+        source_cell_id: generatorId, target_cell_id: outputId, target_input: 'media',
+      })
+      await notebookCellNode(page, outputId).click()
+      const card = page.getByRole('region', { name: 'Made with', exact: true })
+      await expect.poll(() => card.getAttribute('aria-busy'), { timeout: MCP_ROUNDTRIP_MS }).toBe('false')
+      expect(await card.locator('.inspector-made-with-note').textContent())
+        .toBe('No recorded run for this output. Showing @c8’s current settings.')
+      expect(await card.locator('.inspector-made-with-provider').textContent()).toBe('Kie')
+      expect(await card.locator('.inspector-made-with-model').textContent()).toBe('bytedance/seedance-2-5')
+      expect(await card.locator('.inspector-prompt-token').allTextContents()).toEqual(['@image1'])
+      expect(await page.getByRole('region', { name: 'Cell cost' }).count()).toBe(0)
+      const cardBox = await card.boundingBox()
+      const bodyBox = await page.locator('.inspector-media-body').boundingBox()
+      expect(cardBox && bodyBox && cardBox.x >= bodyBox.x && cardBox.x + cardBox.width <= bodyBox.x + bodyBox.width).toBe(true)
+      expect(await card.locator('.inspector-made-with-footer').isVisible()).toBe(false)
+
+      await card.getByRole('button', { name: /Generate video/ }).click()
+      await expect.poll(() => page.locator('.generation-cell-inspector').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(1)
+    } finally {
+      await collapseComposerDock(page)
+      for (const cellId of created.reverse()) await call('delete_notebook_cell', { cell_id: cellId })
+      await client.close()
+      notebookDirty = true
+    }
+  }, 120_000)
+
   it('switches frame images to R2V references and combines image, video and audio inputs', async () => {
     const page = await openApp()
     const client = new Client({ name: 'reference-inputs-browser-e2e', version: '1' }, {
