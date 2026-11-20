@@ -6,6 +6,17 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- The **Made with** card of a generated image or video lists the inputs its
+  run sent under **Inputs**: each slot, such as `@firstframe` or `@image1`,
+  with a thumbnail and the cell it came from, as in `@image1 from @c1`.
+  Clicking one selects that cell. The list comes from the recorded request,
+  so it stays right after the generator's inputs are rewired, and an input
+  whose cell is gone reads "not on the grid". Over MCP,
+  `list_cell_generations` attempts carry `inputs` (`slot`, `kind`,
+  `artifactId`, `sourceCellId`, `thumbnailUrl`).
+
 ### Changed
 
 - A generated image or video tile names the provider and model that made it

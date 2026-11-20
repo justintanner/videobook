@@ -1,6 +1,14 @@
 import { generationInputTokenPattern } from '../../server/src/generation-input-targets'
 import { providerDisplayLabel } from './workspace-action-resources'
 
+export type GenerationRunInput = {
+  slot: string
+  kind: 'image' | 'video' | 'audio'
+  artifactId: string
+  sourceCellId: string | null
+  thumbnailUrl: string | null
+}
+
 export type OutputGeneration = {
   attemptId: string
   runId: string | null
@@ -10,6 +18,7 @@ export type OutputGeneration = {
   resolvedPrompt: string | null
   startedAt: number
   finishedAt: number | null
+  inputs: GenerationRunInput[]
 }
 
 export type PromptSegment = { text: string; token: string | null }
@@ -37,6 +46,33 @@ function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
+function inputKind(value: unknown): GenerationRunInput['kind'] | null {
+  return value === 'image' || value === 'video' || value === 'audio' ? value : null
+}
+
+function runInput(value: unknown): GenerationRunInput | null {
+  const row = recordOf(value)
+  const slot = text(row?.slot)
+  const kind = inputKind(row?.kind)
+  const artifactId = text(row?.artifactId)
+  if (!row || !slot || !kind || !artifactId) return null
+  return {
+    slot,
+    kind,
+    artifactId,
+    sourceCellId: text(row.sourceCellId),
+    thumbnailUrl: text(row.thumbnailUrl),
+  }
+}
+
+function runInputs(value: unknown): GenerationRunInput[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    const input = runInput(entry)
+    return input ? [input] : []
+  })
+}
+
 function attemptRecord(value: unknown): GenerationAttemptRecord | null {
   const row = recordOf(value)
   const attemptId = text(row?.attemptId)
@@ -56,6 +92,7 @@ function attemptRecord(value: unknown): GenerationAttemptRecord | null {
     resolvedPrompt: text(row.resolvedPrompt),
     startedAt,
     finishedAt: status === 'completed' ? finiteNumber(row.updatedAt) : null,
+    inputs: runInputs(row.inputs),
   }
 }
 
@@ -86,6 +123,7 @@ export function producingGeneration(
     resolvedPrompt: match.resolvedPrompt,
     startedAt: match.startedAt,
     finishedAt: match.finishedAt,
+    inputs: match.inputs,
   }
 }
 
@@ -112,7 +150,6 @@ export type GenerationIdentity = {
   label: string
 }
 
-/** Provider and model as a tile names them, the model once, without the provider prefix. */
 export function generationIdentity(
   provider: string | null | undefined,
   model: string | null | undefined,

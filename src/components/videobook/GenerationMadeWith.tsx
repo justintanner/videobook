@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, AudioWaveform, Film, Image as ImageIcon } from 'lucide-react'
 import { Suspense, use, useDeferredValue, type ReactNode } from 'react'
 import type { NotebookCell, NotebookEdge } from 'videobook-engine'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
@@ -14,6 +14,7 @@ import {
   generationRunSeconds,
   producingGeneration,
   type GenerationAttemptRecord,
+  type GenerationRunInput,
   type OutputGeneration,
 } from '@/videobook/output-generation'
 import { useBookUsage } from '@/videobook/useBookUsage'
@@ -166,6 +167,74 @@ function MadeWithNote({ state, producer, generation }: {
   )
 }
 
+function MadeWithInputThumb({ input }: { input: GenerationRunInput }) {
+  if (input.thumbnailUrl) {
+    return (
+      <img
+        className="inspector-made-with-input-thumb"
+        src={input.thumbnailUrl}
+        alt=""
+        loading="lazy"
+        decoding="async"
+      />
+    )
+  }
+  return (
+    <span className="inspector-made-with-input-thumb inspector-made-with-input-icon" aria-hidden="true">
+      {input.kind === 'audio'
+        ? <AudioWaveform size={14} />
+        : input.kind === 'video' ? <Film size={14} /> : <ImageIcon size={14} />}
+    </span>
+  )
+}
+
+function MadeWithInput({ input, source, onSelectSource }: {
+  input: GenerationRunInput
+  source: NotebookCell | null
+  onSelectSource?: (cellId: string) => void
+}) {
+  const body = (
+    <>
+      <MadeWithInputThumb input={input} />
+      <span className="inspector-made-with-input-slot">{input.slot}</span>
+      <span className="inspector-made-with-input-source">
+        {source ? `from ${notebookGridTag(source.slot)}` : 'not on the grid'}
+      </span>
+    </>
+  )
+  if (!source) return <span className="inspector-made-with-input">{body}</span>
+  return (
+    <button
+      type="button"
+      className="inspector-made-with-input"
+      onClick={() => onSelectSource?.(source.id)}
+    >
+      {body}
+    </button>
+  )
+}
+
+function MadeWithInputs({ inputs, cells, onSelectSource }: {
+  inputs: readonly GenerationRunInput[]
+  cells: readonly NotebookCell[]
+  onSelectSource?: (cellId: string) => void
+}) {
+  if (inputs.length === 0) return null
+  return (
+    <div className="inspector-made-with-inputs" role="group" aria-label="Inputs">
+      <span className="inspector-media-field-label">Inputs</span>
+      {inputs.map((input) => (
+        <MadeWithInput
+          key={`${input.slot}:${input.artifactId}`}
+          input={input}
+          source={cells.find((cell) => cell.id === input.sourceCellId) ?? null}
+          onSelectSource={onSelectSource}
+        />
+      ))}
+    </div>
+  )
+}
+
 function fallbackCost({ generation, producer, bookId, call }: {
   generation: OutputGeneration | null
   producer: NotebookCell
@@ -200,12 +269,14 @@ function MadeWithCard({
   generation,
   state,
   cost,
+  cells = [],
   onSelectSource,
 }: {
   producer: NotebookCell
   generation: OutputGeneration | null
   state: MadeWithState
   cost: ReactNode
+  cells?: readonly NotebookCell[]
   onSelectSource?: (cellId: string) => void
 }) {
   const facts = madeWithFacts(producer, generation)
@@ -219,6 +290,9 @@ function MadeWithCard({
       {!loading && <MadeWithIdentity facts={facts} generation={generation} />}
       <MadeWithNote state={state} producer={producer} generation={generation} />
       {!loading && <GeneratingPrompt written={facts.written} sent={facts.sent} />}
+      {!loading && generation && (
+        <MadeWithInputs inputs={generation.inputs} cells={cells} onSelectSource={onSelectSource} />
+      )}
       {!loading && <MadeWithFooter generation={generation} cost={cost} />}
     </section>
   )
@@ -265,6 +339,7 @@ function MadeWithAndTakes({
         generation={generation}
         state="ready"
         cost={cost}
+        cells={cells}
         onSelectSource={onSelectSource}
       />
       <GenerationTakes

@@ -23,11 +23,16 @@ import { captureKeys, generationHarStatus, type GenerationHarStatus } from "../g
 import { readHarIndex } from "../har-index.js";
 import { readHarSettings, type HarSettings } from "../har-settings.js";
 import { logger } from "../logger.js";
+import { generationRunInputs, type GenerationRunInput } from "../generation-run-inputs.js";
 
 type CellGenerationTransition = {
   status: GenerationStatus;
   commitHash: string;
   commitDate: string;
+};
+
+type CellGenerationInput = GenerationRunInput & {
+  thumbnailUrl: string | null;
 };
 
 type CellGenerationAttempt = {
@@ -49,6 +54,7 @@ type CellGenerationAttempt = {
   payloadAvailable: boolean;
   payload?: unknown;
   commandPlan: unknown;
+  inputs: CellGenerationInput[];
   transitions: CellGenerationTransition[];
   har: GenerationHarStatus | null;
   createdAt: number;
@@ -268,6 +274,7 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
           let payloadAvailable = false;
           let payload: unknown = null;
           let commandPlan: unknown = null;
+          let inputs: CellGenerationInput[] = [];
           if (joinArtifactId) {
             const payloadRes = await engine.metadata.artifacts.read<unknown>(
               joinArtifactId,
@@ -282,6 +289,20 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
               "command-plan",
             );
             if (planRes.ok) commandPlan = planRes.value;
+            const requestRes = await engine.metadata.artifacts.read<unknown>(
+              joinArtifactId,
+              "generation-request",
+            );
+            if (requestRes.ok) {
+              inputs = generationRunInputs(requestRes.value, document).map((input) => {
+                const source = assetById.get(input.artifactId);
+                return {
+                  ...input,
+                  thumbnailUrl: source?.thumbnail_url
+                    ?? (input.kind === "image" ? source?.media_url ?? null : null),
+                };
+              });
+            }
           }
           let error = row.error ?? null;
           if (!error && joinArtifactId) {
@@ -307,6 +328,7 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
             payloadAvailable,
             ...(include_payloads ? { payload } : {}),
             commandPlan,
+            inputs,
             transitions: transitions.get(row.generationId) ?? [],
             har: harLookup
               ? await harLookup.status([row.generationId, row.providerArtifactId, row.outputArtifactId])
