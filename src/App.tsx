@@ -11267,6 +11267,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           imageEditModels={imageEditModels.models}
           imageEditModelsLoading={imageEditModels.loading}
           defaultImageEditModelId={imageEditModels.defaultModelId}
+          providerMemory={notebook?.generationProviderMemory}
+          onRememberProvider={rememberGenerationProvider}
           onEstimateImageEditCost={estimateImageEditCost}
           onEditSubjects={(input) =>
             editFullscreenSubjects(mediaFullscreen, input)}

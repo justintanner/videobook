@@ -40,6 +40,8 @@ type NotebookMediaFullscreenProps = {
   imageEditModels?: readonly ImageEditModelOption[]
   imageEditModelsLoading?: boolean
   defaultImageEditModelId?: string | null
+  providerMemory?: Readonly<Record<string, string>>
+  onRememberProvider?: (familyId: string, provider: string) => void
   onEstimateImageEditCost?: (
     modelId: string,
     operation: 'edit' | 'replace',
@@ -123,6 +125,8 @@ export function NotebookMediaFullscreen({
   imageEditModels,
   imageEditModelsLoading,
   defaultImageEditModelId,
+  providerMemory,
+  onRememberProvider,
   onEstimateImageEditCost,
   onAnalyzeSubjects,
   onCaptureFrame,
@@ -341,6 +345,8 @@ export function NotebookMediaFullscreen({
           imageEditModels={imageEditModels}
           imageEditModelsLoading={imageEditModelsLoading}
           defaultImageEditModelId={defaultImageEditModelId}
+          providerMemory={providerMemory}
+          onRememberProvider={onRememberProvider}
           onEstimateImageEditCost={onEstimateImageEditCost}
           closeRef={closeRef}
           onAnalyzeSubjects={onAnalyzeSubjects}

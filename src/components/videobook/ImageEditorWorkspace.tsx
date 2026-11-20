@@ -70,6 +70,8 @@ export type ImageEditorWorkspaceProps = {
   imageEditModels?: readonly ImageEditModelOption[]
   imageEditModelsLoading?: boolean
   defaultImageEditModelId?: string | null
+  providerMemory?: Readonly<Record<string, string>>
+  onRememberProvider?: (familyId: string, provider: string) => void
   onEstimateImageEditCost?: (
     modelId: string,
     operation: 'edit' | 'replace',
@@ -583,6 +585,8 @@ export function ImageEditorWorkspace({
   imageEditModels,
   imageEditModelsLoading,
   defaultImageEditModelId,
+  providerMemory,
+  onRememberProvider,
   onEstimateImageEditCost,
   onAnalyzeSubjects,
   onEditingChange,
@@ -666,12 +670,19 @@ export function ImageEditorWorkspace({
     refreshCostEstimate(modelId)
   }
   const changeFamily = (familyId: string) => {
+    const remembered = providerMemory?.[familyId]
     const next = actionForFamily(models, familyId, {
       frontierType: editFrontierType,
       compatible: modelSupportsTarget,
       currentProvider: currentModel?.provider,
+      ...(remembered ? { rememberedProvider: remembered } : {}),
     })
     if (next) selectModel(next.id)
+  }
+  const changeProvider = (modelId: string) => {
+    const provider = providerOptions.find((option) => option.action.id === modelId)?.action.provider
+    selectModel(modelId)
+    if (currentModel && provider) onRememberProvider?.(currentModel.family.id, provider)
   }
   const hoveredRegion = regions.find((region) => region.id === hoveredRegionId) ?? null
   const snapOffer = hoveredRegion ? bestSubjectSnap(hoveredRegion.box, subjects) : null
@@ -1009,7 +1020,7 @@ export function ImageEditorWorkspace({
                 aria-label="Generation provider"
                 value={currentModel?.id ?? ''}
                 disabled={imageEditModelsLoading || providerOptions.length <= 1}
-                onChange={(event) => selectModel(event.target.value)}
+                onChange={(event) => changeProvider(event.target.value)}
               >
                 {providerOptions.map(({ action, label, priceLabel, available, compatible }) => (
                   <option key={action.id} value={action.id} disabled={!compatible}>
