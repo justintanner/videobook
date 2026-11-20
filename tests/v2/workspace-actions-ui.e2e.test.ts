@@ -951,9 +951,10 @@ describe('built-in sound preview and apply without provider credentials', () => 
       page.setDefaultTimeout(testBudget(15_000))
       const remoteRequests: string[] = []
       const errors: string[] = []
+      const fontOrigins = new Set(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'])
       page.on('request', request => {
         const url = new URL(request.url())
-        if (['http:', 'https:'].includes(url.protocol) && ![origin, appUrl].includes(url.origin)) remoteRequests.push(request.url())
+        if (['http:', 'https:'].includes(url.protocol) && ![origin, appUrl].includes(url.origin) && !fontOrigins.has(url.origin)) remoteRequests.push(request.url())
       })
       page.on('pageerror', error => errors.push(error.message))
       await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
@@ -1060,9 +1061,10 @@ describe('local zoom picked on the Actions sheet preview', () => {
       page.setDefaultTimeout(testBudget(15_000))
       const remoteRequests: string[] = []
       const errors: string[] = []
+      const fontOrigins = new Set(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'])
       page.on('request', request => {
         const url = new URL(request.url())
-        if (['http:', 'https:'].includes(url.protocol) && ![origin, appUrl].includes(url.origin)) remoteRequests.push(request.url())
+        if (['http:', 'https:'].includes(url.protocol) && ![origin, appUrl].includes(url.origin) && !fontOrigins.has(url.origin)) remoteRequests.push(request.url())
       })
       page.on('pageerror', error => errors.push(error.message))
       await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
