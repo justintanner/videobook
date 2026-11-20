@@ -294,4 +294,37 @@ describe("voice chat action policy", () => {
       parameters: expect.objectContaining({ required: ["asset_id"] }),
     }));
   });
+
+  it("plans auto-edit for a video and refuses a still, while discovering show_auto_edit in voice", async () => {
+    const video = await engine.artifacts.create("video", "leap clip");
+    const still = await engine.artifacts.create("image", "still frame");
+    if (!video.ok || !still.ok) throw new Error("Could not create auto-edit fixtures");
+    const videoCell = engine.notebooks.createCell({ type: "video", slot: { row: 6, column: 4 }, outputArtifactId: video.value.artifactId });
+    const stillCell = engine.notebooks.createCell({ type: "image", slot: { row: 7, column: 4 }, outputArtifactId: still.value.artifactId });
+    for (const cell of [videoCell, stillCell]) {
+      const inserted = await engine.notebooks.insertCell(notebookId, cell);
+      if (!inserted.ok) throw new Error(inserted.error.message);
+    }
+    const spoken = "add a cold open and a slow-mo replay to @g5";
+    const plan = chatActionPlanSchema.parse(value(await prepare(spoken, {
+      tool: "show_auto_edit",
+      params: { asset_id: "g5" },
+      message: spoken,
+    })));
+    expect(plan).toMatchObject({
+      tool: "show_auto_edit",
+      routedTool: "show_auto_edit",
+      effect: "view",
+      params: { asset_id: video.value.artifactId, cell_id: videoCell.id },
+      confirmation: { required: false },
+    });
+    expect((await prepare(spoken, { tool: "show_auto_edit", params: { asset_id: still.value.artifactId }, message: spoken })).content[0]?.text)
+      .toBe("@h5 holds image; auto-edit needs a video");
+    expect(discoverVoiceActions(engine, "auto-edit")).toContainEqual(expect.objectContaining({
+      name: "show_auto_edit",
+      effect: "view",
+      requiresReview: false,
+      parameters: expect.objectContaining({ required: ["asset_id"] }),
+    }));
+  });
 });

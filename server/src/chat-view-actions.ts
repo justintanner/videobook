@@ -23,6 +23,7 @@ const SHOW_MEDIA_FULLSCREEN = "show_media_fullscreen";
 const SHOW_SUBTITLES = "show_subtitles";
 const SHOW_GRAPHICS = "show_graphics";
 const SHOW_VIDEO_CLEANUP = "show_video_cleanup";
+const SHOW_AUTO_EDIT = "show_auto_edit";
 const VIDEO_MEDIA_KINDS: readonly string[] = ["video", "final"];
 
 const VIEW_MEDIA: Readonly<Record<string, { kinds: readonly string[]; message: string }>> = {
@@ -30,6 +31,7 @@ const VIEW_MEDIA: Readonly<Record<string, { kinds: readonly string[]; message: s
   [SHOW_SUBTITLES]: { kinds: VIDEO_MEDIA_KINDS, message: "subtitles need a video" },
   [SHOW_GRAPHICS]: { kinds: VIDEO_MEDIA_KINDS, message: "graphics go on a video" },
   [SHOW_VIDEO_CLEANUP]: { kinds: VIDEO_MEDIA_KINDS, message: "removing graphics needs a video" },
+  [SHOW_AUTO_EDIT]: { kinds: VIDEO_MEDIA_KINDS, message: "auto-edit needs a video" },
 };
 
 function graphicsText(description: string) {
@@ -37,6 +39,13 @@ function graphicsText(description: string) {
 }
 
 const CHAT_VIEW_ACTIONS: readonly ChatViewAction[] = [
+  {
+    name: SHOW_AUTO_EDIT,
+    description: "Open the auto-edit review sheet for one notebook video to add a cold open, instant replay, slow motion, crash or glitch effect on the best moment, and make a clip punchy. Changes nothing until the user renders",
+    schema: {
+      asset_id: z.string().min(1).describe("Artifact ID or grid address of the cell's video"),
+    },
+  },
   {
     name: SHOW_VIDEO_CLEANUP,
     description: "Open the local video OSG/title remover to detect burned-in text, review editable timed regions, and erase titles, subtitles, logos or other graphics into a cleaned copy",

@@ -5,7 +5,7 @@ export const FULLSCREEN_COMMANDS: readonly string[] = ["/notebook", "/music-vide
 export const PREVIEW_COMMANDS: readonly string[] = [
   "/trim", "/trim-audio", "/overlay", "/translate-subs", "/post", "/crop", "/describe", "/suggest-cuts",
   "/analyze-jokes", "/sfx", "/goal", "/run", "/rename-all",
-  "/edit-cold-open", "/watermark", "/rewrite", "/make-cover-song", "/archive",
+  "/edit-cold-open", "/auto-edit", "/watermark", "/rewrite", "/make-cover-song", "/archive",
   "/extend-audio", "/remove-sound", "/clean-audio", "/vocals", "/transcribe", "/subs", "/settings",
   "/speed", "/timewarp", "/zoom",
   "/sync-audio", "/splice", "/split", "/skeleton", "/speak", "/caption", "/duck", "/fit",

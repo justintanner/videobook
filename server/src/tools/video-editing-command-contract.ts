@@ -185,7 +185,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "remove_video_graphics", exposure: "ui", command: "/remove-graphics", purpose: "Detect, review and locally remove burned-in text and graphics" },
   { tool: "prepare_cold_open", exposure: "composite", command: "/edit-cold-open", purpose: "Select an AI highlight for review" },
   { tool: "edit_cold_open", exposure: "composite", command: "/edit-cold-open", purpose: "Render a reviewed cold-open copy" },
-  { tool: "auto_edit", exposure: "internal", purpose: "Read a video's auto-edit draft and render a segment plan into a new cell" },
+  { tool: "auto_edit", exposure: "composite", command: "/auto-edit", purpose: "Read a video's auto-edit draft and render a segment plan into a new cell" },
   { tool: "trim_video", exposure: "direct", command: "/trim", purpose: "Keep a range, remove ranges or shave the ends, in place or into a new cell" },
   { tool: "trim_audio", exposure: "direct", command: "/trim-audio", purpose: "Keep or remove a time range from audio" },
   { tool: "split_video", exposure: "composite", command: "/split", purpose: "Split a video at times, durations or scenes into new cells" },

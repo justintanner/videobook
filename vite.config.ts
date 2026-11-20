@@ -49,6 +49,9 @@ function clientManualChunk(id: string): string | undefined {
   ) {
     return 'workspace-actions'
   }
+  if (id.includes('/src/components/videobook/auto-edit/')) {
+    return 'auto-edit'
+  }
   if (id.includes('/src/components/')) {
     return 'ui'
   }

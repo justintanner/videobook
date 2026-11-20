@@ -1292,4 +1292,22 @@ describe("slash command parse/normalize/dispatch", () => {
     });
   });
 
+  describe("/auto-edit", () => {
+    it("parses an optional asset_ref and dispatches open_auto_edit", () => {
+      const cmd = findCommand("/auto-edit", "@a1");
+      expect(cmd.uiAction).toBe("open_auto_edit");
+      expect(cmd.exposure).toBe("composite");
+      expect(cmd.interaction).toBe("preview");
+      expect(parseCommandArgs("@a1", cmd.params)).toEqual({ asset_ref: "a1" });
+      expect(parseCommandArgs("", cmd.params)).toEqual({});
+
+      let captured: string | undefined;
+      const dispatched = executeUiAction("open_auto_edit", {
+        open_auto_edit: (assetRef) => { captured = assetRef; },
+      }, { raw: "@a1", args: { asset_ref: "@a1" } });
+      expect(dispatched).toBe(true);
+      expect(captured).toBe("@a1");
+    });
+  });
+
 });

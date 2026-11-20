@@ -24,6 +24,7 @@ Review is what the action sheet asks before Run action. A tool billed per operat
 | `command.archive-browse` | `/archive-browse` |  | book | none | `open_archive` | slash, launcher | dialog | none |
 | `command.arrange-videos-column` | `/arrange-videos-column` |  | notebook | none | `/arrange-videos-column` | slash, launcher | composer | none |
 | `command.arrange-videos-row` | `/arrange-videos-row` |  | notebook | none | `/arrange-videos-row` | slash, launcher | composer | none |
+| `command.auto-edit` | `/auto-edit` |  | book | asset: asset_ref | `open_auto_edit` | slash, launcher | dialog | none |
 | `command.books` | `/books` |  | global | none | `open_projects` | slash, launcher | dialog | none |
 | `command.caption` | `/caption` |  | sequence | none | `/caption` | slash, launcher | composer | none |
 | `command.clip-audio` | `/clip-audio` | /volume, /audio-set | sequence | clip: clip_id | `/clip-audio` | slash, launcher | composer | none |
@@ -97,7 +98,6 @@ Review is what the action sheet asks before Run action. A tool billed per operat
 | `tool.attach_library_asset` | `/attach-library-asset` |  | notebook | cell: cell_id | `attach_library_asset` | slash, launcher, cell-menu | dialog | none |
 | `tool.audio_boost` | `/audio-boost` |  | book | asset: asset_id | `audio_boost` | slash, launcher, cell-menu | dialog | none |
 | `tool.audio_mix` | `/audio-mix` |  | book | none | `audio_mix` | slash, launcher | dialog | none |
-| `tool.auto_edit` | `/auto-edit` |  | book | asset: asset_id | `auto_edit` | slash, launcher, cell-menu | dialog | generation (op=analyze); otherwise none |
 | `tool.backfill_asset_tags` | `/backfill-asset-tags` |  | book | none | `backfill_asset_tags` | slash, launcher | dialog | generation |
 | `tool.cancel_job` | `/cancel-job` |  | book | asset: asset_id | `cancel_job` | slash, launcher, cell-menu | dialog | none |
 | `tool.caption_video` | `/caption-video` |  | book | asset: asset_id | `caption_video` | slash, launcher, cell-menu | dialog | generation (op=prepare); destructive (op=update resolve=discard, op=render output=replace); otherwise none |
@@ -298,6 +298,7 @@ Review is what the action sheet asks before Run action. A tool billed per operat
 | `upload_file` | `command.upload` | Import opens a native file picker and uploads media through the file workflow; users do not enter base64 data. |
 | `prepare_cold_open` | `command.edit-cold-open` | Selects a highlight in the cold-open review. |
 | `edit_cold_open` | `command.edit-cold-open` | Creates the reviewed cold-open copy. |
+| `auto_edit` | `command.auto-edit` | Previews the segment plan, finds the moment and renders in the auto-edit review sheet. |
 | `video_goal` | `command.goal` | Goal mode analyzes the brief and source before generation, with editable structure, character, timing, sound and graphics choices. Review source removal regions or adopt a matching cleaned copy; check the prepared video once, then reuse its image and video references. Preserved-source edits generate only the changed interval. Review the retained action window, including its complete payoff, before frame-accurate assembly with the kept source shots. Review each creative stage with its estimate; versions stay selectable and revisable. Without a video, review the frame then the clip. Saved storyboard goals keep their cleanup workflow. Finish applies the selected sound and saved watermark, with an optional typed or suggested title. |
 | `record_prompt` | `tool.chat` | Records text entered through the composer and generation editors; browsing history is a separate action. |
 | `slash_commands` | `command.actions` | Loads slash suggestions and dynamic project shortcuts in the Actions launcher. |

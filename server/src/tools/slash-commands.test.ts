@@ -92,6 +92,14 @@ describe("slash_commands tool", () => {
     expect(commandNames).not.toContain("/render");
     expect(commandNames).toContain("/render-video");
     expect(commandNames).toContain("/clean-audio");
+    expect(commandNames).toContain("/edit-cold-open");
+    expect(commandNames).toContain("/auto-edit");
+    const autoEditCmd = commands.find((c) => c.command === "/auto-edit");
+    expect(autoEditCmd).toMatchObject({
+      uiAction: "open_auto_edit",
+      exposure: "composite",
+      params: [{ name: "asset_ref", type: "string", required: false }],
+    });
     expect(commandNames).toContain("/vocals");
     expect(commandNames).toContain("/original");
     expect(commandNames).toContain("/landscape");

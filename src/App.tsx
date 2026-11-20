@@ -323,6 +323,7 @@ import { resolvePlaySlot } from '@/videobook/play-command'
 import { useSubtitleEditor } from '@/videobook/useSubtitleEditor'
 import { useGraphicsEditor } from '@/videobook/useGraphicsEditor'
 import { useVideoCleanup } from '@/videobook/useVideoCleanup'
+import { useAutoEdit } from '@/videobook/useAutoEdit'
 import { graphicsBlockText, graphicsEditorTarget, graphicsWatermarkTarget, type GraphicsWatermarkTarget } from '@/videobook/graphics-model'
 import { subtitlesCommandTarget } from '@/videobook/subtitles-model'
 import {
@@ -661,6 +662,11 @@ const MusicVideoEditor = lazy(async () => {
   return { default: module.MusicVideoEditor }
 })
 
+const AutoEditSheet = lazy(async () => {
+  const module = await import('@/components/videobook/auto-edit/AutoEditSheet')
+  return { default: module.AutoEditSheet }
+})
+
 type MediaFullscreenSession = {
   key: string
   bookId: string
@@ -734,6 +740,7 @@ type PendingChatAction =
   | { kind: 'subtitles'; assetId: string }
   | { kind: 'graphics'; assetId: string }
   | { kind: 'video-cleanup'; assetId: string }
+  | { kind: 'auto-edit'; assetId: string }
   | {
       kind: 'transcribe'
       assetId: string | null
@@ -1806,6 +1813,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const subtitles = useSubtitleEditor({ bookId, ready: mcp.state === 'ready', call })
   const graphics = useGraphicsEditor({ bookId, ready: mcp.state === 'ready', call })
   const videoCleanup = useVideoCleanup({ bookId, ready: mcp.state === 'ready', call })
+  const autoEdit = useAutoEdit({ bookId, ready: mcp.state === 'ready', call })
   const selectCanvasCell = useCallback((cellId: string | null, chat?: ChatExecution, initialPreview?: unknown) => {
     if (chat && !chat.isCurrent()) return
     setPreviewTurnId(cellId ? chat?.id ?? null : null)
@@ -2716,10 +2724,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (pendingChatAction?.kind === 'subtitles') subtitles.close()
     if (pendingChatAction?.kind === 'graphics') graphics.close()
     if (pendingChatAction?.kind === 'video-cleanup') videoCleanup.close()
+    if (pendingChatAction?.kind === 'auto-edit') autoEdit.close()
     setPendingCommandPlan(null)
     setPendingChatAction(null)
     focusCommandComposer()
-  }, [bookId, call, cancelChatReview, focusCommandComposer, graphics, pendingChatAction, subtitles, videoCleanup])
+  }, [autoEdit, bookId, call, cancelChatReview, focusCommandComposer, graphics, pendingChatAction, subtitles, videoCleanup])
   const updatePendingSpliceOverlap = useCallback((value: string) => {
     const overlap = Number(value)
     if (value.trim() === '' || !Number.isFinite(overlap) || overlap < 0) return
@@ -6134,6 +6143,28 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     videoCleanup.open(resolved.target)
     return { ok: true, message: `Graphics remover opened for ${resolved.target.label}` }
   }
+  const openAutoEdit = (reference: string | undefined, chat?: ChatExecution): ComposerOutcome => {
+    if (mcp.state !== 'ready' || !bookId || !notebook) {
+      return { ok: false, message: 'Open a connected notebook before auto-editing.' }
+    }
+    const resolved = graphicsEditorTarget({
+      reference: reference ?? selectedNotebookCell?.outputArtifactId ?? undefined,
+      image: undefined,
+      assets,
+      mentions: commandMentionAssets,
+      notebookId: notebook.id,
+    })
+    if (!resolved.ok) return { ok: false, message: 'Select a ready video or use /auto-edit @a1.' }
+    presentEditorSheet({ kind: 'auto-edit', assetId: resolved.target.artifactId }, chat)
+    autoEdit.open({
+      artifactId: resolved.target.artifactId,
+      label: resolved.target.label,
+      mediaUrl: resolved.target.mediaUrl,
+      address: resolved.target.address,
+      notebookId: resolved.target.notebookId,
+    })
+    return { ok: true, message: `Auto-edit opened for ${resolved.target.label}` }
+  }
   const openGraphicsFor = (artifactId: string) => {
     const result = openGraphics(artifactId, undefined)
     if (!result.ok) setNotice(result.message, 'error')
@@ -7271,6 +7302,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return openSourceDeliveryReview(reference, plan.params.to === 'download' ? 'download' : 'icloud', chat, asString(plan.params.text) ?? undefined)
     }
     if (plan.tool === 'show_video_cleanup') return openVideoCleanup(asString(plan.params.asset_id) ?? undefined, chat)
+    if (plan.tool === 'show_auto_edit') return openAutoEdit(asString(plan.params.asset_id) ?? undefined, chat)
     if (plan.tool === 'show_subtitles' || plan.tool === 'show_graphics') {
       const assetId = asString(plan.params.asset_id)
       if (!assetId) return { ok: false, message: plan.tool === 'show_graphics' ? 'Name the video for the graphics.' : 'Name the video to caption.' }
@@ -7875,6 +7907,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       reviewChat(chat, false, () => setPendingChatAction(null))
       videoCleanup.close()
       return outcome
+    }
+    if (pendingChatAction.kind === 'auto-edit') {
+      const activeBookId = bookId
+      const activeNotebookId = notebook?.id ?? null
+      const outcome = await autoEdit.render(chat)
+      if (!outcome.ok) return outcome
+      if (activeNotebookId) {
+        await refreshBookData(activeBookId, activeNotebookId, chat?.isCurrent, chat)
+      }
+      reviewChat(chat, false, () => setPendingChatAction(null))
+      autoEdit.close()
+      if (outcome.cellId) {
+        selectCanvasCell(outcome.cellId)
+        presentCreatedCells([outcome.cellId], chat)
+      }
+      return { ok: true, message: outcome.message }
     }
     if (pendingChatAction.kind === 'post-delivery') {
       const review = pendingChatAction.review
@@ -8676,6 +8724,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const parsed = parseCommandArgs(resolvedRest, command.params)
         return openColdOpenReview(asString(parsed.asset_ref) ?? undefined, chat)
       }
+      if (command.uiAction === 'open_auto_edit') {
+        const parsed = parseCommandArgs(resolvedRest, command.params)
+        return openAutoEdit(asString(parsed.asset_ref) ?? undefined, chat)
+      }
       if (command.uiAction === 'open_post_composer') {
         const target = postCommandTarget(rest)
         return openSourceDeliveryReview(target.reference, 'icloud', chat, target.text)
@@ -9412,6 +9464,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       contextMenuActions.push({ id: 'subtitles', label: 'Subtitles', icon: 'subtitles', disabled: busy || mcp.state !== 'ready' || !contextMenuVisualAsset.mediaUrl })
       contextMenuActions.push({ id: 'graphics', label: 'Graphics', icon: 'graphics', disabled: busy || mcp.state !== 'ready' || !contextMenuVisualAsset.mediaUrl })
       contextMenuActions.push({ id: 'cold-open', label: 'Edit cold open', icon: 'split', disabled: busy || mcp.state !== 'ready' || !contextMenuVisualAsset.mediaUrl })
+      contextMenuActions.push({ id: 'auto-edit', label: 'Auto-edit', icon: 'split', disabled: busy || mcp.state !== 'ready' || !contextMenuVisualAsset.mediaUrl })
       contextMenuActions.push({
         id: 'download',
         label: 'Download video',
@@ -9604,6 +9657,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (actionId === 'cold-open' && contextMenuVisualAsset) {
       const result = openColdOpenReview(contextMenuVisualAsset.artifactId)
+      if (!result.ok) setNotice(result.message, 'error')
+      return
+    }
+    if (actionId === 'auto-edit' && contextMenuVisualAsset) {
+      const result = openAutoEdit(contextMenuVisualAsset.artifactId)
       if (!result.ok) setNotice(result.message, 'error')
       return
     }
@@ -9888,6 +9946,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (pendingChatAction?.kind === 'video-cleanup') {
       return <VideoCleanupSheet editor={videoCleanup} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} />
+    }
+    if (pendingChatAction?.kind === 'auto-edit') {
+      return (
+        <Suspense fallback={null}>
+          <AutoEditSheet editor={autoEdit} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} />
+        </Suspense>
+      )
     }
     if (pendingChatAction.kind === 'transcribe') {
       const action = pendingChatAction

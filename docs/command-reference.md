@@ -230,7 +230,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 - `zoom_video` — Zoom in on parts of a video toward a focus point, easing in, holding and returning, with an optional built-in sound. Local and free: one FFmpeg encode in place, with history.
 
-## Slash actions (270; 108 dedicated command routes)
+## Slash actions (270; 109 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
@@ -253,7 +253,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/attach-library-asset` — Copy a foreign Library asset into a book and attach it to a media slot; MCP: `attach_library_asset`
 - `/audio-boost` — Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.; MCP: `audio_boost`
 - `/audio-mix` — Mix a video or audio asset onto another at a lower volume, editing the target in-place.; MCP: `audio_mix`
-- `/auto-edit` — Read a video's auto-edit draft, find the hook and best moment with AI analysis (paid), or render an auto-edit into a new cell locally for free without changing the source video.; MCP: `auto_edit`
+- `/auto-edit` — Preview a cold open, instant replays, push-in and slow-motion crash beat on the source video, then render a new copy; UI: `open_auto_edit`
 - `/backfill-asset-tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.; MCP: `backfill_asset_tags`
 - `/books` — Open the book selector dropdown; UI: `open_projects`
 - `/cancel-job` — Cancel a queued or running persistent job by job_id. For a leftover provider task after local jobs have finished, pass asset_id and its expected_task_id to cancel local tracking and retain media; this does not cancel the request at the provider.; MCP: `cancel_job`

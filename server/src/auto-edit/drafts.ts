@@ -131,6 +131,7 @@ export interface AutoEditGetResponse {
   cues: AutoEditCue[];
   changes: string[];
   analysis: AutoEditAnalysisView;
+  analysis_available: boolean;
   last_render: RenderRequestStatus | null;
 }
 
@@ -142,6 +143,7 @@ export type AutoEditAnalyzeResponse =
     cues: AutoEditCue[];
     changes: string[];
     analysis: AutoEditAnalysisView;
+    analysis_available: boolean;
   }
   | {
     status: "queued" | "running";
@@ -404,6 +406,7 @@ export async function readAutoEditGet(engine: Engine, artifactId: string): Promi
     cues: built.cues,
     changes,
     analysis: autoEditAnalysisView(analysisState),
+    analysis_available: Boolean(getApiKey("OPENAI_API_KEY")),
     last_render: latestAutoEditRender(engine, artifactId),
   };
 }
@@ -434,6 +437,7 @@ export async function requestAutoEditAnalysis(
       cues: got.cues,
       changes: got.changes.length > 0 ? got.changes : state.value.changes,
       analysis: got.analysis,
+      analysis_available: got.analysis_available,
     };
   }
   if (!getApiKey("OPENAI_API_KEY")) {

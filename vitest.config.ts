@@ -52,6 +52,7 @@ export default defineConfig({
       'extension/src/mcp.test.ts',
       'extension/src/x-post-target.test.ts',
       'src/videobook/asset-tags.test.ts',
+      'src/videobook/auto-edit-preview.test.ts',
       'src/videobook/splice-preview.test.ts',
       'src/videobook/scene-timeline-edits.test.ts',
       'src/videobook/cut-review.test.ts',

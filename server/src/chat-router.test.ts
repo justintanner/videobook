@@ -87,6 +87,14 @@ describe("chat routing catalog", () => {
     });
     expect(prompt).toContain("- show_graphics: Open the on-screen graphics editor");
     expect(prompt).toContain("- For show_graphics: use when the user asks to add, edit, style or move on-screen graphics");
+    expect(getRoutableTool(tools, "show_auto_edit")).toMatchObject({
+      effect: "view",
+      autoApply: true,
+      params: ["asset_id"],
+      requiredParams: ["asset_id"],
+    });
+    expect(prompt).toContain("- show_auto_edit: Open the auto-edit review sheet");
+    expect(prompt).toContain("- For show_auto_edit: to auto-edit a clip, or to add a cold open with a replay and slow-motion effect, use show_auto_edit. Never generate a new video for it");
   });
 
   it("routes a zoom on existing footage to the free local zoom_video", () => {

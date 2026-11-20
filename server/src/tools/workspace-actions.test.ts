@@ -3,7 +3,7 @@ import { z } from "zod";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { scopedEngine } from "../engine.js";
-import { buildWorkspaceActionCatalog } from "../workspace-action-catalog.js";
+import { buildWorkspaceActionCatalog, WORKFLOW_TOOLS } from "../workspace-action-catalog.js";
 import type { WorkspaceActionCatalog } from "../workspace-action-contract.js";
 import { getCanonicalCommands } from "./commands.js";
 import { getAllToolDefs } from "./index.js";
@@ -65,12 +65,14 @@ describe("workspace action exposure contract", () => {
   it("reviews tools billed per operation by the chosen operation, as the chain bills them", () => {
     const catalog = buildWorkspaceActionCatalog(tools, commands);
     const action = (tool: string) => catalog.actions.find((entry) => entry.id === `tool.${tool}`)!;
-    expect(action("auto_edit")).toMatchObject({
-      confirmation: "none",
-      confirmationRules: [
-        { when: { op: "analyze" }, confirmation: "generation" },
-      ],
+    expect(catalog.tools.find((entry) => entry.tool === "auto_edit")).toMatchObject({
+      actionId: "command.auto-edit",
+      exposure: "workflow",
     });
+    expect(catalog.actions.find((entry) => entry.id === "command.auto-edit")?.target.mediaKinds).toEqual(["video", "final"]);
+    expect(toolSpendsMoney("auto_edit", { op: "get" })).toBe(false);
+    expect(toolSpendsMoney("auto_edit", { op: "render" })).toBe(false);
+    expect(toolSpendsMoney("auto_edit", { op: "analyze" })).toBe(true);
     expect(action("video_graphics")).toMatchObject({
       confirmation: "none",
       confirmationRules: [
@@ -88,9 +90,10 @@ describe("workspace action exposure contract", () => {
         { when: { op: "render", output: "replace" }, confirmation: "destructive" },
       ],
     });
+    const directBillable = Object.keys(BILLABLE_TOOL_OPERATIONS).filter((tool) => !WORKFLOW_TOOLS[tool]);
     expect(catalog.actions.filter((entry) => entry.confirmationRules).map((entry) => entry.id).sort())
-      .toEqual(Object.keys(BILLABLE_TOOL_OPERATIONS).map((tool) => `tool.${tool}`).sort());
-    for (const tool of Object.keys(BILLABLE_TOOL_OPERATIONS)) {
+      .toEqual(directBillable.map((tool) => `tool.${tool}`).sort());
+    for (const tool of directBillable) {
       const reviewed = action(tool);
       const paid = new Set(reviewed.confirmationRules!.filter((rule) => rule.confirmation === "generation").map((rule) => rule.when.op));
       for (const op of reviewed.inputSchema.properties!.op!.enum as string[]) {

@@ -17,6 +17,7 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   open_music_video: { kind: 'existing' },
   start_goal: { kind: 'existing' },
   open_cold_open: { kind: 'existing' },
+  open_auto_edit: { kind: 'existing' },
   open_watermark: { kind: 'existing' },
   speak_preview: { kind: 'existing' },
   x_connect: { kind: 'existing' },
