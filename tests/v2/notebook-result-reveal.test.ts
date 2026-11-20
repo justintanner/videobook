@@ -1,42 +1,136 @@
-import { describe, expect, it, vi } from 'vitest'
-import { revealNotebookResult } from '../../src/videobook/notebook-result-reveal'
+import { describe, expect, it } from 'vitest'
+import {
+  notebookRevealScroll,
+  type NotebookRevealGeometry,
+  type NotebookRevealRect,
+} from '../../src/videobook/notebook-result-reveal'
 
-describe('notebook result reveal', () => {
-  it('waits for refreshed layout before smoothly scrolling to the latest end', () => {
-    const frames: FrameRequestCallback[] = []
-    const scheduleFrame = (callback: FrameRequestCallback) => {
-      frames.push(callback)
-      return frames.length
-    }
-    const scrollTo = vi.fn()
-    const target = { scrollHeight: 1200, scrollTo }
+const canvasTop = 60
+const canvasLeft = 28
 
-    revealNotebookResult(() => target, scheduleFrame)
+function geometry(input: {
+  cell: { top: number; left: number; width?: number; height?: number }
+  scrollTop: number
+  scrollLeft?: number
+  dockTop: number
+  width?: number
+  height?: number
+  contentHeight?: number
+  contentWidth?: number
+}): NotebookRevealGeometry {
+  const width = input.width ?? 1400
+  const height = input.height ?? 900
+  const scrollLeft = input.scrollLeft ?? 0
+  const cellTop = canvasTop + input.cell.top - input.scrollTop
+  const cellLeft = canvasLeft + input.cell.left - scrollLeft
+  const cells: NotebookRevealRect = {
+    top: cellTop,
+    bottom: cellTop + (input.cell.height ?? 136),
+    left: cellLeft,
+    right: cellLeft + (input.cell.width ?? 164),
+  }
+  return {
+    visible: {
+      top: canvasTop,
+      bottom: Math.min(canvasTop + height, input.dockTop),
+      left: canvasLeft,
+      right: canvasLeft + width,
+    },
+    cells,
+    scrollTop: input.scrollTop,
+    scrollLeft,
+    maxScrollTop: (input.contentHeight ?? 2000) - height,
+    maxScrollLeft: (input.contentWidth ?? width) - width,
+  }
+}
 
-    expect(scrollTo).not.toHaveBeenCalled()
-    frames.shift()?.(0)
-    expect(scrollTo).not.toHaveBeenCalled()
-    target.scrollHeight = 1480
-    frames.shift()?.(16)
+describe('notebook cell reveal scroll', () => {
+  it('brings row a back when a new tile lands there after the canvas scrolled down', () => {
+    const next = notebookRevealScroll(geometry({
+      cell: { top: 20, left: 8 },
+      scrollTop: 640,
+      dockTop: 560,
+    }), 'center')
 
-    expect(scrollTo).toHaveBeenCalledOnce()
-    expect(scrollTo).toHaveBeenCalledWith({
-      top: 1480,
-      behavior: 'smooth',
-    })
+    expect(next).toEqual({ top: 0, left: 0 })
   })
 
-  it('does nothing when the notebook canvas is no longer mounted', () => {
-    const frames: FrameRequestCallback[] = []
-    const scheduleFrame = (callback: FrameRequestCallback) => {
-      frames.push(callback)
-      return frames.length
-    }
+  it('centers a new tile in the space above an open preview dock', () => {
+    const next = notebookRevealScroll(geometry({
+      cell: { top: 860, left: 500 },
+      scrollTop: 0,
+      dockTop: 560,
+    }), 'center')
 
-    revealNotebookResult(() => null, scheduleFrame)
-    frames.shift()?.(0)
-    frames.shift()?.(16)
+    const visibleHeight = 560 - canvasTop
+    expect(next).toEqual({ top: 860 - (visibleHeight - 136) / 2, left: 0 })
+  })
 
-    expect(frames).toHaveLength(0)
+  it('treats a tile behind the preview dock as offscreen and leaves visible tiles alone', () => {
+    const hidden = geometry({ cell: { top: 520, left: 500 }, scrollTop: 0, dockTop: 560 })
+    const visible = geometry({ cell: { top: 120, left: 500 }, scrollTop: 0, dockTop: 560 })
+
+    expect(notebookRevealScroll(hidden, 'offscreen')).not.toBeNull()
+    expect(notebookRevealScroll(visible, 'offscreen')).toBeNull()
+  })
+
+  it('aligns the top of a batch taller than the visible area', () => {
+    const next = notebookRevealScroll(geometry({
+      cell: { top: 900, left: 8, height: 700 },
+      scrollTop: 0,
+      dockTop: 560,
+    }), 'center')
+
+    expect(next).toEqual({ top: 900 - 16, left: 0 })
+  })
+
+  it('scrolls sideways on a phone only when the new tile is outside the viewport', () => {
+    const phone = { width: 390, height: 700, contentWidth: 1044, dockTop: 600 }
+    const offscreen = notebookRevealScroll(geometry({
+      ...phone,
+      cell: { top: 20, left: 760, width: 120, height: 100 },
+      scrollTop: 0,
+    }), 'center')
+    const onscreen = notebookRevealScroll(geometry({
+      ...phone,
+      cell: { top: 300, left: 100, width: 120, height: 100 },
+      scrollTop: 0,
+    }), 'center')
+
+    expect(offscreen).toEqual({ top: 0, left: 760 + 120 - 390 + 16 })
+    expect(onscreen?.left).toBe(0)
+  })
+
+  it('keeps the horizontal position for a clicked tile reveal', () => {
+    const next = notebookRevealScroll(geometry({
+      width: 390,
+      height: 700,
+      contentWidth: 1044,
+      dockTop: 600,
+      cell: { top: 900, left: 760, width: 120, height: 100 },
+      scrollTop: 0,
+      scrollLeft: 100,
+    }), 'center', false)
+
+    expect(next?.left).toBe(100)
+  })
+
+  it('does not scroll when the tile is already centered', () => {
+    const visibleHeight = 560 - canvasTop
+    const scrollTop = 860 - (visibleHeight - 136) / 2
+
+    expect(notebookRevealScroll(geometry({
+      cell: { top: 860, left: 500 },
+      scrollTop,
+      dockTop: 560,
+    }), 'center')).toBeNull()
+  })
+
+  it('does nothing while the dock covers the whole canvas', () => {
+    expect(notebookRevealScroll(geometry({
+      cell: { top: 20, left: 8 },
+      scrollTop: 400,
+      dockTop: canvasTop,
+    }), 'center')).toBeNull()
   })
 })

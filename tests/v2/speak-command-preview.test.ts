@@ -240,7 +240,6 @@ describe('CommandComposer /voices prefill', () => {
       onEnsureCatalog: async () => undefined,
       onExecute: async () => ({ ok: true, message: 'Done' }),
       onModelChange: () => undefined,
-      onSuccessfulExecute: () => undefined,
     }))
 
     expect(html).toContain('data-testid="speak-command-preview"')

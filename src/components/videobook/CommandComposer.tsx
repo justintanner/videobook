@@ -178,7 +178,6 @@ interface CommandComposerProps {
   onSendingChange?: (sending: boolean) => void
   onCommandRowHeightChange?: (height: number) => void
   onHeightChange?: (height: number) => void
-  onSuccessfulExecute: () => void
   voiceCatalog?: ElevenLabsVoicesState
   voice?: VoiceConversation
 }
@@ -252,7 +251,6 @@ export function CommandComposer({
   onSendingChange,
   onCommandRowHeightChange,
   onHeightChange,
-  onSuccessfulExecute,
   voiceCatalog,
   voice,
 }: CommandComposerProps) {
@@ -694,7 +692,6 @@ export function CommandComposer({
         ensureVoicesForInput(inputDecision.value)
         selectInput = inputDecision.select
       }
-      if (nextOutcome.ok) onSuccessfulExecute()
     } catch (error) {
       const failure = {
         ok: false,

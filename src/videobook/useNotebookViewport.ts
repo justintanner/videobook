@@ -1,6 +1,8 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import { revealNotebookCell } from './notebook-result-reveal'
+import { revealNotebookCells, selectedNotebookCellOnly, type NotebookRevealMode } from './notebook-result-reveal'
 import { fitNotebookGridCellHeight, fitNotebookGridZoom, notebookGrid } from './notebook-grid'
+
+const CREATED_CELL_RENDER_WAIT_MS = 5_000
 
 export function useNotebookViewport(bookId: string, notebookId: string | undefined, active: boolean, commandRowHeight: number) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -49,11 +51,15 @@ export function useNotebookViewport(bookId: string, notebookId: string | undefin
     const observer = new ResizeObserver(sync)
     observer.observe(container)
     return () => {
-      revealCleanupRef.current?.()
       container.removeEventListener('scroll', rememberPosition)
       observer.disconnect()
     }
   }, [active, bookId, notebookId, commandRowHeight, rememberPosition])
+
+  useLayoutEffect(() => () => {
+    revealCleanupRef.current?.()
+    revealCleanupRef.current = null
+  }, [active, bookId, notebookId])
 
   useLayoutEffect(() => {
     const container = scrollRef.current
@@ -65,8 +71,20 @@ export function useNotebookViewport(bookId: string, notebookId: string | undefin
 
   const revealCell = useCallback((cellId: string) => {
     revealCleanupRef.current?.()
-    revealCleanupRef.current = revealNotebookCell(() => scrollRef.current, cellId)
+    revealCleanupRef.current = revealNotebookCells(() => scrollRef.current, [cellId], {
+      keep: selectedNotebookCellOnly(cellId),
+      horizontal: false,
+    })
   }, [])
 
-  return { scrollRef, surface, zoom, cellHeight, revealCell }
+  const revealCells = useCallback((cellIds: readonly string[], mode: NotebookRevealMode = 'center') => {
+    if (cellIds.length === 0) return
+    revealCleanupRef.current?.()
+    revealCleanupRef.current = revealNotebookCells(() => scrollRef.current, cellIds, {
+      mode,
+      waitMs: CREATED_CELL_RENDER_WAIT_MS,
+    })
+  }, [])
+
+  return { scrollRef, surface, zoom, cellHeight, revealCell, revealCells }
 }

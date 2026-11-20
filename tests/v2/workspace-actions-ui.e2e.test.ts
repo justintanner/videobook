@@ -229,6 +229,66 @@ describe('workspace action launcher with real endpoints', () => {
     }
   }, testBudget(120_000))
 
+  it('keeps new downloads in view above the composer, even with a preview open', async () => {
+    const video = await readFile(join(rootDir, 'video.mp4'))
+    const source = createServer((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': video.length }).end(video)
+    })
+    await new Promise<void>(resolve => source.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = source.address()
+      if (!address || typeof address === 'string') throw new Error('Missing video source port')
+      const notebook = await call('create_notebook', { name: 'Download focus' }) as { id: string }
+      await page.evaluate(([book, id]) => localStorage.setItem(`videobook.active-notebook:${book}`, id!), [bookId, notebook.id])
+      await page.reload()
+      await expect.poll(() => page.getByLabel('Open actions', { exact: true }).isEnabled(), { timeout: testBudget(MCP_ROUNDTRIP_MS) }).toBe(true)
+      const scroll = page.locator('.notebook-horizontal-scroll')
+      const cellIds = async () => (await call('get_notebook', { notebook_id: notebook.id }) as { cells: Array<{ id: string }> }).cells.map(cell => cell.id)
+      const settledPlacement = (cellId: string) => scroll.evaluate((element, id) => new Promise<{ topGap: number; bottomGap: number } | null>((resolve) => {
+        let last = element.scrollTop
+        let still = 0
+        const step = () => {
+          still = element.scrollTop === last ? still + 1 : 0
+          last = element.scrollTop
+          if (still < 20) return requestAnimationFrame(step)
+          const tile = element.querySelector(`.react-flow__node[data-id="${id}"]`)?.getBoundingClientRect()
+          const composer = document.querySelector('.command-composer')!.getBoundingClientRect()
+          const viewport = element.getBoundingClientRect()
+          resolve(tile ? { topGap: tile.top - viewport.top, bottomGap: composer.top - tile.bottom } : null)
+        }
+        requestAnimationFrame(step)
+      }), cellId)
+      const expectInView = async (cellId: string) => {
+        await expect.poll(async () => {
+          const gaps = await settledPlacement(cellId)
+          return gaps !== null && gaps.topGap >= 0 && gaps.bottomGap >= 0
+        }, { timeout: testBudget(MCP_ROUNDTRIP_MS) }).toBe(true)
+        await page.waitForTimeout(1_000)
+        const gaps = await settledPlacement(cellId)
+        expect(gaps?.topGap).toBeGreaterThanOrEqual(0)
+        expect(gaps?.bottomGap).toBeGreaterThanOrEqual(0)
+      }
+
+      await sendCommand(`/download http://127.0.0.1:${address.port}/first.mp4`)
+      await expect.poll(async () => (await cellIds()).length, { timeout: testBudget(MCP_ROUNDTRIP_MS) }).toBe(1)
+      const [firstId] = await cellIds()
+      await expectInView(firstId!)
+      expect(await page.locator(`[data-id="${firstId}"] .cell-node-footer strong`).textContent()).toBe('@a1')
+
+      await page.locator(`[data-id="${firstId}"] .cell-node-body`).click()
+      await page.locator('.command-composer .inspector-media-row-content').waitFor({ state: 'visible', timeout: testBudget(MCP_ROUNDTRIP_MS) })
+      await scroll.evaluate((element) => { element.scrollTop = element.scrollHeight })
+      expect(await scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+
+      await sendCommand(`/download http://127.0.0.1:${address.port}/second.mp4`)
+      await expect.poll(async () => (await cellIds()).length, { timeout: testBudget(MCP_ROUNDTRIP_MS) }).toBe(2)
+      const secondId = (await cellIds()).find(id => id !== firstId)!
+      await expectInView(secondId)
+    } finally {
+      await new Promise<void>(resolve => source.close(() => resolve()))
+    }
+  }, testBudget(120_000))
+
   it('lists the complete endpoint catalog and traverses past twelve options with the keyboard', async () => {
     await openActions()
     const options = page.locator('.workspace-actions-list [role="option"]')

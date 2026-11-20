@@ -32,13 +32,13 @@ export function composerDockShouldOpen(reason: ComposerDockOpenReason): boolean 
     || reason === 'reopen'
 }
 
-export function notebookActionCreatedCells(
+export function notebookCreatedCellIds(
   before: { id: string; cells: readonly { id: string }[] } | null,
   after: { id: string; cells: readonly { id: string }[] } | null | undefined,
-): boolean {
-  if (!before || !after || before.id !== after.id) return false
+): string[] {
+  if (!before || !after || before.id !== after.id) return []
   const existingIds = new Set(before.cells.map((cell) => cell.id))
-  return after.cells.some((cell) => !existingIds.has(cell.id))
+  return after.cells.filter((cell) => !existingIds.has(cell.id)).map((cell) => cell.id)
 }
 
 export function composerDockDraftKey(

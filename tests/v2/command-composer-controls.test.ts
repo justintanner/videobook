@@ -55,7 +55,6 @@ function renderComposer(
     onEnsureCatalog: async () => undefined,
     onExecute: async () => ({ ok: true, message: 'Done' }),
     onModelChange: () => undefined,
-    onSuccessfulExecute: () => undefined,
     ...overrides,
   }))
 }
@@ -293,7 +292,6 @@ describe('CommandComposer controls', () => {
       onEnsureCatalog: async () => undefined,
       onExecute: async () => ({ ok: true, message: 'Done' }),
       onModelChange: () => undefined,
-      onSuccessfulExecute: () => undefined,
     }))
 
     expect(html).not.toContain('command-control-kind')
@@ -344,7 +342,6 @@ describe('CommandComposer controls', () => {
       onEnsureCatalog: async () => undefined,
       onExecute: async () => ({ ok: true, message: 'Done' }),
       onModelChange: () => undefined,
-      onSuccessfulExecute: () => undefined,
     }))
     expect(hide(loading)).toContain(`aria-label="${COMPOSER_DOCK_HIDE_LABEL}"`)
     expect(hide(loading)).not.toContain('disabled')
@@ -377,7 +374,6 @@ describe('CommandComposer controls', () => {
       onEnsureCatalog: async () => undefined,
       onExecute: async () => ({ ok: true, message: 'Done' }),
       onModelChange: () => undefined,
-      onSuccessfulExecute: () => undefined,
       children: createElement('aside', { className: 'confirm-sheet', 'aria-label': 'Generation review' },
         createElement('button', { type: 'button' }, 'Cancel'),
       ),
@@ -436,7 +432,6 @@ describe('CommandComposer controls', () => {
       onEnsureCatalog: async () => undefined,
       onExecute: async () => ({ ok: true, message: 'Done' }),
       onModelChange: () => undefined,
-      onSuccessfulExecute: () => undefined,
       children: createElement('aside', { className: 'confirm-sheet', 'aria-label': 'Generation review' },
         createElement('button', { type: 'button' }, 'Cancel'),
       ),
@@ -591,7 +586,6 @@ describe('message log visibility', () => {
       onEnsureCatalog: async () => undefined,
       onExecute: async () => ({ ok: true, message: 'Done' }),
       onModelChange: () => undefined,
-      onSuccessfulExecute: () => undefined,
       children: createElement('aside', { className: 'confirm-sheet', 'aria-label': 'Generation review' },
         createElement('footer', { className: 'confirm-sheet-foot' },
           createElement('button', { type: 'button' }, 'Cancel'),
@@ -662,7 +656,6 @@ describe('message log visibility', () => {
       onEnsureCatalog: async () => undefined,
       onExecute: async () => ({ ok: true, message: 'Done' }),
       onModelChange: () => undefined,
-      onSuccessfulExecute: () => undefined,
     }))
     expect(html).not.toContain('aria-busy="true"')
     expect(html).not.toContain('command-line-shell-transmitting')

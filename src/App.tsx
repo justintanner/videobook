@@ -523,7 +523,7 @@ import {
   composerDockShouldOpen,
   composerPanelDrawsClose,
   pauseComposerDockMedia,
-  notebookActionCreatedCells,
+  notebookCreatedCellIds,
 } from '@/videobook/composer-dock'
 import {
   parsePendingApplyCommand,
@@ -534,7 +534,6 @@ import {
   type PendingReview,
   type VoiceReviewEdit,
 } from '@/videobook/voice-review-command'
-import { revealNotebookResult } from '@/videobook/notebook-result-reveal'
 import {
   NO_NOTEBOOK_REVIEW,
   notebookReviewRoles,
@@ -1093,6 +1092,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     zoom: notebookZoom,
     cellHeight: notebookCellHeight,
     revealCell: revealNotebookCanvasCell,
+    revealCells: revealNotebookCanvasCells,
   } = useNotebookViewport(bookId, notebook?.id, screen === 'notebook', commandRowHeight)
   const notebookCanvasStyle = useMemo(() => ({
     '--notebook-command-row-height': `${commandRowHeight}px`,
@@ -1724,31 +1724,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setHighlightedCellIds((current) => expireHighlight(current, cellIds))
     }, HIGHLIGHT_MS)
     if (!options.scroll) return
-    window.requestAnimationFrame(() => {
-      if (
-        options.scroll === 'offscreen'
-        && flowRef.current?.getNodes().some((node) => node.dragging)
-      ) return
-      const reducedMotion = window.matchMedia(
-        '(prefers-reduced-motion: reduce)',
-      ).matches
-      for (const cellId of cellIds) {
-        const target = document.querySelector(`[data-id="${cellId}"]`)
-        if (!target) continue
-        if (options.scroll === 'offscreen') {
-          const rect = target.getBoundingClientRect()
-          const onScreen = rect.top >= 0 && rect.left >= 0
-            && rect.bottom <= window.innerHeight
-            && rect.right <= window.innerWidth
-          if (onScreen) continue
-        }
-        target.scrollIntoView({
-          block: 'center',
-          behavior: reducedMotion ? 'auto' : 'smooth',
-        })
-      }
-    })
-  }, [])
+    if (
+      options.scroll === 'offscreen'
+      && flowRef.current?.getNodes().some((node) => node.dragging)
+    ) return
+    revealNotebookCanvasCells(cellIds, options.scroll)
+  }, [revealNotebookCanvasCells])
 
   const focusCommandComposer = useCallback(() => {
     restoreCommandComposerFocus(() =>
@@ -2389,13 +2370,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     resumeMediaProcessingWatches(bookId, notebook, assets)
   }, [assets, bookId, notebook, resumeMediaProcessingWatches])
 
-  const collapseComposerAfterCellCreation = useCallback((chat?: ChatExecution) => {
+  const presentCreatedCells = useCallback((
+    cellIds: readonly string[],
+    chat?: ChatExecution,
+  ) => {
     const scope = watchScopeRef.current
     if (scope.bookId !== bookId || scope.notebookId !== notebook?.id) return
+    presentChat(chat, () => revealNotebookCanvasCells(cellIds))
     // Closing the dock ends a voice conversation, so a live one keeps it open.
     if (voiceActiveRef.current) return
     presentChat(chat, () => setComposerDockOpen(false))
-  }, [bookId, notebook?.id])
+  }, [bookId, notebook?.id, revealNotebookCanvasCells])
 
   const runCell = useCallback(async (
     cellId: string,
@@ -2470,7 +2455,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             throw new Error('The server did not return a notebook run')
           }
           generationWatchStarted = true
-          if (outputCellId) collapseComposerAfterCellCreation(chat)
+          if (outputCellId) presentCreatedCells([outputCellId], chat)
           const watchCellId = outputCellId ?? cellId
           let address = notebookGridAddress(cell.slot)
           if (outputCellId) {
@@ -2490,8 +2475,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             setCellQueued(outputCellId, true)
             if (selectedCellIdsRef.current.has(cellId)) {
               selectCanvasCell(null, chat)
-              presentChat(chat, () =>
-                highlightCells([outputCellId], { scroll: 'center' }))
+              presentChat(chat, () => highlightCells([outputCellId]))
             }
           }
           presentChat(chat, () => setNotice(`${notebookGridTag(cell.slot)} queued`))
@@ -2569,13 +2553,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     assets,
     bookId,
     call,
-    collapseComposerAfterCellCreation,
     createGenerationPlan,
     highlightCells,
     jobs,
     notebook,
     online,
     prepareGenerationPlan,
+    presentCreatedCells,
     revealCells,
     selectCanvasCell,
     setCellQueued,
@@ -2717,10 +2701,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     ),
     [notebookMetrics, notebookZoom],
   )
-  const revealLatestNotebookResult = useCallback(() => {
-    if (screen !== 'notebook') return
-    revealNotebookResult(() => notebookScrollRef.current)
-  }, [notebookScrollRef, screen])
   const dismissPendingCommandPlan = useCallback(() => {
     cancelChatReview()
     voiceOutcomeRef.current?.({ status: 'cancelled', message: 'Pending action cancelled on screen.' })
@@ -3597,8 +3577,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true, message: 'Goal saved in its notebook.' }
     }
     await refreshBookData(scope.bookId, scope.notebookId, undefined, chat)
-    revealNotebookCanvasCell(goal.cellId)
-    collapseComposerAfterCellCreation(chat)
+    presentCreatedCells([goal.cellId], chat)
     openGoalTile(goal.cellId)
     const where = goal.address ?? 'a new tile'
     return { ok: true, message: goal.status === 'planning' ? `Planning your short in ${where}` : `Your short in ${where} is ready to review` }
@@ -3609,8 +3588,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const scope = goalScope
     const goal = await actOnGoal(scope, args)
     if (args.action !== 'approve' && args.action !== 'regenerate' && args.action !== 'revise' && args.action !== 'retry') return goal
-    if (watchScopeRef.current.bookId === scope.bookId && watchScopeRef.current.notebookId === scope.notebookId) collapseComposerAfterCellCreation()
-    await refreshBookData(scope.bookId, scope.notebookId)
+    const before = notebook
+    const refreshed = await refreshBookData(scope.bookId, scope.notebookId)
+    if (watchScopeRef.current.bookId === scope.bookId && watchScopeRef.current.notebookId === scope.notebookId) {
+      presentCreatedCells(notebookCreatedCellIds(before, refreshed))
+    }
     return goal
   }
 
@@ -3747,7 +3729,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!cellId || !addressTag || !runId || !jobId) {
       throw new Error('The server did not return the frame extraction cell')
     }
-    collapseComposerAfterCellCreation()
+    presentCreatedCells([cellId])
     setCellRunError(cellId, null)
     setCellQueued(cellId, true)
     void watchNotebookRun({
@@ -3904,12 +3886,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         selectCanvasCell(producerCellId, chat)
         setSourceViewCellId(null)
         setHistoryViewCellId(null)
-        collapseComposerAfterCellCreation(chat)
-        revealNotebookCanvasCell(producerCellId)
+        presentCreatedCells([producerCellId], chat)
       })
     }
     return true
-  }, [bookId, call, closeMediaFullscreen, collapseComposerAfterCellCreation, refreshBookData, revealNotebookCanvasCell, selectCanvasCell, setNotice])
+  }, [bookId, call, closeMediaFullscreen, presentCreatedCells, refreshBookData, selectCanvasCell, setNotice])
 
   const refreshBookList = useCallback(async () => {
     const value = await call('list_books', { sort: 'newest' })
@@ -4507,15 +4488,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         },
       }))
       const updatedNotebook = await refreshBookData(bookId, notebook.id)
+      const createdCellId = asString(created?.id)
       rememberLastWorkSlot(slot)
-      if (type === 'timeline' && typeof created?.id === 'string') {
-        selectCanvasCell(created.id)
-        requestAnimationFrame(() => document.querySelector(`[data-id="${created.id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
-      }
-      if (passiveMediaKind(type) && typeof created?.id === 'string') {
-        openMediaLibrary(created.id, updatedNotebook)
+      if (type === 'timeline' && createdCellId) selectCanvasCell(createdCellId)
+      if (passiveMediaKind(type) && createdCellId) {
+        openMediaLibrary(createdCellId, updatedNotebook)
+        revealNotebookCanvasCells([createdCellId])
       } else {
-        collapseComposerAfterCellCreation()
+        presentCreatedCells(createdCellId ? [createdCellId] : [])
       }
       setNotice(`Added ${notebookGridTag(slot)} cell`)
     } catch (error) {
@@ -5086,7 +5066,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         makeRoom,
       )
       if (mediaLibraryPicker?.cellId === null) closeMediaLibrary()
-      collapseComposerAfterCellCreation()
+      presentCreatedCells([createdCellId])
       rememberLastWorkSlot(slot)
       await refreshBookData(bookId, notebook.id)
       setNotice(reusedExisting
@@ -5214,7 +5194,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         : `Copied and attached @${asset.id} from ${asset.owningBookName}`)
       if (picker.cellId !== null || selectedCellIdsRef.current.size === 0) {
         closeMediaLibrary()
-        if (createdCellId) collapseComposerAfterCellCreation()
+        if (createdCellId) presentCreatedCells([createdCellId])
+      } else if (createdCellId) {
+        revealNotebookCanvasCells([createdCellId])
       }
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error)
@@ -5325,7 +5307,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       runAccepted = true
       persistSpeakVoiceId(voiceId)
-      collapseComposerAfterCellCreation(chat)
+      presentCreatedCells([created.cellId], chat)
       presentChat(chat, () => setNotice(`${created.cellAddress} queued`))
       void watchGenerationRun({
         bookId,
@@ -5392,7 +5374,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         imported += 1
       }
       const refreshed = await refreshBookData(bookId, notebook?.id)
-      if (notebookActionCreatedCells(notebook, refreshed)) collapseComposerAfterCellCreation()
+      const createdCellIds = notebookCreatedCellIds(notebook, refreshed)
+      if (createdCellIds.length > 0) presentCreatedCells(createdCellIds)
       setNotice([
         imported > 0 ? `Imported ${imported}` : '',
         reused > 0 ? `reused ${reused} existing` : '',
@@ -5786,7 +5769,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }, { chat }))
         reviewChat(chat, false, () => setPendingCommandPlan(null))
         const refreshed = await refreshBookData(bookId, notebookId, undefined, chat).catch(() => undefined)
-        if (notebookActionCreatedCells(notebook, refreshed)) collapseComposerAfterCellCreation(chat)
+        const createdCellIds = notebookCreatedCellIds(notebook, refreshed)
+        if (createdCellIds.length > 0) presentCreatedCells(createdCellIds, chat)
         const message = asString(queued?.status) === 'completed'
           ? 'Workbook is already current'
           : 'Workbook run accepted and queued'
@@ -5870,7 +5854,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             setCellQueued(cellId, false)
             throw new Error('The server did not return a notebook run')
           }
-          if (outputCellId) collapseComposerAfterCellCreation(chat)
+          if (outputCellId) presentCreatedCells([outputCellId], chat)
           const watchCellId = outputCellId ?? cellId
           const watchedCell = notebook?.cells.find((cell) => cell.id === cellId)
           let address = watchedCell
@@ -6192,7 +6176,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       createdCellId = nextCellId
       if (isCurrent?.() === false) return { ok: true, message: 'Download queued in the previous workspace.' }
       selectCanvasCell(nextCellId, chat)
-      collapseComposerAfterCellCreation(chat)
+      presentCreatedCells([nextCellId], chat)
     } catch (error) {
       await refreshBookData(bookId, notebook.id, isCurrent, chat)
       const message = error instanceof Error ? error.message : String(error)
@@ -6293,7 +6277,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const clipRuns = results.map(notebookClipRun).filter((run) => run !== null)
       const outputs = clipRuns.flatMap((run) => run.outputs)
       for (const output of outputs) setCellQueued(output.cellId, true)
-      collapseComposerAfterCellCreation(chat)
+      presentCreatedCells(outputs.map((output) => output.cellId), chat)
       await refreshBookData(bookId, currentNotebook.id, undefined, chat).catch(() => undefined)
       if (outputs.length === 0) {
         presentChat(chat, () => setNotice(`Trimmed ${sourceAddress} in place`))
@@ -6353,10 +6337,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       actionCellId = run.actionCellId
       if (isCurrent?.() === false) return { ok: true, message: 'Frame extraction queued in the previous workspace.' }
-      collapseComposerAfterCellCreation(chat)
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
       selectCanvasCell(run.outputCellId ?? actionCellId, chat)
+      presentCreatedCells([run.outputCellId ?? actionCellId], chat)
       presentChat(chat, () => setNotice(`Frame extraction queued for ${sourceAddress}`))
       const outcome = await watchNotebookRun({
         bookId,
@@ -6429,10 +6413,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       actionCellId = run.actionCellId
       if (isCurrent?.() === false) return { ok: true, message: 'Audio extraction queued in the previous workspace.' }
-      collapseComposerAfterCellCreation(chat)
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
       selectCanvasCell(run.outputCellId ?? actionCellId, chat)
+      presentCreatedCells([run.outputCellId ?? actionCellId], chat)
       presentChat(chat, () => setNotice(`Audio extraction queued for ${sourceAddress}`))
       const outcome = await watchNotebookRun({
         bookId,
@@ -6945,7 +6929,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         : []
       if (notebook && routedCells.length > 0) {
         const placements: string[] = []
-        let firstCellId: string | null = null
+        const createdCellIds: string[] = []
         for (const { cell, makeRoom } of routedCells) {
           if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
           const created = recordValue(await call('create_notebook_cell', {
@@ -6958,13 +6942,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (!cellId) {
             throw new Error('The server did not return the new notebook cell')
           }
-          firstCellId ??= cellId
+          createdCellIds.push(cellId)
           placements.push(notebookGridTag(cell.slot))
         }
         if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
-        selectCanvasCell(firstCellId, chat)
+        selectCanvasCell(createdCellIds[0] ?? null, chat)
         await refreshBookData(bookId, notebook.id, isCurrent, chat)
-        collapseComposerAfterCellCreation(chat)
+        presentCreatedCells(createdCellIds, chat)
         const message = `Created ${placements.join(' and ')}`
         if (isCurrent?.() !== false) presentChat(chat, () => setNotice(message))
         return { ok: true, message }
@@ -6974,7 +6958,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const refreshed = await refreshBookData(bookId, notebook?.id, isCurrent, chat)
       if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
       if (createdCellId) selectCanvasCell(createdCellId, chat)
-      if (notebookActionCreatedCells(notebook, refreshed)) collapseComposerAfterCellCreation(chat)
+      const createdCellIds = notebookCreatedCellIds(notebook, refreshed)
+      if (createdCellIds.length > 0) presentCreatedCells(createdCellIds, chat)
       const message = chainResult
         ? plan.message || 'Chain complete'
         : messageFor(result, plan.message || 'Action applied')
@@ -7654,10 +7639,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }, { chat })
       runAccepted = true
       const acceptedRecord = recordValue(accepted)
-      collapseComposerAfterCellCreation(chat)
       const runId = asString(acceptedRecord?.run_id)
       const jobOperationId = asString(acceptedRecord?.job_id)
       const outputCellId = asString(acceptedRecord?.output_cell_id)
+      presentCreatedCells([outputCellId ?? cellId], chat)
       reviewChat(chat, false, () => setPendingChatAction(null))
       if (!voiceActiveRef.current) focusCommandComposer()
       setCellQueued(cellId, false)
@@ -7676,7 +7661,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           .catch(() => null)
         presentChat(chat, () => {
           revealCells([outputCellId])
-          highlightCells([outputCellId], { scroll: 'center' })
+          highlightCells([outputCellId])
         })
         setCellRunError(outputCellId, null)
         setCellQueued(outputCellId, true)
@@ -7684,7 +7669,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           candidate.id === outputCellId)
         if (output) address = notebookGridAddress(output.slot)
       } else {
-        highlightCells([cellId], { scroll: 'center' })
+        highlightCells([cellId])
       }
       void watchGenerationRun({
         bookId,
@@ -7854,7 +7839,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!current()) return { ok: true, message: `Cold-open copy created as ${output.address}` }
       reviewChat(chat, false, () => setPendingChatAction(null))
       selectCanvasCell(output.cellId)
-      collapseComposerAfterCellCreation(chat)
+      presentCreatedCells([output.cellId], chat)
       return { ok: true, message: `Cold-open copy created as ${output.address}` }
     }
     if (pendingChatAction.kind === 'subtitles') {
@@ -8103,8 +8088,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           throw new Error('Unsupported notebook action')
         }
         reviewChat(chat, false, () => setPendingChatAction(null))
-        await refreshBookData(bookId, currentNotebook.id, undefined, chat)
-        if (action.kind === 'create') collapseComposerAfterCellCreation(chat)
+        const refreshed = await refreshBookData(bookId, currentNotebook.id, undefined, chat)
+        if (action.kind === 'create') presentCreatedCells(notebookCreatedCellIds(currentNotebook, refreshed), chat)
         presentChat(chat, () => setNotice(pendingChatAction.plan.summary))
         return { ok: true, message: pendingChatAction.plan.summary }
       } catch (error) {
@@ -8148,7 +8133,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : []
     if (notebook && routedCells.length > 0) {
       const placements: string[] = []
-      let firstCellId: string | null = null
+      const createdCellIds: string[] = []
       for (const { cell, makeRoom } of routedCells) {
         const created = recordValue(await call('create_notebook_cell', {
           book_id: bookId,
@@ -8160,21 +8145,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (!cellId) {
           throw new Error('The server did not return the new notebook cell')
         }
-        firstCellId ??= cellId
+        createdCellIds.push(cellId)
         placements.push(notebookGridTag(cell.slot))
       }
       if (watchScopeRef.current.bookId === bookId) {
-        selectCanvasCell(firstCellId, chat)
+        selectCanvasCell(createdCellIds[0] ?? null, chat)
         await refreshBookData(bookId, notebook.id, undefined, chat)
       }
       const message = `Created ${placements.join(' and ')}`
-      collapseComposerAfterCellCreation(chat)
+      presentCreatedCells(createdCellIds, chat)
       presentChat(chat, () => setNotice(message))
       return { ok: true, message }
     }
     if (watchScopeRef.current.bookId === bookId) {
       const refreshed = await refreshBookData(bookId, notebook?.id, undefined, chat)
-      if (notebookActionCreatedCells(notebook, refreshed)) collapseComposerAfterCellCreation(chat)
+      const createdCellIds = notebookCreatedCellIds(notebook, refreshed)
+      if (createdCellIds.length > 0) presentCreatedCells(createdCellIds, chat)
     }
     if (tool === 'delete_asset') {
       const deleted = recordValue(result)
@@ -9483,7 +9469,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       await refreshBookData(bookId, notebook.id)
       selectCanvasCell(cellId)
-      collapseComposerAfterCellCreation()
+      presentCreatedCells([cellId])
       setNotice(`Duplicated as ${address}`)
     } catch (cause) {
       setNotice(cause instanceof Error ? cause.message : String(cause), 'error')
@@ -9816,9 +9802,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     `${screen}:${bookId}:${notebook?.id ?? ''}`,
     showCommandComposer && mcp.state === 'ready' && !busy && (Boolean(bookId) || Boolean(currentActionComposer)),
   )
-  const revealSuccessfulComposerResult = () => {
-    if (!mediaFullscreen) revealLatestNotebookResult()
-  }
 
   // One confirm sheet for every pending action. The body varies; the shell,
   // the keyboard model and the footer status slot do not.
@@ -11376,7 +11359,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           setHistoryViewCellId(null)
         }}
         onModelChange={changeChatModel}
-        onSuccessfulExecute={revealSuccessfulComposerResult}
       >
         {confirmSheet ?? actionSheetElement ?? clipSheetElement}
       </CommandComposer>
