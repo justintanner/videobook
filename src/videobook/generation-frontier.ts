@@ -4,7 +4,7 @@ import type { ActionChoice } from './workspace-actions'
 
 const frontierTypes = ['t2i', 'i2i', 't2v', 'i2v', 'r2v', 'v2v'] as const
 
-type FrontierType = typeof frontierTypes[number]
+export type FrontierType = typeof frontierTypes[number]
 
 const frameTargets = new Set(['first_frame', 'last_frame', 'loop', 'keyframe'])
 

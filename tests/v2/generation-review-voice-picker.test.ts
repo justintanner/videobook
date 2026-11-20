@@ -18,6 +18,7 @@ const ttsAction: NotebookGenerationAction = {
   cellTypes: ['generate_audio'],
   provider: 'elevenlabs',
   providerLabel: 'ElevenLabs',
+  family: { id: 'generation.generate_elevenlabs_text_to_audio', title: 'ElevenLabs' },
   model: '@apicity/elevenlabs',
   operation: 'text_to_audio',
   tool: 'generate_elevenlabs_text_to_audio',

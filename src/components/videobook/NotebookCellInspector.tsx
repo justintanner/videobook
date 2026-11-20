@@ -3214,6 +3214,7 @@ function ExecutableCellInspector({
     tool: draft.tool,
     provider: draft.provider,
     providerLabel: draft.provider,
+    family: { id: draft.tool, title: draft.tool || 'No compatible models' },
     model: draft.model,
     operation: draft.operation,
     title: draft.tool || 'No compatible models',

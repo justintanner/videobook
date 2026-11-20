@@ -839,6 +839,7 @@ describe('notebook chat generation cycle guards', () => {
       cellTypes: ['generate_image' as const],
       provider: 'kie',
       providerLabel: 'Kie',
+      family: { id: 'generation.kie:nano-banana-pro', title: 'Nano Banana Pro' },
       model: 'kie:nano-banana-pro',
       operation: 'text_to_image',
       tool: 'generate_image',

@@ -81,11 +81,18 @@ export type GenerationControl = {
   hidden?: boolean
 }
 
+export type GenerationFamily = {
+  id: string
+  title: string
+}
+
 export type NotebookGenerationAction = {
   id: string
   cellTypes: NotebookGenerationCellType[]
   provider: string
   providerLabel: string
+  family: GenerationFamily
+  variant?: string
   model: string
   operation: string
   tool: string
@@ -306,6 +313,13 @@ function inputContract(value: unknown): GenerationInputContract | null {
   return modes.length > 0 ? { modes } : null
 }
 
+function generationFamily(value: unknown): GenerationFamily | null {
+  const family = recordValue(value)
+  const id = nonBlankStringValue(family?.id)
+  const title = nonBlankStringValue(family?.title)
+  return id && title ? { id, title } : null
+}
+
 export function asNotebookGenerationActions(
   value: unknown,
 ): NotebookGenerationAction[] {
@@ -343,11 +357,15 @@ export function asNotebookGenerationActions(
     const priority = finiteNumber(action.defaultPriority)
     const prompt = recordValue(action.prompt)
     const promptField = nonBlankStringValue(prompt?.field)
+    const id = nonBlankStringValue(action.id) ?? `generation.${tool}`
+    const variant = nonBlankStringValue(action.variant)
     return [{
-      id: nonBlankStringValue(action.id) ?? `generation.${tool}`,
+      id,
       cellTypes,
       provider,
       providerLabel: nonBlankStringValue(action.providerLabel) ?? provider,
+      family: generationFamily(action.family) ?? { id, title: title ?? tool },
+      ...(variant ? { variant } : {}),
       model,
       operation,
       tool,
