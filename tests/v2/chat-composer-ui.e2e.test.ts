@@ -2303,23 +2303,23 @@ describe('chat composer browser flow', () => {
       `.notebook-flow .react-flow__node[data-id="${fullscreenImageCellId}"]`,
     )
     const cardMedia = fullscreenNode.locator('.cell-media')
-    const cardMetadata = fullscreenNode.locator('.cell-media-rail')
+    const cardFooter = fullscreenNode.locator('.cell-node-footer')
+    const cardMetadata = cardFooter.locator('.cell-node-footer-meta')
     await cardMetadata.waitFor({ state: 'visible' })
+    expect(await fullscreenNode.locator('.cell-media-rail').count()).toBe(0)
     expect(await fullscreenNode.locator('.cell-media-caption').count()).toBe(0)
     expect(await cardMedia.getAttribute('title')).toBe('A fullscreen image fixture')
     const cardMediaBox = await cardMedia.boundingBox()
+    const cardFooterBox = await cardFooter.boundingBox()
     const cardMetadataBox = await cardMetadata.boundingBox()
-    if (!cardMediaBox || !cardMetadataBox) {
+    if (!cardMediaBox || !cardFooterBox || !cardMetadataBox) {
       throw new Error('Could not measure image card metadata')
     }
-    const metadataTopInset = cardMetadataBox.y - cardMediaBox.y
-    const metadataRightInset =
-      cardMediaBox.x + cardMediaBox.width
-        - cardMetadataBox.x - cardMetadataBox.width
-    expect(metadataTopInset).toBeGreaterThanOrEqual(-1)
-    expect(metadataTopInset).toBeLessThanOrEqual(1)
-    expect(metadataRightInset).toBeGreaterThanOrEqual(-1)
-    expect(metadataRightInset).toBeLessThanOrEqual(16)
+    expect(cardMetadataBox.y).toBeGreaterThanOrEqual(cardMediaBox.y + cardMediaBox.height - 1)
+    expect(cardMetadataBox.y).toBeGreaterThanOrEqual(cardFooterBox.y - 1)
+    expect(cardMetadataBox.y + cardMetadataBox.height).toBeLessThanOrEqual(cardFooterBox.y + cardFooterBox.height + 1)
+    expect(cardMetadataBox.x).toBeGreaterThanOrEqual(cardFooterBox.x - 1)
+    expect(cardMetadataBox.x + cardMetadataBox.width).toBeLessThanOrEqual(cardFooterBox.x + cardFooterBox.width + 1)
     await fullscreenNode.click()
     const trigger = page.getByLabel('Open @c3 fullscreen')
     const editTrigger = page.getByLabel('Edit @c3 image')

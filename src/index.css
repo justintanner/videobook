@@ -11430,6 +11430,8 @@ textarea:focus-visible {
 
 .image-editor-instructions {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 10px;
   padding: 18px;
   border-bottom: 1px solid rgba(72, 119, 92, 0.25);
@@ -11500,6 +11502,7 @@ textarea:focus-visible {
 
 .image-editor-model {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 4px;
 }
@@ -11510,6 +11513,10 @@ textarea:focus-visible {
 }
 
 .image-editor-model select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   background: #10201a;
   border: 1px solid #2a4438;
   border-radius: 6px;
@@ -11694,6 +11701,7 @@ textarea:focus-visible {
   grid-row: 2;
   min-width: 0;
   min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   border-left: 1px solid rgba(92, 145, 114, 0.3);
   background: #06110b;
