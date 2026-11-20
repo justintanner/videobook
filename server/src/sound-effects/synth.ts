@@ -20,7 +20,7 @@ function noise(length: number, seed: number): Float32Array {
   });
 }
 
-function bandpass(samples: Float32Array, cutoff: Curve): Float32Array {
+function svf(samples: Float32Array, cutoff: Curve, mode: "band" | "low"): Float32Array {
   let low = 0;
   let band = 0;
   return samples.map((sample, index) => {
@@ -29,8 +29,16 @@ function bandpass(samples: Float32Array, cutoff: Curve): Float32Array {
     const high = sample - low - band / 1.2;
     band += f * high;
     low += f * band;
-    return band;
+    return mode === "band" ? band : low;
   });
+}
+
+function bandpass(samples: Float32Array, cutoff: Curve): Float32Array {
+  return svf(samples, cutoff, "band");
+}
+
+function lowpass(samples: Float32Array, cutoff: Curve): Float32Array {
+  return svf(samples, cutoff, "low");
 }
 
 function sine(length: number, pitch: Curve): Float32Array {
@@ -78,6 +86,25 @@ function glitch(length: number): Float32Array {
   });
 }
 
+function powerDown(length: number): Float32Array {
+  const tone = sine(length, sweep(440, 55));
+  const hum = lowpass(noise(length, 97), sweep(900, 120));
+  return envelope(mix(tone, hum, 0.15), decay(0.35, 0.045 / 1.4));
+}
+
+function errorTone(length: number): Float32Array {
+  const tone = sine(length, (u) => u < 0.45 ? 330 : 220);
+  const peak = 0.015 / 0.35;
+  return envelope(tone, (u) => {
+    if (u < 0.38) {
+      return Math.min(1, u / peak, (0.38 - u) / 0.04) * Math.exp(-Math.max(0, u - peak) / 0.14);
+    }
+    if (u < 0.52) return 0;
+    const local = (u - 0.52) / 0.48;
+    return 0.78 * Math.min(1, local / 0.08, (1 - local) / 0.12) * Math.exp(-local / 0.5);
+  });
+}
+
 const recipes: Record<BuiltinSoundId, (length: number) => Float32Array> = {
   zoom_in: (length) => rush(length, sweep(220, 5_200), 0.82, 11),
   zoom_out: (length) => rush(length, sweep(5_200, 220), 0.18, 11),
@@ -89,6 +116,8 @@ const recipes: Record<BuiltinSoundId, (length: number) => Float32Array> = {
   impact: (length) => envelope(mix(sine(length, sweep(110, 45)), envelope(noise(length, 51), decay(0.018)), 0.12), decay(0.18)),
   riser: (length) => rush(length, sweep(180, 6_000), 0.95, 67),
   glitch,
+  power_down: powerDown,
+  error: errorTone,
 };
 
 function pan(samples: Float32Array, position: Curve): BuiltinAudio {

@@ -76,4 +76,18 @@ describe("apply_builtin_sfx tool", () => {
     expect(action).toBeDefined();
     expect(action?.confirmation).toBe("none");
   });
+
+  it("accepts and mixes power_down and error cues into a fixture clip", async () => {
+    const result = await client.callTool({
+      name: "apply_builtin_sfx",
+      arguments: {
+        book_id: bookId,
+        asset_id: assetId,
+        sfx: [{ sound: "power_down", timestamp: 0.5 }, { sound: "error", timestamp: 2.0 }],
+      },
+    });
+    expect(result.isError, JSON.stringify(result.content)).toBeFalsy();
+    expect(data(result)).toMatchObject({ asset_id: assetId, status: "completed", applied: 2, dropped: 0 });
+    await waitForBookQueuesIdleForTests();
+  }, testBudget(60_000));
 });

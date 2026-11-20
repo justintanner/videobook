@@ -1,4 +1,5 @@
 import { adaptCommandArgs, parseCommandArgs, type CommandToolArgs } from '../lib/command-registry.js'
+import { builtinSoundId } from '../../server/src/sound-effects/catalog.js'
 import type { UiActionId } from '../../server/src/workspace-action-contract.js'
 
 type Params = Parameters<typeof parseCommandArgs>[1]
@@ -92,7 +93,12 @@ function characterRoute(parts: readonly string[]): MergedCommandRoute | null {
 function sfxRoute(parts: readonly string[]): MergedCommandRoute | null {
   if (parts.length === 0) return { kind: 'sound-effects' }
   if (parts.length === 1) return null
-  if (parts.length === 3) return toolRoute('apply_builtin_sfx', adaptCommandArgs('apply_builtin_sfx', parseCommandArgs(parts.join(' '), APPLY_SFX_PARAMS.slice(0, 3))), true)
+  if (parts.length === 3) {
+    const ordered = builtinSoundId(parts[1] ?? '') !== null && builtinSoundId(parts[2] ?? '') === null
+      ? [parts[0], parts[2], parts[1]]
+      : parts
+    return toolRoute('apply_builtin_sfx', adaptCommandArgs('apply_builtin_sfx', parseCommandArgs(ordered.join(' '), APPLY_SFX_PARAMS.slice(0, 3))), true)
+  }
   return toolRoute('apply_sfx', adaptCommandArgs('apply_sfx', parseCommandArgs(parts.join(' '), APPLY_SFX_PARAMS)), true)
 }
 

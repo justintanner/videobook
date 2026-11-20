@@ -1,5 +1,5 @@
 export const BUILTIN_SOUND_IDS = [
-  "zoom_in", "zoom_out", "whoosh", "swish", "pop", "click", "ding", "impact", "riser", "glitch",
+  "zoom_in", "zoom_out", "whoosh", "swish", "pop", "click", "ding", "impact", "riser", "glitch", "power_down", "error",
 ] as const;
 
 export type BuiltinSoundId = typeof BUILTIN_SOUND_IDS[number];
@@ -23,6 +23,8 @@ export const BUILTIN_SOUNDS: readonly BuiltinSound[] = [
   { id: "impact", title: "Impact", description: "A deep thump lands with a brief noisy edge.", durationSeconds: 0.6, accentSeconds: 0.01 },
   { id: "riser", title: "Riser", description: "A climbing tone and rush build anticipation.", durationSeconds: 1.5, accentSeconds: 1.425 },
   { id: "glitch", title: "Glitch", description: "Short digital bursts stutter between silent gaps.", durationSeconds: 0.3, accentSeconds: 0.01 },
+  { id: "power_down", title: "Power down", description: "A falling tone and soft hum fade as power drops.", durationSeconds: 1.4, accentSeconds: 0.05 },
+  { id: "error", title: "Error", description: "Two short low tones mark an error.", durationSeconds: 0.35, accentSeconds: 0.02 },
 ];
 
 export function builtinSound(id: BuiltinSoundId): BuiltinSound {

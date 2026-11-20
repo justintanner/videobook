@@ -44,7 +44,7 @@ function loudestWindow(left: Float32Array, right: Float32Array): number {
 
 describe("built-in sound synthesis", () => {
   it("keeps the picker order and normalizes user names", () => {
-    expect(BUILTIN_SOUND_IDS).toEqual(["zoom_in", "zoom_out", "whoosh", "swish", "pop", "click", "ding", "impact", "riser", "glitch"]);
+    expect(BUILTIN_SOUND_IDS).toEqual(["zoom_in", "zoom_out", "whoosh", "swish", "pop", "click", "ding", "impact", "riser", "glitch", "power_down", "error"]);
     expect(BUILTIN_SOUNDS.map((sound) => sound.id)).toEqual(BUILTIN_SOUND_IDS);
     for (const text of ["zoom-in", "Zoom In", "zoom in", " zoom_in "]) expect(builtinSoundId(text)).toBe("zoom_in");
     expect(builtinSoundId("unknown")).toBeNull();
@@ -135,5 +135,34 @@ describe("built-in sound synthesis", () => {
     }
     expect(builtinSound("glitch").durationSeconds).toBeLessThanOrEqual(0.4);
     expect(gaps).toBeGreaterThanOrEqual(3);
+  });
+
+  it("glides power_down downward so its last third is below half the first third", () => {
+    const samples = renderBuiltinSound("power_down").left;
+    const third = Math.floor(samples.length / 3);
+    const first = spectrum(samples.slice(0, third)).strongest;
+    const last = spectrum(samples.slice(-third)).strongest;
+    expect(last).toBeLessThan(first / 2);
+  });
+
+  it("splits error into two bursts separated by silence with the second lower", () => {
+    const { left, right } = renderBuiltinSound("error");
+    let gapStart = -1;
+    let gapEnd = -1;
+    let run = 0;
+    for (let index = 0; index < left.length; index += 1) {
+      if (left[index] === 0 && right[index] === 0) run += 1;
+      else {
+        if (run >= 480 && index > run) {
+          gapStart = index - run;
+          gapEnd = index;
+          break;
+        }
+        run = 0;
+      }
+    }
+    expect(gapStart).toBeGreaterThan(0);
+    expect(gapEnd).toBeGreaterThan(gapStart);
+    expect(spectrum(left.slice(0, gapStart)).strongest).toBeGreaterThan(spectrum(left.slice(gapEnd)).strongest);
   });
 });
