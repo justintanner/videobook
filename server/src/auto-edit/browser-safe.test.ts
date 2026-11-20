@@ -6,7 +6,13 @@ import { describe, expect, it } from "vitest";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER_SRC = resolve(HERE, "..");
-const BROWSER_SAFE_FILES = ["plan.ts", "looks.ts"];
+const BROWSER_SAFE_FILES = ["plan.ts", "looks.ts", "style.ts"];
+const ALLOWED_REACHABLE_SERVER_FILES = new Set([
+  "auto-edit/plan.ts",
+  "auto-edit/looks.ts",
+  "auto-edit/style.ts",
+  "sound-effects/catalog.ts",
+]);
 const MODULE_SPECIFIER = /^\s*(?:import|export)\s+(type\s+)?[\w$*{}\s,]*?\s*from\s+["']([^"']+)["']|^\s*import\s+["']([^"']+)["']/gmu;
 const BUILTINS = new Set(builtinModules);
 
@@ -47,9 +53,9 @@ function forbidden(specifier: string): boolean {
 }
 
 describe("browser-safe auto-edit files", () => {
-  it.each(BROWSER_SAFE_FILES)("%s reaches only browser-safe auto-edit modules with no server imports", (name) => {
+  it.each(BROWSER_SAFE_FILES)("%s reaches only browser-safe modules with no server imports", (name) => {
     const files = reachableFiles(join(HERE, name));
-    expect(files.every((file) => BROWSER_SAFE_FILES.includes(relative(HERE, file)))).toBe(true);
+    expect(files.every((file) => ALLOWED_REACHABLE_SERVER_FILES.has(relative(SERVER_SRC, file)))).toBe(true);
     const problems = files.flatMap((file) => valueImports(file)
       .filter((specifier) => forbidden(specifier) || (!specifier.startsWith(".") && specifier !== "zod"))
       .map((specifier) => `${relative(SERVER_SRC, file)} imports ${specifier}`));
