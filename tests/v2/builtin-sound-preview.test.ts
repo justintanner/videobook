@@ -16,6 +16,6 @@ describe('built-in sound previews', () => {
   })
 
   it('keeps the sounds in separate cached URLs', () => {
-    expect(new Set(BUILTIN_SOUND_IDS.map(builtinSoundUrl)).size).toBe(10)
+    expect(new Set(BUILTIN_SOUND_IDS.map(builtinSoundUrl)).size).toBe(BUILTIN_SOUND_IDS.length)
   })
 })

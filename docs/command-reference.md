@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (218)
+## MCP endpoints (219)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
@@ -26,6 +26,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `attach_library_asset` — Copy a foreign Library asset into a book and attach it to a media slot
 - `audio_boost` — Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.
 - `audio_mix` — Mix a video or audio layer asset into a target video or audio asset in place, starting at 0 seconds at volume 0-100; the target keeps its duration and picture.
+- `auto_edit` — Read a video's auto-edit draft or render an auto-edit into a new cell. Rendering runs locally for free without changing the source video.
 - `backfill_asset_tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.
 - `book_archive` — Local export-book/import-book CLI coordination: prepare a consistent snapshot, reserve an import workspace, adopt a validated book, or release scratch files. Archive bytes stay on the local filesystem.
 - `cancel_job` — Cancel a queued or running persistent job by job_id. For a leftover provider task after local jobs have finished, pass asset_id and its expected_task_id to cancel local tracking and retain media; this does not cancel the request at the provider.
@@ -229,7 +230,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 - `zoom_video` — Zoom in on parts of a video toward a focus point, easing in, holding and returning, with an optional built-in sound. Local and free: one FFmpeg encode in place, with history.
 
-## Slash actions (269; 108 dedicated command routes)
+## Slash actions (270; 108 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
@@ -252,6 +253,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/attach-library-asset` — Copy a foreign Library asset into a book and attach it to a media slot; MCP: `attach_library_asset`
 - `/audio-boost` — Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.; MCP: `audio_boost`
 - `/audio-mix` — Mix a video or audio asset onto another at a lower volume, editing the target in-place.; MCP: `audio_mix`
+- `/auto-edit` — Read a video's auto-edit draft or render an auto-edit into a new cell. Rendering runs locally for free without changing the source video.; MCP: `auto_edit`
 - `/backfill-asset-tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.; MCP: `backfill_asset_tags`
 - `/books` — Open the book selector dropdown; UI: `open_projects`
 - `/cancel-job` — Cancel a queued or running persistent job by job_id. For a leftover provider task after local jobs have finished, pass asset_id and its expected_task_id to cancel local tracking and retain media; this does not cancel the request at the provider.; MCP: `cancel_job`

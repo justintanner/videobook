@@ -1,7 +1,9 @@
 import { AUDIO_OPTS, H264_MEDIUM } from "../ffmpeg.js";
+import { buildBuiltinSfxFilter, type BuiltinSfxCue } from "../sound-effects/mix.js";
 import { lookFilter } from "./looks.js";
 import {
   checkSegmentPlan,
+  planOutputFrames,
   segmentOutputFrames,
   type PlanSegment,
   type SegmentPlan,
@@ -17,6 +19,8 @@ export interface SegmentRenderArgsOptions {
   inputPath: string;
   outputPath: string;
   variableFrameRate: boolean;
+  cues?: readonly BuiltinSfxCue[];
+  cuePaths?: readonly string[];
 }
 
 export interface SegmentFilterGraph {
@@ -238,14 +242,38 @@ export function buildSegmentRenderArgs(
   options: SegmentRenderArgsOptions,
 ): string[] {
   const graph = buildSegmentFilterGraph(plan, options);
+  const cues = options.cues ?? [];
+  const cuePaths = options.cuePaths ?? [];
+  const inputArgs = [...graph.inputArgs];
+  const filterParts = [...graph.filterParts];
+  let audioArgs: string[];
+
+  if (cues.length > 0) {
+    if (cuePaths.length !== cues.length) {
+      throw new Error(`Expected ${cues.length} sound cue file path(s); got ${cuePaths.length}.`);
+    }
+    for (const cuePath of cuePaths) {
+      inputArgs.push("-i", cuePath);
+    }
+    const outputDuration = planOutputFrames(plan) / plan.source.fps;
+    const sfxFilter = buildBuiltinSfxFilter(cues, plan.source.hasAudio, outputDuration, {
+      baseInput: graph.audioOut ?? "[0:a:0]",
+      firstCueInputIndex: plan.segments.length,
+    });
+    filterParts.push(sfxFilter);
+    audioArgs = ["-map", "[outa]", ...AUDIO_OPTS];
+  } else {
+    audioArgs = graph.audioOut ? ["-map", graph.audioOut, ...AUDIO_OPTS] : ["-an"];
+  }
+
   return [
     "-y",
-    ...graph.inputArgs,
+    ...inputArgs,
     "-filter_complex",
-    graph.filterParts.join(";"),
+    filterParts.join(";"),
     "-map",
     graph.videoOut,
-    ...(graph.audioOut ? ["-map", graph.audioOut, ...AUDIO_OPTS] : ["-an"]),
+    ...audioArgs,
     ...H264_MEDIUM,
     "-r",
     filterNumber(plan.source.fps),

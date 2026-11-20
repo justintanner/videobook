@@ -10,6 +10,7 @@ import { mutateNotebook } from "./notebook-mutations.js";
 import { removeArtifactFromTimeline } from "./tools/delete-asset.js";
 import { forgetCaptionState } from "./captions/forget.js";
 import { forgetGraphicsState } from "./graphics/forget.js";
+import { forgetAutoEditState } from "./auto-edit/forget.js";
 import { forgetCleanupState } from "./video-cleanup/service.js";
 
 /** One place at HEAD that still holds the artifact, as the engine reports it. */
@@ -362,6 +363,7 @@ export async function forgetAsset(
   }
   forgetCaptionState(engine, artifactId);
   forgetGraphicsState(engine, artifactId);
+  forgetAutoEditState(engine, artifactId);
   forgetCleanupState(engine, artifactId);
   return await eraseObjects(engine, artifactId, pending, releaseObject);
 }

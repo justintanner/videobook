@@ -2,6 +2,7 @@ import { trendingResearchDef } from "./trending-research.js";
 import { bookArchiveDefs } from "./book-archive.js";
 import { setHarCaptureDef } from "./set-har-capture.js";
 import { coldOpenDefs } from "./cold-open.js";
+import { autoEditDef } from "./auto-edit.js";
 import type { McpServer, StandardSchemaWithJSON } from "@modelcontextprotocol/server";
 import type { Engine } from "videobook-engine";
 import type { BookManager } from "../book-manager.js";
@@ -137,6 +138,7 @@ import { listChatModelsDef } from "../chat-models.js";
 export function getVideoEditingToolDefs(engine: Engine, books?: BookManager): ToolDef[] {
   return [
     ...coldOpenDefs(engine),
+    autoEditDef(engine),
     trimVideoDef(engine),
     trimAudioDef(engine),
     splitVideoDef(engine),

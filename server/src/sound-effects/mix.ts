@@ -22,18 +22,25 @@ export async function writeBuiltinSfxFiles(scratchDir: string, cues: readonly Bu
   return cues.map(({ sound }) => paths.get(sound)!);
 }
 
-export function buildBuiltinSfxFilter(cues: readonly BuiltinSfxCue[], hasAudio: boolean, durationSeconds: number): string {
+export function buildBuiltinSfxFilter(
+  cues: readonly BuiltinSfxCue[],
+  hasAudio: boolean,
+  durationSeconds: number,
+  options?: { baseInput?: string; firstCueInputIndex?: number },
+): string {
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) throw new Error("Video duration must be positive");
   if (cues.length === 0) throw new Error("At least one sound cue is required");
+  const baseInput = options?.baseInput ?? "[0:a:0]";
+  const firstCueInputIndex = options?.firstCueInputIndex ?? 1;
   const duration = durationSeconds.toFixed(6);
   const parts = [hasAudio
-    ? `[0:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=duration=${duration},asetpts=PTS-STARTPTS[base]`
+    ? `${baseInput}aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=duration=${duration},asetpts=PTS-STARTPTS[base]`
     : `anullsrc=channel_layout=stereo:sample_rate=48000,atrim=duration=${duration},asetpts=PTS-STARTPTS[base]`];
   cues.forEach((cue, index) => {
     if (!Number.isFinite(cue.startSeconds) || cue.startSeconds < 0) throw new Error("Cue start must be nonnegative");
     if (!Number.isFinite(cue.gain) || cue.gain < 0 || cue.gain > 1) throw new Error("Cue gain must be between 0 and 1");
     const delay = Math.round(cue.startSeconds * 48_000);
-    parts.push(`[${index + 1}:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=${cue.gain},adelay=${delay}S|${delay}S[s${index}]`);
+    parts.push(`[${firstCueInputIndex + index}:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=${cue.gain},adelay=${delay}S|${delay}S[s${index}]`);
   });
   parts.push(`[base]${cues.map((_, index) => `[s${index}]`).join("")}amix=inputs=${cues.length + 1}:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95:level=false[outa]`);
   return parts.join(";");

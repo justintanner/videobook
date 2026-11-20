@@ -285,6 +285,7 @@ function jobTypeToAssetWorkKind(
       return { kind: "crop" };
     case "render_captions":
     case "render_graphics":
+    case "render_auto_edit":
       return { kind: "render" };
     case "edit_cold_open":
     case "splice_video":
