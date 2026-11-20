@@ -2454,8 +2454,7 @@ describe('chat composer browser flow', () => {
       operation: 'edit',
       prompt: editPrompt,
     })
-    const modelSelect = dialog.getByLabel('Model', { exact: true })
-    await modelSelect.selectOption({ label: 'GPT Image 2' })
+    await selectGenerationAction(dialog, 'gpt-image-2-image-to-image')
     observedCalls.length = 0
     await modalInput.fill(editPrompt)
     await dialog.getByRole('button', { name: /Apply edit/ }).click()
