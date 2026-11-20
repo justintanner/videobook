@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SEGMENT_LOOK_IDS, type SegmentLook } from "./looks.js";
 
 const SEGMENT_PLAN_VERSION = 1 as const;
 const MAX_SEGMENTS = 24;
@@ -6,6 +7,8 @@ const MIN_SEGMENT_OUTPUT_FRAMES = 2;
 const MAX_OUTPUT_SECONDS = 180;
 const MIN_SEGMENT_SPEED = 0.25;
 const MAX_SEGMENT_SPEED = 4;
+const MIN_ZOOM_SCALE = 1;
+const MAX_ZOOM_SCALE = 3;
 
 const SEGMENT_ROLES = [
   "cold_open",
@@ -18,6 +21,20 @@ const SEGMENT_ROLES = [
 
 const SEGMENT_MOTIONS = ["flow", "blend", "repeat"] as const;
 const SEGMENT_AUDIO_POLICIES = ["source", "pitch", "mute"] as const;
+const SEGMENT_ZOOM_EASES = ["hold", "linear", "smooth"] as const;
+
+const segmentZoomPointSchema = z.object({
+  scale: z.number().finite().min(MIN_ZOOM_SCALE).max(MAX_ZOOM_SCALE),
+  x: z.number().finite().min(0).max(1),
+  y: z.number().finite().min(0).max(1),
+}).strict();
+
+const segmentZoomSchema = z.object({
+  from: segmentZoomPointSchema,
+  to: segmentZoomPointSchema,
+  ease: z.enum(SEGMENT_ZOOM_EASES),
+  rampFraction: z.number().finite().gt(0).max(1).default(1),
+}).strict();
 
 export const segmentSourceSchema = z.object({
   artifactId: z.string().min(1),
@@ -37,6 +54,8 @@ export const segmentSchema = z.object({
   speed: z.number().finite().min(MIN_SEGMENT_SPEED).max(MAX_SEGMENT_SPEED).default(1),
   motion: z.enum(SEGMENT_MOTIONS).default("repeat"),
   audio: z.enum(SEGMENT_AUDIO_POLICIES).default("source"),
+  zoom: segmentZoomSchema.optional(),
+  look: z.enum(SEGMENT_LOOK_IDS).default("none"),
 }).strict();
 
 export const segmentPlanSchema = z.object({
@@ -45,9 +64,18 @@ export const segmentPlanSchema = z.object({
   segments: z.array(segmentSchema).min(1).max(MAX_SEGMENTS),
 }).strict();
 
+export type SegmentZoomPoint = z.infer<typeof segmentZoomPointSchema>;
+export type SegmentZoom = Omit<z.infer<typeof segmentZoomSchema>, "rampFraction"> & {
+  rampFraction?: number;
+};
 export type SegmentSource = z.infer<typeof segmentSourceSchema>;
-export type PlanSegment = z.infer<typeof segmentSchema>;
-export type SegmentPlan = z.infer<typeof segmentPlanSchema>;
+export type PlanSegment = Omit<z.infer<typeof segmentSchema>, "zoom" | "look"> & {
+  zoom?: SegmentZoom;
+  look?: SegmentLook;
+};
+export type SegmentPlan = Omit<z.infer<typeof segmentPlanSchema>, "segments"> & {
+  segments: PlanSegment[];
+};
 
 export interface SegmentPlanIssue {
   segmentId: string;
@@ -80,6 +108,77 @@ export function segmentOutputStartFrames(plan: Pick<SegmentPlan, "segments">): n
 
 export function planOutputFrames(plan: Pick<SegmentPlan, "segments">): number {
   return plan.segments.reduce((total, segment) => total + segmentOutputFrames(segment), 0);
+}
+
+export function segmentZoomAt(
+  segment: Pick<PlanSegment, "startFrame" | "endFrame" | "speed" | "zoom">,
+  outputFrame: number,
+): SegmentZoomPoint {
+  const zoom = segment.zoom;
+  if (!zoom) return { scale: 1, x: 0.5, y: 0.5 };
+  if (zoom.ease === "hold") {
+    return { scale: zoom.to.scale, x: zoom.to.x, y: zoom.to.y };
+  }
+  const frames = segmentOutputFrames(segment);
+  const rampFraction = zoom.rampFraction ?? 1;
+  const span = (frames - 1) * rampFraction;
+  const u = span <= 0 ? 1 : Math.min(1, Math.max(0, outputFrame / span));
+  const eased = zoom.ease === "smooth" ? u * u * (3 - 2 * u) : u;
+  return {
+    scale: zoom.from.scale + (zoom.to.scale - zoom.from.scale) * eased,
+    x: zoom.from.x + (zoom.to.x - zoom.from.x) * eased,
+    y: zoom.from.y + (zoom.to.y - zoom.from.y) * eased,
+  };
+}
+
+function checkZoomPoint(
+  segmentId: string,
+  label: "from" | "to",
+  point: SegmentZoomPoint,
+): SegmentPlanIssue[] {
+  const issues: SegmentPlanIssue[] = [];
+  if (!Number.isFinite(point.scale) || point.scale < MIN_ZOOM_SCALE || point.scale > MAX_ZOOM_SCALE) {
+    issues.push({
+      segmentId,
+      message: `Segment "${segmentId}" zoom.${label}.scale must be from ${MIN_ZOOM_SCALE} to ${MAX_ZOOM_SCALE}; got ${point.scale}.`,
+    });
+  }
+  if (!Number.isFinite(point.x) || point.x < 0 || point.x > 1) {
+    issues.push({
+      segmentId,
+      message: `Segment "${segmentId}" zoom.${label}.x must be from 0 to 1; got ${point.x}.`,
+    });
+  }
+  if (!Number.isFinite(point.y) || point.y < 0 || point.y > 1) {
+    issues.push({
+      segmentId,
+      message: `Segment "${segmentId}" zoom.${label}.y must be from 0 to 1; got ${point.y}.`,
+    });
+  }
+  return issues;
+}
+
+function checkSegmentZoom(segment: PlanSegment): SegmentPlanIssue[] {
+  const zoom = segment.zoom;
+  if (!zoom) return [];
+  const issues: SegmentPlanIssue[] = [
+    ...checkZoomPoint(segment.id, "from", zoom.from),
+    ...checkZoomPoint(segment.id, "to", zoom.to),
+  ];
+  const rampFraction = zoom.rampFraction ?? 1;
+  if (!Number.isFinite(rampFraction) || rampFraction <= 0 || rampFraction > 1) {
+    issues.push({
+      segmentId: segment.id,
+      message: `Segment "${segment.id}" zoom.rampFraction must be above 0 and at most 1; got ${rampFraction}.`,
+    });
+  }
+  if (!SEGMENT_ZOOM_EASES.includes(zoom.ease)) {
+    issues.push({
+      segmentId: segment.id,
+      message: `Segment "${segment.id}" zoom.ease "${String(zoom.ease)}" is not supported.`,
+    });
+  }
+  return issues;
 }
 
 function checkSegmentRange(segment: PlanSegment, sourceFrames: number): SegmentPlanIssue[] {
@@ -128,6 +227,13 @@ export function checkSegmentPlan(plan: SegmentPlan): SegmentPlanIssue[] {
     }
     const rangeIssues = checkSegmentRange(segment, plan.source.frames);
     issues.push(...rangeIssues);
+    issues.push(...checkSegmentZoom(segment));
+    if (segment.look !== undefined && !SEGMENT_LOOK_IDS.includes(segment.look)) {
+      issues.push({
+        segmentId: segment.id,
+        message: `Segment "${segment.id}" look "${String(segment.look)}" is not supported.`,
+      });
+    }
     if (!Number.isFinite(segment.speed) || segment.speed < MIN_SEGMENT_SPEED || segment.speed > MAX_SEGMENT_SPEED) {
       issues.push({
         segmentId: segment.id,

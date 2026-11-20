@@ -7,6 +7,7 @@ import {
   segmentOutputFrames,
   segmentOutputStartFrames,
   segmentPlanSchema,
+  segmentZoomAt,
   type SegmentPlan,
 } from "./plan.js";
 
@@ -45,6 +46,7 @@ describe("segment plan schema and frame arithmetic", () => {
       speed: 1,
       motion: "repeat",
       audio: "source",
+      look: "none",
     });
     expect(() => segmentPlanSchema.parse({
       ...basePlan(),
@@ -120,5 +122,70 @@ describe("segment plan schema and frame arithmetic", () => {
     expect(longIssues).toHaveLength(1);
     expect(longIssues[0]!.segmentId).toBe("s1");
     expect(longIssues[0]!.message).toContain("180 s");
+  });
+
+  it("evaluates segmentZoomAt for hold, linear, smooth and rampFraction", () => {
+    const baseSeg = { startFrame: 0, endFrame: 31, speed: 1 };
+    expect(segmentZoomAt(baseSeg, 10)).toEqual({ scale: 1, x: 0.5, y: 0.5 });
+
+    const holdSeg = {
+      ...baseSeg,
+      zoom: { from: { scale: 1, x: 0.2, y: 0.2 }, to: { scale: 2, x: 0.5, y: 0.25 }, ease: "hold" as const },
+    };
+    expect(segmentZoomAt(holdSeg, 0)).toEqual({ scale: 2, x: 0.5, y: 0.25 });
+    expect(segmentZoomAt(holdSeg, 30)).toEqual({ scale: 2, x: 0.5, y: 0.25 });
+
+    const linearSeg = {
+      ...baseSeg,
+      zoom: { from: { scale: 1, x: 0.3, y: 0.5 }, to: { scale: 2, x: 0.7, y: 0.5 }, ease: "linear" as const },
+    };
+    expect(segmentZoomAt(linearSeg, 0)).toEqual({ scale: 1, x: 0.3, y: 0.5 });
+    expect(segmentZoomAt(linearSeg, 15).scale).toBeCloseTo(1.5, 6);
+    expect(segmentZoomAt(linearSeg, 15).x).toBeCloseTo(0.5, 6);
+    expect(segmentZoomAt(linearSeg, 30)).toEqual({ scale: 2, x: 0.7, y: 0.5 });
+
+    const smoothSeg = {
+      ...baseSeg,
+      zoom: {
+        from: { scale: 1, x: 0.5, y: 0.5 },
+        to: { scale: 2.7, x: 0.6, y: 0.4 },
+        ease: "smooth" as const,
+        rampFraction: 0.5,
+      },
+    };
+    expect(segmentZoomAt(smoothSeg, 0)).toEqual({ scale: 1, x: 0.5, y: 0.5 });
+    expect(segmentZoomAt(smoothSeg, 15)).toEqual({ scale: 2.7, x: 0.6, y: 0.4 });
+    expect(segmentZoomAt(smoothSeg, 30)).toEqual({ scale: 2.7, x: 0.6, y: 0.4 });
+  });
+
+  it("reports zoom fields out of range in checkSegmentPlan", () => {
+    const badZoomPlan = basePlan({
+      segments: [
+        {
+          id: "bad-z",
+          role: "push_in",
+          startFrame: 0,
+          endFrame: 30,
+          speed: 1,
+          motion: "repeat",
+          audio: "source",
+          zoom: {
+            from: { scale: 0.5, x: -0.1, y: 0.5 },
+            to: { scale: 3.5, x: 0.5, y: 1.2 },
+            ease: "linear",
+            rampFraction: 0,
+          },
+        },
+      ],
+    });
+    const issues = checkSegmentPlan(badZoomPlan);
+    expect(issues.every((issue) => issue.segmentId === "bad-z")).toBe(true);
+    expect(issues.map((issue) => issue.message)).toEqual(expect.arrayContaining([
+      expect.stringContaining("zoom.from.scale"),
+      expect.stringContaining("zoom.from.x"),
+      expect.stringContaining("zoom.to.scale"),
+      expect.stringContaining("zoom.to.y"),
+      expect.stringContaining("zoom.rampFraction"),
+    ]));
   });
 });

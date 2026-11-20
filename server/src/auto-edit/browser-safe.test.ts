@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER_SRC = resolve(HERE, "..");
-const BROWSER_SAFE_FILES = ["plan.ts"];
+const BROWSER_SAFE_FILES = ["plan.ts", "looks.ts"];
 const MODULE_SPECIFIER = /^\s*(?:import|export)\s+(type\s+)?[\w$*{}\s,]*?\s*from\s+["']([^"']+)["']|^\s*import\s+["']([^"']+)["']/gmu;
 const BUILTINS = new Set(builtinModules);
 
