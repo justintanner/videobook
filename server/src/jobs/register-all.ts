@@ -65,6 +65,7 @@ import { registerCaptionAnalysisJobs } from "./caption-analysis.js";
 import { registerRenderCaptionsJob } from "./render-captions.js";
 import { registerRenderGraphicsJob } from "./render-graphics.js";
 import { registerRenderAutoEditJob } from "./render-auto-edit.js";
+import { registerAnalyzeAutoEditJob } from "./analyze-auto-edit.js";
 import { registerSuggestGraphicsJob } from "./suggest-graphics.js";
 import { registerGraphicsRegionsJob } from "./graphics-regions.js";
 import { registerOsgPlacementJob } from "./osg-placement.js";
@@ -162,6 +163,7 @@ export function registerAllJobHandlers(
   registerRenderCaptionsJob(engine);
   registerRenderGraphicsJob(engine);
   registerRenderAutoEditJob(engine);
+  registerAnalyzeAutoEditJob(engine);
   registerSuggestGraphicsJob(engine);
   registerGraphicsRegionsJob(engine);
   registerOsgPlacementJob(engine);

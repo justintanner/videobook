@@ -65,6 +65,12 @@ describe("workspace action exposure contract", () => {
   it("reviews tools billed per operation by the chosen operation, as the chain bills them", () => {
     const catalog = buildWorkspaceActionCatalog(tools, commands);
     const action = (tool: string) => catalog.actions.find((entry) => entry.id === `tool.${tool}`)!;
+    expect(action("auto_edit")).toMatchObject({
+      confirmation: "none",
+      confirmationRules: [
+        { when: { op: "analyze" }, confirmation: "generation" },
+      ],
+    });
     expect(action("video_graphics")).toMatchObject({
       confirmation: "none",
       confirmationRules: [

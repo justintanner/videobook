@@ -215,4 +215,27 @@ describe("estimate_cost tool", () => {
     expect(payload.estimate.usd).toBe(0);
     expect(payload.estimate.warnings.join(" ")).toContain("Duration");
   });
+
+  it("prices auto_edit analyze with one or two text-forecast calls plus an image-token warning, while get and render are free", async () => {
+    const engine = createEngineForTest(tempDir);
+    const shortClip = await videoWithDuration(engine, 9);
+    const longClip = await videoWithDuration(engine, 40);
+    const bookId = engine.book.get().bookId;
+
+    const payload = await estimate([
+      { tool_name: "auto_edit", input: { book_id: bookId, asset_id: shortClip, op: "get" } },
+      { tool_name: "auto_edit", input: { book_id: bookId, asset_id: shortClip, op: "render" } },
+      { tool_name: "auto_edit", input: { book_id: bookId, asset_id: shortClip, op: "analyze" } },
+      { tool_name: "auto_edit", input: { book_id: bookId, asset_id: longClip, op: "analyze" } },
+    ]);
+
+    expect(payload.per_call[0]!.estimate.usd).toBe(0);
+    expect(payload.per_call[0]!.estimate.source).toBe("free");
+    expect(payload.per_call[1]!.estimate.usd).toBe(0);
+    expect(payload.per_call[1]!.estimate.source).toBe("free");
+    expect(payload.per_call[2]!.estimate.usd).toBeGreaterThan(0);
+    expect(payload.per_call[2]!.estimate.warnings.join(" ")).toContain("excludes image tokens");
+    expect(payload.per_call[3]!.estimate.usd).toBeGreaterThan(payload.per_call[2]!.estimate.usd);
+    expect(payload.per_call[3]!.estimate.warnings.join(" ")).toContain("excludes image tokens");
+  });
 });

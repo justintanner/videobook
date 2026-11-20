@@ -15,9 +15,14 @@ import { checkSeedanceEditSource, checkReframeVideoGeometry, normalizeRefParams,
 import { kieTaskSourceCostHints } from "../media/kie-task-source.js";
 import { resolveGenerationSource } from "../media/generation-source.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
+import { ANALYZE_AUTO_EDIT_PROMPT, REFINE_AUTO_EDIT_PROMPT } from "../auto-edit/analysis.js";
+import { resolveVideoAssetReference } from "./video-source-reference.js";
 
 const GENERATION_TOOLS = new Set(["generate_image", "generate_video", "generate_audio"]);
 const ANALYSIS_TOOLS = new Set(["analyze_video", "analyze_jokes", "describe_image", "suggest_cuts", "tag_assets", OPENAI_ANALYSIS_TOOL]);
+const AUTO_EDIT_REFINEMENT_CUTOFF_SECONDS = 12;
+const AUTO_EDIT_ANALYZE_MAX_OUTPUT_TOKENS = 2000;
+const AUTO_EDIT_IMAGE_TOKEN_WARNING = "Text-only forecast; excludes image tokens for the sampled frames.";
 
 const callItem = z.object({
   tool_name: z.string().describe("Tool whose cost to estimate: generate_image, generate_video, generate_audio, edit_image_subjects, rewrite_prompt, chat or analysis"),
@@ -122,9 +127,62 @@ function estimateLanguageCall(toolName: string, input: Record<string, unknown>):
   return { ...estimate, notes: [...(estimate.notes ?? []), "Forecast for one text call; excludes media tokens, tool calls and conversation history."] };
 }
 
+async function autoEditVideoDuration(engine: Engine, input: Record<string, unknown>): Promise<number | undefined> {
+  if (typeof input.duration === "number" && Number.isFinite(input.duration) && input.duration > 0) {
+    return input.duration;
+  }
+  const assetRef = text(input.asset_id);
+  if (!assetRef) return undefined;
+  try {
+    const artifactId = resolveVideoAssetReference(engine, assetRef, text(input.notebook_id));
+    const manifest = await engine.files.manifest(artifactId);
+    const streams = engine.streams.list(artifactId);
+    if (manifest.ok && streams.ok) {
+      const videoFile = manifest.value.files.find((file) => file.name === "original.mp4") ?? manifest.value.files[0];
+      const matching = videoFile
+        ? streams.value.filter((stream) => stream.sourcePath === videoFile.name && stream.objectHash === videoFile.objectHash)
+        : streams.value;
+      const video = matching.find((stream) => stream.kind === "video" && stream.video);
+      if (video && video.timeBase.denominator > 0) {
+        const seconds = video.durationTicks * video.timeBase.numerator / video.timeBase.denominator;
+        if (seconds > 0) return seconds;
+      }
+    }
+    return await sourceDuration(engine, [artifactId]);
+  } catch {
+    return undefined;
+  }
+}
+
+async function estimateAutoEdit(engine: Engine, input: Record<string, unknown>): Promise<CostEstimate> {
+  if (text(input.op) !== "analyze") return { ...FREE_ESTIMATE };
+  const duration = await autoEditVideoDuration(engine, input);
+  const twoCalls = duration !== undefined && duration > AUTO_EDIT_REFINEMENT_CUTOFF_SECONDS;
+  const first = forecastLanguageCall(INTELLIGENCE_MODEL, ANALYZE_AUTO_EDIT_PROMPT, AUTO_EDIT_ANALYZE_MAX_OUTPUT_TOKENS);
+  const second = twoCalls
+    ? forecastLanguageCall(INTELLIGENCE_MODEL, REFINE_AUTO_EDIT_PROMPT, AUTO_EDIT_ANALYZE_MAX_OUTPUT_TOKENS)
+    : null;
+  const calls = second ? [first, second] : [first];
+  const usd = calls.reduce((total, entry) => total + entry.usd, 0);
+  const warnings = [...new Set([...calls.flatMap((entry) => entry.warnings), AUTO_EDIT_IMAGE_TOKEN_WARNING])];
+  return {
+    usd,
+    currency: first.currency,
+    source: first.source,
+    breakdown: second ? {} : first.breakdown,
+    rateAsOf: first.rateAsOf,
+    warnings,
+    notes: [
+      ...(first.notes ?? []),
+      `Text-only forecast for ${second ? "two" : "one"} ${INTELLIGENCE_MODEL} call${second ? "s" : ""}; excludes image tokens.`,
+    ],
+  };
+}
+
 async function estimateOne(engine: Engine, toolName: string, input: Record<string, unknown>): Promise<CostEstimate> {
   if (GENERATION_TOOLS.has(toolName)) return estimateMedia(engine, input);
   if (toolName === "edit_image_subjects") return estimateImageEdit(input);
+  if (toolName === "auto_edit") return estimateAutoEdit(engine, input);
   if (toolName === "rewrite_prompt" || toolName === "chat" || ANALYSIS_TOOLS.has(toolName)) return estimateLanguageCall(toolName, input);
   return unavailable(`no cost adapter registered for tool '${toolName}'`);
 }

@@ -125,6 +125,7 @@ function scopeForSchema(schema: ActionInputSchema): WorkspaceAction["scope"] {
 }
 
 export const DESTRUCTIVE_TOOL_OPERATIONS: Readonly<Record<string, readonly Readonly<Record<string, string>>[]>> = {
+  auto_edit: [],
   caption_video: [{ op: "update", resolve: "discard" }, { op: "render", output: "replace" }],
   video_graphics: [{ op: "delete_template" }, { op: "render", output: "replace" }],
 };

@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { ArtifactManifestFile, Engine, NotebookCell, NotebookDocument } from "videobook-engine";
+import {
+  analysisComponentState,
+  enqueueAnalysisComponent,
+  latestComponentJob,
+} from "../analysis-components.js";
+import { getApiKey } from "../api-key.js";
 import { displayDimensions, type Rational } from "../captions/geometry.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import { findCanonicalMediaFile } from "../original-media-file.js";
@@ -15,6 +21,15 @@ import {
   writeRenderSetting,
   type RenderRequestStatus,
 } from "../render-requests.js";
+import {
+  AUTO_EDIT_MOMENTS,
+  autoEditAnalysisView,
+  autoEditMomentAnalysisSchema,
+  autoEditMomentsKey,
+  autoEditTranscriptHashes,
+  readAutoEditAnalysisState,
+  type AutoEditAnalysisView,
+} from "./analysis.js";
 import {
   checkSegmentPlan,
   secondsToFrame,
@@ -33,6 +48,18 @@ import {
   type AutoEditCue,
   type AutoEditSections,
 } from "./style.js";
+
+export type AutoEditServiceErrorCode = "not_ready" | "invalid";
+
+export class AutoEditServiceError extends Error {
+  readonly code: AutoEditServiceErrorCode;
+
+  constructor(code: AutoEditServiceErrorCode, message: string) {
+    super(message);
+    this.name = "AutoEditServiceError";
+    this.code = code;
+  }
+}
 
 export const AUTO_EDIT_RENDER_JOB = "render_auto_edit";
 export const AUTO_EDIT_SOURCE_OPERATION = "auto_edit";
@@ -63,6 +90,7 @@ export interface StoredAutoEditDraft {
   sourceHash: string;
   anchors: AutoEditAnchors;
   sections: AutoEditSections;
+  changes?: string[];
 }
 
 export interface AutoEditRenderRequest {
@@ -102,8 +130,23 @@ export interface AutoEditGetResponse {
   plan: SegmentPlan;
   cues: AutoEditCue[];
   changes: string[];
+  analysis: AutoEditAnalysisView;
   last_render: RenderRequestStatus | null;
 }
+
+export type AutoEditAnalyzeResponse =
+  | {
+    status: "cached";
+    draft: AutoEditGetResponse["draft"];
+    plan: SegmentPlan;
+    cues: AutoEditCue[];
+    changes: string[];
+    analysis: AutoEditAnalysisView;
+  }
+  | {
+    status: "queued" | "running";
+    job_id: number;
+  };
 
 function draftKey(artifactId: string): string {
   return `auto-edit.draft.${artifactId}`;
@@ -206,29 +249,49 @@ export function readStoredAutoEditDraft(engine: Engine, artifactId: string): Sto
   const anchors = autoEditAnchorsSchema.safeParse(raw.anchors);
   const sections = autoEditSectionsSchema.safeParse(raw.sections);
   if (!anchors.success || !sections.success) return null;
+  const changes = Array.isArray(raw.changes)
+    ? raw.changes.filter((entry): entry is string => typeof entry === "string")
+    : undefined;
   return {
     revision: raw.revision,
     sourceHash: raw.sourceHash,
     anchors: anchors.data,
     sections: sections.data,
+    ...(changes && changes.length > 0 ? { changes } : {}),
   };
 }
 
-function saveAutoEditDraft(
+export function saveAutoEditDraft(
   engine: Engine,
   artifactId: string,
   sourceHash: string,
   anchors: AutoEditAnchors,
   sections: AutoEditSections,
+  changes?: readonly string[],
 ): StoredAutoEditDraft {
   const draft: StoredAutoEditDraft = {
     revision: randomUUID(),
     sourceHash,
     anchors,
     sections,
+    ...(changes && changes.length > 0 ? { changes: [...changes] } : {}),
   };
   writeRenderSetting(engine, draftKey(artifactId), draft);
   return draft;
+}
+
+export function writeAutoEditAnalyzedDraft(
+  engine: Engine,
+  artifactId: string,
+  sourceHash: string,
+  anchors: AutoEditAnchors,
+  changes: readonly string[] = [],
+): StoredAutoEditDraft {
+  const existing = readStoredAutoEditDraft(engine, artifactId);
+  const sections = existing && existing.sourceHash === sourceHash
+    ? existing.sections
+    : { ...DEFAULT_AUTO_EDIT_SECTIONS };
+  return saveAutoEditDraft(engine, artifactId, sourceHash, anchors, sections, changes);
 }
 
 export function deleteAutoEditDraft(engine: Engine, artifactId: string): void {
@@ -310,12 +373,15 @@ function checkAutoEditNotebook(engine: Engine, notebookId: string | null, source
 
 export async function readAutoEditGet(engine: Engine, artifactId: string): Promise<AutoEditGetResponse> {
   const source = await readAutoEditSource(engine, artifactId);
+  const transcriptHashes = await autoEditTranscriptHashes(engine, artifactId);
+  const analysisState = readAutoEditAnalysisState(engine, source.sourceHash, transcriptHashes);
   const segSource = segmentSourceOf(source);
   const saved = readStoredAutoEditDraft(engine, artifactId);
   const matches = saved !== null && saved.sourceHash === source.sourceHash;
   const anchors = matches ? saved.anchors : defaultAnchors(segSource);
   const sections = matches ? saved.sections : { ...DEFAULT_AUTO_EDIT_SECTIONS };
   const built = buildAutoEditPlan(segSource, anchors, sections);
+  const changes = built.changes.length > 0 ? built.changes : (matches ? (saved.changes ?? []) : []);
   return {
     source: {
       artifact_id: source.artifactId,
@@ -336,9 +402,60 @@ export async function readAutoEditGet(engine: Engine, artifactId: string): Promi
     },
     plan: built.plan,
     cues: built.cues,
-    changes: built.changes,
+    changes,
+    analysis: autoEditAnalysisView(analysisState),
     last_render: latestAutoEditRender(engine, artifactId),
   };
+}
+
+export async function requestAutoEditAnalysis(
+  engine: Engine,
+  bookId: string,
+  sourceArtifactId: string,
+  force: boolean,
+): Promise<AutoEditAnalyzeResponse> {
+  const source = await readAutoEditSource(engine, sourceArtifactId);
+  const transcriptHashes = await autoEditTranscriptHashes(engine, sourceArtifactId);
+  const key = autoEditMomentsKey(source.sourceHash, transcriptHashes);
+  const state = analysisComponentState(engine, AUTO_EDIT_MOMENTS, key, autoEditMomentAnalysisSchema);
+  if ((state.status === "queued" || state.status === "running") && state.jobId !== null) {
+    return { status: state.status, job_id: state.jobId };
+  }
+  if (!force && state.status === "ready" && state.value) {
+    const saved = readStoredAutoEditDraft(engine, sourceArtifactId);
+    if (!saved || saved.sourceHash !== source.sourceHash) {
+      writeAutoEditAnalyzedDraft(engine, sourceArtifactId, source.sourceHash, state.value.anchors, state.value.changes);
+    }
+    const got = await readAutoEditGet(engine, sourceArtifactId);
+    return {
+      status: "cached",
+      draft: got.draft,
+      plan: got.plan,
+      cues: got.cues,
+      changes: got.changes.length > 0 ? got.changes : state.value.changes,
+      analysis: got.analysis,
+    };
+  }
+  if (!getApiKey("OPENAI_API_KEY")) {
+    throw new AutoEditServiceError(
+      "not_ready",
+      "Find the moment needs an OpenAI API key (OPENAI_API_KEY), and the anchors can still be set by hand.",
+    );
+  }
+  const enqueued = await enqueueAnalysisComponent(
+    engine,
+    AUTO_EDIT_MOMENTS,
+    key,
+    { bookId, sourceArtifactId },
+    { force, hasResult: state.status === "ready" },
+  );
+  const job = latestComponentJob(engine, AUTO_EDIT_MOMENTS, key);
+  const status = job?.state === "running" || job?.state === "completing" ? "running" : "queued";
+  const jobId = enqueued.jobId ?? job?.id;
+  if (jobId == null) {
+    throw new Error("Auto-edit analysis could not be queued.");
+  }
+  return { status, job_id: jobId };
 }
 
 export interface AutoEditRenderArgs {

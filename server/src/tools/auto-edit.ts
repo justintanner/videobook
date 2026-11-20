@@ -1,6 +1,11 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { readAutoEditGet, requestAutoEditRender } from "../auto-edit/drafts.js";
+import {
+  AutoEditServiceError,
+  readAutoEditGet,
+  requestAutoEditAnalysis,
+  requestAutoEditRender,
+} from "../auto-edit/drafts.js";
 import { segmentPlanSchema } from "../auto-edit/plan.js";
 import {
   autoEditAnchorsSchema,
@@ -11,13 +16,14 @@ import type { ToolDef, ToolResult } from "./tool-def.js";
 import { advertisedAs } from "./tool-json-schema.js";
 import { resolveVideoAssetReference } from "./video-source-reference.js";
 
-const AUTO_EDIT_OPS = ["get", "render"] as const;
+const AUTO_EDIT_OPS = ["get", "analyze", "render"] as const;
 
 const schema = {
   book_id: z.string().uuid().describe("Book id"),
   asset_id: z.string().min(1).describe("Source video artifact UUID or notebook address such as @a1"),
   notebook_id: z.string().uuid().optional().describe("Notebook that resolves an @address and receives the new cell"),
-  op: z.enum(AUTO_EDIT_OPS).optional().describe("get (default) reads the draft and plan; render queues a local render"),
+  op: z.enum(AUTO_EDIT_OPS).optional().describe("get (default) reads the draft and plan; analyze finds the hook, moment and subject with AI; render queues a local render"),
+  force: z.boolean().optional().describe("analyze: re-run analysis even when a cached result already exists"),
   anchors: advertisedAs(autoEditAnchorsSchema, {
     type: "object",
     description: "render: hook, moment, focus, keep and cuts in source seconds; give anchors or plan, not both",
@@ -45,6 +51,12 @@ function jsonResult(value: unknown): ToolResult {
 }
 
 function errorResult(error: unknown): ToolResult {
+  if (error instanceof AutoEditServiceError) {
+    return {
+      isError: true,
+      content: [{ type: "text", text: JSON.stringify({ status: error.code, message: error.message }) }],
+    };
+  }
   return {
     isError: true,
     content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
@@ -54,7 +66,7 @@ function errorResult(error: unknown): ToolResult {
 export function autoEditDef(engine: Engine): ToolDef {
   return {
     name: "auto_edit",
-    description: "Read a video's auto-edit draft or render an auto-edit into a new cell. Rendering runs locally for free without changing the source video.",
+    description: "Read a video's auto-edit draft, find the hook and best moment with AI analysis (paid), or render an auto-edit into a new cell locally for free without changing the source video.",
     annotations: { destructiveHint: false, readOnlyHint: false, idempotentHint: true, openWorldHint: false },
     schema,
     handler: async (rawInput) => {
@@ -64,6 +76,9 @@ export function autoEditDef(engine: Engine): ToolDef {
         const op = args.op ?? "get";
         if (op === "get") {
           return jsonResult(await readAutoEditGet(engine, sourceArtifactId));
+        }
+        if (op === "analyze") {
+          return jsonResult(await requestAutoEditAnalysis(engine, args.book_id, sourceArtifactId, args.force === true));
         }
         if (!args.source_hash) {
           throw new Error("source_hash is required for auto_edit render.");

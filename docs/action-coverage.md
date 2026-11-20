@@ -97,7 +97,7 @@ Review is what the action sheet asks before Run action. A tool billed per operat
 | `tool.attach_library_asset` | `/attach-library-asset` |  | notebook | cell: cell_id | `attach_library_asset` | slash, launcher, cell-menu | dialog | none |
 | `tool.audio_boost` | `/audio-boost` |  | book | asset: asset_id | `audio_boost` | slash, launcher, cell-menu | dialog | none |
 | `tool.audio_mix` | `/audio-mix` |  | book | none | `audio_mix` | slash, launcher | dialog | none |
-| `tool.auto_edit` | `/auto-edit` |  | book | asset: asset_id | `auto_edit` | slash, launcher, cell-menu | dialog | none |
+| `tool.auto_edit` | `/auto-edit` |  | book | asset: asset_id | `auto_edit` | slash, launcher, cell-menu | dialog | generation (op=analyze); otherwise none |
 | `tool.backfill_asset_tags` | `/backfill-asset-tags` |  | book | none | `backfill_asset_tags` | slash, launcher | dialog | generation |
 | `tool.cancel_job` | `/cancel-job` |  | book | asset: asset_id | `cancel_job` | slash, launcher, cell-menu | dialog | none |
 | `tool.caption_video` | `/caption-video` |  | book | asset: asset_id | `caption_video` | slash, launcher, cell-menu | dialog | generation (op=prepare); destructive (op=update resolve=discard, op=render output=replace); otherwise none |

@@ -19,6 +19,7 @@ export const BILLABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
  * the two can never drift apart.
  */
 export const BILLABLE_TOOL_OPERATIONS: Readonly<Record<string, ReadonlySet<string>>> = {
+  auto_edit: new Set(["analyze"]),
   caption_video: new Set(["prepare"]),
   video_graphics: new Set(["suggest", "detect_regions"]),
 };

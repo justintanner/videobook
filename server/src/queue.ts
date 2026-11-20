@@ -629,6 +629,7 @@ const ARTIFACT_DETACHED_JOB_TYPES: ReadonlySet<string> = new Set([
   "post_copy",
   "suggest_graphics",
   "graphics_regions",
+  "analyze_auto_edit",
   "semantic_index",
   "tag_asset",
   "backfill_asset_tags",
