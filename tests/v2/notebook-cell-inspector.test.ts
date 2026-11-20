@@ -475,7 +475,10 @@ describe('NotebookCellInspector', () => {
 
     expect(html).toContain('<select aria-label="Generation model">')
     expect(html).toContain(
-      '<option value="generation.generate_kie_nano_banana_pro_text_to_image" selected="">Nano Banana Pro · Kie</option>',
+      '<option value="generation.generate_kie_nano_banana_pro_text_to_image" selected="">Nano Banana Pro</option>',
+    )
+    expect(html).toContain(
+      '<select aria-label="Generation provider" disabled=""><option value="generation.generate_kie_nano_banana_pro_text_to_image" selected="">Kie</option></select>',
     )
     expect(html).not.toContain('<select aria-label="Provider">')
     expect(html).not.toContain('<select aria-label="Operation">')
@@ -627,7 +630,7 @@ describe('NotebookCellInspector', () => {
       },
     }))
 
-    expect(html).toContain('Gemini Omni Video · Kie')
+    expect(html).toContain('<option value="generation.generate_kie_gemini_omni_video" selected="">Gemini Omni Video</option>')
     expect(html).toContain('<select aria-label="Generation type">')
     expect(html).toContain('T2V · Text to video')
     expect(html).toContain('<select aria-label="Duration">')
@@ -1047,7 +1050,10 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain(
-      '<option value="generation.generate_kie_gpt_image_2_text_to_image" selected="">GPT Image 2 · Kie · incompatible</option>',
+      '<option value="generation.generate_kie_gpt_image_2_text_to_image" selected="">GPT Image 2</option>',
+    )
+    expect(html).toContain(
+      '<option value="generation.generate_kie_gpt_image_2_text_to_image" selected="">Kie · incompatible</option>',
     )
     expect(html).toContain('This model does not accept image reference inputs.')
     expect(html).toMatch(/class="inspector-run-action"[^>]*disabled=""/)

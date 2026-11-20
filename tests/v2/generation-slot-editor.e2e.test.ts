@@ -10,6 +10,7 @@ import sharp from 'sharp'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { MANAGED_ENV_KEYS } from '../../server/src/env-secrets.js'
 import { testBudget } from '../../server/src/test-budget.js'
+import { selectGenerationAction } from './generation-picker-e2e'
 
 type StartedProcess = { child: ChildProcess; output: string[] }
 type Edge = { id: string; source: string; target: string; targetInput: string }
@@ -201,8 +202,8 @@ describe('generation slot editor in the browser', () => {
     await call('update_notebook_cell', { cell_id: generationId, cell: { prompt: 'Blend @image1 into @image2' } })
     await page.reload()
     await page.locator(`.notebook-flow .react-flow__node[data-id="${generationId}"] .cell-node`).click({ timeout: testBudget(60_000) })
-    const model = page.locator('.inspector').getByLabel('Generation model')
-    await model.selectOption(`generation.${PICKED}`)
+    const provider = page.locator('.inspector').getByLabel('Generation provider')
+    await selectGenerationAction(page.locator('.inspector'), `generation.${PICKED}`)
     const resolution = page.locator('.inspector').getByLabel('Resolution')
     await resolution.selectOption({ label: '720p' })
     const grip = chip('Reference images', 1).locator('.generation-slot-grip')
@@ -212,7 +213,7 @@ describe('generation slot editor in the browser', () => {
     const saved = (await call<Notebook>('get_notebook')).cells.find((cell) => cell.id === generationId)
     expect(saved?.model).toBe(GROK)
     expect(saved?.prompt).toBe('Blend @image2 into @image1')
-    expect(await model.inputValue()).toBe(`generation.${PICKED}`)
+    expect(await provider.inputValue()).toBe(`generation.${PICKED}`)
     expect(await resolution.locator('option:checked').textContent()).toBe('720p')
     await expect.poll(async () => await page.evaluate(() => document.activeElement?.closest('.generation-slot-chip')?.textContent ?? ''), {
       timeout: testBudget(15_000),
@@ -220,7 +221,7 @@ describe('generation slot editor in the browser', () => {
     await page.keyboard.press('ArrowDown')
     await expect.poll(keyframes, { timeout: testBudget(15_000) }).toEqual([[0, 'image'], [1, 'image_2']])
     expect((await call<Notebook>('get_notebook')).cells.find((cell) => cell.id === generationId)?.prompt).toBe('Blend @image1 into @image2')
-    expect(await model.inputValue()).toBe(`generation.${PICKED}`)
+    expect(await provider.inputValue()).toBe(`generation.${PICKED}`)
     expect(await resolution.locator('option:checked').textContent()).toBe('720p')
   }, testBudget(90_000))
 
@@ -346,8 +347,8 @@ describe('generation slot editor in the browser', () => {
       await call('set_notebook_cell_inputs', { cell_id: editId, inputs: [{ source_cell_id: images[0], target_input: 'image', params: {} }] })
       await page.reload()
       await page.locator(`.notebook-flow .react-flow__node[data-id="${editId}"] .cell-node`).click({ timeout: testBudget(60_000) })
-      const model = page.locator('.inspector').getByLabel('Generation model')
-      await model.selectOption(`generation.${draftModel}`)
+      const provider = page.locator('.inspector').getByLabel('Generation provider')
+      await selectGenerationAction(page.locator('.inspector'), `generation.${draftModel}`)
       const mask = slot('Mask')
       await mask.waitFor({ state: 'visible', timeout: testBudget(30_000) })
       await page.locator('.inspector .generation-slot-tile').filter({ hasText: '@a2' }).locator('.generation-slot-grip').dragTo(mask.locator('.generation-slot-empty'))
@@ -359,7 +360,7 @@ describe('generation slot editor in the browser', () => {
       expect(saved?.provider).toBe('kie')
       expect(saved?.operation).toBe('text_to_image')
       expect(saved?.tool).toBe('generate_image')
-      expect(await model.inputValue()).toBe(`generation.${draftModel}`)
+      expect(await provider.inputValue()).toBe(`generation.${draftModel}`)
     } finally {
       await call('update_notebook_cell', {
         cell_id: editId,

@@ -286,6 +286,7 @@ import {
   asNotebookGenerationActions,
   compatibleGenerationActions,
   compatibleGenerationModes,
+  generationActionIsCompatible,
   generationRequiresPrompt,
   type GenerationControlValue,
   type GenerationPreviewDraft,
@@ -9946,6 +9947,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             busy={busy}
             draft={action.draft}
             modes={pendingGenerationModeOptions}
+            isActionCompatible={(candidate) => generationActionIsCompatible(candidate, pendingGenerationConnectedInputs)}
             preview={action.preview}
             previewError={action.previewError}
             previewLoading={action.previewLoading}

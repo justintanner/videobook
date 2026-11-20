@@ -6407,8 +6407,18 @@ textarea:focus-visible {
   gap: 6px;
 }
 
-.generation-review-model-section {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+.generation-review-editor > .generation-review-model-section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.generation-review-model-section > label {
+  flex: 1 1 120px;
+}
+
+.generation-review-model-section > .generation-review-model-field {
+  flex: 2 1 220px;
 }
 
 .generation-cell-inspector {

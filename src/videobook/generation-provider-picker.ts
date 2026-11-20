@@ -33,7 +33,11 @@ export type GenerationProviderOption<T extends FamilyPickerAction> = {
 type ProviderPickerOptions<T extends FamilyPickerAction> = {
   frontierType: FrontierType | null
   compatible?: (action: T) => boolean
+  selectedId?: string
+  alternatives?: boolean
 }
+
+const unknownFrontierPrice = '-'
 
 const operationFrontierTypes: Readonly<Record<string, FrontierType>> = {
   text_to_image: 't2i',
@@ -81,7 +85,7 @@ function servesType(action: FamilyPickerAction, type: FrontierType | null): bool
 
 function endpointScore<T extends FamilyPickerAction>(action: T, options: ProviderPickerOptions<T>): number {
   return (frontierRanking(action, options.frontierType) ? 4 : 0)
-    + (options.compatible?.(action) ?? true ? 2 : 0)
+    + (isCompatible(action, options) ? 2 : 0)
     + (servesType(action, options.frontierType) ? 1 : 0)
 }
 
@@ -90,15 +94,33 @@ function requestEndpoint<T extends FamilyPickerAction>(endpoints: readonly T[], 
     endpointScore(action, options) > endpointScore(best, options) ? action : best)
 }
 
-function providerOption<T extends FamilyPickerAction>(action: T, options: ProviderPickerOptions<T>): GenerationProviderOption<T> {
+function isCompatible<T extends FamilyPickerAction>(action: T, options: ProviderPickerOptions<T>): boolean {
+  return options.compatible?.(action) ?? true
+}
+
+function slotEndpoints<T extends FamilyPickerAction>(candidates: readonly T[], options: ProviderPickerOptions<T>): T[] {
+  const chosen = requestEndpoint(candidates, options)
+  const primary = candidates.find(action => action.id === options.selectedId) ?? chosen
+  const others = candidates.filter(action => action !== primary && isCompatible(action, options)
+    && (options.alternatives || (action === chosen && !isCompatible(primary, options))))
+  return [primary, ...others]
+}
+
+function operationLabel(operation: string): string {
+  const words = operation.replaceAll('_', ' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+function providerOption<T extends FamilyPickerAction>(action: T, options: ProviderPickerOptions<T>, shared: boolean): GenerationProviderOption<T> {
   const ranking = frontierRanking(action, options.frontierType)
+  const label = [action.providerLabel, action.variant, shared ? operationLabel(action.operation) : undefined]
   return {
     action,
-    label: action.variant ? `${action.providerLabel} · ${action.variant}` : action.providerLabel,
+    label: label.filter(Boolean).join(' · '),
     ...(ranking ? { ranking } : {}),
-    priceLabel: ranking?.priceLabel ?? null,
+    priceLabel: ranking && ranking.priceLabel !== unknownFrontierPrice ? ranking.priceLabel : null,
     available: action.available !== false,
-    compatible: options.compatible?.(action) ?? true,
+    compatible: isCompatible(action, options),
   }
 }
 
@@ -113,7 +135,10 @@ export function generationProviderOptions<T extends FamilyPickerAction>(
     const key = `${action.provider}\u0000${action.variant ?? ''}`
     endpoints.set(key, [...endpoints.get(key) ?? [], action])
   }
-  return [...endpoints.values()].map(candidates => providerOption(requestEndpoint(candidates, options), options))
+  return [...endpoints.values()].flatMap((candidates) => {
+    const shown = slotEndpoints(candidates, options)
+    return shown.map(action => providerOption(action, options, shown.length > 1))
+  })
 }
 
 export function actionForFamily<T extends FamilyPickerAction>(

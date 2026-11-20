@@ -3224,11 +3224,11 @@ function ExecutableCellInspector({
     controls: [],
     inputContract: { modes: [] },
   }
-  const generationEditorActions = generationPickerActions.map((candidate) =>
+  const generationEditorActions = selectedGenerationAction
+    ? generationPickerActions
+    : [editorAction, ...generationPickerActions]
+  const generationEditorCompatible = (candidate: NotebookGenerationAction) =>
     generationActionIsCompatible(candidate, connectedGenerationInputs)
-      ? candidate
-      : { ...candidate, providerLabel: `${candidate.providerLabel} · incompatible` })
-  if (!selectedGenerationAction) generationEditorActions.unshift(editorAction)
   const generationEditorDraft = {
     action: editorAction,
     cell: { ...cell, ...generationPreviewDraft(draft) },
@@ -3535,6 +3535,7 @@ function ExecutableCellInspector({
             draft={generationEditorDraft}
             modes={generationModeOptions}
             compatibleModeIds={compatibleModeIds}
+            isActionCompatible={generationEditorCompatible}
             sourceVisible={sourceVisible}
             notebookId={notebookId}
             doltArtifactAssets={artifactAssets}

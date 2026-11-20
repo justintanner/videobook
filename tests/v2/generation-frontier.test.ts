@@ -87,7 +87,7 @@ describe('frontier model picker', () => {
     expect(html).toContain(`value="${nano.model}" selected=""`)
   })
 
-  it('renders ranked options, a divider, prices and disabled unavailable providers without switching selection', () => {
+  it('renders ranked families, a divider, the provider price and disabled unavailable families without switching selection', () => {
     const unavailable = { ...sunburst, available: false }
     const other = actions.find(action => !action.frontier?.length)!
     const html = renderToStaticMarkup(createElement(GenerationBody, {
@@ -110,9 +110,10 @@ describe('frontier model picker', () => {
     expect(html).toContain('optgroup label="Other models"')
     expect(html).toContain('Unavailable · provider not configured')
     expect(html).toContain('Elo 1210')
-    expect(html).toContain('0.03-0.08 USD/image')
-    expect(html).toContain(`value="${nano.id}" selected=""`)
-    expect(html).toContain(`value="${sunburst.id}" disabled=""`)
-    expect(html.indexOf(`value="${flare.id}"`)).toBeLessThan(html.indexOf(`value="${nano.id}"`))
+    expect(html).toContain(`<option value="${nano.family.id}" selected="">#7 · Nano Banana 2.1 · Elo 1176</option>`)
+    const price = nano.frontier!.find(ranking => ranking.type === 't2i')!.priceLabel
+    expect(html).toContain(`<select aria-label="Generation provider" disabled=""><option value="${nano.id}" selected="">Kie · ${price}</option></select>`)
+    expect(html).toContain(`value="${sunburst.family.id}" disabled=""`)
+    expect(html.indexOf(`value="${flare.family.id}"`)).toBeLessThan(html.indexOf(`value="${nano.family.id}"`))
   })
 })

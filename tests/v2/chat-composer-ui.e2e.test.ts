@@ -16,6 +16,7 @@ import { v7 as uuidv7 } from 'uuid'
 import { MANAGED_ENV_KEYS } from '../../server/src/env-secrets.js'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
 import { testBudget } from '../../server/src/test-budget.js'
+import { selectGenerationAction } from './generation-picker-e2e'
 
 const execFileAsync = promisify(execFile)
 
@@ -4095,19 +4096,18 @@ describe('chat composer browser flow', () => {
     expect(await editor.getByText('Or type', { exact: false }).count()).toBe(0)
 
     const imageModel = editor.getByLabel('Generation model')
-    expect(await imageModel.inputValue()).toBe('generation.kie:nano-banana-2-1')
+    expect(await imageModel.inputValue()).toBe('image:nano-banana-2-1')
+    expect(await editor.getByLabel('Generation provider').inputValue()).toBe('generation.kie:nano-banana-2-1')
     expect(await editor.getByLabel('Resolution', { exact: true }).inputValue()).toBe('string:2K')
     expect(await source.textContent()).toContain('"resolution": "2K"')
     const gptModels = (await imageModel.locator('option').allTextContents())
       .map((label) => label.replace(/^#\d+ · /u, '').replace(/ · Elo .*$/u, ''))
     expect(gptModels).toEqual(expect.arrayContaining([
-      'GPT Image 2.5 Flare · Kie',
-      'GPT Image 2.5 Sunburst · Kie',
+      'GPT Image 2.5 Flare',
+      'GPT Image 2.5 Sunburst',
     ]))
 
-    await editor.getByLabel('Generation model').selectOption(
-      'generation.kie:nano-banana-pro',
-    )
+    await selectGenerationAction(editor, 'generation.kie:nano-banana-pro')
     await expect.poll(async () => await source.textContent(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toContain('"model": "nano-banana-pro"')
@@ -4287,14 +4287,13 @@ describe('chat composer browser flow', () => {
     await collapseComposerDock(page)
     await notebookCellNode(page, directVideoGenerationCellId).click()
     const editor = page.locator('.generation-cell-inspector .confirm-generation')
-    const model = editor.getByLabel('Generation model')
     const source = editor.locator('.generation-review-json pre')
     const prompt = editor.getByRole('textbox', { name: 'Prompt', exact: true })
     observedCalls.length = 0
     try {
       await editor.getByLabel('Generation type', { exact: true }).selectOption('r2v')
       await editor.getByTitle(/^Add @c3 to /).click()
-      await model.selectOption('generation.kie:vidu-q4/image-to-video')
+      await selectGenerationAction(editor, 'generation.kie:vidu-q4/image-to-video')
       await prompt.fill('')
       await editor.getByLabel('Duration', { exact: true }).fill('3')
       await editor.getByLabel('Resolution', { exact: true }).selectOption('string:540p')
@@ -4308,7 +4307,7 @@ describe('chat composer browser flow', () => {
       expect(await source.textContent()).toContain('"duration": 3')
       expect(await editor.getByLabel('Aspect ratio', { exact: true }).count()).toBe(0)
 
-      await model.selectOption('generation.kie:vidu-q4/reference-to-video')
+      await selectGenerationAction(editor, 'generation.kie:vidu-q4/reference-to-video')
       await prompt.fill('Animate @image1 in a gentle breeze')
       await editor.getByLabel('Aspect ratio', { exact: true }).selectOption('string:9:16')
       await editor.getByLabel('Resolution', { exact: true }).selectOption('string:4k')
@@ -4336,14 +4335,13 @@ describe('chat composer browser flow', () => {
     await collapseComposerDock(page)
     await notebookCellNode(page, directVideoGenerationCellId).click()
     const editor = page.locator('.generation-cell-inspector .confirm-generation')
-    const model = editor.getByLabel('Generation model')
     const source = editor.locator('.generation-review-json pre')
     const prompt = editor.getByRole('textbox', { name: 'Prompt', exact: true })
     observedCalls.length = 0
     try {
       await editor.getByLabel('Generation type', { exact: true }).selectOption('r2v')
       await editor.getByTitle(/^Add @c3 to /).click()
-      await model.selectOption('generation.fal:bytedance/seedance-2.0/us/image-to-video')
+      await selectGenerationAction(editor, 'generation.fal:bytedance/seedance-2.0/us/image-to-video')
       await prompt.fill('Drift toward the moon from @image1')
       await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
         .toContain('"endpoint_id": "bytedance/seedance-2.0/us/image-to-video"')
@@ -4352,7 +4350,7 @@ describe('chat composer browser flow', () => {
       expect(await source.textContent()).toContain('"image_url"')
       expect(await source.textContent()).not.toContain('"end_image_url"')
 
-      await model.selectOption('generation.fal:minimax/h3-max/styles/vhs')
+      await selectGenerationAction(editor, 'generation.fal:minimax/h3-max/styles/vhs')
       await prompt.fill('A tape-worn walk through the garden')
       await editor.getByLabel('Damage level', { exact: true }).selectOption('string:heavy')
       await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })

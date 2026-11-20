@@ -1,4 +1,5 @@
-import { frontierPickerGroups, generationFrontierType } from '@/videobook/generation-frontier'
+import { generationFrontierType } from '@/videobook/generation-frontier'
+import { actionForFamily, generationFamilyGroups, generationProviderOptions } from '@/videobook/generation-provider-picker'
 import { isSeedanceEdit, SEEDANCE_EDIT_DESCRIPTION } from '../../../../../server/src/media/seedance-edit'
 import { useRef, useState, type ReactNode } from 'react'
 import { frameAspectRatio as modelFrameAspectRatio, FRAME_ASPECT_DESCRIPTION } from '../../../../../server/src/media/frame-options'
@@ -76,6 +77,7 @@ type GenerationBodyProps = {
   promptHistory?: PromptHistoryControl
   inputFooter?: ReactNode
   compatibleModeIds?: ReadonlySet<string>
+  isActionCompatible?: (action: NotebookGenerationAction) => boolean
   sourceVisible?: boolean
   notebookId?: string
   doltArtifactAssets?: DoltArtifactAssets
@@ -262,6 +264,7 @@ export function GenerationBody({
   promptHistory,
   inputFooter,
   compatibleModeIds,
+  isActionCompatible,
   sourceVisible = false,
   notebookId = '',
   doltArtifactAssets,
@@ -278,7 +281,22 @@ export function GenerationBody({
   const promptLayerRef = useRef<HTMLDivElement>(null)
   const tokenSources = promptTokenSources(slotEditor)
   const frontierType = generationFrontierType(draft.cell.type, generationMode(draft), draft.action.operation, sources)
-  const modelGroups = frontierPickerGroups(actions, frontierType)
+  const pickerActions = actions.some((action) => action.id === draft.action.id) ? actions : [draft.action, ...actions]
+  const familyGroups = generationFamilyGroups(pickerActions, frontierType)
+  const providerOptions = generationProviderOptions(pickerActions, draft.action.family.id, {
+    frontierType,
+    compatible: isActionCompatible,
+    selectedId: draft.action.id,
+    alternatives: true,
+  })
+  const changeFamily = (familyId: string) => {
+    const next = actionForFamily(pickerActions, familyId, {
+      frontierType,
+      compatible: isActionCompatible,
+      currentProvider: draft.action.provider,
+    })
+    if (next) onActionChange(next.id)
+  }
   const settings = notebookChatGenerationSettings(draft)
   const frameAspectRatio = modelFrameAspectRatio(draft.action.model, draft.cell.inputs ?? {})
   const previewPlayer = useVoicePreviewPlayer()
@@ -366,24 +384,37 @@ export function GenerationBody({
 
       <div className="confirm-section generation-review-editor" hidden={sourceVisible === true}>
         <section className="generation-review-model-section" aria-label="Model">
-          <label>
+          <label className="generation-review-model-field">
             <span className="confirm-section-label">Model</span>
             <select
               aria-label="Generation model"
-              value={draft.action.id}
-              disabled={busy || actions.length === 0}
-              onChange={(event) => onActionChange(event.target.value)}
+              value={draft.action.family.id}
+              disabled={busy || pickerActions.length === 0}
+              onChange={(event) => changeFamily(event.target.value)}
             >
-              {modelGroups.map(group => (
+              {familyGroups.map(group => (
                 <optgroup key={group.label} label={group.label}>
-                  {group.rows.map(({ action, ranking }) => (
-                    <option key={action.id} value={action.id} disabled={action.available === false}>
-                      {ranking ? `#${ranking.rank} · ` : ''}{action.title} · {action.providerLabel}
-                      {ranking ? ` · Elo ${ranking.elo} · ${ranking.priceLabel}` : ''}
-                      {action.available === false ? ' · unavailable' : ''}
+                  {group.rows.map(({ family, ranking, available }) => (
+                    <option key={family.id} value={family.id} disabled={!available}>
+                      {ranking ? `#${ranking.rank} · ${family.title} · Elo ${ranking.elo}` : family.title}
                     </option>
                   ))}
                 </optgroup>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="confirm-section-label">Provider</span>
+            <select
+              aria-label="Generation provider"
+              value={draft.action.id}
+              disabled={busy || providerOptions.length <= 1}
+              onChange={(event) => onActionChange(event.target.value)}
+            >
+              {providerOptions.map(({ action, label, priceLabel, available, compatible }) => (
+                <option key={action.id} value={action.id} disabled={!available}>
+                  {[label, priceLabel, available ? null : 'not configured', compatible ? null : 'incompatible'].filter(Boolean).join(' · ')}
+                </option>
               ))}
             </select>
           </label>

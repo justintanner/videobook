@@ -12,6 +12,7 @@ import type { NotebookCell } from 'videobook-engine'
 import sharp from 'sharp'
 import { probeVideo, runFfmpeg } from '../../server/src/ffmpeg.js'
 import { testBudget } from '../../server/src/test-budget.js'
+import { selectGenerationAction } from './generation-picker-e2e'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
@@ -334,7 +335,6 @@ describe('drawn region image editor through real MCP', () => {
       await page.reload()
       await page.locator(`.react-flow__node[data-id="${producer.id}"] .cell-node`).click()
       const inspector = page.locator('.inspector')
-      const model = inspector.getByLabel('Generation model')
       const generate = inspector.getByRole('button', { name: /^Generate/ }).first()
       const payload = inspector.getByLabel('Generation payload preview', { exact: true })
       await expect.poll(() => payload.textContent()).toContain('"task_type": "UPSCALE"')
@@ -345,16 +345,16 @@ describe('drawn region image editor through real MCP', () => {
       expect(await inspector.getByText('Replacement audio', { exact: true }).count()).toBeGreaterThan(0)
       await expect.poll(() => generate.isEnabled()).toBe(true)
       await page.screenshot({ path: '/tmp/videobook-topaz-promptless.png' })
-      await model.selectOption('generation.fal:minimax/h3-max/reframe-video')
+      await selectGenerationAction(inspector, 'generation.fal:minimax/h3-max/reframe-video')
       const prompt = inspector.locator('.generation-review-prompt-section textarea')
       await prompt.fill('Preserve the painted houses and warm light')
-      await model.selectOption('generation.machgen:Topaz-Video-Precision')
+      await selectGenerationAction(inspector, 'generation.machgen:Topaz-Video-Precision')
       await expect.poll(() => payload.textContent()).toContain('"task_type": "UPSCALE"')
       expect(await payload.textContent()).toContain('"prompt": ""')
       expect(await prompt.count()).toBe(0)
-      await model.selectOption('generation.fal:minimax/h3-max/reframe-video')
+      await selectGenerationAction(inspector, 'generation.fal:minimax/h3-max/reframe-video')
       expect(await prompt.inputValue()).toBe('Preserve the painted houses and warm light')
-      await model.selectOption('generation.machgen:Topaz-Video-Precision')
+      await selectGenerationAction(inspector, 'generation.machgen:Topaz-Video-Precision')
       await expect.poll(() => generate.isEnabled()).toBe(true)
       await generate.click()
       await expect.poll(() => requests.filter((request) => request.name === 'run_notebook_cell').length).toBe(1)
@@ -693,17 +693,17 @@ describe('drawn region image editor through real MCP', () => {
       await page.reload()
       await page.locator(`.react-flow__node[data-id="${String(edited.producer_cell_id)}"] .cell-node`).click()
       const editor = page.locator('.generation-cell-inspector .confirm-generation')
-      await expect.poll(() => editor.getByLabel('Generation model').inputValue()).toBe('image-edit.fal-ai/nano-banana-pro/edit')
+      await expect.poll(() => editor.getByLabel('Generation provider').inputValue()).toBe('image-edit.fal-ai/nano-banana-pro/edit')
       const payload = editor.locator('.generation-review-json pre')
       await expect.poll(() => payload.textContent(), { timeout: 15_000 }).toContain('"endpoint_id": "fal-ai/nano-banana-pro/edit"')
       expect(await page.getByText('This model does not accept the current inputs.', { exact: false }).count()).toBe(0)
       await editor.getByRole('textbox', { name: 'Prompt', exact: true }).fill('A spider portal behind the person')
       await expect.poll(() => payload.textContent(), { timeout: 15_000 }).toContain('A spider portal behind the person')
       expect(await editor.getByRole('link', { name: 'fal requests' }).count()).toBe(0)
-      await editor.getByLabel('Generation model').selectOption('image-edit.seedream/5-pro-image-to-image')
+      await selectGenerationAction(editor, 'image-edit.seedream/5-pro-image-to-image')
       await expect.poll(() => payload.textContent(), { timeout: 15_000 }).toContain('seedream/5-pro-image-to-image')
       expect(await editor.getByRole('link', { name: 'Kie logs' }).count()).toBe(0)
-      await editor.getByLabel('Generation model').selectOption('image-edit.fal-ai/nano-banana-pro/edit')
+      await selectGenerationAction(editor, 'image-edit.fal-ai/nano-banana-pro/edit')
       await expect.poll(() => payload.textContent(), { timeout: 15_000 }).toContain('fal-ai/nano-banana-pro/edit')
       await page.screenshot({ path: '/tmp/videobook-image-edit-inspector.png' })
       const generate = page.getByLabel('Primary cell action').getByRole('button', { name: 'Generate', exact: true })
