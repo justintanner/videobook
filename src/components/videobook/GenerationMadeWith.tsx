@@ -1,10 +1,13 @@
 import { ArrowRight } from 'lucide-react'
-import { Suspense, use } from 'react'
-import type { NotebookCell } from 'videobook-engine'
+import { Suspense, use, useDeferredValue, type ReactNode } from 'react'
+import type { NotebookCell, NotebookEdge } from 'videobook-engine'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { CellUsageCost } from './CellUsageCost'
 import { GeneratingPrompt } from './GeneratingRunDetails'
+import { GenerationTakes } from './GenerationTakes'
+import { UsageCostSummary } from './UsageCost'
 import { formatMediaTime } from '@/videobook/notebook-cell-presentation'
+import { generationTakes, producerOutputsSignature, takesTotal } from '@/videobook/generation-takes'
 import {
   generationModelLabel,
   generationProviderLabel,
@@ -13,6 +16,7 @@ import {
   type GenerationAttemptRecord,
   type OutputGeneration,
 } from '@/videobook/output-generation'
+import { useBookUsage } from '@/videobook/useBookUsage'
 
 export type LoadCellGenerations = (
   cellId: string,
@@ -24,7 +28,7 @@ type CallTool = (
   options?: { background?: boolean },
 ) => Promise<unknown>
 
-type MadeWithOutcome = { generation: OutputGeneration | null; readable: boolean }
+type MadeWithOutcome = { attempts: readonly GenerationAttemptRecord[]; readable: boolean }
 
 type MadeWithState = 'loading' | 'ready' | 'unreadable'
 
@@ -36,28 +40,36 @@ type MadeWithProps = {
   call?: CallTool
   load?: LoadCellGenerations
   onSelectSource?: (cellId: string) => void
+  /** The notebook graph, to place each take at its output's grid address. */
+  cells?: readonly NotebookCell[]
+  edges?: readonly NotebookEdge[]
 }
 
-// One promise per loader, cell and artifact so `use()` sees a stable value;
-// a regenerated output has a new artifact id and reads again.
-const outcomeCache = new WeakMap<LoadCellGenerations, Map<string, Promise<MadeWithOutcome>>>()
+type CachedOutcome = { signature: string; promise: Promise<MadeWithOutcome> }
+
+// One promise per loader and producer so `use()` sees a stable value; it is
+// read again when the output on screen or any output of the producer changes.
+const outcomeCache = new WeakMap<LoadCellGenerations, Map<string, CachedOutcome>>()
 
 function cachedOutcome(
   load: LoadCellGenerations,
-  cellId: string,
-  artifactId: string,
+  producerId: string,
+  signature: string,
 ): Promise<MadeWithOutcome> {
-  const byKey = outcomeCache.get(load) ?? new Map<string, Promise<MadeWithOutcome>>()
-  outcomeCache.set(load, byKey)
-  const key = `${cellId}:${artifactId}`
-  const cached = byKey.get(key)
-  if (cached) return cached
-  const pending = load(cellId).then(
-    (attempts): MadeWithOutcome => ({ generation: producingGeneration(attempts, artifactId), readable: true }),
-    (): MadeWithOutcome => ({ generation: null, readable: false }),
+  const byProducer = outcomeCache.get(load) ?? new Map<string, CachedOutcome>()
+  outcomeCache.set(load, byProducer)
+  const cached = byProducer.get(producerId)
+  if (cached?.signature === signature) return cached.promise
+  const promise = load(producerId).then(
+    (attempts): MadeWithOutcome => ({ attempts, readable: true }),
+    (): MadeWithOutcome => ({ attempts: [], readable: false }),
   )
-  byKey.set(key, pending)
-  return pending
+  byProducer.set(producerId, { signature, promise })
+  return promise
+}
+
+async function usageUnavailable(): Promise<unknown> {
+  throw new Error('Usage is unavailable')
 }
 
 export function GenerationProducerLink({
@@ -154,11 +166,20 @@ function MadeWithNote({ state, producer, generation }: {
   )
 }
 
-function MadeWithFooter({ generation, producer, bookId, call }: {
+function fallbackCost({ generation, producer, bookId, call }: {
   generation: OutputGeneration | null
   producer: NotebookCell
   bookId: string
   call?: CallTool
+}): ReactNode {
+  return generation?.runId
+    ? <CellUsageCost bookId={bookId} call={call} cellId={null} runId={generation.runId} />
+    : <CellUsageCost bookId={bookId} call={call} cellId={producer.id} />
+}
+
+function MadeWithFooter({ generation, cost }: {
+  generation: OutputGeneration | null
+  cost: ReactNode
 }) {
   const seconds = generation ? generationRunSeconds(generation) : null
   return (
@@ -168,9 +189,7 @@ function MadeWithFooter({ generation, producer, bookId, call }: {
           Took {formatMediaTime(Math.round(seconds))}
         </span>
       )}
-      {generation?.runId
-        ? <CellUsageCost bookId={bookId} call={call} cellId={null} runId={generation.runId} />
-        : <CellUsageCost bookId={bookId} call={call} cellId={producer.id} />}
+      {cost}
     </div>
   )
 }
@@ -180,12 +199,14 @@ function MadeWithCard({
   producer,
   generation,
   state,
-  bookId,
-  call,
+  cost,
   onSelectSource,
-}: Omit<MadeWithProps, 'outputCellId' | 'outputArtifactId' | 'load'> & {
+}: {
+  producer: NotebookCell
   generation: OutputGeneration | null
   state: MadeWithState
+  cost: ReactNode
+  onSelectSource?: (cellId: string) => void
 }) {
   const facts = madeWithFacts(producer, generation)
   const loading = state === 'loading'
@@ -198,33 +219,106 @@ function MadeWithCard({
       {!loading && <MadeWithIdentity facts={facts} generation={generation} />}
       <MadeWithNote state={state} producer={producer} generation={generation} />
       {!loading && <GeneratingPrompt written={facts.written} sent={facts.sent} />}
-      {!loading && (
-        <MadeWithFooter generation={generation} producer={producer} bookId={bookId} call={call} />
-      )}
+      {!loading && <MadeWithFooter generation={generation} cost={cost} />}
     </section>
   )
 }
 
-function LoadedMadeWith({ promise, ...props }: Omit<MadeWithProps, 'outputCellId' | 'outputArtifactId' | 'load'> & {
-  promise: Promise<MadeWithOutcome>
-}) {
-  const { generation, readable } = use(promise)
-  return <MadeWithCard {...props} generation={generation} state={readable ? 'ready' : 'unreadable'} />
-}
-
-export function GenerationMadeWith({
+/** The card with this run's cost beside every run of the producer. */
+function MadeWithAndTakes({
+  attempts,
+  generation,
+  producer,
   outputCellId,
   outputArtifactId,
-  load,
-  ...props
-}: MadeWithProps) {
-  if (!load || !outputArtifactId) {
-    return <MadeWithCard {...props} generation={null} state="ready" />
-  }
-  const promise = cachedOutcome(load, outputCellId, outputArtifactId)
+  cells,
+  bookId,
+  call,
+  onSelectSource,
+}: Omit<MadeWithProps, 'load' | 'edges'> & {
+  attempts: readonly GenerationAttemptRecord[]
+  generation: OutputGeneration | null
+}) {
+  const runId = generation?.runId ?? null
+  const usage = useBookUsage({
+    bookId,
+    ready: Boolean(call),
+    call: call ?? usageUnavailable,
+    cellId: producer.id,
+    runId,
+  })
+  const run = runId && usage.snapshot?.run?.id === runId ? usage.snapshot.run : null
+  const producerUsage = usage.snapshot?.cell?.id === producer.id ? usage.snapshot.cell : null
+  const takes = generationTakes(attempts, {
+    cells: cells ?? [],
+    outputCellId,
+    outputArtifactId,
+    runs: producerUsage?.runs ?? [],
+  })
+  const cost = run
+    ? <div className="usage-cost-scopes"><UsageCostSummary label="Run cost" totals={run.totals} calls={run.calls} /></div>
+    : null
   return (
-    <Suspense fallback={<MadeWithCard {...props} generation={null} state="loading" />}>
-      <LoadedMadeWith {...props} promise={promise} />
+    <>
+      <MadeWithCard
+        producer={producer}
+        generation={generation}
+        state="ready"
+        cost={cost}
+        onSelectSource={onSelectSource}
+      />
+      <GenerationTakes
+        producer={producer}
+        takes={takes}
+        total={takesTotal(producerUsage?.totals ?? null)}
+        onSelectCell={onSelectSource}
+      />
+    </>
+  )
+}
+
+function LoadedMadeWith({ promise, ...props }: Omit<MadeWithProps, 'load' | 'edges'> & {
+  promise: Promise<MadeWithOutcome>
+}) {
+  const { attempts, readable } = use(promise)
+  const generation = props.outputArtifactId
+    ? producingGeneration(attempts, props.outputArtifactId)
+    : null
+  if (readable && attempts.length > 0) {
+    return <MadeWithAndTakes {...props} attempts={attempts} generation={generation} />
+  }
+  return (
+    <MadeWithCard
+      producer={props.producer}
+      generation={generation}
+      state={readable ? 'ready' : 'unreadable'}
+      cost={fallbackCost({ ...props, generation })}
+      onSelectSource={props.onSelectSource}
+    />
+  )
+}
+
+export function GenerationMadeWith({ load, edges, ...props }: MadeWithProps) {
+  const signature = `${props.outputArtifactId ?? ''}|${producerOutputsSignature(
+    props.producer.id,
+    props.cells ?? [],
+    edges ?? [],
+  )}`
+  const promise = load ? cachedOutcome(load, props.producer.id, signature) : null
+  const shown = useDeferredValue(promise)
+  const fallback = (state: MadeWithState) => (
+    <MadeWithCard
+      producer={props.producer}
+      generation={null}
+      state={state}
+      cost={fallbackCost({ ...props, generation: null })}
+      onSelectSource={props.onSelectSource}
+    />
+  )
+  if (!shown) return fallback('ready')
+  return (
+    <Suspense fallback={fallback('loading')}>
+      <LoadedMadeWith {...props} promise={shown} />
     </Suspense>
   )
 }

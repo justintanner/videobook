@@ -17,6 +17,8 @@ export type PromptSegment = { text: string; token: string | null }
 export type GenerationAttemptRecord = OutputGeneration & {
   status: string
   artifactId: string | null
+  outputCellId: string | null
+  thumbnailUrl: string | null
 }
 
 type UnknownRecord = Record<string, unknown>
@@ -45,6 +47,8 @@ function attemptRecord(value: unknown): GenerationAttemptRecord | null {
     attemptId,
     status,
     artifactId: text(row.artifactId),
+    outputCellId: text(row.outputCellId),
+    thumbnailUrl: text(row.thumbnailUrl),
     runId: text(row.runId),
     provider: text(row.provider),
     model: text(row.model),

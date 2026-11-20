@@ -40,6 +40,7 @@ type CellGenerationAttempt = {
   prompt: string | null;
   resolvedPrompt: string | null;
   artifactId: string | null;
+  outputCellId: string | null;
   providerArtifactId: string | null;
   providerTask: ProviderTaskStatus | null;
   error: string | null;
@@ -297,6 +298,7 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
             prompt: row.prompt ?? null,
             resolvedPrompt: row.resolvedPrompt ?? null,
             artifactId: row.outputArtifactId ?? null,
+            outputCellId: row.outputCellId ?? null,
             providerArtifactId: row.providerArtifactId ?? null,
             providerTask: await readProviderTaskStatus(engine, row.providerArtifactId ?? joinArtifactId, row),
             error,

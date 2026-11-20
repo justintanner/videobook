@@ -61,6 +61,19 @@ describe("usage cost by notebook cell, run and job", () => {
     expect(book.recent).toHaveLength(4);
   });
 
+  it("splits a cell's totals by run so each take carries its own cost", async () => {
+    seedRun();
+    record({ id: "e", provider: "kie", model: "bytedance/seedance-2-5", activity: "video", status: "pending", basis: "estimated", costUsd: 1.71, estimateUsd: 1.71, cellId: CELL, runId: "run-later", createdAt: 5 });
+    const scoped = await usage({ scope: { cell_id: CELL, run_id: RUN } });
+    const cell = scoped.cell as { runs: Array<{ id: string; count: number; actualUsd: number; pendingCount: number; pendingEstimateUsd: number }> };
+    expect(cell.runs.map((run) => run.id)).toEqual([RUN, "run-later"].sort());
+    const settled = cell.runs.find((run) => run.id === RUN)!;
+    expect(settled).toMatchObject({ count: 2, pendingCount: 0 });
+    expect(settled.actualUsd).toBeCloseTo(0.81, 9);
+    expect(cell.runs.find((run) => run.id === "run-later")).toMatchObject({ count: 1, pendingCount: 1, pendingEstimateUsd: 1.71 });
+    expect(scoped.run).not.toHaveProperty("runs");
+  });
+
   it("lists each job with the usage its own calls recorded", async () => {
     const generating = engine.jobs.queue.enqueue({ type: "generate_media", payload: { type: "generate_media" } }).job;
     const waveform = engine.jobs.queue.enqueue({ type: "extract_waveform", payload: { type: "extract_waveform" } }).job;

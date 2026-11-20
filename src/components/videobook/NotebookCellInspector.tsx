@@ -2131,6 +2131,8 @@ function MediaCellInspector({
       call={assetTools}
       load={onLoadCellGenerations}
       onSelectSource={onSelectSource}
+      cells={cells}
+      edges={edges}
     />
   ) : (
     <InputSources

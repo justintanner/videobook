@@ -86,7 +86,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `generate_video` — Generate a video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `get_book` — Read the current book identity
-- `get_book_usage` — Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, the latest 20 requests, and totals that set quoted estimates against actuals. Pass scope.cell_id or scope.run_id to add that notebook cell's or run's totals and its calls among the latest 200. Tracking starts when usage recording is enabled for this book.
+- `get_book_usage` — Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, the latest 20 requests, and totals that set quoted estimates against actuals. Pass scope.cell_id or scope.run_id to add that notebook cell's or run's totals and its calls among the latest 200; a cell scope also lists its totals per run. Tracking starts when usage recording is enabled for this book.
 - `get_edit_action` — Read the immutable audit record for a committed CommandPlan edit stage
 - `get_editing_moments` — Read cached editing moments (shot boundaries, motion, ranked source moments) for the current video source
 - `get_entity` — Read a reusable prompt, scene or character
@@ -322,7 +322,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_image`
 - `/generate-video` — Generate a video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_video`
 - `/get-book` — Read the current book identity; MCP: `get_book`
-- `/get-book-usage` — Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, the latest 20 requests, and totals that set quoted estimates against actuals. Pass scope.cell_id or scope.run_id to add that notebook cell's or run's totals and its calls among the latest 200. Tracking starts when usage recording is enabled for this book.; MCP: `get_book_usage`
+- `/get-book-usage` — Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, the latest 20 requests, and totals that set quoted estimates against actuals. Pass scope.cell_id or scope.run_id to add that notebook cell's or run's totals and its calls among the latest 200; a cell scope also lists its totals per run. Tracking starts when usage recording is enabled for this book.; MCP: `get_book_usage`
 - `/get-edit-action` — Read the immutable audit record for a committed CommandPlan edit stage; MCP: `get_edit_action`
 - `/get-editing-moments` — Read cached editing moments (shot boundaries, motion, ranked source moments) for the current video source; MCP: `get_editing_moments`
 - `/get-entity` — Read a reusable prompt, scene or character; MCP: `get_entity`

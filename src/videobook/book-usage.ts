@@ -1,6 +1,6 @@
-import type { UsageEntry, UsageRollupTotals, UsageSummary, UsageTotals } from 'videobook-engine'
+import type { UsageEntry, UsageRollupGroup, UsageRollupTotals, UsageSummary, UsageTotals } from 'videobook-engine'
 
-export type UsageScope = { id: string; totals: UsageRollupTotals; calls: UsageEntry[] }
+export type UsageScope = { id: string; totals: UsageRollupTotals; calls: UsageEntry[]; runs?: UsageRollupGroup[] }
 
 export type BookUsageSnapshot = UsageSummary & {
   recent: UsageEntry[]

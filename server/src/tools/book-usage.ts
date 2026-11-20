@@ -1,12 +1,21 @@
-import type { Engine, UsageEntry, UsageRollupFilter } from "videobook-engine";
+import type { Engine, UsageEntry } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { settleFinishedUsage, usageIncomplete } from "../provider-usage.js";
 
 const SCOPE_CALLS = 200;
 
-function scopeUsage(engine: Engine, filter: UsageRollupFilter, matches: (entry: UsageEntry) => boolean) {
-  return { totals: engine.usage.rollup(filter).totals, calls: engine.usage.recent(SCOPE_CALLS).filter(matches).reverse() };
+function scopeCalls(engine: Engine, matches: (entry: UsageEntry) => boolean): UsageEntry[] {
+  return engine.usage.recent(SCOPE_CALLS).filter(matches).reverse();
+}
+
+function cellScope(engine: Engine, cellId: string) {
+  const rollup = engine.usage.rollup({ cellId });
+  return { totals: rollup.totals, runs: rollup.runs, calls: scopeCalls(engine, (entry) => entry.cellId === cellId) };
+}
+
+function runScope(engine: Engine, runId: string) {
+  return { totals: engine.usage.rollup({ runId }).totals, calls: scopeCalls(engine, (entry) => entry.runId === runId) };
 }
 
 export function notBilledCallsByJob(engine: Engine): Map<string, UsageEntry[]> {
@@ -32,7 +41,7 @@ function scopeArgs(value: unknown): { cellId?: string; runId?: string } {
 export function bookUsageDef(engine: Engine): ToolDef {
   return {
     name: "get_book_usage",
-    description: "Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, the latest 20 requests, and totals that set quoted estimates against actuals. Pass scope.cell_id or scope.run_id to add that notebook cell's or run's totals and its calls among the latest 200. Tracking starts when usage recording is enabled for this book.",
+    description: "Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, the latest 20 requests, and totals that set quoted estimates against actuals. Pass scope.cell_id or scope.run_id to add that notebook cell's or run's totals and its calls among the latest 200; a cell scope also lists its totals per run. Tracking starts when usage recording is enabled for this book.",
     schema: {
       book_id: z.string().uuid(),
       scope: z.object({
@@ -52,8 +61,8 @@ export function bookUsageDef(engine: Engine): ToolDef {
             rollup: engine.usage.rollup().totals,
             recent: engine.usage.recent(),
             incomplete: usageIncomplete(engine),
-            ...(cellId ? { cell: { id: cellId, ...scopeUsage(engine, { cellId }, (entry) => entry.cellId === cellId) } } : {}),
-            ...(runId ? { run: { id: runId, ...scopeUsage(engine, { runId }, (entry) => entry.runId === runId) } } : {}),
+            ...(cellId ? { cell: { id: cellId, ...cellScope(engine, cellId) } } : {}),
+            ...(runId ? { run: { id: runId, ...runScope(engine, runId) } } : {}),
           }),
         }],
       };
