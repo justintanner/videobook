@@ -17,6 +17,16 @@ const MIN_PEAK_TO_END_SECONDS = 0.3;
 const MAX_PEAK_TO_END_SECONDS = 2;
 const MIN_HOOK_SECONDS = 1.5;
 const MAX_HOOK_SECONDS = 5;
+
+export const AUTO_EDIT_ANCHOR_LIMITS = {
+  minStartToPeakSeconds: MIN_START_TO_PEAK_SECONDS,
+  maxStartToPeakSeconds: MAX_START_TO_PEAK_SECONDS,
+  minPeakToEndSeconds: MIN_PEAK_TO_END_SECONDS,
+  maxPeakToEndSeconds: MAX_PEAK_TO_END_SECONDS,
+  minHookSeconds: MIN_HOOK_SECONDS,
+  maxHookSeconds: MAX_HOOK_SECONDS,
+} as const;
+
 const MIN_CUT_SECONDS = 0.3;
 const MAX_CUTS = 3;
 const DEFAULT_HOOK_SECONDS = 2.5;

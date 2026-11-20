@@ -5,6 +5,7 @@ import type { SegmentSource } from '../../server/src/auto-edit/plan'
 import { buildAutoEditPlan, DEFAULT_AUTO_EDIT_SECTIONS, type AutoEditAnchors } from '../../server/src/auto-edit/style'
 import { AutoEditBody, AutoEditSheet } from '@/components/videobook/auto-edit/AutoEditSheet'
 import { buildAutoEditSegmentRanges } from '@/videobook/auto-edit-preview'
+import { buildAutoEditTimelineLayout } from '@/videobook/auto-edit-review'
 import type { AutoEditEditor, AutoEditState } from '@/videobook/useAutoEdit'
 
 const SOURCE: SegmentSource = {
@@ -83,22 +84,31 @@ function makeEditor(overrides: Partial<AutoEditState> = {}): AutoEditEditor {
 }
 
 describe('AutoEditSheet server render', () => {
-  it('renders segment strip blocks with names and proportional widths, switches, and key-missing reason', () => {
+  const segmentNames = (html: string) => [...html.matchAll(/<span class="auto-edit-segment-name">([^<]+)<\/span>/g)].map((m) => m[1])
+
+  it('renders the timeline with readable segments, markers, beats, and the key-missing reason', () => {
     const editor = makeEditor({ analysisAvailable: false })
     const html = renderToStaticMarkup(createElement(AutoEditBody, { editor }))
     const ranges = buildAutoEditSegmentRanges(editor.state.plan!)
+    const blocks = buildAutoEditTimelineLayout(ranges)
 
-    const blockMatches = [...html.matchAll(/<button[^>]*class="auto-edit-strip-block"[^>]*>([^<]+)<\/button>/g)]
-    expect(blockMatches.map((m) => m[1])).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Body'])
-    expect(blockMatches).toHaveLength(ranges.length)
-    for (const [index, range] of ranges.entries()) {
-      expect(blockMatches[index]![0]).toContain(`width:${range.widthPercent.toFixed(2)}%`)
+    expect(segmentNames(html)).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Body'])
+    expect(blocks).toHaveLength(ranges.length)
+    for (const block of blocks) {
+      expect(html).toContain(`left:${block.leftPercent.toFixed(3)}%;width:${block.widthPercent.toFixed(3)}%`)
     }
 
     for (const label of ['Cold open', 'Replays', 'Push-in', 'Crash', 'Sounds']) {
-      expect(html).toContain(`role="switch" checked=""`)
-      expect(html).toContain(`<span>${label}</span>`)
+      expect(html).toMatch(new RegExp(`role="switch" aria-label="${label}"[^>]*checked=""`))
     }
+    expect(html).toContain('+2.00 s')
+    expect(html).toContain('riser, impact ×2, glitch, power down')
+
+    for (const marker of ['Hook start 1.50s', 'Hook end 3.50s', 'Moment start 6.00s', 'Moment peak 6.50s', 'Moment end 7.20s']) {
+      expect(html).toContain(`aria-label="${marker}"`)
+    }
+    expect(html).toContain('aria-label="Cold open segment"')
+    expect(html).toContain('Treatment')
 
     expect(html).toContain('disabled=""')
     expect(html).toContain('OPENAI_API_KEY')
@@ -118,13 +128,15 @@ describe('AutoEditSheet server render', () => {
       onClose: () => undefined,
     }))
 
-    const blockMatches = [...html.matchAll(/<button[^>]*class="auto-edit-strip-block"[^>]*>([^<]+)<\/button>/g)]
-    expect(blockMatches.map((m) => m[1])).toEqual(['Body', 'Replay', 'Punch-in', 'Push-in', 'Body'])
+    expect(segmentNames(html)).toEqual(['Body', 'Replay', 'Punch-in', 'Push-in', 'Body'])
+    expect(html).not.toContain('aria-label="Hook start')
 
     expect(html).toContain(`role="status"`)
     expect(html).toContain(notice)
-    expect(html).toContain('high confidence:')
+    expect(html).toContain('High confidence')
     expect(html).toContain('Person leaps across sofa.')
+    expect(html).toContain('Auto-edit · Crash replay')
+    expect(html).toContain('1080×1920 · 10.00s · 30 fps → ')
 
     const renderPos = html.indexOf('Render <kbd>↵</kbd>')
     const cancelPos = html.indexOf('Cancel <kbd>Esc</kbd>')

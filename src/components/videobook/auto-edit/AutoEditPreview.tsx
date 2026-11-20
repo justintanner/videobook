@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useRef, useState, type MouseEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type MouseEvent, type RefObject } from 'react'
+import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
 import type { SegmentPlan } from '../../../../server/src/auto-edit/plan'
 import { frameToSeconds } from '../../../../server/src/auto-edit/plan'
 import type { AutoEditCue } from '../../../../server/src/auto-edit/style'
@@ -6,6 +7,7 @@ import {
   autoEditCuesBetween,
   autoEditInvertZoomPoint,
   autoEditLookFilter,
+  autoEditNudgeSeconds,
   autoEditPlanDurationSeconds,
   autoEditScheduleAt,
   autoEditZoomStyle,
@@ -14,12 +16,19 @@ import {
 import { builtinSoundUrl } from '@/videobook/builtin-sound-preview'
 import { graphicsFocusPoint } from '@/videobook/graphics-pointer'
 
+export type AutoEditPreviewMode = 'plan' | 'source'
+
 export interface AutoEditSeekCommand {
   nonce: number
-  kind: 'segment' | 'source'
+  kind: 'segment' | 'source' | 'resume-plan' | 'source-current'
   segmentIndex?: number
   sourceSeconds?: number
   play?: boolean
+}
+
+export interface AutoEditPreviewPosition {
+  outputSeconds: number | null
+  sourceSeconds: number
 }
 
 interface AutoEditPreviewProps {
@@ -28,11 +37,15 @@ interface AutoEditPreviewProps {
   mediaUrl: string
   soundsEnabled: boolean
   focusPoint: { x: number; y: number }
+  focusLabel: string
+  mode: AutoEditPreviewMode
   seekCommand: AutoEditSeekCommand | null
   readSourceTimeRef: RefObject<() => number>
   activeSegmentIndex: number
   onActiveSegmentChange: (segmentIndex: number) => void
+  onModeChange: (mode: AutoEditPreviewMode) => void
   onPlaceFocus: (point: { x: number; y: number }) => void
+  onPosition: (position: AutoEditPreviewPosition) => void
 }
 
 export function AutoEditPreview({
@@ -41,18 +54,23 @@ export function AutoEditPreview({
   mediaUrl,
   soundsEnabled,
   focusPoint,
+  focusLabel,
+  mode,
   seekCommand,
   readSourceTimeRef,
   activeSegmentIndex,
   onActiveSegmentChange,
+  onModeChange,
   onPlaceFocus,
+  onPosition,
 }: AutoEditPreviewProps) {
   const crashFilterId = useId().replace(/:/g, '-') + '-crash'
   const rgbSplitFilterId = useId().replace(/:/g, '-') + '-rgb'
   const videoRef = useRef<HTMLVideoElement>(null)
   const rangeInputRef = useRef<HTMLInputElement>(null)
-  const readoutRef = useRef<HTMLOutputElement>(null)
-  const modeRef = useRef<'plan' | 'source'>('plan')
+  const clockMainRef = useRef<HTMLElement>(null)
+  const clockSubRef = useRef<HTMLSpanElement>(null)
+  const modeRef = useRef<AutoEditPreviewMode>('plan')
   const segmentIndexRef = useRef(0)
   const seekingTargetRef = useRef<number | null>(null)
   const lastOutputTimeRef = useRef(0)
@@ -67,7 +85,13 @@ export function AutoEditPreview({
   const ranges = buildAutoEditSegmentRanges(plan)
   const totalDuration = autoEditPlanDurationSeconds(plan)
   const fps = plan.source.fps
+  const sourceDuration = frameToSeconds(plan.source.frames, fps)
   const rgbShiftPx = Math.max(3, Math.round(Math.min(18, plan.source.width * 0.012)))
+
+  const writeClock = useCallback((main: string, sub: string) => {
+    if (clockMainRef.current) clockMainRef.current.textContent = main
+    if (clockSubRef.current) clockSubRef.current.textContent = sub
+  }, [])
 
   const stopCueAudio = useCallback(() => {
     for (const audio of playingAudioRef.current) {
@@ -103,10 +127,35 @@ export function AutoEditPreview({
     video.dataset.look = sample.look
     pausedZoomRef.current = sample.zoom
     if (rangeInputRef.current) rangeInputRef.current.value = sample.outputTime.toFixed(3)
-    if (readoutRef.current) {
-      readoutRef.current.value = `${sample.segmentLabel} · ${sample.outputTime.toFixed(2)} / ${totalDuration.toFixed(2)}s · src ${sample.sourceTime.toFixed(2)}s`
-    }
-  }, [crashFilterId, plan, rgbSplitFilterId, totalDuration])
+    writeClock(
+      `${sample.outputTime.toFixed(2)} / ${totalDuration.toFixed(2)}s`,
+      `${sample.segmentLabel} · source ${sample.sourceTime.toFixed(2)}s`,
+    )
+    onPosition({ outputSeconds: sample.outputTime, sourceSeconds: sample.sourceTime })
+  }, [crashFilterId, onPosition, plan, rgbSplitFilterId, totalDuration, writeClock])
+
+  const showSourceFrame = useCallback((sourceSeconds: number) => {
+    const video = videoRef.current
+    if (!video) return
+    video.style.transform = 'none'
+    video.style.transformOrigin = '50% 50%'
+    video.style.filter = 'none'
+    video.dataset.look = 'none'
+    pausedZoomRef.current = { scale: 1, x: 0.5, y: 0.5 }
+    if (rangeInputRef.current) rangeInputRef.current.value = sourceSeconds.toFixed(3)
+    writeClock(
+      `${sourceSeconds.toFixed(2)} / ${sourceDuration.toFixed(2)}s`,
+      `Source · frame ${Math.round(sourceSeconds * fps)}`,
+    )
+    onPosition({ outputSeconds: null, sourceSeconds })
+  }, [fps, onPosition, sourceDuration, writeClock])
+
+  const startPlayback = useCallback((video: HTMLVideoElement, failureMessage: string) => {
+    void video.play().catch(() => {
+      video.muted = true
+      void video.play().catch(() => setPlaybackError(failureMessage))
+    })
+  }, [])
 
   const enterSegment = useCallback((index: number, shouldPlay: boolean, resetCues = false) => {
     const video = videoRef.current
@@ -126,13 +175,8 @@ export function AutoEditPreview({
     video.playbackRate = range.segment.speed
     video.currentTime = range.sourceStartSeconds
     applySampleVisuals(range.outputStartSeconds)
-    if (shouldPlay) {
-      void video.play().catch(() => {
-        video.muted = true
-        void video.play().catch(() => setPlaybackError('Press Play to preview this video.'))
-      })
-    }
-  }, [applySampleVisuals, cues, onActiveSegmentChange, ranges])
+    if (shouldPlay) startPlayback(video, 'Press Play to preview this video.')
+  }, [applySampleVisuals, cues, onActiveSegmentChange, ranges, startPlayback])
 
   const playFromOutputTime = useCallback((outputTimeSeconds: number, shouldPlay: boolean) => {
     const video = videoRef.current
@@ -151,13 +195,19 @@ export function AutoEditPreview({
     video.playbackRate = sample.playbackRate
     video.currentTime = sample.sourceTime
     applySampleVisuals(sample.outputTime)
-    if (shouldPlay) {
-      void video.play().catch(() => {
-        video.muted = true
-        void video.play().catch(() => setPlaybackError('Press Play to preview this video.'))
-      })
-    }
-  }, [applySampleVisuals, cues, onActiveSegmentChange, plan, ranges])
+    if (shouldPlay) startPlayback(video, 'Press Play to preview this video.')
+  }, [applySampleVisuals, cues, onActiveSegmentChange, plan, ranges, startPlayback])
+
+  const seekSource = useCallback((sourceSeconds: number) => {
+    const video = videoRef.current
+    if (!video) return
+    modeRef.current = 'source'
+    video.pause()
+    video.playbackRate = 1
+    seekingTargetRef.current = sourceSeconds
+    video.currentTime = sourceSeconds
+    showSourceFrame(sourceSeconds)
+  }, [showSourceFrame])
 
   useEffect(() => {
     readSourceTimeRef.current = () => {
@@ -182,68 +232,72 @@ export function AutoEditPreview({
       enterSegment(Math.max(0, Math.min(ranges.length - 1, seekCommand.segmentIndex)), seekCommand.play ?? true, true)
       return
     }
-    if (seekCommand.kind === 'source' && typeof seekCommand.sourceSeconds === 'number') {
-      modeRef.current = 'source'
+    if (seekCommand.kind === 'resume-plan') {
       video.pause()
-      video.playbackRate = 1
-      video.style.transform = 'none'
-      video.style.transformOrigin = '50% 50%'
-      video.style.filter = 'none'
-      video.dataset.look = 'none'
-      pausedZoomRef.current = { scale: 1, x: 0.5, y: 0.5 }
-      seekingTargetRef.current = seekCommand.sourceSeconds
-      video.currentTime = seekCommand.sourceSeconds
-      if (readoutRef.current) {
-        readoutRef.current.value = `Source ${seekCommand.sourceSeconds.toFixed(2)}s / ${frameToSeconds(plan.source.frames, fps).toFixed(2)}s`
-      }
+      playFromOutputTime(lastOutputTimeRef.current, false)
+      return
     }
-  }, [enterSegment, fps, plan.source.frames, ranges.length, seekCommand, stopCueAudio])
+    if (seekCommand.kind === 'source-current') {
+      seekSource(video.currentTime)
+      return
+    }
+    if (seekCommand.kind === 'source' && typeof seekCommand.sourceSeconds === 'number') {
+      seekSource(seekCommand.sourceSeconds)
+    }
+  }, [enterSegment, playFromOutputTime, ranges.length, seekCommand, seekSource, stopCueAudio])
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
     let frameId = 0
-    const tick = () => {
-      if (modeRef.current === 'plan') {
-        const idx = Math.max(0, Math.min(ranges.length - 1, segmentIndexRef.current))
-        const range = ranges[idx]
-        if (range) {
-          const target = seekingTargetRef.current
-          const pendingSeek = target !== null && (video.seeking || Math.abs(video.currentTime - target) > Math.max(0.25, 2 / fps))
-          if (!pendingSeek) {
-            seekingTargetRef.current = null
-            const rawLocalSource = Math.max(0, video.currentTime - range.sourceStartSeconds)
-            const localOutput = rawLocalSource / range.segment.speed
-            const outputTime = Math.min(range.outputEndSeconds, range.outputStartSeconds + localOutput)
-            applySampleVisuals(outputTime)
-            if (soundsEnabled && !video.paused) {
-              const matched = autoEditCuesBetween(cues, lastOutputTimeRef.current, outputTime)
-              for (const entry of matched) {
-                if (firedCuesRef.current.has(entry.index)) continue
-                firedCuesRef.current.add(entry.index)
-                playCueSound(entry.cue)
-              }
-            }
-            lastOutputTimeRef.current = outputTime
-            const endThreshold = Math.max(0.015, 0.5 / fps)
-            if (!video.paused && video.currentTime >= range.sourceEndSeconds - endThreshold) {
-              if (idx + 1 < ranges.length) {
-                enterSegment(idx + 1, true)
-              } else {
-                video.pause()
-                stopCueAudio()
-              }
-            }
-          }
+    const tickSource = () => {
+      const target = seekingTargetRef.current
+      const pendingSeek = target !== null && (video.seeking || Math.abs(video.currentTime - target) > Math.max(0.25, 2 / fps))
+      if (pendingSeek) return
+      seekingTargetRef.current = null
+      if (!video.paused) showSourceFrame(video.currentTime)
+    }
+    const tickPlan = () => {
+      const idx = Math.max(0, Math.min(ranges.length - 1, segmentIndexRef.current))
+      const range = ranges[idx]
+      if (!range) return
+      const target = seekingTargetRef.current
+      const pendingSeek = target !== null && (video.seeking || Math.abs(video.currentTime - target) > Math.max(0.25, 2 / fps))
+      if (pendingSeek) return
+      seekingTargetRef.current = null
+      const rawLocalSource = Math.max(0, video.currentTime - range.sourceStartSeconds)
+      const localOutput = rawLocalSource / range.segment.speed
+      const outputTime = Math.min(range.outputEndSeconds, range.outputStartSeconds + localOutput)
+      applySampleVisuals(outputTime)
+      if (soundsEnabled && !video.paused) {
+        const matched = autoEditCuesBetween(cues, lastOutputTimeRef.current, outputTime)
+        for (const entry of matched) {
+          if (firedCuesRef.current.has(entry.index)) continue
+          firedCuesRef.current.add(entry.index)
+          playCueSound(entry.cue)
         }
       }
+      lastOutputTimeRef.current = outputTime
+      const endThreshold = Math.max(0.015, 0.5 / fps)
+      if (!video.paused && video.currentTime >= range.sourceEndSeconds - endThreshold) {
+        if (idx + 1 < ranges.length) {
+          enterSegment(idx + 1, true)
+        } else {
+          video.pause()
+          stopCueAudio()
+        }
+      }
+    }
+    const tick = () => {
+      if (modeRef.current === 'plan') tickPlan()
+      else tickSource()
       frameId = requestAnimationFrame(tick)
     }
     frameId = requestAnimationFrame(tick)
     return () => {
       cancelAnimationFrame(frameId)
     }
-  }, [applySampleVisuals, cues, enterSegment, fps, playCueSound, ranges, soundsEnabled, stopCueAudio])
+  }, [applySampleVisuals, cues, enterSegment, fps, playCueSound, ranges, showSourceFrame, soundsEnabled, stopCueAudio])
 
   useEffect(() => {
     if (modeRef.current === 'plan') {
@@ -259,22 +313,43 @@ export function AutoEditPreview({
     const video = videoRef.current
     if (!video) return
     setPlaybackError(null)
-    if (video.paused) {
-      video.muted = false
-      if (modeRef.current !== 'plan' || lastOutputTimeRef.current >= totalDuration - 0.04) {
-        enterSegment(0, true)
-        return
-      }
-      const range = ranges[segmentIndexRef.current]
-      if (range) video.playbackRate = range.segment.speed
-      void video.play().catch(() => {
-        video.muted = true
-        void video.play().catch(() => setPlaybackError('Unable to start preview playback.'))
-      })
-    } else {
+    if (!video.paused) {
       video.pause()
       stopCueAudio()
+      return
     }
+    video.muted = false
+    if (modeRef.current === 'source') {
+      if (video.currentTime >= sourceDuration - 0.04) seekSource(0)
+      video.playbackRate = 1
+      startPlayback(video, 'Unable to start preview playback.')
+      return
+    }
+    if (lastOutputTimeRef.current >= totalDuration - 0.04) {
+      enterSegment(0, true)
+      return
+    }
+    const range = ranges[segmentIndexRef.current]
+    if (range) video.playbackRate = range.segment.speed
+    startPlayback(video, 'Unable to start preview playback.')
+  }
+
+  const stepFrames = (deltaFrames: number) => {
+    const video = videoRef.current
+    if (!video) return
+    video.pause()
+    stopCueAudio()
+    if (modeRef.current === 'plan') {
+      playFromOutputTime(lastOutputTimeRef.current + deltaFrames / fps, false)
+      return
+    }
+    seekSource(autoEditNudgeSeconds(video.currentTime, deltaFrames, fps, sourceDuration))
+  }
+
+  const handleScrub = (value: number) => {
+    stopCueAudio()
+    if (modeRef.current === 'plan') playFromOutputTime(value, false)
+    else seekSource(value)
   }
 
   const handleStageClick = (event: MouseEvent<HTMLDivElement>) => {
@@ -293,8 +368,9 @@ export function AutoEditPreview({
     })
   }
 
-  const aspectRatio = `${plan.source.width} / ${plan.source.height}`
+  const stageStyle = { '--auto-edit-aspect': `${plan.source.width / plan.source.height}` } as CSSProperties
   const activeRange = ranges[activeSegmentIndex]
+  const scrubMax = mode === 'plan' ? totalDuration : sourceDuration
 
   return (
     <div className="auto-edit-preview-pane">
@@ -324,55 +400,76 @@ export function AutoEditPreview({
           </filter>
         </defs>
       </svg>
-      <div
-        className="auto-edit-stage"
-        style={{ aspectRatio }}
-        onClick={handleStageClick}
-      >
-        <video
-          ref={videoRef}
-          src={mediaUrl}
-          aria-label="Auto-edit preview"
-          data-segment-id={activeRange?.segment.id ?? ''}
-          playsInline
-          preload="auto"
-          onSeeked={() => {
-            seekingTargetRef.current = null
-          }}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onEnded={() => {
-            if (modeRef.current === 'plan' && segmentIndexRef.current + 1 < ranges.length) {
-              enterSegment(segmentIndexRef.current + 1, true)
-            } else {
-              stopCueAudio()
-            }
-          }}
-        />
-        <span
-          className="auto-edit-focus-dot"
-          aria-hidden="true"
-          style={{ left: `${focusPoint.x * 100}%`, top: `${focusPoint.y * 100}%` }}
-        />
+      <div className="auto-edit-mode" role="group" aria-label="Preview mode">
+        <button type="button" aria-pressed={mode === 'plan'} onClick={() => onModeChange('plan')}>Edit preview</button>
+        <button type="button" aria-pressed={mode === 'source'} onClick={() => onModeChange('source')}>Source</button>
+      </div>
+      <div className="auto-edit-stage-frame">
+        <div
+          className="auto-edit-stage"
+          style={stageStyle}
+          data-playing={playing ? 'true' : 'false'}
+          onClick={handleStageClick}
+        >
+          <video
+            ref={videoRef}
+            src={mediaUrl}
+            aria-label="Auto-edit preview"
+            data-segment-id={activeRange?.segment.id ?? ''}
+            playsInline
+            preload="auto"
+            onSeeked={() => {
+              seekingTargetRef.current = null
+            }}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={() => {
+              if (modeRef.current === 'plan' && segmentIndexRef.current + 1 < ranges.length) {
+                enterSegment(segmentIndexRef.current + 1, true)
+              } else {
+                stopCueAudio()
+              }
+            }}
+          />
+          <span className="auto-edit-stage-badge" data-mode={mode}>
+            {mode === 'plan' ? activeRange?.label ?? 'Edit' : 'Source'}
+          </span>
+          <span
+            className="auto-edit-focus-dot"
+            aria-hidden="true"
+            style={{ left: `${focusPoint.x * 100}%`, top: `${focusPoint.y * 100}%` }}
+          >
+            <span className="auto-edit-focus-label">{`subject · ${focusLabel}`}</span>
+          </span>
+        </div>
       </div>
       <div className="auto-edit-transport">
-        <button type="button" onClick={togglePlay}>{playing ? 'Pause' : 'Play'}</button>
+        <button type="button" className="auto-edit-icon-button" aria-label={playing ? 'Pause' : 'Play'} onClick={togglePlay}>
+          {playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
+        </button>
+        <output className="auto-edit-clock">
+          <strong ref={clockMainRef}>{`0.00 / ${totalDuration.toFixed(2)}s`}</strong>
+          <span ref={clockSubRef} />
+        </output>
+        <button type="button" className="auto-edit-icon-button" aria-label="Back one frame" onClick={() => stepFrames(-1)}>
+          <ChevronLeft size={16} aria-hidden="true" />
+        </button>
+        <button type="button" className="auto-edit-icon-button" aria-label="Forward one frame" onClick={() => stepFrames(1)}>
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
         <input
           ref={rangeInputRef}
+          key={mode}
           type="range"
           min={0}
-          max={totalDuration || 1}
+          max={scrubMax || 1}
           step={1 / fps}
           defaultValue={0}
-          aria-label="Preview position"
-          onChange={(event) => {
-            stopCueAudio()
-            playFromOutputTime(Number(event.target.value), false)
-          }}
+          aria-label={mode === 'plan' ? 'Edit position' : 'Source position'}
+          onChange={(event) => handleScrub(Number(event.target.value))}
         />
-        <output ref={readoutRef}>{`${totalDuration.toFixed(2)}s output`}</output>
       </div>
-      <p className="auto-edit-preview-note">Preview approximates looks and slow motion; the render is exact.</p>
+      <p className="auto-edit-preview-note">Click the paused picture to place the subject. Preview approximates looks and slow motion; the render is exact.</p>
       {playbackError && <p className="auto-edit-alert" role="alert">{playbackError}</p>}
     </div>
   )
