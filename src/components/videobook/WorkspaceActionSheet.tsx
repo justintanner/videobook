@@ -153,7 +153,7 @@ function WorkspaceActionVariants({ action, variants, values, busy, onOpenAction 
   return <details className="workspace-action-variants"><summary>Model and provider</summary>
     <div className="workspace-generation-models">
       <label><span>Model</span>
-        <select aria-label="Model" value={action.title} disabled={busy || modelTitles.length < 2} onChange={(event) => {
+        <select aria-label="Generation model" value={action.title} disabled={busy || modelTitles.length < 2} onChange={(event) => {
           const next = variantForTitle(variants, action, event.target.value)
           if (next) onOpenAction(next.id, values)
         }}>
@@ -161,7 +161,7 @@ function WorkspaceActionVariants({ action, variants, values, busy, onOpenAction 
         </select>
       </label>
       <label><span>Provider</span>
-        <select aria-label="Provider" value={action.id} disabled={busy || providers.length < 2} onChange={(event) => onOpenAction(event.target.value, values)}>
+        <select aria-label="Generation provider" value={action.id} disabled={busy || providers.length < 2} onChange={(event) => onOpenAction(event.target.value, values)}>
           {providers.map((variant) => <option key={variant.id} value={variant.id}>{variant.generation?.provider ?? variant.title}</option>)}
         </select>
       </label>

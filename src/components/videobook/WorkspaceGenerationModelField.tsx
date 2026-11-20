@@ -58,7 +58,7 @@ export function WorkspaceGenerationModelField({
       <label>
         <span>Model{required && <span aria-hidden="true"> *</span>}</span>
         <select
-          aria-label="Model"
+          aria-label="Generation model"
           required={required}
           disabled={disabled || models.length === 0}
           value={familyId}
@@ -71,7 +71,7 @@ export function WorkspaceGenerationModelField({
       <label>
         <span>Provider</span>
         <select
-          aria-label="Provider"
+          aria-label="Generation provider"
           disabled={disabled || !familyId || providers.length < 2}
           value={shownProvider}
           onChange={(event) => onChange(generationModelIdForChange(choices, media, draft, { modelId: event.target.value }))}

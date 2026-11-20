@@ -6,6 +6,7 @@ const familyByAction = new Map(listNotebookActions({ includeHiddenGeneration: tr
 
 function generationFamilyId(actionId: string): string {
   const familyId = familyByAction.get(actionId)
+    ?? familyByAction.get(actionId.startsWith('generation.') ? actionId : `generation.${actionId}`)
   if (!familyId) throw new Error(`No model family for ${actionId}`)
   return familyId
 }

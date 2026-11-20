@@ -328,8 +328,8 @@ describe('workspace action sheet', () => {
 
     const draft = { ...seedWorkspaceActionDraft(image, withModels), model: wavespeedText }
     const html = renderActionSheet(image, { draft, context: withModels })
-    const model = selectMarkup(html, 'Model')
-    const provider = selectMarkup(html, 'Provider')
+    const model = selectMarkup(html, 'Generation model')
+    const provider = selectMarkup(html, 'Generation provider')
     expect(model).toMatch(/value="image:gpt-image-2-6-sunburst"[^>]*>#\d+ · GPT Image 2.6 Sunburst · Elo \d+/)
     expect(model).not.toMatch(/WaveSpeed|MachGen|Nunchux|>Fal</)
     expect(provider).toContain(`value="${wavespeedText}"`)
@@ -343,14 +343,17 @@ describe('workspace action sheet', () => {
     expect(empty).toContain('>Choose provider</option>')
 
     const edit = renderActionSheet(image, { draft: { ...draft, refs: { image: ['image-1'] } }, context: withModels })
-    expect(selectMarkup(edit, 'Provider')).toContain(`value="${wavespeedEdit}"`)
+    const editProvider = selectMarkup(edit, 'Generation provider')
+    expect(editProvider).toContain(`value="${wavespeedText}"`)
+    expect(editProvider).toContain('incompatible')
+    expect(editProvider).toContain(`value="${wavespeedEdit}"`)
 
     const unavailable = choices.map(choice => choice.value === wavespeedText ? { ...choice, available: false } : choice)
     const unavailableHtml = renderActionSheet(image, {
       draft,
       context: { ...context, choices: { ...context.choices, model: unavailable } },
     })
-    expect(selectMarkup(unavailableHtml, 'Provider')).toMatch(new RegExp(`value="${wavespeedText}" disabled=""[^>]*>WaveSpeed · .+ · not configured`))
+    expect(selectMarkup(unavailableHtml, 'Generation provider')).toMatch(new RegExp(`value="${wavespeedText}" disabled=""[^>]*>WaveSpeed · .+ · not configured`))
 
     const single = choices.map(choice => choice.family?.id).find((familyId, _index, familyIds) => {
       if (!familyId || familyIds.indexOf(familyId) !== _index) return false
@@ -362,8 +365,8 @@ describe('workspace action sheet', () => {
       draft: { ...draft, model: only.value },
       context: withModels,
     })
-    const singleProvider = selectMarkup(singleHtml, 'Provider')
-    expect(singleProvider.startsWith('aria-label="Provider" disabled=""')).toBe(true)
+    const singleProvider = selectMarkup(singleHtml, 'Generation provider')
+    expect(singleProvider.startsWith('aria-label="Generation provider" disabled=""')).toBe(true)
     expect(singleProvider).toContain(`value="${only.value}" selected=""`)
     expect(singleProvider).not.toContain(choices.find(choice => choice.value === only.value)?.family?.title ?? 'missing-family')
 
@@ -384,9 +387,9 @@ describe('workspace action sheet', () => {
       draft: { ...seedWorkspaceActionDraft(video, context), model: videoModel!.value },
       context: { ...context, choices: { ...context.choices, model: videoChoices } },
     })
-    expect(selectMarkup(videoHtml, 'Model')).toContain(`value="${videoModel!.family!.id}"`)
-    expect(selectMarkup(videoHtml, 'Provider')).toContain(videoModel!.providerLabel!)
-    expect(selectMarkup(videoHtml, 'Provider')).not.toContain(videoModel!.family!.title)
+    expect(selectMarkup(videoHtml, 'Generation model')).toContain(`value="${videoModel!.family!.id}"`)
+    expect(selectMarkup(videoHtml, 'Generation provider')).toContain(videoModel!.providerLabel!)
+    expect(selectMarkup(videoHtml, 'Generation provider')).not.toContain(videoModel!.family!.title)
     expect(videoHtml).not.toContain('Provider and model')
   })
 
@@ -405,8 +408,8 @@ describe('workspace action sheet', () => {
     const wavespeed = variant('gen.wavespeed', 'GPT Image 2.6 Sunburst', 'wavespeed')
     const kie = variant('gen.kie', 'Nano Banana 2.1', 'kie')
     const html = renderActionSheet(fal, { variants: [fal, wavespeed, kie] })
-    const model = html.slice(html.indexOf('aria-label="Model"'), html.indexOf('</select>', html.indexOf('aria-label="Model"')))
-    const provider = html.slice(html.indexOf('aria-label="Provider"'), html.indexOf('</select>', html.indexOf('aria-label="Provider"')))
+    const model = html.slice(html.indexOf('aria-label="Generation model"'), html.indexOf('</select>', html.indexOf('aria-label="Generation model"')))
+    const provider = html.slice(html.indexOf('aria-label="Generation provider"'), html.indexOf('</select>', html.indexOf('aria-label="Generation provider"')))
     expect(model).toContain('>GPT Image 2.6 Sunburst</option>')
     expect(model).toContain('>Nano Banana 2.1</option>')
     expect(model).not.toContain('fal ·')
