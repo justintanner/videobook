@@ -11,10 +11,12 @@ type WorkspaceGenerationModelFieldProps = {
   values: Record<string, unknown>
   value: string
   choices: readonly ActionChoice[]
+  providerMemory?: Readonly<Record<string, string>>
   required?: boolean
   disabled?: boolean
   hint?: string
   onChange: (value: string | undefined) => void
+  onRememberProvider?: (familyId: string, provider: string) => void
 }
 
 function optionGroups(options: readonly ActionChoice[]): string[] {
@@ -37,16 +39,18 @@ export function WorkspaceGenerationModelField({
   values,
   value,
   choices,
+  providerMemory,
   required = false,
   disabled = false,
   hint,
   onChange,
+  onRememberProvider,
 }: WorkspaceGenerationModelFieldProps) {
   const draft = value ? { ...values, model: value } : values
   const models = generationModelChoices(choices, media, draft)
   const familyId = choices.find(choice => choice.value === value)?.family?.id ?? ''
   const providers = familyId ? generationProviderChoices(choices, familyId, media, draft) : []
-  const resolved = familyId ? generationModelIdForChange(choices, media, draft, { familyId }) ?? '' : ''
+  const resolved = familyId ? generationModelIdForChange(choices, media, draft, { familyId }, providerMemory) ?? '' : ''
   const providerValue = providers.some(option => option.value === value) ? value : resolved
   const shownProvider = providers.some(option => option.value === providerValue) ? providerValue : ''
   const emptyModel = required ? 'Choose model' : 'Use default'
@@ -62,7 +66,7 @@ export function WorkspaceGenerationModelField({
           required={required}
           disabled={disabled || models.length === 0}
           value={familyId}
-          onChange={(event) => onChange(generationModelIdForChange(choices, media, draft, { familyId: event.target.value }))}
+          onChange={(event) => onChange(generationModelIdForChange(choices, media, draft, { familyId: event.target.value }, providerMemory))}
         >
           <option value="">{models.length ? emptyModel : 'No model available'}</option>
           <ChoiceOptions options={models} />
@@ -74,7 +78,11 @@ export function WorkspaceGenerationModelField({
           aria-label="Generation provider"
           disabled={disabled || !familyId || providers.length < 2}
           value={shownProvider}
-          onChange={(event) => onChange(generationModelIdForChange(choices, media, draft, { modelId: event.target.value }))}
+          onChange={(event) => {
+            const provider = providers.find(option => option.value === event.target.value)?.provider
+            if (familyId && provider) onRememberProvider?.(familyId, provider)
+            onChange(generationModelIdForChange(choices, media, draft, { modelId: event.target.value }))
+          }}
         >
           {emptyProvider && <option value="">{emptyProvider}</option>}
           {providers.map(option => (

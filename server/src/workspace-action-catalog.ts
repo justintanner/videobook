@@ -49,6 +49,10 @@ export const WORKFLOW_TOOLS: Readonly<Record<string, { actionId: string; reason:
     actionId: "tool.chat",
     reason: "Records text entered through the composer and generation editors; browsing history is a separate action.",
   },
+  remember_generation_provider: {
+    actionId: "command.actions",
+    reason: "The generation Provider select stores the book's chosen provider for that model family. Changing the model does not write it, and users do not type this command.",
+  },
   set_notebook_cell_inputs: {
     actionId: "tool.set_notebook_cell_input",
     reason: "The generation editor writes a cell's whole input layout when inputs are dragged between slots, reordered or removed.",

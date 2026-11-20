@@ -125,6 +125,28 @@ describe('generation provider picker', () => {
     expect(actionForFamily(imageActions, 'image:no-such-family', options)).toBeNull()
   })
 
+  it('prefers a remembered usable provider, then the current one, and still falls back when none are usable', () => {
+    const options = { frontierType: 't2i' as const, compatible: compatibleWith([]) }
+    expect(actionForFamily(imageActions, sunburst, { ...options, currentProvider: 'kie', rememberedProvider: 'wavespeed' })?.model)
+      .toBe('wavespeed:openai/gpt-image-2.6-sunburst/text-to-image')
+    expect(actionForFamily(imageActions, sunburst, { ...options, rememberedProvider: 'wavespeed' })?.model)
+      .toBe('wavespeed:openai/gpt-image-2.6-sunburst/text-to-image')
+    const wavespeedGone = unavailable(imageActions, action => action.provider === 'wavespeed')
+    expect(actionForFamily(wavespeedGone, sunburst, { ...options, currentProvider: 'kie', rememberedProvider: 'wavespeed' })?.model)
+      .toBe('kie:gpt-image-2-6/sunburst-text-to-image')
+    expect(actionForFamily(imageActions, sunburst, {
+      frontierType: 't2i',
+      compatible: (action) => action.provider !== 'wavespeed',
+      currentProvider: 'fal',
+      rememberedProvider: 'wavespeed',
+    })?.provider).toBe('fal')
+    expect(actionForFamily(imageActions, sunburst, { ...options, currentProvider: 'kie', rememberedProvider: 'xai' })?.model)
+      .toBe('kie:gpt-image-2-6/sunburst-text-to-image')
+    const noneUsable = unavailable(imageActions, action => action.family.id === sunburst)
+    expect(actionForFamily(noneUsable, sunburst, { ...options, currentProvider: 'kie', rememberedProvider: 'wavespeed' })?.model)
+      .toBe('fal:openai/gpt-image-2.6/sunburst/text-to-image')
+  })
+
   it('falls back to the first usable endpoint in catalog order for an unranked family', () => {
     const unranked = generationProviderOptions(imageActions, 'image:seedream-5-flash', { frontierType: 't2i', compatible: compatibleWith([]) })
     expect(unranked.map(option => [option.label, option.action.model])).toEqual([

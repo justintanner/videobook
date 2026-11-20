@@ -82,7 +82,9 @@ type GenerationBodyProps = {
   notebookId?: string
   doltArtifactAssets?: DoltArtifactAssets
   slotEditor?: GenerationSlotEditor
+  providerMemory?: Readonly<Record<string, string>>
   onActionChange: (actionId: string) => void
+  onRememberProvider?: (familyId: string, provider: string) => void
   onAddSource: (cellId: string, targetInput?: string) => void
   onModeChange: (modeId: string) => void
   onPromptChange: (prompt: string) => void
@@ -269,7 +271,9 @@ export function GenerationBody({
   notebookId = '',
   doltArtifactAssets,
   slotEditor,
+  providerMemory,
   onActionChange,
+  onRememberProvider,
   onAddSource,
   onModeChange,
   onPromptChange,
@@ -290,12 +294,19 @@ export function GenerationBody({
     alternatives: true,
   })
   const changeFamily = (familyId: string) => {
+    const remembered = providerMemory?.[familyId]
     const next = actionForFamily(pickerActions, familyId, {
       frontierType,
       compatible: isActionCompatible,
       currentProvider: draft.action.provider,
+      ...(remembered ? { rememberedProvider: remembered } : {}),
     })
     if (next) onActionChange(next.id)
+  }
+  const changeProvider = (actionId: string) => {
+    const provider = providerOptions.find((option) => option.action.id === actionId)?.action.provider
+    onActionChange(actionId)
+    if (provider) onRememberProvider?.(draft.action.family.id, provider)
   }
   const settings = notebookChatGenerationSettings(draft)
   const frameAspectRatio = modelFrameAspectRatio(draft.action.model, draft.cell.inputs ?? {})
@@ -409,7 +420,7 @@ export function GenerationBody({
               aria-label="Generation provider"
               value={draft.action.id}
               disabled={busy || providerOptions.length <= 1}
-              onChange={(event) => onActionChange(event.target.value)}
+              onChange={(event) => changeProvider(event.target.value)}
             >
               {providerOptions.map(({ action, label, priceLabel, available, compatible }) => (
                 <option key={action.id} value={action.id} disabled={!available}>

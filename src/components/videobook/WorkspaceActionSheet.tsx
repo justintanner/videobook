@@ -70,7 +70,9 @@ type WorkspaceActionSheetProps = {
   error: string | null
   busy: boolean
   applyFormId: string
+  providerMemory?: Readonly<Record<string, string>>
   onChange: (name: string, value: unknown) => void
+  onRememberProvider?: (familyId: string, provider: string) => void
   onPatch: (patch: WorkspaceActionDraft) => void
   onBack: () => void
   onOpenAction: OpenAction
@@ -182,7 +184,7 @@ function WorkspaceEntityPicker({ context, entityId, busy, onPatch }: {
   </select></label>
 }
 
-function WorkspaceActionBody({ action, variants, context, draft, review, result, busy, onChange, onPatch, onBack, onOpenAction }: WorkspaceActionBodyProps) {
+function WorkspaceActionBody({ action, variants, context, draft, review, result, busy, providerMemory, onChange, onRememberProvider, onPatch, onBack, onOpenAction }: WorkspaceActionBodyProps) {
   const formRef = useRef<HTMLFormElement>(null)
   const values = effectiveWorkspaceActionValues(action, draft)
   const frameAspectRatio = workspaceActionFrameAspectRatio(action, draft)
@@ -219,8 +221,8 @@ function WorkspaceActionBody({ action, variants, context, draft, review, result,
         if (name === 'model' && action.generation && generationModelsSplit(context.choices.model ?? [])) {
           return <WorkspaceGenerationModelField key={name} media={action.generation.mediaType} values={values}
             value={typeof values.model === 'string' ? values.model : ''} choices={context.choices.model ?? []}
-            required={required.has(name)} disabled={busy} hint={schema.description}
-            onChange={(value) => onChange(name, value)} />
+            providerMemory={providerMemory} required={required.has(name)} disabled={busy} hint={schema.description}
+            onChange={(value) => onChange(name, value)} onRememberProvider={onRememberProvider} />
         }
         const entityField = entityEditor && name === 'entity'
         return <WorkspaceActionField key={entityField ? `${name}:${entityId}` : name} name={name} schema={entityField ? ENTITY_EDITOR_SCHEMA : schema}

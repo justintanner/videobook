@@ -68,6 +68,7 @@ const QUIET_TOOLS: ReadonlySet<string> = new Set([
   'list_jobs',
   'list_prompt_history',
   'list_workspace_actions',
+  'remember_generation_provider',
   'slash_commands',
 ])
 

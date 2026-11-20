@@ -325,6 +325,8 @@ describe('workspace action sheet', () => {
       .toBe(generationProviderChoices(choices, nano, 'image', {}).find(choice => choice.provider === 'wavespeed')?.value)
     expect(generationModelIdForChange(choices, 'image', { model: wavespeedEdit, refs: { image: ['image-1'] } }, { familyId: nano }))
       .toBe(generationProviderChoices(choices, nano, 'image', { refs: { image: ['image-1'] } }).find(choice => choice.provider === 'wavespeed')?.value)
+    expect(generationModelIdForChange(choices, 'image', { model: 'kie:nano-banana-2-1' }, { familyId: sunburst }, { [sunburst]: 'wavespeed' }))
+      .toBe(wavespeedText)
 
     const draft = { ...seedWorkspaceActionDraft(image, withModels), model: wavespeedText }
     const html = renderActionSheet(image, { draft, context: withModels })

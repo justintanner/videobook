@@ -175,6 +175,7 @@ export function generationModelIdForChange(
   media: string,
   values: Record<string, unknown>,
   change: { familyId?: string; modelId?: string },
+  providerMemory?: Readonly<Record<string, string>>,
 ): string | undefined {
   if ('modelId' in change) return change.modelId || undefined
   const familyId = change.familyId ?? ''
@@ -183,9 +184,11 @@ export function generationModelIdForChange(
   const actions = pickerActions(choices)
   const currentId = typeof values.model === 'string' ? values.model : ''
   const current = actions.find(action => action.id === currentId)
+  const remembered = providerMemory?.[familyId]
   return actionForFamily(actions, familyId, {
     frontierType: type,
     compatible: (action) => endpointFits(action, type),
     ...(current ? { currentProvider: current.provider } : {}),
+    ...(remembered ? { rememberedProvider: remembered } : {}),
   })?.id ?? undefined
 }

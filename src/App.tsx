@@ -607,6 +607,7 @@ import {
   asGenerationPlans,
   asInitialWorkspace,
   asJobs,
+  asGenerationProviderMemory,
   asNotebook,
   asNotebooks,
   asSequence,
@@ -1001,7 +1002,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const [bookId, setBookId] = useState(() =>
     initialWorkspace?.bookId ?? savedValue('videobook.active-book'))
-  const [notebook, setNotebook] = useState<NotebookDocument | null>(
+  const [notebook, setNotebook] = useState<NotebookSnapshot | null>(
     () => initialWorkspace?.notebook ?? null,
   )
   const [assets, setAssets] = useState<AssetRecord[]>(() => initialWorkspace?.assets ?? [])
@@ -1135,6 +1136,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   ) => {
     setNoticeState({ text, tone })
   }, [])
+  const activeBookIdRef = useRef(bookId)
+  activeBookIdRef.current = bookId
   const flowRef = useRef<ReactFlowInstance<CanvasNode, NotebookFlowEdge> | null>(null)
   const bookMenuRequestRef = useRef(0)
   const imageSubjectMapRequestRef = useRef(0)
@@ -3022,6 +3025,39 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     prompt: pendingGenerationDraft?.cell.prompt ?? '',
     onApply: updatePendingGenerationPrompt,
   })
+  const rememberGenerationProvider = useCallback((familyId: string, provider: string) => {
+    const requestedBookId = activeBookIdRef.current
+    if (!requestedBookId || mcp.state !== 'ready' || !notebook) return
+    const snapshot = notebook as NotebookSnapshot
+    const previous = snapshot.generationProviderMemory ?? {}
+    if (previous[familyId] !== provider) {
+      setNotebook({ ...snapshot, generationProviderMemory: { ...previous, [familyId]: provider } })
+    }
+    void call('remember_generation_provider', {
+      book_id: requestedBookId,
+      family_id: familyId,
+      provider,
+    }).then((value) => {
+      if (!value || typeof value !== 'object' || !('generation_provider_memory' in value)) return
+      const memory = asGenerationProviderMemory(value.generation_provider_memory)
+      if (!memory || activeBookIdRef.current !== requestedBookId) return
+      setNotebook((current) => current
+        ? { ...(current as NotebookSnapshot), generationProviderMemory: memory }
+        : current)
+    }).catch((error: unknown) => {
+      if (activeBookIdRef.current === requestedBookId) {
+        setNotebook((current) => {
+          if (!current) return current
+          const live = { ...((current as NotebookSnapshot).generationProviderMemory ?? {}) }
+          if (live[familyId] !== provider) return current
+          if (previous[familyId] === undefined) delete live[familyId]
+          else live[familyId] = previous[familyId]
+          return { ...(current as NotebookSnapshot), generationProviderMemory: live }
+        })
+      }
+      setNotice(error instanceof Error ? error.message : 'Could not remember the provider', 'error')
+    })
+  }, [call, mcp.state, notebook, setNotice])
   const updatePendingGenerationAction = useCallback((actionId: string) => {
     if (!pendingGenerationDraft) return
     const action = pendingGenerationActionOptions.find((candidate) =>
@@ -9957,7 +9993,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             slotEditor={pendingGenerationSlotEditor}
             voiceCatalog={elevenLabsVoices}
             promptHistory={pendingGenerationPromptHistory}
+            providerMemory={(notebook as NotebookSnapshot | null)?.generationProviderMemory}
             onActionChange={updatePendingGenerationAction}
+            onRememberProvider={rememberGenerationProvider}
             onAddSource={addPendingGenerationSource}
             onModeChange={updatePendingGenerationMode}
             onPromptChange={updatePendingGenerationPrompt}
@@ -10342,7 +10380,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       error={actionCatalogStatus.error}
       busy={Boolean(currentActionSheet.running)}
       applyFormId={COMMAND_COMPOSER_FORM_ID}
+      providerMemory={(notebook as NotebookSnapshot | null)?.generationProviderMemory}
       onChange={(name, value) => updateActionSheetDraft((draft, action, context) => patchWorkspaceActionDraft(action, context, draft, name, value))}
+      onRememberProvider={rememberGenerationProvider}
       onPatch={(patch) => updateActionSheetDraft((draft) => ({ ...draft, ...patch }))}
       onBack={() => {
         cancelChatReview()
@@ -10667,6 +10707,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onUseSavedVideo={file => void restoreDownloadFromFile(selectedNotebookCell, file)}
           generationActions={generationActions}
           generationSettingsMemory={(notebook as NotebookSnapshot | null)?.generationSettingsMemory}
+          generationProviderMemory={(notebook as NotebookSnapshot | null)?.generationProviderMemory}
+          onRememberProvider={rememberGenerationProvider}
           mentionAssets={commandMentionAssets}
           voiceCatalog={elevenLabsVoices}
           busy={busy || Boolean(selectedMediaSlotState?.operation)}

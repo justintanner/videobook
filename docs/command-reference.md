@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (217)
+## MCP endpoints (218)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
@@ -159,6 +159,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `register_search_manifest` — Register an immutable semantic-index model manifest
 - `relayout_notebook` — Arrange cells into the Clean lanes (source videos, generators, images, generated videos, audio, work; Timeline rows stay put; goal notebooks keep the goal layout). Migrates legacy inline generate_video / generate_image artifacts into output cells.
 - `release_search_reference` — Release a temporary reverse-search reference
+- `remember_generation_provider` — Remember the provider chosen for one model family in this book. The generation Provider select calls this; it is not a slash command.
 - `remove_sequence_track` — Remove an empty canonical track while preserving required track kinds
 - `remove_sound` — Silence a described sound (e.g. a horse neigh) in a video or audio asset in place, using ElevenLabs Scribe audio-event timestamps; the picture is unchanged.
 - `remove_video_graphics` — Locally detect burned-in titles/text, review timed regions and remove OSG, logos or text into a new video copy. get reads source/model/detection state; install_models downloads 213 MB once; detect samples local text candidates (review scene text and add non-text logos manually); render uses reviewed regions. LaMa is frame-by-frame AI inpainting and may flicker; fill is fast interpolation for simple backgrounds. No media upload or API key.

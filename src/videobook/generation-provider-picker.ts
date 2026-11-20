@@ -144,13 +144,14 @@ export function generationProviderOptions<T extends FamilyPickerAction>(
 export function actionForFamily<T extends FamilyPickerAction>(
   actions: readonly T[],
   familyId: string,
-  options: ProviderPickerOptions<T> & { currentProvider?: string },
+  options: ProviderPickerOptions<T> & { currentProvider?: string; rememberedProvider?: string },
 ): T | null {
   const providers = generationProviderOptions(actions, familyId, options)
   const usable = providers.filter(option => option.available && option.compatible)
   const ranked = usable.filter(option => option.ranking)
     .sort((left, right) => left.ranking!.rank - right.ranking!.rank)
-  return (usable.find(option => option.action.provider === options.currentProvider)
+  return (usable.find(option => option.action.provider === options.rememberedProvider)
+    ?? usable.find(option => option.action.provider === options.currentProvider)
     ?? ranked[0]
     ?? usable[0]
     ?? providers[0])?.action ?? null

@@ -395,7 +395,23 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
   }
 }
 
-export type NotebookSnapshot = NotebookDocument & { revision?: string; posts?: PostView[]; generationSettingsMemory?: StickySettings }
+export type NotebookSnapshot = NotebookDocument & {
+  revision?: string
+  posts?: PostView[]
+  generationSettingsMemory?: StickySettings
+  generationProviderMemory?: Record<string, string>
+}
+
+export function asGenerationProviderMemory(value: unknown): Record<string, string> | null {
+  const record = recordValue(value)
+  if (!record) return null
+  const memory: Record<string, string> = {}
+  for (const [familyId, provider] of Object.entries(record)) {
+    if (typeof provider !== 'string' || !provider.trim() || !familyId.trim()) continue
+    memory[familyId] = provider.trim()
+  }
+  return memory
+}
 
 export function asNotebook(value: unknown): NotebookSnapshot | null {
   const item = recordValue(value)
@@ -459,6 +475,9 @@ export function asNotebook(value: unknown): NotebookSnapshot | null {
     ...(Array.isArray(item.posts) ? { posts: item.posts as PostView[] } : {}),
     ...(recordValue(item.generation_settings_memory)
       ? { generationSettingsMemory: parseStickySettings(recordValue(item.generation_settings_memory)!) }
+      : {}),
+    ...(recordValue(item.generation_provider_memory)
+      ? { generationProviderMemory: asGenerationProviderMemory(recordValue(item.generation_provider_memory)!) ?? {} }
       : {}),
     cells,
     edges,

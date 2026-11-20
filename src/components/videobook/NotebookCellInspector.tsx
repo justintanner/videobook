@@ -490,6 +490,8 @@ type NotebookCellInspectorProps = {
   generationsVisible?: boolean
   generationActions?: readonly NotebookGenerationAction[]
   generationSettingsMemory?: StickySettings
+  generationProviderMemory?: Readonly<Record<string, string>>
+  onRememberProvider?: (familyId: string, provider: string) => void
   mentionAssets?: readonly AssetMentionCandidate[]
   voiceCatalog?: ElevenLabsVoicesState
   /** Transcribe / analyze progress, keyed by artifact id. */
@@ -2657,6 +2659,8 @@ function ExecutableCellInspector({
   onSelectSource,
   generationActions = [],
   generationSettingsMemory,
+  generationProviderMemory,
+  onRememberProvider,
   mentionAssets = [],
   voiceCatalog,
 }: Pick<
@@ -2686,6 +2690,8 @@ function ExecutableCellInspector({
   | 'onSelectSource'
   | 'generationActions'
   | 'generationSettingsMemory'
+  | 'generationProviderMemory'
+  | 'onRememberProvider'
   | 'mentionAssets'
   | 'voiceCatalog'
 > & {
@@ -3559,7 +3565,9 @@ function ExecutableCellInspector({
                 />
               </div>
             ) : undefined}
+            providerMemory={generationProviderMemory}
             onActionChange={updateGenerationAction}
+            onRememberProvider={onRememberProvider}
             onAddSource={(sourceCellId, targetInput) => {
               if (targetInput) void changeGenerationSource(targetInput, sourceCellId)
             }}
@@ -4181,6 +4189,8 @@ export function NotebookCellInspector({
   generationsVisible = false,
   generationActions,
   generationSettingsMemory,
+  generationProviderMemory,
+  onRememberProvider,
   mediaInsightWork,
   onUpdate,
   onSetInput,
@@ -4364,6 +4374,8 @@ export function NotebookCellInspector({
       onSelectSource={onSelectSource}
       generationActions={generationActions}
       generationSettingsMemory={generationSettingsMemory}
+      generationProviderMemory={generationProviderMemory}
+      onRememberProvider={onRememberProvider}
       mentionAssets={mentionAssets}
       voiceCatalog={voiceCatalog}
     />

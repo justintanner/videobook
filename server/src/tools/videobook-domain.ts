@@ -93,6 +93,10 @@ import {
   rememberNotebookStickySettings,
   seedNotebookStickySettings,
 } from "../notebook-sticky-settings.js";
+import {
+  readGenerationProviderMemory,
+  rememberGenerationProvider,
+} from "../generation-memory.js";
 import { generationInputMentions, remapGenerationInputPrompt } from "../generation-input-mentions.js";
 import { applyPreviewPlaceholderUrls } from "../preview-payload.js";
 import { jobProviderTaskStatus } from "../provider-task-status.js";
@@ -789,6 +793,7 @@ function notebookPayload(
     posts: notebookPosts(engine, normalized),
     edges: normalized.edges,
     generation_settings_memory: readNotebookStickySettings(engine, normalized.id),
+    generation_provider_memory: readGenerationProviderMemory(engine),
   };
 }
 
@@ -1422,6 +1427,25 @@ export function videobookDomainDefs(
         await migrateLegacyPosts(engine);
         const result = engine.notebooks.read(String(args.notebook_id));
         return result.ok ? json(notebookPayload(engine, result.value)) : failure(result.error.message);
+      },
+    },
+    {
+      name: "remember_generation_provider",
+      description: "Remember the provider chosen for one model family in this book. The generation Provider select calls this; it is not a slash command.",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        family_id: z.string().min(1),
+        provider: z.string().min(1),
+      },
+      handler: async (args) => {
+        try {
+          return json({
+            generation_provider_memory: rememberGenerationProvider(engine, String(args.family_id), String(args.provider)),
+          });
+        } catch (error) {
+          return failure(error instanceof Error ? error.message : String(error));
+        }
       },
     },
     {
