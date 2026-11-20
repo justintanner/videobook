@@ -328,6 +328,7 @@ function wavespeedModel(apiId: string, found: WaveSpeedEndpoint): ModelEntry {
     media,
     operations: [operation],
     title: `${found.family}${TITLE_SUFFIX[operation]} (WaveSpeed)`,
+    family: found.family,
     dialect: dialectFor(apiId, media, refs),
     refs,
     ...(guide ? { guide } : {}),

@@ -10,6 +10,8 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { modelFrontierRankings, type ModelFrontierRanking } from "./media/frontier.js";
 import { PROVIDER_ENV_KEYS } from "./media/adapters/index.js";
 import { listModels } from "./media/listing.js";
+import { resolveModel } from "./media/descriptor.js";
+import { modelFamily, type ModelFamily, type ModelFamilyFields } from "./media/model-family.js";
 import type { ResolvedModel } from "./media/types.js";
 import { notebookGenerationInputContract } from "./notebook-generation-contract.js";
 import { controlsForModel } from "./notebook-generation-controls.js";
@@ -60,6 +62,8 @@ interface NotebookAction {
   };
   isDefault?: boolean;
   providerLabel?: string;
+  family?: ModelFamily;
+  variant?: string;
   defaultPriority?: number;
   inputContract?: NotebookGenerationInputContract;
   controls?: NotebookGenerationControl[];
@@ -365,6 +369,7 @@ function generationAction(model: ResolvedModel): NotebookAction {
       requiresConfirmation: true,
     },
     providerLabel: providerLabels[model.provider],
+    ...modelFamily(model),
     ...(DEFAULT_MODELS.has(model.id) ? { defaultPriority: 0, isDefault: true } : {}),
     inputContract: notebookGenerationInputContract(model),
     controls: controlsForModel(model),
@@ -372,6 +377,10 @@ function generationAction(model: ResolvedModel): NotebookAction {
     available: Boolean(process.env[PROVIDER_ENV_KEYS[model.provider]]?.trim()),
     frontier: modelFrontierRankings(model.id),
   };
+}
+
+function catalogModelFamily(model: { id: string; catalogModel?: string }): Partial<ModelFamilyFields> {
+  return model.catalogModel ? modelFamily(resolveModel(model.catalogModel)) : {};
 }
 
 export function listNotebookActions(options: {
@@ -389,6 +398,7 @@ export function listNotebookActions(options: {
     operation: "image_to_image",
     provider: model.provider,
     providerLabel: model.provider === "local" ? "Local" : providerLabels[model.provider],
+    ...catalogModelFamily(model),
     model: model.id,
     tool: "edit_image_subjects",
     title: model.label,

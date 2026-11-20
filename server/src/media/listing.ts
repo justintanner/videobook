@@ -2,6 +2,7 @@ import { modelFrontierRankings, type ModelFrontierRanking } from "./frontier.js"
 import { PROVIDER_ENV_KEYS } from "./adapters/index.js";
 import { MODEL_ENTRIES } from "./catalog.js";
 import { resolveEntry } from "./descriptor.js";
+import { modelFamily, type ModelFamily } from "./model-family.js";
 import { registerDiagnosticName } from "../diagnostics.js";
 import { logger } from "../logger.js";
 import type { InputLimit, ItemParamSpec, Media, ModelEntry, ModeSpec, Operation, OptionSpec, ResolvedModel, SlotField, SlotSpec } from "./types.js";
@@ -9,6 +10,8 @@ import type { InputLimit, ItemParamSpec, Media, ModelEntry, ModeSpec, Operation,
 export interface ModelListing {
   id: string;
   title: string;
+  family: ModelFamily;
+  variant?: string;
   provider: string;
   media: Media;
   operations: readonly Operation[];
@@ -41,6 +44,7 @@ export function modelListing(model: ResolvedModel): ModelListing {
   return {
     id: model.id,
     title: model.title,
+    ...modelFamily(model),
     provider: model.provider,
     media: model.media,
     operations: model.entry.operations,

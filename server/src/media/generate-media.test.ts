@@ -206,8 +206,8 @@ describe("generic media generation", () => {
     const all = toolJson(await client.callTool({ name: "list_generation_models", arguments: {} })) as { models: Array<{ id: string; media: string; operations: string[] }> };
     expect(all.models.some((model) => model.id === "kie:bytedance/seedance-2-5")).toBe(true);
     expect(all.models).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "kie:flux-3/klein-text-to-image", media: "image", operations: ["text_to_image"] }),
-      expect.objectContaining({ id: "kie:flux-3/klein-edit-image", media: "image", operations: ["edit_image"] }),
+      expect.objectContaining({ id: "kie:flux-3/klein-text-to-image", media: "image", operations: ["text_to_image"], family: { id: "image:flux-3-klein", title: "FLUX 3 Klein" } }),
+      expect.objectContaining({ id: "kie:flux-3/klein-edit-image", media: "image", operations: ["edit_image"], family: { id: "image:flux-3-klein", title: "FLUX 3 Klein" } }),
     ]));
     const speech = toolJson(await client.callTool({ name: "list_generation_models", arguments: { media: "audio", operation: "speech" } })) as { models: Array<{ media: string; operations: string[] }> };
     expect(speech.models.length).toBeGreaterThan(5);

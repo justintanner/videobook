@@ -116,6 +116,8 @@ export interface ModelEntry {
   media: Media;
   operations: readonly Operation[];
   title?: string;
+  family?: string;
+  variant?: string;
   description?: string;
   prompt?: string | null;
   refs?: Partial<Record<RefRole, string | readonly string[] | null>>;
