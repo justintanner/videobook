@@ -28,6 +28,31 @@ and the package uses [Semantic Versioning](https://semver.org/).
 - Nunchux GPT Image 2.6 Sunburst and Flare for text-to-image and edits of up
   to 16 images plus a Mask or Markup image. Book images are sent inline, and
   each run is priced from the tokens Nunchux reports.
+- Each book remembers the provider you choose for a model. When you pick that
+  model again in the cell editor, the chat generation review, the Actions
+  sheet or the fullscreen image editor, that provider is selected while it is
+  configured and can take the inputs; changing only the model saves nothing.
+  The choices are kept in the book setting `generation-provider-memory`,
+  notebook payloads carry them as `generation_provider_memory`, and the new
+  `remember_generation_provider` (`family_id`, `provider`) saves one.
+- The fullscreen image editor adds GPT Image 2.6 Sunburst and Flare edits on
+  KIE and fal, and a second provider for Nano Banana 2.1 and GPT Image 2 (fal)
+  and Nano Banana Pro (KIE). `edit_image_subjects` accepts their model ids;
+  the existing ids, the default model and saved edit cells are unchanged.
+- A generated image or video's inspector replaces the "From @b4" link with a
+  **Made with** card that still links to the generator. It shows the
+  provider, model and date of the run that made the output on screen, its
+  prompt as written, with chips for inputs such as `@image1`, and as sent,
+  how long it took and what it cost. With no recorded run, or when the runs
+  cannot be read, it says so and shows the generator's current settings. The
+  prompt there and in a running generation's details has a copy button.
+- Under that card, **Takes from @b4** lists every run of the generator,
+  newest first, with its output's address and thumbnail, model, status and
+  cost (billed, or the quote while it runs), and the generator's total billed
+  and pending. The take on screen is marked and clicking another selects its
+  output; a take whose output cell was deleted stays listed. Over MCP,
+  `list_cell_generations` attempts carry `outputCellId`, and `get_book_usage`
+  with `scope.cell_id` adds the cell's totals per run in `runs`.
 
 ### Changed
 
@@ -40,6 +65,31 @@ and the package uses [Semantic Versioning](https://semver.org/).
 - MachGen GPT Image 2.6 qualities now come from MachGen's published model
   surfaces. No value Videobook offered was withdrawn: MachGen refuses xhigh
   and max on GPT Image 2, which Videobook never sent.
+- Image and video generation pick a **Model** and a **Provider** in two
+  selects: in the cell editor, the chat generation review, the generate image
+  and video forms of the Actions sheet and the fullscreen image editor.
+  **Model** lists each model once with its leaderboard rank and Elo, however
+  many providers offer it, and folds variants such as Seedance 2.0 US or H3
+  Max Turbo into their model. **Provider** lists who offers the chosen model,
+  with the variant and price, marks one that is not configured or cannot take
+  the inputs, and is disabled when there is only one. Changing the model
+  keeps the provider when it offers the new model, and every option the
+  single list offered can still be chosen. `list_generation_models` and
+  `list_notebook_actions` rows gain `family` and `variant`, and
+  `list_image_edit_models` rows gain `family`, `variant` and `frontier`.
+- A new GEN IMAGE or GEN VIDEO cell starts on the model, and so the provider,
+  of the last image or video generated in this book, in any notebook and
+  after a restart, instead of the default model. That covers the add menu,
+  dragging to create, the canvas **Generate image** and **Generate video**
+  items, `create_notebook_cell` without a model and chat generations. Runs
+  from the cell editor, reruns, chat and slash commands set it; goal and
+  chain steps, extend, upscale, lip sync, motion control, layering and
+  fullscreen image edits do not. A remembered model that is hidden, retired,
+  not configured or unable to take the cell's inputs falls back to another
+  endpoint of the same model on the same provider, then to the default. An
+  explicit model always wins. It is kept in the book setting
+  `generation-model-memory`, and notebook payloads such as `get_notebook`
+  carry it as `generation_model_memory`.
 
 ### Fixed
 
@@ -47,6 +97,13 @@ and the package uses [Semantic Versioning](https://semver.org/).
   of selected subjects to a new segment-edit model and refused the old
   request, so every exact edit failed. Edits now use segment-edit with the
   same subject indexes, and an edit already waiting on KIE resumes.
+- New tiles stay in view. A download, a generation's output or another tile
+  you create scrolls into view between the top of the canvas and the
+  composer's open panel, which then closes unless a voice conversation is
+  live. A successful composer command used to scroll to the bottom of the
+  notebook, so a download landing at @a1 in a new book left row a out of
+  view, and a generation's output was shown only when its source tile was
+  selected. Tiles created by other clients leave the scroll alone.
 
 ## [0.8.2] - 2026-11-19
 
