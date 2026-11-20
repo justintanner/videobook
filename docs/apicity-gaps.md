@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.28.0 (2026-11-13). Image, video and audio
+Videobook now uses Apicity 0.29.0 (2026-11-20). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -1530,3 +1530,126 @@ a book image, against a local stub built from apicity's 19 Nunchux recordings,
 plus the submit and poll errors those recordings show;
 `frontier.test.ts`, the regenerated generation-input goldens and
 `docs/generation-models.md` cover the catalog. No provider was called.
+
+## 58. (decision) Apicity 0.29.0 adoption, the exact subject edit and new endpoints — DECIDED 2026-11-20
+
+All 18 `@apicity` packages resolve 0.29.0 from npm (vb-q2mpt). The range moves
+from `^0.28.1` to `^0.29.0` in both manifests, because a caret on a 0.x
+version pins the minor. 0.29.0 carries two breaking changes.
+
+- **Exact subject edit (apicity PR 744, 752).** KIE gave
+  `grok-imagine-image-2-0/image-edit` a new contract (`prompt`,
+  `aspect_ratio`, 1-5 `image_urls`) and moved the old body (`prompt`,
+  `task_id`, `mask_indexs`) to `grok-imagine-image-2-0/segment-edit`; the old
+  body on `image-edit` answers 422 "image_urls is required", so every exact
+  edit failed in 0.8.2. `grokImagineImage2EditRequest` now builds a
+  `GrokImagineImage2SegmentEditRequestSchema` request and
+  `GROK_EXACT_MASK_ADAPTER_ID` is the segment-edit id, which the notebook
+  preview maps to KIE. The mask indexes stay the segment-map `index` values,
+  counted from 0, unchanged (apicity's recorded segment-edit sent `[0]`, and
+  the test builds that exact body). No path sends `task_id` or `mask_indexs`
+  to `image-edit`.
+  - *A task stored under the old id* resumes. Its stored `taskId` is a KIE
+    task like any other and is still polled. The stored request no longer
+    parses with the image-edit schema, so `readStoredImageSubjectEditTask`
+    reads a stored `image-edit` body with `task_id` and `mask_indexs` as the
+    same segment-edit request and keeps the task id. A stored body in the new
+    `image-edit` form is not an exact edit and still fails as before. A job
+    that failed at submit stored no task id and simply submits a new
+    segment-edit.
+  - *A segment-edit result is not a source for a new segment map.* KIE
+    documents the segment-map `task_id` as a
+    `grok-imagine-image-2-0/text-to-image` task, or a segment-map task made
+    from an `image_url`. `GROK_IMAGE_2_SOURCE_MODELS` therefore holds only
+    text-to-image, and the old `image-edit` id (which was never documented as a
+    source) leaves it. An edited image gets the semantic route. Segmenting any
+    book image through `segment-map` with an `image_url` would open the exact
+    route to edited and uploaded images; that is follow-up work, not part of
+    this adoption.
+  - *The new `image-edit` is catalogued* as
+    `kie:grok-imagine-image-2-0/image-edit`, an edit of 1-5 images by URL with
+    a required aspect ratio, priced at $0.02. It is on no frontier board, so it
+    needs no gap entry; it is not an exact-edit route.
+- **MachGen image settings (apicity PR 734).** Videobook never sends
+  `image_config.size_mode` and never reads `height` from a typed generate or
+  upscale-quote request: it builds `image_config` from its own size tables
+  and reads video heights from its `resolution` option, so no read needs a
+  `size_mode` guard. The schema now refuses settings a model does not take.
+  The GPT Image 2.6 `quality` values are read from `MACHGEN_IMAGE_SURFACES`
+  (low, medium, high, xhigh, max) instead of a second table; `auto` is left
+  out because `@apicity/cost` cannot price it. GPT Image 2 keeps high and low
+  as `optimization_level` and never sends `image_output.quality`, so xhigh and
+  max were never offered to it. The video sweep builds 35,903 accepted
+  requests and the image sweep 756, and the 0.29.0 schema accepts every one.
+- **New catalog entries**, each with wire and ref tests in
+  `server/src/media/apicity-0290.test.ts` and prices from `@apicity/cost`:
+  - KIE: Kling 4.0 Image (text-to-image and edits of up to 10 images, mentioned
+    as `@image_1` through the `kling4` dialect), GPT Image 2.6 Economy
+    text-to-image and edits (PNG only; Videobook drops the GIF fields and always
+    sends `aspect_ratio`, which KIE fails without), Grok Imagine Image 2.0 Edit,
+    Seedance 2.5 Flash (480p or 720p; text, frames and references), LTX 2.5 Fast
+    and Pro text- and image-to-video and LTX 2.5 Fast audio-to-video (operation
+    `lip_sync`, output length follows the audio), and Gemini Omni 1.2 Flash
+    Extend (`extend_video`; the source's KIE task id as `task_id`). LTX 2.5 Fast
+    pins 1080p, because Videobook's preferred 1440p with its 12 s default is a
+    request KIE refuses. The Extend request names a source task, not its
+    resolution, so `server/src/media/kie-task-source.ts` (formerly
+    `seedance-draft.ts`) finds the book video with that task id and passes its
+    360p or 720p resolution as `costHints.inputResolution`; an unknown source
+    stays $0 with Apicity's warning.
+  - fal: MAI Image 2.7 text-to-image, edit and Flash edit (1-5 images). fal
+    bills them by tokens, so the estimate is $0 until fal reports the billable
+    units, as for fal GPT Image 2.6. A transparent background with JPEG output
+    is refused locally; fal documents the rule and does not enforce it.
+  - MachGen: Gemini Omni 1.2 Flash (text, first and last frames, references of
+    up to 6 images and 3 videos). The grid stores the surface maximums, so
+    Videobook refuses an `edit` with more than two images or one video, an
+    `extend` with more than one video, and more than 10 s with both frames; its
+    Frames mode defaults to 10 s. Seedream 5.5 text-to-image and edits of up to
+    10 images, at 1K or 2K sizes inside MachGen's 921,600-4,624,220 pixel range
+    (apicity recorded a 1024x1024 edit at $0.028). Hyperflow H3 and Pika H3
+    Flex, which the frontier reaches through `MiniMax-H3-Turbo` with
+    `adapter: "hyperflow"` or `"pika_h3_flex"`, are the entries
+    `machgen:MiniMax-H3-Turbo/hyperflow` and `.../pika_h3_flex`;
+    `frontierCatalogId` appends a row's `adapter`.
+  - WaveSpeed: SkyReels V4 image-to-video, with its `images` (up to 6 middle
+    frames) as the Keyframes slot, and the text-to-video rule that fast mode
+    has no sound.
+  - Nunchux: GPT Image 2.6 Sunburst and Flare text-to-image and edits of up to
+    16 images, with Mask and Markup field slots (not both), PNG, JPEG or WebP,
+    and quality low, medium or high (Nunchux offers no xhigh or max). The
+    `openai` family is synchronous: the adapter calls
+    `v2.openai.images.generations` or `.edits`, sends book images inline as
+    `data:image` URIs, refuses an `http:` URL before work, and stores the
+    returned `b64_json`. Nunchux bills these by tokens and `extractActual`
+    knows no Nunchux billing fields, so the usage ledger prices the finished
+    call with `@apicity/cost` from the response's `usage` token counts.
+- **Left out.** `kie:kling-4-0/long-image` makes one tall e-commerce detail
+  page or web page design, with two skills whose fields exclude each other; it
+  is not a picture for a video book and is on no board. MachGen Gemini Omni
+  1.2 Flash UPSCALE stays out because `@apicity/cost` leaves it unpriced.
+  MachGen's new 540p MiniMax H3 and H3 Turbo heights are private like 1080p (a
+  403 for accounts without access, and no rate) and join `privateHeights`.
+  MachGen and Seedream automatic sizing stays unused, as `@apicity/cost` cannot
+  price it. Nunchux's `n` and `moderation: low` are not offered.
+- **Existing entries.** KIE Seedance 2.5 adds a 4k tier (H.265 10-bit); its
+  catalog default stays 1080p (`pinnedDefaults`), since the preferred-default
+  rule would otherwise choose 4k. Apicity's wider schemas reach the existing
+  entries unchanged: KIE Grok Imagine image-to-image takes up to 5 images, GPT
+  Image 2 edits a background, Seedream 5 Lite an output format and ultra
+  quality, Seedance 2.5 `omni_reference_task_type`, and Grok Upscale a
+  resolution.
+- **Frontier.** The registry holds the 2026-11-19 boards; every row maps to a
+  catalog entry or a gap. `googleflow:nano-banana-2` is a new gap (Google Flow
+  is not a catalog provider). Ranks moved: MAI Image 2.7 edit is #1 for image
+  editing, GPT Image 2.6 Sunburst edits #2, MachGen GPT Image 2 #6 for
+  text-to-image, and the WaveSpeed Gemini Omni 1.2 Flash edit is now #2 for
+  video editing while SkyReels V4 text-to-video left the board.
+
+Evidence is offline: `apicity-0290.test.ts`, `machgen.test.ts`,
+`nunchux.test.ts` (a GPT Image 2.6 generation and edit through the local
+stub, priced from reported tokens), `kie-task-source.test.ts`,
+`frontier.test.ts`, `server/src/tools/image-subjects.test.ts` (the recorded
+segment-edit body at index 0, and resume under the new and old ids), the
+regenerated generation-input goldens and `docs/generation-models.md`. No
+provider was called.

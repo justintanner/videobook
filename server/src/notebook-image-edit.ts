@@ -4,6 +4,7 @@ import { findImageEditModel } from "./image-edit-models.js";
 import { resolveImageRef } from "./tools/_media-refs.js";
 import { previewPlaceholderUrl } from "./preview-payload.js";
 import { previewImageSubjectEditRequest, type GenerateImageSubjectEditPayload } from "./jobs/image-subjects.js";
+import { GROK_EXACT_MASK_ADAPTER_ID } from "./jobs/_image-edit-adapter.js";
 
 const boxSchema = z.object({
   x: z.number().min(0).max(1), y: z.number().min(0).max(1),
@@ -87,7 +88,7 @@ export async function prepareNotebookImageEdit(
           return id ? `@${id}` : url;
         }) : value,
   ]));
-  const provider = local ? "local" : request.model === "grok-imagine-image-2-0/image-edit" ? "kie" : model!.provider;
+  const provider = local ? "local" : request.model === GROK_EXACT_MASK_ADAPTER_ID ? "kie" : model!.provider;
   return {
     jobInput,
     input: { prompt, model: request.model, operation: jobInput.operation, image_refs: refs },

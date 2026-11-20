@@ -104,7 +104,7 @@ describe("Nunchux catalog", () => {
     expect(Object.keys(FRONTIER_CATALOG_GAPS).filter((key) => key.startsWith("nunchux:"))).toEqual([]);
   });
 
-  it.each(PRICED.filter((apiId) => apiId !== "gemini-nano-banana-2.1"))("%s builds every mode as a request apicity's schema accepts and @apicity/cost prices", async (apiId) => {
+  it.each(PRICED.filter((apiId) => apiId !== "gemini-nano-banana-2.1" && !apiId.startsWith("gpt-image-")))("%s builds every mode as a request apicity's schema accepts and @apicity/cost prices", async (apiId) => {
     const id = `nunchux:${apiId}`;
     const model = resolveModel(id);
     expect(model.title).toMatch(/\(Nunchux\)$/u);
@@ -208,7 +208,9 @@ describe("Nunchux catalog", () => {
 
   it("ranks each Nunchux model on the boards it holds and previews its method", () => {
     const boards = (apiId: string) => modelFrontierRankings(`nunchux:${apiId}`).map((ranking) => [ranking.type, ranking.rank]);
-    expect(boards("gemini-nano-banana-2.1")).toEqual([["t2i", 7], ["i2i", 9]]);
+    expect(boards("gemini-nano-banana-2.1")).toEqual([["t2i", 8], ["i2i", 10]]);
+    expect(boards("gpt-image-2.6-sunburst")).toEqual([["t2i", 1], ["i2i", 2]]);
+    expect(boards("gpt-image-2.6-flare")).toEqual([["t2i", 3], ["i2i", 3]]);
     expect(boards("wan3.0-video")).toEqual([["t2v", 1], ["r2v", 1]]);
     expect(boards("MiniMax-H3")).toEqual([["t2v", 3], ["i2v", 4], ["r2v", 3]]);
     expect(boards("dreamina-seedance-2-0-260128")).toEqual([["i2v", 3]]);
@@ -319,6 +321,12 @@ describe("Nunchux provider tasks", () => {
     };
   }
 
+  const GPT_USAGE = { input_tokens: 1220, input_tokens_details: { text_tokens: 20, image_tokens: 1200 }, output_tokens: 4160, output_tokens_details: { image_tokens: 4160 }, total_tokens: 5380 };
+
+  function gptImage(): unknown {
+    return { created: 1795170000, background: "opaque", output_format: "png", quality: "high", size: "1152x2048", data: [{ b64_json: png.toString("base64"), generation_id: "gen_nunchux_1" }], usage: GPT_USAGE };
+  }
+
   function route(method: string, path: string, response: ServerResponse): void {
     if (method === "GET" && path === "/outputs/clip.mp4") {
       response.writeHead(200, { "content-type": "video/mp4" });
@@ -327,6 +335,7 @@ describe("Nunchux provider tasks", () => {
     }
     if (method === "POST" && submitReply) return sendJson(response, submitReply.code, submitReply.body);
     if (method === "POST" && path === "/v1/google/v1beta/interactions") return sendJson(response, 200, interaction());
+    if (method === "POST" && path.startsWith("/v2/openai/images/")) return sendJson(response, 200, gptImage());
     if (method === "POST" && path in SUBMIT_REPLIES) return sendJson(response, 200, SUBMIT_REPLIES[path]);
     if (method === "GET") return sendJson(response, pollReply.code, pollReply.body);
     sendJson(response, 404, { detail: "Not found" });
@@ -489,6 +498,55 @@ describe("Nunchux provider tasks", () => {
     expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({
       provider: "nunchux", model: "gemini-nano-banana-2.1", activity: "images", status: "completed", costUsd: expect.closeTo(0.0336, 6),
     });
+  });
+
+  it("generates and edits GPT Image 2.6 synchronously, sends book images inline and prices the call from the reported tokens", async () => {
+    const generated = await enqueued("generate_image", { model: "nunchux:gpt-image-2.6-flare", prompt: "a red kite", options: { quality: "low" } });
+    await waitForJob(generated.jobId, testBudget(30_000));
+    const generation = recorded.find((entry) => entry.path === "/v2/openai/images/generations")!;
+    expect(generation.authorization).toBe("Bearer local-nunchux-key");
+    expect(JSON.parse(generation.body)).toEqual({ model: "gpt-image-2.6-flare", prompt: "a red kite", size: "1152x2048", quality: "low", output_format: "png", background: "auto" });
+
+    const created = await engine.artifacts.create("image", "kite");
+    if (!created.ok) throw new Error(created.error.message);
+    const source = await sharp({ create: { width: 32, height: 32, channels: 3, background: "#2878b4" } }).png().toBuffer();
+    expect((await engine.files.write(created.value.artifactId, "original.png", source)).ok).toBe(true);
+    const edited = await enqueued("generate_image", {
+      model: "nunchux:gpt-image-2.6-sunburst", prompt: "make it night", refs: { image: [created.value.artifactId] }, options: { aspect_ratio: "16:9", resolution: "1K" },
+    });
+    await waitForJob(edited.jobId, testBudget(30_000));
+    const edit = recorded.find((entry) => entry.path === "/v2/openai/images/edits")!;
+    expect(JSON.parse(edit.body)).toEqual({
+      model: "gpt-image-2.6-sunburst", prompt: "make it night", images: [{ image_url: `data:image/png;base64,${source.toString("base64")}` }],
+      size: "1536x864", quality: "high", output_format: "png", background: "auto",
+    });
+
+    const tokens = { inputTokens: 1220, imageInputTokens: 1200, imageOutputTokens: 4160 };
+    for (const { assetId, model } of [{ ...generated, model: "gpt-image-2.6-flare" }, { ...edited, model: "gpt-image-2.6-sunburst" }]) {
+      await expect.poll(async () => {
+        const stored = await engine.files.read(assetId, "original.png");
+        return stored.ok ? Buffer.from(stored.value).equals(png) : false;
+      }, { timeout: testBudget(30_000) }).toBe(true);
+      const price = computeEstimate({ provider: "nunchux", payload: { model }, costHints: tokens });
+      expect(price.warnings).toEqual([]);
+      expect(price.usd).toBeCloseTo(20 * 5 / 1e6 + 1200 * 8 / 1e6 + 4160 * 30 / 1e6, 9);
+      expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({
+        provider: "nunchux", model, activity: "images", status: "completed", basis: "estimated", costUsd: expect.closeTo(price.usd, 9),
+        inputTokens: 1220, outputTokens: 4160, warnings: [],
+      });
+    }
+  });
+
+  it("refuses a plain http image URL for a GPT Image 2.6 edit before creating work", async () => {
+    const before = engine.artifacts.list().length;
+    const refused = await client.callTool({
+      name: "generate_image",
+      arguments: { book_id: engine.book.get().bookId, model: "nunchux:gpt-image-2.6-flare", prompt: "add a hat", refs: { image: [FRAME.replace("https://", "http://")] } },
+    });
+    expect(refused.isError).toBe(true);
+    expect(toolText(refused)).toContain("takes https image URLs or images from this book");
+    expect(engine.artifacts.list()).toHaveLength(before);
+    expect(recorded).toEqual([]);
   });
 
   it("fails a generation Nunchux refuses at submit with its API error", async () => {

@@ -3,6 +3,8 @@ import {
   NunchuxBytedanceGenerationTasksRequestSchema,
   NunchuxGoogleInteractionsRequestSchema,
   NunchuxMinimaxVideoGenerationRequestSchema,
+  NunchuxOpenAiImagesEditsRequestSchema,
+  NunchuxOpenAiImagesGenerationsRequestSchema,
 } from "@apicity/nunchux";
 import { z, type RefinementCtx, type ZodObject, type ZodRawShape, type ZodType } from "zod";
 import type { InputRules, ModeSpec, ModelEntry, RefRole, WireSpec } from "./types.js";
@@ -10,14 +12,17 @@ import type { InputRules, ModeSpec, ModelEntry, RefRole, WireSpec } from "./type
 type AnyObject = ZodObject<ZodRawShape>;
 type Value = Record<string, unknown>;
 
-export type NunchuxFamily = "alibaba" | "bytedance" | "google" | "minimax";
+export type NunchuxFamily = "alibaba" | "bytedance" | "google" | "minimax" | "openai";
 
 const SUBMIT_DOT_PATHS: Readonly<Record<NunchuxFamily, string>> = {
   alibaba: "v1.alibaba.services.aigc.videoGeneration.videoSynthesis",
   bytedance: "v1.bytedance.contents.generations.tasks",
   google: "v1.google.v1beta.interactions",
   minimax: "v1.minimax.v2.videoGeneration",
+  openai: "v2.openai.images.generations",
 };
+
+const OPENAI_EDIT_DOT_PATH = "v2.openai.images.edits";
 
 interface NunchuxModel {
   family: NunchuxFamily;
@@ -245,7 +250,89 @@ function nanoBananaRequest(value: Value): Value {
   };
 }
 
+const GPT_IMAGE_SIZES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "1:1": { "1K": "1024x1024", "2K": "2048x2048", "4K": "2880x2880" },
+  "16:9": { "1K": "1536x864", "2K": "2048x1152", "4K": "3840x2160" },
+  "9:16": { "1K": "864x1536", "2K": "1152x2048", "4K": "2160x3840" },
+  "4:3": { "1K": "1152x864", "2K": "2048x1536", "4K": "3264x2448" },
+  "3:4": { "1K": "864x1152", "2K": "1536x2048", "4K": "2448x3264" },
+  "3:2": { "1K": "1536x1024", "2K": "2448x1632", "4K": "3504x2336" },
+  "2:3": { "1K": "1024x1536", "2K": "1632x2448", "4K": "2336x3504" },
+  "21:9": { "1K": "1680x720", "2K": "2688x1152", "4K": "3808x1632" },
+};
+
+const GPT_IMAGE_ASPECTS = Object.keys(GPT_IMAGE_SIZES) as [string, ...string[]];
+
+const GPT_IMAGE_INPUT = z.object({
+  prompt: z.string().min(1).max(32_000).describe("What to generate or how to change the images, up to 32,000 characters; name connected inputs by their slot, such as @image1"),
+  image_urls: urls(16, "Images to edit, up to 16"),
+  mask_url: url("Mask over the first image; its transparent areas may change"),
+  markup: url("Markup PNG laid over the first image, with the same dimensions"),
+  aspect_ratio: z.enum(GPT_IMAGE_ASPECTS).default("1:1").describe("Output aspect ratio"),
+  resolution: z.enum(["1K", "2K", "4K"]).default("2K").describe("Output size"),
+  quality: z.enum(["low", "medium", "high"]).default("high").describe("Rendering quality; high is the top setting Nunchux offers"),
+  complexity: z.enum(["low", "medium", "high"]).optional().describe("Planning effort, separate from quality; omit for OpenAI's default"),
+  output_format: z.enum(["png", "jpeg", "webp"]).default("png").describe("Output format"),
+  background: z.enum(["auto", "opaque", "transparent"]).default("auto").describe("Background; transparent needs png or webp"),
+}).superRefine((value, ctx) => {
+  const record = value as Value;
+  if (record.background === "transparent" && record.output_format === "jpeg") addIssue(ctx, "background", "A transparent background needs png or webp output");
+  if (text(record.mask_url) && text(record.markup)) addIssue(ctx, "markup", "can't be combined with a mask");
+  if ((text(record.mask_url) || text(record.markup)) && list(record.image_urls).length === 0) addIssue(ctx, "image_urls", "A mask or markup needs an image to edit");
+});
+
+function gptImageRequest(model: string, value: Value): Value {
+  const images = list(value.image_urls);
+  const mask = text(value.mask_url);
+  const markup = text(value.markup);
+  return {
+    model,
+    prompt: value.prompt,
+    ...(images.length > 0 ? { images: images.map((ref) => ({ image_url: ref })) } : {}),
+    ...(mask ? { mask: { image_url: mask } } : {}),
+    ...(markup ? { markup: { image_url: markup } } : {}),
+    size: GPT_IMAGE_SIZES[String(value.aspect_ratio)]?.[String(value.resolution)],
+    quality: value.quality,
+    ...(text(value.complexity) ? { complexity: value.complexity } : {}),
+    output_format: value.output_format,
+    background: value.background,
+  };
+}
+
+const INLINE_PLACEHOLDER = "data:image/png;base64,AA==";
+
+function placeholderImage(part: unknown): unknown {
+  const ref = (part as { image_url?: unknown } | undefined)?.image_url;
+  return typeof ref === "string" && ref.length > 0 ? { image_url: INLINE_PLACEHOLDER } : part;
+}
+
+const GPT_IMAGE_PENDING_REQUEST = z.record(z.string(), z.unknown()).superRefine((value, ctx) => {
+  const checked: Value = {
+    ...value,
+    ...(Array.isArray(value.images) ? { images: value.images.map(placeholderImage) } : {}),
+    ...(value.mask !== undefined ? { mask: placeholderImage(value.mask) } : {}),
+    ...(value.markup !== undefined ? { markup: placeholderImage(value.markup) } : {}),
+  };
+  const schema = Array.isArray(value.images) ? NunchuxOpenAiImagesEditsRequestSchema : NunchuxOpenAiImagesGenerationsRequestSchema;
+  const parsed = schema.safeParse(checked);
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) ctx.addIssue({ code: "custom", message: issue.message, path: issue.path });
+  }
+});
+
+function gptImageModel(model: string, title: string): NunchuxModel {
+  return {
+    family: "openai",
+    entry: { media: "image", operations: ["text_to_image", "edit_image"], title, guide: "gpt_image_26", dialect: "natural" },
+    input: GPT_IMAGE_INPUT,
+    wrap: (value) => gptImageRequest(model, value),
+    request: GPT_IMAGE_PENDING_REQUEST,
+  };
+}
+
 const NUNCHUX_MODELS: Readonly<Record<string, NunchuxModel>> = {
+  "gpt-image-2.6-sunburst": gptImageModel("gpt-image-2.6-sunburst", "GPT Image 2.6 Sunburst (Nunchux)"),
+  "gpt-image-2.6-flare": gptImageModel("gpt-image-2.6-flare", "GPT Image 2.6 Flare (Nunchux)"),
   "gemini-nano-banana-2.1": {
     family: "google",
     entry: { media: "image", operations: ["text_to_image", "edit_image"], title: "Nano Banana 2.1 (Nunchux)", guide: "nano_banana", dialect: "natural" },
@@ -312,11 +399,16 @@ export function nunchuxFamily(apiId: string): NunchuxFamily {
 
 export function isNunchuxTaskModel(apiId: string): boolean {
   const family = nunchuxModel(apiId)?.family;
-  return family !== undefined && family !== "google";
+  return family !== undefined && family !== "google" && family !== "openai";
 }
 
-export function nunchuxDotPath(apiId: string): string {
-  return SUBMIT_DOT_PATHS[nunchuxFamily(apiId)];
+export function nunchuxDotPath(apiId: string, edit = false): string {
+  const family = nunchuxFamily(apiId);
+  return family === "openai" && edit ? OPENAI_EDIT_DOT_PATH : SUBMIT_DOT_PATHS[family];
+}
+
+export function isNunchuxGptImage(apiId: string): boolean {
+  return nunchuxModel(apiId)?.family === "openai";
 }
 
 export function isNunchuxSeedance(apiId: string): boolean {

@@ -5,7 +5,7 @@ import { MEDIA_TASK_TYPES } from "./adapters/types.js";
 import { tryResolveModel } from "./descriptor.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { machgenTaskUrl, machgenTopaz, machgenUpscale, machgenUpscaleRequirement, type MachGenUpscaleSpec } from "./machgen.js";
-import { isNunchuxSeedance, nunchuxFamily } from "./nunchux.js";
+import { isNunchuxGptImage, isNunchuxSeedance, nunchuxFamily } from "./nunchux.js";
 import { normalizeRefs, resolveRefInput } from "./refs.js";
 import type { MediaRefs, ResolvedModel } from "./types.js";
 
@@ -155,6 +155,8 @@ async function frameAspectHint(engine: Engine, refs: MediaRefs): Promise<CostHin
 async function resolveNunchuxSource(engine: Engine, model: ResolvedModel, refs: MediaRefs): Promise<GenerationSource> {
   const url = nunchuxFamily(model.apiId) === "google" ? refs.image?.find((raw) => /^https?:\/\//u.test(raw)) : undefined;
   if (url) return refused(`${model.title} takes images from this book, not a URL (${url}): Nunchux receives edit images as inline data`);
+  const insecure = isNunchuxGptImage(model.apiId) ? refs.image?.find((raw) => /^http:\/\//u.test(raw)) : undefined;
+  if (insecure) return refused(`${model.title} takes https image URLs or images from this book, not ${insecure}`);
   const costHints = isNunchuxSeedance(model.apiId) ? await frameAspectHint(engine, refs) : {};
   return { ok: true, refs, sourceVideoIds: [], costHints, options: {} };
 }

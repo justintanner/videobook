@@ -994,6 +994,7 @@ async function readNunchuxTask(provider: ReturnType<typeof nunchuxProvider>, api
       return { status: task.status.toLowerCase(), videoUrl: task.content?.url ?? null, error: nunchuxErrorText(task.error) };
     }
     case "google":
+    case "openai":
       throw new Error(`Nunchux ${apiId} does not run as a task`);
   }
 }

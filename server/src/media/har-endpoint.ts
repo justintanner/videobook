@@ -17,7 +17,7 @@ export function generationHarEndpoint(model: ParsedModelId, refs: MediaRefs): st
     case "alibaba": return "api.v1.services.aigc.multimodalGeneration.generation";
     case "machgen": return "api.v0.generate";
     case "wavespeed": return wavespeedDotPath(model.apiId);
-    case "nunchux": return nunchuxDotPath(model.apiId);
+    case "nunchux": return nunchuxDotPath(model.apiId, (refs.image?.length ?? 0) > 0);
     case "elevenlabs":
       switch (model.apiId) {
         case "sound-generation": return "v1.soundGeneration";

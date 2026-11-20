@@ -25,7 +25,7 @@ import { configureProviderEndpoints } from "./endpoints.js";
 import { adapterFor } from "./adapters/index.js";
 import { resetMachGenUpscaleQuotesForTests } from "./adapters/machgen.js";
 import { sourcedGenerationInput } from "./generation-source.js";
-import { MACHGEN_IMAGE_SPECS, MACHGEN_MODELS, MACHGEN_TOPAZ_MODELS, machgenTaskUrl } from "./machgen.js";
+import { MACHGEN_ADAPTER_MODELS, MACHGEN_IMAGE_SPECS, MACHGEN_MODELS, MACHGEN_TOPAZ_MODELS, machgenTaskUrl } from "./machgen.js";
 import { previewGeneration } from "./preview.js";
 import type { Operation } from "./types.js";
 import { testBudget } from "../test-budget.js";
@@ -77,7 +77,7 @@ describe("MachGen catalog", () => {
       for (const task of tasks) expect(MACHGEN_VIDEO_GRIDS[apiId]?.[task as "T2V" | "I2V" | "R2V"], `${apiId} ${task}`).toBeDefined();
     }
     expect(MODEL_ENTRIES.filter((entry) => entry.id.startsWith("machgen:")).map((entry) => entry.id.slice("machgen:".length)).sort())
-      .toEqual([...Object.keys(MACHGEN_MODELS), ...MACHGEN_IMAGE_MODELS, ...MACHGEN_TOPAZ_MODELS, "MiniMax-H3/upscale", "MiniMax-H3/sharpen"].sort());
+      .toEqual([...Object.keys(MACHGEN_MODELS), ...MACHGEN_ADAPTER_MODELS, ...MACHGEN_IMAGE_MODELS, ...MACHGEN_TOPAZ_MODELS, "MiniMax-H3/upscale", "MiniMax-H3/sharpen"].sort());
   });
 
   it("takes the frame and reference inputs each model's MachGen grids accept", () => {
@@ -203,7 +203,7 @@ describe("MachGen catalog", () => {
       }
     }
     expect(failures).toEqual([]);
-    expect(accepted).toBe(35_407);
+    expect(accepted).toBe(35_903);
     expect(refused).toEqual(EXPECTED_REFUSALS);
   });
 
@@ -403,7 +403,7 @@ describe("MachGen catalog", () => {
   });
 });
 
-const EXPECTED_REFUSALS: Record<string, number> = { "MiniMax-H3": 1620, "Seedance-2.5": 36, "Vidu-Q3-Pro": 128 };
+const EXPECTED_REFUSALS: Record<string, number> = { "MiniMax-H3": 1620, "Seedance-2.5": 36, "Vidu-Q3-Pro": 128, "Gemini-Omni-1.2-Flash": 64 };
 
 type SweepVariant = { fields: Record<string, unknown>; hints: CostHints };
 
@@ -429,7 +429,7 @@ describe("MachGen image catalog", () => {
   it("catalogs every MachGen image model for text-to-image and edits of up to 16 GPT Image or 14 Nano Banana images", () => {
     const maxImages: Record<string, number> = {
       "GPT-Image-2": 16, "GPT-Image-2.5-Sunburst": 16, "GPT-Image-2.5-Flare": 16, "GPT-Image-2.6-Sunburst": 16, "GPT-Image-2.6-Flare": 16,
-      "Nano-Banana-2": 14, "Nano-Banana-2.1": 14,
+      "Nano-Banana-2": 14, "Nano-Banana-2.1": 14, "Seedream-5.5": 10,
     };
     expect(Object.keys(MACHGEN_IMAGE_SPECS).sort()).toEqual([...MACHGEN_IMAGE_MODELS].sort());
     for (const apiId of MACHGEN_IMAGE_MODELS) {
@@ -495,7 +495,7 @@ describe("MachGen image catalog", () => {
       }
     }
     expect(failures).toEqual([]);
-    expect(accepted).toBe(724);
+    expect(accepted).toBe(756);
     expect(refused).toEqual({
       "GPT-Image-2": 40, "GPT-Image-2.5-Sunburst": 20, "GPT-Image-2.5-Flare": 20, "GPT-Image-2.6-Sunburst": 100, "GPT-Image-2.6-Flare": 100,
     });

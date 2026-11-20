@@ -1,6 +1,7 @@
 import { z, type RefinementCtx, type ZodRawShape, type ZodType } from "zod";
 import {
   MACHGEN_I2I_MAX_IMAGES,
+  MACHGEN_IMAGE_SURFACES,
   MACHGEN_VIDEO_GRIDS,
   MACHGEN_VIDEO_MODEL_TASK_TYPES,
   MACHGEN_VIDEO_SHARPEN,
@@ -27,6 +28,7 @@ interface MachGenModelFacts {
   maxSecondsAtHeight?: Readonly<Record<number, number>>;
   smartEditNeedsAdaptive?: boolean;
   multiShot?: boolean;
+  operationCaps?: Readonly<Record<string, Readonly<Partial<Record<ReferenceKind, number>>>>>;
 }
 
 interface MachGenModelSpec extends MachGenModelFacts {
@@ -72,7 +74,7 @@ const TEXT_TASK: readonly TaskType[] = ["T2V"];
 const ALL_REFERENCES: readonly ReferenceKind[] = ["image", "video", "audio"];
 const SEED_FIELD = z.number().int().min(0).max(2_147_483_647).optional().describe("Seed for reproducible output");
 
-const H3: MachGenModelFacts = { audioToggle: true, seed: true, promptRequiredFor: ALL_TASKS, maxPromptChars: 65535, privateHeights: [1080] };
+const H3: MachGenModelFacts = { audioToggle: true, seed: true, promptRequiredFor: ALL_TASKS, maxPromptChars: 65535, privateHeights: [540, 1080] };
 const SEEDANCE_20_TIER: MachGenModelFacts = { audioToggle: true, seed: true, promptRequiredFor: ALL_TASKS };
 const VIDU_Q3: MachGenModelFacts = { audioToggle: true, seed: true, promptRequiredFor: TEXT_TASK, maxPromptChars: 5000 };
 const VEO: MachGenModelFacts = { audioToggle: false, seed: true, promptRequiredFor: TEXT_TASK };
@@ -105,6 +107,14 @@ const MACHGEN_MODEL_FACTS: Readonly<Record<string, MachGenModelFacts>> = {
   "HappyHorse-1.0": HAPPYHORSE,
   "Grok-Imagine-Video": { audioToggle: false, seed: false, promptRequiredFor: TEXT_TASK },
   "Grok-Imagine-Video-1.5": { audioToggle: false, seed: false, promptRequiredFor: [] },
+  "Gemini-Omni-1.2-Flash": {
+    audioToggle: false,
+    seed: false,
+    promptRequiredFor: ALL_TASKS,
+    references: ["image", "video"],
+    maxSecondsWithBothFrames: 10,
+    operationCaps: { edit: { image: 2, video: 1 }, extend: { video: 1 } },
+  },
 };
 
 const TASK_NAMES: Readonly<Record<TaskType, string>> = {
@@ -213,8 +223,8 @@ const GPT_IMAGE_SIZES: Readonly<Record<string, Readonly<Record<string, readonly 
 const NANO_BANANA_HEIGHTS: Readonly<Record<string, number>> = { "1K": 1024, "2K": 2048, "4K": 4096 };
 const NANO_BANANA_ASPECT_RATIOS: readonly string[] = ["16:9", "21:9", "3:2", "4:3", "1:1", "4:5", "3:4", "2:3", "9:16"];
 
-function sizeConfigs(): MachGenImageSpec["configs"] {
-  return Object.fromEntries(Object.entries(GPT_IMAGE_SIZES).map(([aspect, tiers]) => [aspect, Object.fromEntries(
+function sizeConfigs(sizes: typeof GPT_IMAGE_SIZES): MachGenImageSpec["configs"] {
+  return Object.fromEntries(Object.entries(sizes).map(([aspect, tiers]) => [aspect, Object.fromEntries(
     Object.entries(tiers).map(([tier, [width, height]]) => [tier, { width, height }]),
   )]));
 }
@@ -225,7 +235,20 @@ function heightConfigs(): MachGenImageSpec["configs"] {
   )]));
 }
 
-const GPT_IMAGE: MachGenImageSpec = { resolutions: GPT_IMAGE_TIERS, configs: sizeConfigs(), quality: false, seed: false };
+const SEEDREAM_TIERS: readonly string[] = ["1K", "2K"];
+
+const SEEDREAM_SIZES: Readonly<Record<string, Readonly<Record<string, readonly [number, number]>>>> = {
+  "1:1": { "1K": [1024, 1024], "2K": [2048, 2048] },
+  "16:9": { "1K": [1280, 720], "2K": [2560, 1440] },
+  "9:16": { "1K": [720, 1280], "2K": [1440, 2560] },
+  "4:3": { "1K": [1152, 864], "2K": [2304, 1728] },
+  "3:4": { "1K": [864, 1152], "2K": [1728, 2304] },
+  "3:2": { "1K": [1248, 832], "2K": [2496, 1664] },
+  "2:3": { "1K": [832, 1248], "2K": [1664, 2496] },
+  "21:9": { "1K": [1568, 672], "2K": [3024, 1296] },
+};
+
+const GPT_IMAGE: MachGenImageSpec = { resolutions: GPT_IMAGE_TIERS, configs: sizeConfigs(GPT_IMAGE_SIZES), quality: false, seed: false };
 const NANO_BANANA: MachGenImageSpec = { resolutions: Object.keys(NANO_BANANA_HEIGHTS), configs: heightConfigs(), quality: false, seed: false };
 
 export const MACHGEN_IMAGE_SPECS: Readonly<Record<string, MachGenImageSpec>> = {
@@ -236,10 +259,10 @@ export const MACHGEN_IMAGE_SPECS: Readonly<Record<string, MachGenImageSpec>> = {
   "GPT-Image-2.6-Flare": { ...GPT_IMAGE, outputQuality: true },
   "Nano-Banana-2": { ...NANO_BANANA, seed: true },
   "Nano-Banana-2.1": NANO_BANANA,
+  "Seedream-5.5": { resolutions: SEEDREAM_TIERS, configs: sizeConfigs(SEEDREAM_SIZES), quality: false, seed: false },
 };
 
 const OPTIMIZATION_LEVELS: Readonly<Record<string, string>> = { high: "STANDARD", low: "EXPRESS" };
-const OUTPUT_QUALITIES = ["low", "medium", "high", "xhigh", "max"] as const;
 
 const MACHGEN_UPSCALES: Readonly<Record<string, MachGenUpscaleSpec>> = {
   "MiniMax-H3/upscale": {
@@ -453,6 +476,21 @@ function visualKinds(spec: MachGenModelSpec): ReferenceKind[] {
   return spec.references.filter((kind) => kind !== "audio");
 }
 
+function checkOperationCaps(
+  spec: MachGenModelSpec,
+  references: Record<ReferenceKind, string[]>,
+  operation: string | null,
+  ctx: RefinementCtx,
+): void {
+  const caps = operation && references.video.length > 0 ? spec.operationCaps?.[operation] : undefined;
+  for (const kind of ALL_REFERENCES) {
+    const cap = caps?.[kind];
+    if (cap !== undefined && references[kind].length > cap) {
+      addIssue(ctx, REFERENCE_FIELDS[kind], `${operation} takes at most ${cap} reference ${kind}${cap === 1 ? "" : "s"}`);
+    }
+  }
+}
+
 function checkReferences(spec: MachGenModelSpec, value: Record<string, unknown>, task: TaskType, ctx: RefinementCtx): void {
   if (task !== "R2V") return;
   const references = referencesOf(spec, value);
@@ -463,6 +501,7 @@ function checkReferences(spec: MachGenModelSpec, value: Record<string, unknown>,
   if (spec.referenceTotal !== undefined && total > spec.referenceTotal) {
     addIssue(ctx, "", `reference-to-video takes at most ${spec.referenceTotal} references in all`);
   }
+  checkOperationCaps(spec, references, text(value.reference_video_operation), ctx);
   if (spec.smartEditNeedsAdaptive && value.duration === -1 && references.video.length > 0 && value.aspect_ratio !== "adaptive") {
     addIssue(ctx, "aspect_ratio", "-1 duration with a reference video edits that video and needs the adaptive aspect ratio");
   }
@@ -557,6 +596,12 @@ function imageConfig(spec: MachGenImageSpec, value: Record<string, unknown>): Im
   return spec.configs[String(value.aspect_ratio)]?.[String(value.resolution)];
 }
 
+function outputQualities(apiId: string): [string, ...string[]] {
+  const surfaces = MACHGEN_IMAGE_SURFACES[apiId as keyof typeof MACHGEN_IMAGE_SURFACES];
+  const offered = surfaces.T2I.qualities.filter((quality) => quality !== "auto" && surfaces.I2I.qualities.includes(quality));
+  return offered as [string, ...string[]];
+}
+
 function imageInput(apiId: string, spec: MachGenImageSpec): WireSpec["input"] {
   const [firstAspect, ...otherAspects] = Object.keys(spec.configs) as [string, ...string[]];
   const [firstResolution, ...otherResolutions] = spec.resolutions as [string, ...string[]];
@@ -566,7 +611,7 @@ function imageInput(apiId: string, spec: MachGenImageSpec): WireSpec["input"] {
     aspect_ratio: z.enum([firstAspect, ...otherAspects]).default("1:1").describe("Output aspect ratio"),
     resolution: z.enum([firstResolution, ...otherResolutions]).default(firstResolution).describe("Output resolution"),
     ...(spec.quality ? { quality: z.enum(["high", "low"]).default("high").describe("Image quality: high is MachGen's STANDARD level, low its far cheaper EXPRESS level") } : {}),
-    ...(spec.outputQuality ? { quality: z.enum(OUTPUT_QUALITIES).default("high").describe("Rendering quality; with the size it sets the output tokens MachGen bills") } : {}),
+    ...(spec.outputQuality ? { quality: z.enum(outputQualities(apiId)).default("high").describe("Rendering quality; with the size it sets the output tokens MachGen bills") } : {}),
     ...(spec.seed ? { seed: SEED_FIELD } : {}),
   }).superRefine((value, ctx) => {
     if (imageConfig(spec, value)) return;
@@ -669,6 +714,18 @@ function topazRequest(apiId: string, value: Record<string, unknown>): Record<str
   };
 }
 
+interface MachGenAdapterVariant {
+  model: string;
+  adapter: string;
+}
+
+const MACHGEN_ADAPTER_VARIANTS: Readonly<Record<string, MachGenAdapterVariant>> = {
+  "MiniMax-H3-Turbo/hyperflow": { model: "MiniMax-H3-Turbo", adapter: "hyperflow" },
+  "MiniMax-H3-Turbo/pika_h3_flex": { model: "MiniMax-H3-Turbo", adapter: "pika_h3_flex" },
+};
+
+export const MACHGEN_ADAPTER_MODELS: readonly string[] = Object.keys(MACHGEN_ADAPTER_VARIANTS);
+
 export function machgenWire(apiId: string): WireSpec | null {
   if (machgenTopaz(apiId)) {
     return { input: topazInput(apiId), fixed: {}, wrap: (value) => topazRequest(apiId, value), request: MachGenGenerateRequestSchema };
@@ -681,12 +738,14 @@ export function machgenWire(apiId: string): WireSpec | null {
   if (image) {
     return { input: imageInput(apiId, image), fixed: {}, wrap: (value) => imageRequest(apiId, image, value), request: MachGenGenerateRequestSchema };
   }
-  const spec = MACHGEN_MODELS[apiId];
+  const variant = MACHGEN_ADAPTER_VARIANTS[apiId];
+  const model = variant?.model ?? apiId;
+  const spec = MACHGEN_MODELS[model];
   if (!spec) return null;
   return {
     input: machgenInput(spec),
     fixed: {},
-    wrap: (value) => machgenRequest(apiId, spec, value),
+    wrap: (value) => ({ ...machgenRequest(model, spec, value), ...(variant ? { adapter: variant.adapter } : {}) }),
     request: MachGenGenerateRequestSchema,
   };
 }

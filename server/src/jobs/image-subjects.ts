@@ -1,9 +1,9 @@
 import { falContentRefusal } from "./_fal-shared.js";
 import { assertGoalLineageCurrent, goalGenerationLineageSchema } from "../goal-generation-provenance.js";
 import { submitMediaJob } from "../usage-providers.js";
-import { type GrokImagineImage2ImageEditRequest, type KieProvider, type SeedreamProLayerDecompositionRequest } from "@apicity/kie";
+import { type GrokImagineImage2SegmentEditRequest, type KieProvider, type SeedreamProLayerDecompositionRequest } from "@apicity/kie";
 import {
-  GrokImagineImage2ImageEditRequestSchema,
+  GrokImagineImage2SegmentEditRequestSchema,
   GrokImagineImage2SegmentMapRequestSchema,
   SeedreamProLayerDecompositionRequestSchema,
 } from "@apicity/kie/zod";
@@ -97,7 +97,7 @@ type KieLayerResult = {
 
 type StoredImageSubjectEditTask = {
   adapterId: string;
-  request: ImageEditProviderRequest | GrokImagineImage2ImageEditRequest;
+  request: ImageEditProviderRequest | GrokImagineImage2SegmentEditRequest;
   taskId: string;
 };
 
@@ -578,6 +578,17 @@ async function persistProcessedImage(
   if (!metadata.ok) throw new Error(metadata.error.message);
 }
 
+const LEGACY_EXACT_EDIT_MODEL = "grok-imagine-image-2-0/image-edit";
+
+function parseStoredSegmentEditRequest(value: unknown): GrokImagineImage2SegmentEditRequest | null {
+  const stored = record(value);
+  const current = stored?.model === LEGACY_EXACT_EDIT_MODEL
+    ? { ...stored, model: GROK_EXACT_MASK_ADAPTER_ID }
+    : value;
+  const parsed = GrokImagineImage2SegmentEditRequestSchema.safeParse(current);
+  return parsed.success ? parsed.data : null;
+}
+
 export async function readStoredImageSubjectEditTask(
   engine: Engine,
   imageAssetId: string,
@@ -586,7 +597,7 @@ export async function readStoredImageSubjectEditTask(
     imageAssetId,
     "generation-payload",
   );
-  let request: ImageEditProviderRequest | GrokImagineImage2ImageEditRequest | null = null;
+  let request: ImageEditProviderRequest | GrokImagineImage2SegmentEditRequest | null = null;
   let adapterId: string | null = null;
   if (storedRequest.ok) {
     for (const adapter of IMAGE_EDIT_ADAPTERS) {
@@ -598,11 +609,8 @@ export async function readStoredImageSubjectEditTask(
       }
     }
     if (!request) {
-      const parsedExact = GrokImagineImage2ImageEditRequestSchema.safeParse(storedRequest.value);
-      if (parsedExact.success) {
-        request = parsedExact.data;
-        adapterId = GROK_EXACT_MASK_ADAPTER_ID;
-      }
+      request = parseStoredSegmentEditRequest(storedRequest.value);
+      if (request) adapterId = GROK_EXACT_MASK_ADAPTER_ID;
     }
   }
   const storedTask = await engine.metadata.artifacts.read<unknown>(
@@ -621,7 +629,6 @@ export async function readStoredImageSubjectEditTask(
 
 const GROK_IMAGE_2_SOURCE_MODELS = new Set([
   "grok-imagine-image-2-0/text-to-image",
-  "grok-imagine-image-2-0/image-edit",
 ]);
 
 export async function readGrokImagineImage2SourceTaskId(
@@ -656,13 +663,13 @@ export function grokImagineImage2EditRequest(
   sourceTaskId: string,
   prompt: string,
   maskIndexes: readonly number[],
-): GrokImagineImage2ImageEditRequest {
+): GrokImagineImage2SegmentEditRequest {
   const mask_indexs = maskIndexes.filter((index) => grokMaskIndex(index) !== undefined);
   if (mask_indexs.length === 0) {
     throw new Error("Exact Grok mask edit requires nonnegative mask indexes");
   }
-  return GrokImagineImage2ImageEditRequestSchema.parse({
-    model: "grok-imagine-image-2-0/image-edit",
+  return GrokImagineImage2SegmentEditRequestSchema.parse({
+    model: GROK_EXACT_MASK_ADAPTER_ID,
     input: {
       prompt,
       task_id: sourceTaskId,
@@ -905,7 +912,7 @@ async function generateExactSubjectEdit(
   output: Buffer;
   extras: Buffer[];
   taskId: string;
-  request: GrokImagineImage2ImageEditRequest;
+  request: GrokImagineImage2SegmentEditRequest;
 }> {
   if (!map.grokSourceTaskId) {
     throw new Error("Exact Grok mask edit requires a Grok Imagine Image 2.0 source task");
@@ -918,7 +925,7 @@ async function generateExactSubjectEdit(
   const storedExact = stored?.adapterId === GROK_EXACT_MASK_ADAPTER_ID
     ? stored
     : null;
-  let request = storedExact?.request as GrokImagineImage2ImageEditRequest | null ?? null;
+  let request = storedExact?.request as GrokImagineImage2SegmentEditRequest | null ?? null;
   let taskId = storedExact?.taskId ?? null;
   const provider = kieProvider();
   if (!request || !taskId) {

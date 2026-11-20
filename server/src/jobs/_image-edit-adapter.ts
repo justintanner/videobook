@@ -60,7 +60,7 @@ export interface ImageEditAdapter {
   parseStoredPayload(payload: unknown): ImageEditProviderRequest | null;
 }
 
-export const GROK_EXACT_MASK_ADAPTER_ID = "grok-imagine-image-2-0/image-edit";
+export const GROK_EXACT_MASK_ADAPTER_ID = "grok-imagine-image-2-0/segment-edit";
 
 function closestAspectRatio(
   width: number,

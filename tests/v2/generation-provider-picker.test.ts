@@ -50,7 +50,7 @@ describe('generation provider picker', () => {
     expect(groups.map(group => group.label)).toEqual(['Frontier models', 'Other models'])
     const [frontier] = groups
     expect(frontier!.rows[0]).toMatchObject({ family: { id: sunburst, title: 'GPT Image 2.6 Sunburst' }, ranking: { type: 't2i', rank: 1 }, available: true })
-    expect(frontier!.rows[0]!.actions.map(action => action.provider).sort()).toEqual(['fal', 'fal', 'kie', 'kie', 'machgen', 'wavespeed', 'wavespeed'])
+    expect(frontier!.rows[0]!.actions.map(action => action.provider).sort()).toEqual(['fal', 'fal', 'kie', 'kie', 'machgen', 'nunchux', 'wavespeed', 'wavespeed'])
     expect(frontier!.rows.map(row => row.ranking!.rank)).toEqual(frontier!.rows.map(row => row.ranking!.rank).sort((left, right) => left - right))
     const ids = groups.flatMap(group => group.rows.map(row => row.family.id))
     expect(ids).toEqual([...new Set(ids)])
@@ -75,6 +75,7 @@ describe('generation provider picker', () => {
       ['Fal', 'fal:openai/gpt-image-2.6/sunburst/text-to-image'],
       ['Kie', 'kie:gpt-image-2-6/sunburst-text-to-image'],
       ['MachGen', 'machgen:GPT-Image-2.6-Sunburst'],
+      ['Nunchux', 'nunchux:gpt-image-2.6-sunburst'],
       ['WaveSpeed', 'wavespeed:openai/gpt-image-2.6-sunburst/text-to-image'],
     ])
     for (const option of text) {
@@ -87,6 +88,7 @@ describe('generation provider picker', () => {
       ['Fal', 'fal:openai/gpt-image-2.6/sunburst/edit'],
       ['Kie', 'kie:gpt-image-2-6/sunburst-image-to-image'],
       ['MachGen', 'machgen:GPT-Image-2.6-Sunburst'],
+      ['Nunchux', 'nunchux:gpt-image-2.6-sunburst'],
       ['WaveSpeed', 'wavespeed:openai/gpt-image-2.6-sunburst/edit'],
     ])
     expect(edit.every(option => option.compatible && option.ranking?.type === 'i2i')).toBe(true)
@@ -203,7 +205,7 @@ describe('generation provider picker', () => {
       onSelectSource: () => undefined, onSettingChange: () => undefined,
     }))
     const price = (model: string) => pickerActions.find(action => action.model === model)!.frontier!.find(ranking => ranking.type === 'i2i')!.priceLabel
-    expect(html).toContain(`<option value="${sunburst}" selected="">#1 · GPT Image 2.6 Sunburst · Elo `)
+    expect(html).toContain(`<option value="${sunburst}" selected="">#2 · GPT Image 2.6 Sunburst · Elo `)
     expect(html).not.toMatch(/<select aria-label="Generation model"[^]*?Sunburst · Fal/u)
     expect(html).toContain('<select aria-label="Generation provider">')
     expect(html).toContain(`<option value="${current.id}" selected="">Fal · ${price(current.model)}</option>`)

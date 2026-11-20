@@ -30,9 +30,13 @@ describe("frontier catalog coverage", () => {
     ]));
     expect(modelFrontierRankings("machgen:GPT-Image-2.5-Sunburst")).toEqual([
       expect.objectContaining({ type: "t2i", rank: 2 }),
-      expect.objectContaining({ type: "i2i", rank: 3 }),
+      expect.objectContaining({ type: "i2i", rank: 4 }),
     ]);
-    expect(modelFrontierRankings("machgen:GPT-Image-2")).toEqual([expect.objectContaining({ type: "t2i", rank: 5 })]);
+    const boards = (id: string) => modelFrontierRankings(id).map(({ type, rank }) => [type, rank]);
+    expect(boards("machgen:MiniMax-H3-Turbo/hyperflow")).toEqual([["t2v", 5], ["i2v", 7], ["v2v", 3]]);
+    expect(boards("machgen:MiniMax-H3-Turbo/pika_h3_flex")).toEqual([["i2v", 10], ["v2v", 10]]);
+    expect(boards("machgen:MiniMax-H3-Turbo")).toEqual([]);
+    expect(modelFrontierRankings("machgen:GPT-Image-2")).toEqual([expect.objectContaining({ type: "t2i", rank: 6 })]);
     expect(modelFrontierRankings("xai:grok-imagine-video")).toEqual([]);
     expect(modelFrontierRankings("fal:xai/grok-imagine-video/v1.5/lite/image-to-video")).toEqual([]);
   });

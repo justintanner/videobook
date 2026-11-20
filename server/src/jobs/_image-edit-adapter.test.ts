@@ -165,7 +165,7 @@ describe("image edit adapters", () => {
   });
 
   it("keeps the grok exact-mask route outside the swappable registry", () => {
-    expect(GROK_EXACT_MASK_ADAPTER_ID).toBe("grok-imagine-image-2-0/image-edit");
+    expect(GROK_EXACT_MASK_ADAPTER_ID).toBe("grok-imagine-image-2-0/segment-edit");
     expect(imageEditAdapter(GROK_EXACT_MASK_ADAPTER_ID)).toBeUndefined();
   });
 

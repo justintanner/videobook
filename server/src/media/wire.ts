@@ -68,7 +68,11 @@ const KIE_GPT_IMAGE_26_ANIMATION_FIELDS = ["size", "frame_count", "frame_duratio
 const KIE_MINIMAX_H3_IMAGE = new Set(["minimax-h3/text-to-image", "minimax-h3/image-edit"]);
 const MINIMAX_H3_IMAGE_CUSTOM_SIZE = ["width", "height"];
 
+const KIE_GPT_IMAGE_26_ECONOMY = "gpt-image-2-6/economy-";
+const KIE_GPT_IMAGE_26_ECONOMY_FIXED = ["output_format", "frame_count", "frame_duration_ms"];
+
 function kieCreateTaskInput(apiId: string, input: AnyObject): AnyObject {
+  if (apiId.startsWith(KIE_GPT_IMAGE_26_ECONOMY)) return omitShape(input, KIE_GPT_IMAGE_26_ECONOMY_FIXED);
   if (apiId.startsWith(KIE_GPT_IMAGE_26)) return storedImageFormats(omitShape(input, KIE_GPT_IMAGE_26_ANIMATION_FIELDS));
   return KIE_MINIMAX_H3_IMAGE.has(apiId) ? omitShape(input, MINIMAX_H3_IMAGE_CUSTOM_SIZE) : input;
 }
@@ -246,8 +250,20 @@ function markupWithoutMask(request: AnyObject): AnyObject {
   }) as unknown as AnyObject;
 }
 
+const MAI_IMAGE_27 = "microsoft/mai-image-2.7/";
+
+function transparentNeedsAlpha(request: AnyObject): AnyObject {
+  return request.superRefine((value, ctx) => {
+    const record = value as Record<string, unknown>;
+    if (record.background === "transparent" && record.output_format === "jpeg") {
+      ctx.addIssue({ code: "custom", path: ["background"], message: "a transparent background needs png or webp output" });
+    }
+  }) as unknown as AnyObject;
+}
+
 function falInput(apiId: string, request: AnyObject): AnyObject {
   if (LUMA_RAY_32.has(apiId)) return lumaRayInput(request);
+  if (apiId.startsWith(MAI_IMAGE_27)) return transparentNeedsAlpha(request);
   if (apiId === GEMINI_OMNI_12_FRAMES) return geminiOmniFramesInput(request);
   return apiId.startsWith(GPT_IMAGE_26) ? markupWithoutMask(request) : request;
 }

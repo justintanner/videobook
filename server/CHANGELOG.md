@@ -6,6 +6,48 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- KIE models: Kling 4.0 Image for text-to-image and edits of up to 10 images,
+  GPT Image 2.6 Economy for text-to-image and edits at a flat price, Grok
+  Imagine Image 2.0 Edit for edits of 1-5 images, Seedance 2.5 Flash at 480p
+  or 720p for text, frames and references, LTX 2.5 Fast and Pro for text and
+  image to video, LTX 2.5 Fast audio-to-video that follows a connected audio
+  clip, and Gemini Omni 1.2 Flash Extend, which adds 3-10 s to a 360p or 720p
+  Gemini Omni 1.2 Flash video KIE made in this book (pass its task id) and is
+  priced at that video's resolution.
+- fal MAI Image 2.7 for text-to-image, and MAI Image 2.7 and MAI Image 2.7
+  Flash edits of up to 5 images. fal bills them by tokens, so their cost is
+  known once they run.
+- MachGen Gemini Omni 1.2 Flash for text, first and last frames and
+  references of up to 6 images and 3 videos, which it can edit or extend;
+  Seedream 5.5 for text-to-image and edits of up to 10 images; and Hyperflow
+  H3 and Pika H3 Flex, which run through MiniMax H3 Turbo.
+- WaveSpeed SkyReels V4 image-to-video with a first frame, an optional last
+  frame and up to six keyframes between them.
+- Nunchux GPT Image 2.6 Sunburst and Flare for text-to-image and edits of up
+  to 16 images plus a Mask or Markup image. Book images are sent inline, and
+  each run is priced from the tokens Nunchux reports.
+
+### Changed
+
+- Every `@apicity` package moves to 0.29.0. Model ranks follow the 2026-11-19
+  leaderboards.
+- KIE Seedance 2.5 offers a 4k tier and keeps 1080p as its default. KIE Grok
+  Imagine image-to-image takes up to 5 images, and KIE GPT Image 2 edits,
+  Seedream 5 Lite and Grok Upscale gain the background, output format and
+  resolution options KIE added.
+- MachGen GPT Image 2.6 qualities now come from MachGen's published model
+  surfaces. No value Videobook offered was withdrawn: MachGen refuses xhigh
+  and max on GPT Image 2, which Videobook never sent.
+
+### Fixed
+
+- Exact subject edits work again. KIE moved the Grok Imagine Image 2.0 edit
+  of selected subjects to a new segment-edit model and refused the old
+  request, so every exact edit failed. Edits now use segment-edit with the
+  same subject indexes, and an edit already waiting on KIE resumes.
+
 ## [0.8.2] - 2026-11-19
 
 ### Fixed

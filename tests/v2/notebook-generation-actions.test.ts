@@ -352,6 +352,7 @@ describe('notebook generation actions', () => {
         .sort()
     const all = [
       'machgen:Alibaba-Wan-3.0',
+      'machgen:Gemini-Omni-1.2-Flash',
       'machgen:Grok-Imagine-Video',
       'machgen:Grok-Imagine-Video-1.5',
       'machgen:HappyHorse-1.0',
@@ -361,6 +362,8 @@ describe('notebook generation actions', () => {
       'machgen:LTX-2.3-Pro',
       'machgen:MiniMax-H3',
       'machgen:MiniMax-H3-Turbo',
+      'machgen:MiniMax-H3-Turbo/hyperflow',
+      'machgen:MiniMax-H3-Turbo/pika_h3_flex',
       'machgen:Pixverse-C1',
       'machgen:Pixverse-V6',
       'machgen:Seedance-2.0',
@@ -393,8 +396,11 @@ describe('notebook generation actions', () => {
     expect(machgen([{ kind: 'image', target: 'image' }])).toEqual(withImages)
     expect(machgen([{ kind: 'video', target: 'video' }])).toEqual([
       'machgen:Alibaba-Wan-3.0',
+      'machgen:Gemini-Omni-1.2-Flash',
       'machgen:MiniMax-H3',
       'machgen:MiniMax-H3-Turbo',
+      'machgen:MiniMax-H3-Turbo/hyperflow',
+      'machgen:MiniMax-H3-Turbo/pika_h3_flex',
       'machgen:MiniMax-H3/sharpen',
       'machgen:MiniMax-H3/upscale',
       'machgen:Seedance-2.0',
@@ -407,7 +413,7 @@ describe('notebook generation actions', () => {
       'machgen:Topaz-Video-Precision-Animation',
     ])
     expect(machgen([{ kind: 'audio', target: 'audio' }]))
-      .toEqual(['machgen:Alibaba-Wan-3.0', 'machgen:MiniMax-H3', 'machgen:MiniMax-H3-Turbo', 'machgen:Seedance-2.5'])
+      .toEqual(['machgen:Alibaba-Wan-3.0', 'machgen:MiniMax-H3', 'machgen:MiniMax-H3-Turbo', 'machgen:MiniMax-H3-Turbo/hyperflow', 'machgen:MiniMax-H3-Turbo/pika_h3_flex', 'machgen:Seedance-2.5'])
 
     const h3 = catalog.find((action) => action.model === 'machgen:MiniMax-H3')!
     expect(generationActionLabel(h3)).toBe('MiniMax H3 (MachGen) · MachGen')

@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { v7 as uuidv7 } from "uuid";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Engine } from "videobook-engine";
+import { GrokImagineImage2ImageEditRequestSchema, MediaGenerationRequestSchema } from "@apicity/kie/zod";
 import {
   IMAGE_SUBJECT_MAP_VERSION,
   applyGrokSegmentsToSubjects,
@@ -265,7 +266,7 @@ describe("image subject tools", () => {
     };
   }
 
-  it("routes selected exact_edit subjects to Grok image-edit and otherwise Seedream", async () => {
+  it("routes selected exact_edit subjects to Grok segment-edit and otherwise Seedream", async () => {
     const source = await createSource();
     expect(imageSubjectEditRoute(source.map, ["person"])).toBe("semantic");
     const exactMap: ImageSubjectMapReadyV1 = {
@@ -319,6 +320,14 @@ describe("image subject tools", () => {
     });
     await expect(readGrokImagineImage2SourceTaskId(engine, source.artifactId))
       .resolves.toBeNull();
+    for (const model of ["grok-imagine-image-2-0/segment-edit", "grok-imagine-image-2-0/image-edit"]) {
+      await engine.metadata.artifacts.write(source.artifactId, "generation-payload", {
+        model,
+        input: { prompt: "Recolor", task_id: "grok-source-task", mask_indexs: [0] },
+      });
+      await expect(readGrokImagineImage2SourceTaskId(engine, source.artifactId))
+        .resolves.toBeNull();
+    }
     const extraA = await solidPng(8, 8, { r: 1, g: 2, b: 3 });
     const extraB = await solidPng(8, 8, { r: 4, g: 5, b: 6 });
     await persistExtraResultImages(engine, source.artifactId, [extraA, extraB]);
@@ -839,6 +848,44 @@ describe("image subject tools", () => {
         reacquired.ownerId,
       )).toBe(true);
     }
+  });
+
+  it("resumes an exact edit task stored under segment-edit or the old image-edit id", async () => {
+    const output = await engine.artifacts.create({ kind: "image", label: "Exact replay" });
+    if (!output.ok) throw new Error(output.error.message);
+    const input = {
+      prompt: "Recolor the selected area bright blue.",
+      task_id: "6c042098e0b5df56c0fc79702b7672ad",
+      mask_indexs: [0],
+    };
+    const current = { model: "grok-imagine-image-2-0/segment-edit", input };
+    const taskWrite = await engine.metadata.artifacts.write(
+      output.value.artifactId,
+      "kie-task-id",
+      { taskId: "213fa0107ab8f266d4a71c2c839eaf64" },
+    );
+    if (!taskWrite.ok) throw new Error(taskWrite.error.message);
+    for (const model of ["grok-imagine-image-2-0/segment-edit", "grok-imagine-image-2-0/image-edit"]) {
+      const requestWrite = await engine.metadata.artifacts.write(
+        output.value.artifactId,
+        "generation-payload",
+        { model, input },
+      );
+      if (!requestWrite.ok) throw new Error(requestWrite.error.message);
+      await expect(readStoredImageSubjectEditTask(engine, output.value.artifactId)).resolves.toEqual({
+        adapterId: "grok-imagine-image-2-0/segment-edit",
+        request: current,
+        taskId: "213fa0107ab8f266d4a71c2c839eaf64",
+      });
+    }
+    const newImageEdit = await engine.metadata.artifacts.write(
+      output.value.artifactId,
+      "generation-payload",
+      { model: "grok-imagine-image-2-0/image-edit", input: { prompt: "x", aspect_ratio: "auto", image_urls: ["https://example.test/a.png"] } },
+    );
+    if (!newImageEdit.ok) throw new Error(newImageEdit.error.message);
+    await expect(readStoredImageSubjectEditTask(engine, output.value.artifactId))
+      .rejects.toThrow("Stored Kie subject edit task has no valid generation payload");
   });
 
   it("terminalizes notebook edit cells when a replayable job exhausts its lease", async () => {
@@ -1973,12 +2020,22 @@ describe("image subject request and parsing helpers", () => {
         task_id: "src-task",
         mask_indexs: [0, 1, 2],
       });
-    expect(grokImagineImage2EditRequest("src-task", "no masks", [0]).input)
-      .toEqual({
-        prompt: "no masks",
-        task_id: "src-task",
+    const recorded = grokImagineImage2EditRequest(
+      "6c042098e0b5df56c0fc79702b7672ad",
+      "Recolor the selected area bright blue.",
+      [0],
+    );
+    expect(recorded).toEqual({
+      model: "grok-imagine-image-2-0/segment-edit",
+      input: {
+        prompt: "Recolor the selected area bright blue.",
+        task_id: "6c042098e0b5df56c0fc79702b7672ad",
         mask_indexs: [0],
-      });
+      },
+    });
+    expect(MediaGenerationRequestSchema.safeParse(recorded).success).toBe(true);
+    expect(GrokImagineImage2ImageEditRequestSchema.safeParse({ ...recorded, model: "grok-imagine-image-2-0/image-edit" }).success)
+      .toBe(false);
     expect(() => grokImagineImage2EditRequest("src-task", "no masks", [-1]))
       .toThrow("nonnegative mask indexes");
   });

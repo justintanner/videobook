@@ -24,6 +24,10 @@ const nativeModels: Partial<Record<NotebookFollowUp, Readonly<Record<string, str
   upscale_video: { 'machgen:MiniMax-H3': 'machgen:MiniMax-H3/upscale' },
 }
 
+function takesVideo(action: NotebookGenerationAction): boolean {
+  return action.inputContract.modes.some((mode) => mode.slots.some((slot) => slot.kind === 'video'))
+}
+
 export function notebookFollowUpModels(
   actions: readonly NotebookGenerationAction[],
   followUp: NotebookFollowUp,
@@ -34,7 +38,7 @@ export function notebookFollowUpModels(
   const offered = actions
     .filter((action) => action.operation === followUp && action.cellTypes.includes('generate_video'))
     .map((action) => action.model)
-  const available = new Map(actions.map((action) => [action.model, action.available !== false]))
+  const available = new Map(actions.filter(takesVideo).map((action) => [action.model, action.available !== false]))
   const models = [...new Set([...(native ? [native] : []), ...preferredModels[followUp], ...offered])]
     .filter((model) => available.has(model))
   return [

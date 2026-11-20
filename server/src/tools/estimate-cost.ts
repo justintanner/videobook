@@ -12,7 +12,7 @@ import { DEFAULT_IMAGE_EDIT_MODEL_ID, findImageEditModel } from "../image-edit-m
 import { tryResolveModel } from "../media/descriptor.js";
 import { estimateGeneration } from "../media/cost.js";
 import { checkSeedanceEditSource, checkReframeVideoGeometry, normalizeRefParams, normalizeRefs } from "../media/refs.js";
-import { seedanceDraftCostHints } from "../media/seedance-draft.js";
+import { kieTaskSourceCostHints } from "../media/kie-task-source.js";
 import { resolveGenerationSource } from "../media/generation-source.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
 
@@ -91,7 +91,7 @@ async function estimateMedia(engine: Engine, input: Record<string, unknown>): Pr
   if (sourceError) return unavailable(sourceError);
   const source = await resolveGenerationSource(engine, model, refs, options);
   if (!source.ok) return unavailable(source.error);
-  const hints = { ...await mediaHints(engine, refs, model), ...await seedanceDraftCostHints(engine, model.id, options), ...source.costHints };
+  const hints = { ...await mediaHints(engine, refs, model), ...await kieTaskSourceCostHints(engine, model.id, options), ...source.costHints };
   const result = await estimateGeneration(model, {
     prompt: text(input.prompt),
     refUrls: placeholderRefs(source.refs),

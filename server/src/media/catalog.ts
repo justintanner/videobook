@@ -163,13 +163,13 @@ function machgenModel(apiId: string, title: string, tasks: MachGenTasks, extra: 
   };
 }
 
-function machgenImage(apiId: string, title: string, guide: PromptGuide): ModelEntry {
+function machgenImage(apiId: string, title: string, guide?: PromptGuide): ModelEntry {
   return {
     id: `machgen:${apiId}`,
     media: "image",
     operations: ["text_to_image", "edit_image"],
     title: `${title} (MachGen)`,
-    guide,
+    ...(guide ? { guide } : {}),
     dialect: "natural",
   };
 }
@@ -237,11 +237,18 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:gpt-image-2-6/sunburst-image-to-image", media: "image", operations: ["edit_image"], guide: "gpt_image_26", dialect: "natural" },
   { id: "kie:gpt-image-2-6/flare-text-to-image", media: "image", operations: ["text_to_image"], guide: "gpt_image_26" },
   { id: "kie:gpt-image-2-6/flare-image-to-image", media: "image", operations: ["edit_image"], guide: "gpt_image_26", dialect: "natural" },
+  { id: "kie:gpt-image-2-6/economy-text-to-image", media: "image", operations: ["text_to_image"], guide: "gpt_image_26" },
+  { id: "kie:gpt-image-2-6/economy-image-to-image", media: "image", operations: ["edit_image"], guide: "gpt_image_26", dialect: "natural" },
+  { id: "kie:kling-4-0/image", media: "image", operations: ["text_to_image", "edit_image"], dialect: "kling4" },
+  { id: "kie:grok-imagine-image-2-0/image-edit", media: "image", operations: ["edit_image"], guide: "grok_image", dialect: "natural" },
   { id: "kie:gpt-image-2-image-to-image", media: "image", operations: ["edit_image"], title: "GPT Image 2 Edit", dialect: "natural", hidden: true },
   { id: "kie:seedream/5-pro-image-to-image", media: "image", operations: ["edit_image"], dialect: "natural", hidden: true },
   { id: "kie:grok-imagine/text-to-image", media: "image", operations: ["text_to_image"], guide: "grok_image" },
   { id: "kie:grok-imagine/image-to-image", media: "image", operations: ["edit_image"], guide: "grok_image", dialect: "natural" },
   { id: "xai:grok-imagine-image-2.0", media: "image", operations: ["text_to_image", "edit_image"], guide: "grok_image", title: "Grok Imagine Image 2.0 (xAI)", dialect: "natural" },
+  { id: "fal:microsoft/mai-image-2.7/text-to-image", family: "MAI Image 2.7", media: "image", operations: ["text_to_image"] },
+  { id: "fal:microsoft/mai-image-2.7/edit", family: "MAI Image 2.7", media: "image", operations: ["edit_image"], dialect: "natural" },
+  { id: "fal:microsoft/mai-image-2.7/flash/edit", family: "MAI Image 2.7 Flash", media: "image", operations: ["edit_image"], dialect: "natural" },
   { id: "fal:krea/v3/text-to-image", media: "image", operations: ["text_to_image"], title: "Krea 3" },
   { id: "fal:krea/v3/edit", media: "image", operations: ["edit_image"], title: "Krea 3 Edit", dialect: "natural" },
   { id: "fal:openai/gpt-image-2.6/sunburst/text-to-image", media: "image", operations: ["text_to_image"], guide: "gpt_image_26" },
@@ -310,6 +317,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   machgenImage("GPT-Image-2", "GPT Image 2", "gpt_image"),
   machgenImage("Nano-Banana-2.1", "Nano Banana 2.1", "nano_banana"),
   machgenImage("Nano-Banana-2", "Nano Banana 2", "nano_banana"),
+  machgenImage("Seedream-5.5", "Seedream 5.5"),
 
   {
     id: "kie:bytedance/seedance-2-5",
@@ -319,6 +327,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
     dialect: "seedance",
     modes: [...SEEDANCE_MODES, { id: "v2v", label: "Edit video", roles: ["video", "image", "audio"], requireAny: ["video"] }],
     defaults: { ...LIGHTNING_VIDEO_OPTIONS },
+    pinnedDefaults: ["resolution"],
     frameOptions: { aspect_ratio: "adaptive" },
     inputLimits: [{ kind: "requires", role: "last_frame", requires: "first_frame", message: "A last frame needs a first frame" }],
   },
@@ -359,6 +368,28 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:kling-4.0/flash-keyframe-to-video", media: "video", operations: ["image_to_video"], dialect: "kling4_keyframes" },
   { id: "kie:gemini-omni-video", media: "video", operations: ["image_to_video", "edit_video"], dialect: "natural_source_video", defaults: { duration: "8" }, modes: [{ id: "i2v", label: "Image to video", roles: ["image"] }, { id: "v2v", label: "Edit video", roles: ["video", "image"], requireAny: ["video"] }], refItem: { video: { start: 0, ends: 8 } }, inputLimits: [GEMINI_OMNI_QUOTA], aliases: { clip_start: "video_list.0.start", clip_end: "video_list.0.ends" } },
   { id: "kie:google/gemini-omni-flash-1-2", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"], dialect: "gemini_omni", modes: GEMINI_OMNI_12_MODES, inputLimits: [GEMINI_OMNI_QUOTA] },
+  {
+    id: "kie:google/gemini-omni-flash-1-2-extend",
+    media: "video",
+    operations: ["extend_video"],
+    dialect: "natural",
+    description: "Add 3-10 s to the end of a 360p or 720p Gemini Omni 1.2 Flash video Kie generated in this book, at most 15 s long, or of an earlier extend of one. Pass that run's Kie task id as task_id; only the added seconds bill.",
+  },
+  {
+    id: "kie:bytedance/seedance-2-5-flash",
+    media: "video",
+    operations: ["text_to_video", "image_to_video", "reference_to_video"],
+    guide: "seedance25",
+    dialect: "seedance",
+    modes: SEEDANCE_MODES,
+    frameOptions: { aspect_ratio: "adaptive" },
+    inputLimits: [{ kind: "requires", role: "last_frame", requires: "first_frame", message: "A last frame needs a first frame" }],
+  },
+  { id: "kie:ltx/2-5-fast-text-to-video", family: "LTX 2.5", variant: "Fast", media: "video", operations: ["text_to_video"], defaults: { resolution: "1080p" }, pinnedDefaults: ["resolution"] },
+  { id: "kie:ltx/2-5-fast-image-to-video", family: "LTX 2.5", variant: "Fast", media: "video", operations: ["image_to_video"], refs: { first_frame: "image_url" }, dialect: "strip_frames", defaults: { resolution: "1080p" }, pinnedDefaults: ["resolution"] },
+  { id: "kie:ltx/2-5-fast-audio-to-video", family: "LTX 2.5", variant: "Fast", media: "video", operations: ["lip_sync"], refs: { first_frame: "image_url", audio: "audio_url" }, dialect: "strip_frames", outputLength: "audio", defaults: { resolution: "1080p" }, pinnedDefaults: ["resolution"] },
+  { id: "kie:ltx/2-5-pro-text-to-video", family: "LTX 2.5", variant: "Pro", media: "video", operations: ["text_to_video"] },
+  { id: "kie:ltx/2-5-pro-image-to-video", family: "LTX 2.5", variant: "Pro", media: "video", operations: ["image_to_video"], refs: { first_frame: "image_url" }, dialect: "strip_frames" },
   { id: "kie:wan/3-0-video", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "seedance", modes: SEEDANCE_MODES },
   { id: "kie:wan/3-0-video-prime", family: "Wan 3.0", variant: "Prime", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "seedance", modes: SEEDANCE_MODES },
   { id: "kie:happyhorse-1-1/text-to-video", media: "video", operations: ["text_to_video"] },
@@ -557,6 +588,8 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   machgenModel("HappyHorse-1.1", "HappyHorse 1.1", MACHGEN_IMAGE_REFERENCES),
   machgenModel("Grok-Imagine-Video-1.5", "Grok Imagine Video 1.5", { text: false, frames: MACHGEN_FIRST_FRAME }, { guide: "grok_imagine" }),
   machgenModel("MiniMax-H3-Turbo", "MiniMax H3 Turbo", { frames: MACHGEN_FRAME_OR_LAST, references: MACHGEN_MEDIA }, { rules: machgenClips(15) }),
+  machgenModel("MiniMax-H3-Turbo/hyperflow", "Hyperflow H3", { frames: MACHGEN_FRAME_OR_LAST, references: MACHGEN_MEDIA }, { rules: machgenClips(15) }),
+  machgenModel("MiniMax-H3-Turbo/pika_h3_flex", "Pika H3 Flex", { frames: MACHGEN_FRAME_OR_LAST, references: MACHGEN_MEDIA }, { rules: machgenClips(15) }),
   machgenModel("Seedance-2.0-Fast", "Seedance 2.0 Fast", MACHGEN_SEEDANCE_20, { guide: "seedance2", rules: machgenClips(15) }),
   machgenModel("Seedance-2.0-Mini", "Seedance 2.0 Mini", MACHGEN_SEEDANCE_20, { guide: "seedance2", rules: machgenClips(15) }),
   machgenModel("LTX-2.3-Pro", "LTX 2.3 Pro", { frames: MACHGEN_FRAMES }),
@@ -568,6 +601,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   machgenModel("Pixverse-C1", "Pixverse C1", MACHGEN_IMAGE_REFERENCES),
   machgenModel("HappyHorse-1.0", "HappyHorse 1.0", MACHGEN_IMAGE_REFERENCES),
   machgenModel("Grok-Imagine-Video", "Grok Imagine Video", {}, { guide: "grok_imagine" }),
+  machgenModel("Gemini-Omni-1.2-Flash", "Gemini Omni 1.2 Flash", { frames: { ...MACHGEN_FRAMES, defaults: { duration: 10 } }, references: ["image", "video"] }, { rules: machgenClips(15) }),
   machgenModel("MiniMax-H3-Omni", "MiniMax H3 Omni", { text: false, references: MACHGEN_MEDIA, requireAny: ["image", "video"] }, { hidden: true, rules: machgenClips(15) }),
   machgenModel("Wan2.2-A14B", "Wan 2.2 A14B", { frames: MACHGEN_FIRST_FRAME }, { hidden: true }),
   machgenModel("Vidu-Q3-Turbo", "Vidu Q3 Turbo", MACHGEN_VIDU_Q3, { hidden: true }),

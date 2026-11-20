@@ -187,17 +187,17 @@ describe("WaveSpeed 0.28.1 catalog", () => {
     expect(applyPromptDialect(heygen.entry.dialect, "@firstframe the cat blinks", { first_frame: [IMAGE_ID] })).toBe("the cat blinks");
   });
 
-  it("ranks the new entries on their frontier boards and leaves the unranked Gemini Omni 1.2 edit without one", () => {
+  it("ranks the new entries on their frontier boards", () => {
     const boards = (apiId: string) => modelFrontierRankings(`wavespeed:${apiId}`).map((ranking) => [ranking.type, ranking.rank]);
     expect(boards("openai/gpt-image-2.6-sunburst/text-to-image")).toEqual([["t2i", 1]]);
-    expect(boards("openai/gpt-image-2.6-sunburst/edit")).toEqual([["i2i", 1]]);
-    expect(boards("openai/gpt-image-2.6-flare/edit")).toEqual([["i2i", 2]]);
-    expect(boards("bytedance/seedream-v5.5/edit")).toEqual([["i2i", 7]]);
-    expect(boards("google/gemini-omni-1.2-flash/text-to-video")).toEqual([["t2v", 6]]);
-    expect(boards("skywork-ai/skyreels-v4/text-to-video")).toEqual([["t2v", 10]]);
+    expect(boards("openai/gpt-image-2.6-sunburst/edit")).toEqual([["i2i", 2]]);
+    expect(boards("openai/gpt-image-2.6-flare/edit")).toEqual([["i2i", 3]]);
+    expect(boards("bytedance/seedream-v5.5/edit")).toEqual([["i2i", 8]]);
+    expect(boards("google/gemini-omni-1.2-flash/text-to-video")).toEqual([["t2v", 7]]);
+    expect(boards("skywork-ai/skyreels-v4/text-to-video")).toEqual([]);
     expect(boards("pruna-ai/p-video-2-pro/image-to-video")).toEqual([["i2v", 8]]);
-    expect(boards("google/gemini-omni-1.2-flash/video-edit")).toEqual([]);
-    expect(modelFrontierRankings("machgen:GPT-Image-2.6-Sunburst").map((ranking) => [ranking.type, ranking.rank])).toEqual([["t2i", 1], ["i2i", 1]]);
-    expect(modelFrontierRankings("machgen:GPT-Image-2.6-Flare").map((ranking) => [ranking.type, ranking.rank])).toEqual([["t2i", 3], ["i2i", 2]]);
+    expect(boards("google/gemini-omni-1.2-flash/video-edit")).toEqual([["v2v", 2]]);
+    expect(modelFrontierRankings("machgen:GPT-Image-2.6-Sunburst").map((ranking) => [ranking.type, ranking.rank])).toEqual([["t2i", 1], ["i2i", 2]]);
+    expect(modelFrontierRankings("machgen:GPT-Image-2.6-Flare").map((ranking) => [ranking.type, ranking.rank])).toEqual([["t2i", 3], ["i2i", 3]]);
   });
 });

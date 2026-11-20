@@ -49,7 +49,7 @@ function providerPath(model: ResolvedModel, request: Record<string, unknown>): s
     case "wavespeed":
       return `wavespeed.${wavespeedDotPath(model.apiId)}(request)`;
     case "nunchux":
-      return `nunchux.${nunchuxDotPath(model.apiId)}(request)`;
+      return `nunchux.${nunchuxDotPath(model.apiId, Array.isArray(request.images))}(request)`;
   }
 }
 

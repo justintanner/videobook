@@ -44,6 +44,7 @@ import {
   WaveSpeedOpenaiGptImage2TextToImageRequestSchema,
   WaveSpeedPrunaAiPVideo2ProImageToVideoRequestSchema,
   WaveSpeedRunwaymlAleph2RequestSchema,
+  WaveSpeedSkyworkAiSkyreelsV4ImageToVideoRequestSchema,
   WaveSpeedSkyworkAiSkyreelsV4TextToVideoRequestSchema,
   WaveSpeedWavespeedAiMinimaxH3VideoEditRequestSchema,
   WaveSpeedXAiGrokImagineImageV2p0TextToImageRequestSchema,
@@ -65,7 +66,7 @@ interface WaveSpeedEndpoint {
   operation?: Operation;
   input?: AnyObject;
   wrap?: (input: Record<string, unknown>) => Record<string, unknown>;
-  entry?: Pick<ModelEntry, "itemParams" | "inputLimits">;
+  entry?: Pick<ModelEntry, "itemParams" | "inputLimits" | "refs" | "modes">;
 }
 
 type EndpointExtras = Omit<WaveSpeedEndpoint, "family" | "dotPath" | "schema">;
@@ -152,12 +153,23 @@ const GPT_IMAGE_26_FLARE: EndpointExtras = { input: gptImage26Input(WaveSpeedOpe
 const GPT_IMAGE_26_EDIT: EndpointExtras = { input: markupWithoutMask(gptImage26Input(WaveSpeedOpenaiGptImage2p6SunburstEditRequestSchema)) };
 const GPT_IMAGE_26_FLARE_EDIT: EndpointExtras = { input: markupWithoutMask(gptImage26Input(WaveSpeedOpenaiGptImage2p6FlareEditRequestSchema)) };
 
-const SKYREELS_V4: EndpointExtras = {
-  input: WaveSpeedSkyworkAiSkyreelsV4TextToVideoRequestSchema.superRefine((value, ctx) => {
-    if (value.mode === "fast" && value.sound === true) {
+function fastWithoutSound(schema: AnyObject): AnyObject {
+  return schema.superRefine((value, ctx) => {
+    const record = value as Record<string, unknown>;
+    if (record.mode === "fast" && record.sound === true) {
       ctx.addIssue({ code: "custom", path: ["sound"], message: "fast mode can't generate sound" });
     }
-  }) as unknown as AnyObject,
+  }) as unknown as AnyObject;
+}
+
+const SKYREELS_V4: EndpointExtras = { input: fastWithoutSound(WaveSpeedSkyworkAiSkyreelsV4TextToVideoRequestSchema as unknown as AnyObject) };
+
+const SKYREELS_V4_IMAGE: EndpointExtras = {
+  input: fastWithoutSound(WaveSpeedSkyworkAiSkyreelsV4ImageToVideoRequestSchema as unknown as AnyObject),
+  entry: {
+    refs: { first_frame: "image", last_frame: "last_image", image: null, video: null, audio: null, loop: null, keyframe: "images" },
+    modes: [{ id: "i2v", label: "Frames", roles: ["first_frame", "last_frame", "keyframe"], requireAny: ["first_frame"] }],
+  },
 };
 
 const WAVESPEED_ENDPOINTS: Readonly<Record<string, WaveSpeedEndpoint>> = {
@@ -205,6 +217,7 @@ const WAVESPEED_ENDPOINTS: Readonly<Record<string, WaveSpeedEndpoint>> = {
   "heygen/video-1.0/image-to-video": endpoint("HeyGen Video", "heygen.video1p0.imageToVideo", WaveSpeedHeygenVideo1p0ImageToVideoRequestSchema),
   "heygen/video-1.0/reference-to-video": endpoint("HeyGen Video", "heygen.video1p0.referenceToVideo", WaveSpeedHeygenVideo1p0ReferenceToVideoRequestSchema),
   "skywork-ai/skyreels-v4/text-to-video": endpoint("SkyReels V4", "skyworkAi.skyreelsV4.textToVideo", WaveSpeedSkyworkAiSkyreelsV4TextToVideoRequestSchema, SKYREELS_V4),
+  "skywork-ai/skyreels-v4/image-to-video": endpoint("SkyReels V4", "skyworkAi.skyreelsV4.imageToVideo", WaveSpeedSkyworkAiSkyreelsV4ImageToVideoRequestSchema, SKYREELS_V4_IMAGE),
   "pruna-ai/p-video-2-pro/image-to-video": endpoint("P-Video 2 Pro", "prunaAi.pVideo2Pro.imageToVideo", WaveSpeedPrunaAiPVideo2ProImageToVideoRequestSchema),
   "x-ai/grok-imagine-video-v1.5/image-to-video": endpoint("Grok Imagine Video 1.5", "xAi.grokImagineVideoV1p5.imageToVideo", WaveSpeedXAiGrokImagineVideoV1p5ImageToVideoRequestSchema),
   "x-ai/grok-imagine-video-v1.5/reference-to-video": endpoint("Grok Imagine Video 1.5", "xAi.grokImagineVideoV1p5.referenceToVideo", WaveSpeedXAiGrokImagineVideoV1p5ReferenceToVideoRequestSchema),

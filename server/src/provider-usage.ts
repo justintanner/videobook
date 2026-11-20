@@ -123,7 +123,8 @@ async function priceRequest(provider: Provider, model: string, payload: RecordVa
 
 const MEDIA_ACTIVITY: Record<Media, UsageEntry["activity"]> = { image: "images", video: "video", audio: "audio" };
 const MACHGEN_IMAGE_TASKS = new Set(["T2I", "I2I"]);
-const NUNCHUX_SUBMIT_PATH = /^\/v1\/(alibaba\/services\/aigc\/video-generation\/video-synthesis|bytedance\/contents\/generations\/tasks|google\/v1beta\/interactions|minimax\/v2\/video_generation)$/u;
+const NUNCHUX_SUBMIT_PATH = /^\/(v1\/(alibaba\/services\/aigc\/video-generation\/video-synthesis|bytedance\/contents\/generations\/tasks|google\/v1beta\/interactions|minimax\/v2\/video_generation)|v2\/openai\/images\/(generations|edits))$/u;
+const NUNCHUX_IMAGES_PATH = /\/v2\/openai\/images\/(generations|edits)$/u;
 
 function machgenActivity(payload: RecordValue): UsageEntry["activity"] {
   return MACHGEN_IMAGE_TASKS.has(String(payload.task_type)) ? "images" : "video";
@@ -319,7 +320,36 @@ function falResultOmittedUnits(exchange: ProviderExchange, status: UsageEntry["s
   return { status, actualBasis: "none", warnings: [FAL_RESULT_OMITTED_UNITS_WARNING] };
 }
 
+function nunchuxImageTokens(exchange: ProviderExchange): CostHints | null {
+  if (exchange.provider !== "nunchux" || !NUNCHUX_IMAGES_PATH.test(new URL(exchange.url).pathname)) return null;
+  const usage = object(object(exchange.responseBody).usage);
+  const inputTokens = number(usage.input_tokens);
+  const imageOutputTokens = number(object(usage.output_tokens_details).image_tokens) ?? number(usage.output_tokens);
+  if (inputTokens === null || imageOutputTokens === null) return null;
+  return { inputTokens, imageInputTokens: number(object(usage.input_tokens_details).image_tokens) ?? 0, imageOutputTokens };
+}
+
+function nunchuxImagePatch(exchange: ProviderExchange, status: UsageEntry["status"]): Partial<UsageEntry> | null {
+  const hints = status === "completed" ? nunchuxImageTokens(exchange) : null;
+  if (!hints) return null;
+  const estimate = cost.estimate({ provider: "nunchux", payload: exchange.requestBody ?? {}, costHints: hints });
+  if (estimate.warnings.length > 0) return null;
+  return {
+    status,
+    tokenBased: true,
+    inputTokens: hints.inputTokens!,
+    outputTokens: hints.imageOutputTokens!,
+    costUsd: estimate.usd,
+    basis: "estimated",
+    warnings: [],
+    pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${estimate.rateAsOf ?? PRICING_AS_OF}`,
+    actualBasis: "derived",
+  };
+}
+
 async function observedPatch(engine: Engine, entry: UsageEntry | UsageInput, exchange: ProviderExchange, status: UsageEntry["status"]): Promise<Partial<UsageEntry>> {
+  const nunchuxImage = nunchuxImagePatch(exchange, status);
+  if (nunchuxImage) return nunchuxImage;
   const actual = observedActual(engine, entry, exchange);
   const notBilled = await falNotBilledPatch(exchange, status, entry.model);
   if (notBilled) return notBilled;

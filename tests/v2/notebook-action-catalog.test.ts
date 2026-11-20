@@ -386,6 +386,7 @@ describe("notebook action catalog", () => {
       { field: "replace_audio", max: 1 },
     ]);
     expect(seedance25Action?.controls?.map((control) => control.name)).toEqual([
+      "omni_reference_task_type",
       "return_last_frame",
       "generate_audio",
       "resolution",
@@ -408,7 +409,7 @@ describe("notebook action catalog", () => {
     expect(seedance25Action?.controls?.find((control) =>
       control.name === "resolution")).toMatchObject({
       defaultValue: "1080p",
-      options: ["480p", "720p", "1080p"],
+      options: ["480p", "720p", "1080p", "4k"],
     });
     const wan30PrimeAction = generationCatalog.actions.find((action) =>
       action.model === "kie:wan/3-0-video-prime");

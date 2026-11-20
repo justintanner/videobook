@@ -13,7 +13,7 @@ import { resolveModel } from "../media/descriptor.js";
 import { buildWireRequest, modeSendsNoDuration, type RefParams } from "../media/request.js";
 import { applyPromptDialect } from "../media/prompt-dialects.js";
 import { checkSeedanceEditSource, checkInsertVideoTiming, checkReframeVideoGeometry, checkRefDurations, resolveRefInput, uploadFieldRefs, uploadRefs, type ResolvedRefs } from "../media/refs.js";
-import { seedanceDraftCostHints } from "../media/seedance-draft.js";
+import { kieTaskSourceCostHints } from "../media/kie-task-source.js";
 import { resolveGenerationSource } from "../media/generation-source.js";
 import { assertGoalLineageCurrent, generationReferenceSnapshot, type GoalGenerationLineage, type GoalGenerationOrigin } from "../goal-generation-provenance.js";
 import { adapterFor } from "../media/adapters/index.js";
@@ -61,7 +61,7 @@ async function sourceAudioSeconds(engine: Engine, assetIds: readonly string[]): 
 }
 
 export async function generationSourceCostHints(engine: Engine, refs: ResolvedRefs, job: Pick<GenerateMediaJob, "model" | "mode"> & Partial<Pick<GenerateMediaJob, "options">>): Promise<CostHints> {
-  const draftHints = await seedanceDraftCostHints(engine, job.model, job.options ?? {});
+  const draftHints = await kieTaskSourceCostHints(engine, job.model, job.options ?? {});
   if (Object.keys(draftHints).length > 0) return draftHints;
   const model = resolveModel(job.model);
   if (model.entry.outputLength === "audio") {

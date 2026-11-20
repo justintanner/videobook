@@ -17,7 +17,7 @@ async function readRecord(engine: Engine, artifactId: string, key: string): Prom
   return result.ok ? record(result.value) : {};
 }
 
-async function draftArtifact(engine: Engine, taskId: string): Promise<string | null> {
+async function kieTaskArtifact(engine: Engine, taskId: string): Promise<string | null> {
   for (const artifact of engine.artifacts.list()) {
     if (artifact.kind !== "video") continue;
     const stored = await readRecord(engine, artifact.artifactId, "kie-task-id");
@@ -33,10 +33,10 @@ function inputSeconds(input: Record<string, unknown>, hints: Record<string, unkn
   return Array.isArray(videos) && videos.length > 0 ? undefined : 0;
 }
 
-export async function seedanceDraftCostHints(engine: Engine, model: string, options: Record<string, unknown>): Promise<CostHints> {
+async function seedanceDraftCostHints(engine: Engine, model: string, options: Record<string, unknown>): Promise<CostHints> {
   if (model !== SEEDANCE_DRAFT_COMPLETE_MODEL) return {};
   const taskId = typeof options.draft_task_id === "string" ? options.draft_task_id.trim() : "";
-  const artifactId = taskId ? await draftArtifact(engine, taskId) : null;
+  const artifactId = taskId ? await kieTaskArtifact(engine, taskId) : null;
   if (!artifactId) return {};
   const payload = await readRecord(engine, artifactId, "generation-payload");
   const input = record(payload.input);
@@ -48,4 +48,28 @@ export async function seedanceDraftCostHints(engine: Engine, model: string, opti
     ...(durationSeconds !== undefined ? { durationSeconds } : {}),
     ...(inputDurationSeconds !== undefined ? { inputDurationSeconds } : {}),
   };
+}
+
+const GEMINI_EXTEND_MODEL = "kie:google/gemini-omni-flash-1-2-extend";
+const GEMINI_EXTEND_SOURCE = "google/gemini-omni-flash-1-2";
+const GEMINI_EXTEND_RESOLUTIONS = new Set(["360p", "720p"]);
+
+async function geminiSourceResolution(engine: Engine, artifactId: string): Promise<unknown> {
+  const payload = await readRecord(engine, artifactId, "generation-payload");
+  if (payload.model === GEMINI_EXTEND_SOURCE) return record(payload.input).resolution;
+  if (payload.model !== GEMINI_EXTEND_MODEL.slice("kie:".length)) return undefined;
+  return (await readRecord(engine, artifactId, "generation-cost-hints")).inputResolution;
+}
+
+async function geminiExtendCostHints(engine: Engine, model: string, options: Record<string, unknown>): Promise<CostHints> {
+  if (model !== GEMINI_EXTEND_MODEL) return {};
+  const taskId = typeof options.task_id === "string" ? options.task_id.trim() : "";
+  const artifactId = taskId ? await kieTaskArtifact(engine, taskId) : null;
+  if (!artifactId) return {};
+  const resolution = await geminiSourceResolution(engine, artifactId);
+  return typeof resolution === "string" && GEMINI_EXTEND_RESOLUTIONS.has(resolution) ? { inputResolution: resolution } : {};
+}
+
+export async function kieTaskSourceCostHints(engine: Engine, model: string, options: Record<string, unknown>): Promise<CostHints> {
+  return { ...await seedanceDraftCostHints(engine, model, options), ...await geminiExtendCostHints(engine, model, options) };
 }
