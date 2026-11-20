@@ -7,10 +7,13 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import type { OpenAiResponseInputContent } from "@apicity/openai";
 import { z } from "zod";
 import { getApiKey } from "../api-key.js";
+import { buildSegmentRenderArgs } from "../auto-edit/graph.js";
+import { secondsToFrame, type SegmentPlan } from "../auto-edit/plan.js";
+import { isVariableFrameRate } from "../auto-edit/render.js";
 import { coldOpenCacheKey, coldOpenDestination, coldOpenSource, readColdOpenSuggestion } from "../cold-open.js";
 import { coldOpenRangeError } from "../cold-open-model.js";
 import type { ColdOpenSuggestion } from "../cold-open-model.js";
-import { AUDIO_OPTS, FFMPEG, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { FFMPEG, probeVideo, runFfmpeg, type ProbeResult } from "../ffmpeg.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest, INTELLIGENCE_MODEL } from "../openai-intelligence.js";
@@ -92,6 +95,58 @@ async function prepare(engine: Engine, payload: PreparePayload, signal: AbortSig
   return suggestion;
 }
 
+export function buildColdOpenRenderArgs(input: {
+  sourceArtifactId: string;
+  sourceObjectHash: string;
+  probe: ProbeResult;
+  startSeconds: number;
+  endSeconds: number;
+  inputPath: string;
+  outputPath: string;
+}): string[] {
+  const fps = input.probe.fps;
+  const totalFrames = Math.max(2, secondsToFrame(input.probe.videoDuration, fps));
+  const hookStart = Math.min(totalFrames - 2, Math.max(0, secondsToFrame(input.startSeconds, fps)));
+  const hookEnd = Math.min(totalFrames, Math.max(hookStart + 2, secondsToFrame(input.endSeconds, fps)));
+  const plan: SegmentPlan = {
+    version: 1,
+    source: {
+      artifactId: input.sourceArtifactId,
+      sourceHash: input.sourceObjectHash,
+      fps,
+      frames: totalFrames,
+      width: input.probe.width,
+      height: input.probe.height,
+      hasAudio: input.probe.hasAudio,
+    },
+    segments: [
+      {
+        id: "hook",
+        role: "cold_open",
+        startFrame: hookStart,
+        endFrame: hookEnd,
+        speed: 1,
+        motion: "repeat",
+        audio: "source",
+      },
+      {
+        id: "full",
+        role: "body",
+        startFrame: 0,
+        endFrame: totalFrames,
+        speed: 1,
+        motion: "repeat",
+        audio: "source",
+      },
+    ],
+  };
+  return buildSegmentRenderArgs(plan, {
+    inputPath: input.inputPath,
+    outputPath: input.outputPath,
+    variableFrameRate: isVariableFrameRate(input.probe),
+  });
+}
+
 async function render(engine: Engine, payload: EditPayload, signal: AbortSignal) {
   const source = await coldOpenSource(engine, payload.sourceArtifactId, payload.sourceObjectHash);
   const rangeError = coldOpenRangeError(payload.startSeconds, payload.endSeconds, source.durationSeconds);
@@ -112,24 +167,16 @@ async function render(engine: Engine, payload: EditPayload, signal: AbortSignal)
     const duration = probe.videoDuration;
     const error = coldOpenRangeError(payload.startSeconds, payload.endSeconds, duration);
     if (error) throw new Error(error);
-    const filters = [
-      "[0:v:0]setpts=PTS-STARTPTS,split=2[hooksource][fullsource]",
-      `[hooksource]trim=start=${payload.startSeconds}:end=${payload.endSeconds},setpts=PTS-STARTPTS[hook]`,
-      `[fullsource]trim=end=${duration},setpts=PTS-STARTPTS[full]`,
-    ];
-    if (probe.hasAudio) {
-      filters.push(
-        `[0:a:0]asetpts=PTS-STARTPTS,apad=whole_dur=${duration},atrim=end=${duration},asplit=2[hookaudio][fullaudio]`,
-        `[hookaudio]atrim=start=${payload.startSeconds}:end=${payload.endSeconds},asetpts=PTS-STARTPTS[ha]`,
-        "[fullaudio]asetpts=PTS-STARTPTS[fa]",
-        "[hook][ha][full][fa]concat=n=2:v=1:a=1[v][a]",
-      );
-    } else filters.push("[hook][full]concat=n=2:v=1:a=0[v]");
-    await runFfmpeg([
-      "-y", "-i", inputPath, "-filter_complex", filters.join(";"), "-map", "[v]",
-      ...(probe.hasAudio ? ["-map", "[a]", ...AUDIO_OPTS] : ["-an"]),
-      ...H264_MEDIUM, "-r", String(probe.fps), "-movflags", "+faststart", outputPath,
-    ], { signal });
+    const args = buildColdOpenRenderArgs({
+      sourceArtifactId: payload.sourceArtifactId,
+      sourceObjectHash: payload.sourceObjectHash,
+      probe,
+      startSeconds: payload.startSeconds,
+      endSeconds: payload.endSeconds,
+      inputPath,
+      outputPath,
+    });
+    await runFfmpeg(args, { signal });
     const outputProbe = await probeVideo(outputPath, { signal });
     const expectedDuration = duration + payload.endSeconds - payload.startSeconds;
     if (!outputProbe.videoStream || Math.abs(outputProbe.videoDuration - expectedDuration) > 2 / probe.fps + 0.01) {

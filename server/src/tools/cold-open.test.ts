@@ -10,6 +10,7 @@ import { coldOpenCacheKey, coldOpenSource } from "../cold-open.js";
 import { coldOpenRangeError } from "../cold-open-model.js";
 import { createEngineForTest, closeEngineForTest } from "../engine.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import { buildColdOpenRenderArgs } from "../jobs/cold-open.js";
 import { registerAllJobHandlers } from "../jobs/index.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import { INTELLIGENCE_MODEL } from "../openai-intelligence.js";
@@ -220,4 +221,54 @@ describe("reviewed cold-open copies", () => {
     }
     expect(engine.artifacts.list()).toHaveLength(1);
   });
+
+  it("uses two seeked inputs with no split filter and lands a late hook cleanly on a 30 s clip", async () => {
+    const longPath = join(fixtureRoot, "long30s.mp4");
+    await exec(FFMPEG, [
+      "-v", "error", "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=160x96:rate=24:duration=30",
+      "-f", "lavfi", "-i", "anoisesrc=color=pink:amplitude=0.05:seed=3:duration=30:sample_rate=48000",
+      "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", longPath,
+    ]);
+    const longProbe = await probeVideo(longPath);
+    const args = buildColdOpenRenderArgs({
+      sourceArtifactId: assetId,
+      sourceObjectHash: sourceHash,
+      probe: longProbe,
+      startSeconds: 20,
+      endSeconds: 22,
+      inputPath: longPath,
+      outputPath: join(fixtureRoot, "unused.mp4"),
+    });
+    const filterIdx = args.indexOf("-filter_complex");
+    expect(filterIdx).toBeGreaterThan(0);
+    const inputArgs = args.slice(0, filterIdx);
+    const inputPositions = inputArgs.reduce<number[]>((acc, token, idx) => (token === "-i" ? [...acc, idx] : acc), []);
+    expect(inputPositions).toHaveLength(2);
+    expect(inputArgs[inputPositions[0]! + 1]).toBe(longPath);
+    expect(inputArgs[inputPositions[1]! + 1]).toBe(longPath);
+    expect(inputArgs.slice(0, inputPositions[0]!)).toContain("-ss");
+    const filter = args[filterIdx + 1]!;
+    expect(filter).not.toContain("split");
+    expect(filter).not.toContain("asplit");
+
+    await engine.files.writeFromPath(assetId, "original.mp4", longPath);
+    await registerMediaProbe(engine, assetId, "original.mp4", longProbe);
+    sourceHash = (await coldOpenSource(engine, assetId)).file.objectHash;
+    const output = await done(value(await edit({ start_time: 20, end_time: 22 })).job_id);
+    expect(output.duration).toBeCloseTo(32, 1);
+    const manifest = await engine.files.manifest(output.output_asset_id);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    const outputPath = join(manifest.value.path, "original.mp4");
+    const pickFrame = async (path: string, frameIndex: number) => (await exec(FFMPEG, [
+      "-v", "error", "-i", path, "-vf", `select='eq(n,${frameIndex})'`, "-vframes", "1",
+      "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+    ], { encoding: "buffer", maxBuffer: 2_000_000 })).stdout;
+    for (const [outFrame, srcFrame] of [[0, 480], [24, 504], [48, 0]] as const) {
+      const a = await pickFrame(outputPath, outFrame);
+      const b = await pickFrame(longPath, srcFrame);
+      expect(a.length).toBe(b.length);
+      expect(a.reduce((sum, channel, index) => sum + Math.abs(channel - b[index]!), 0) / a.length).toBeLessThan(6);
+    }
+  }, testBudget(90_000));
 });
