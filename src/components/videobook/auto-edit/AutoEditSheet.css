@@ -2,7 +2,7 @@
    graphics editor: preview at full height on the left, the plan on the right. ---- */
 
 .command-composer[data-resizable-review='true']:has(.confirm-sheet-auto-edit) {
-  height: var(--composer-review-height, min(940px, 88dvh));
+  height: var(--composer-review-height, min(880px, 84dvh));
 }
 
 .command-composer:has(.confirm-sheet-auto-edit) > .command-composer-dock-bar {
@@ -10,13 +10,14 @@
 }
 
 .command-composer[data-resizable-review='true'] .command-composer-dock-body > .confirm-sheet.confirm-sheet-auto-edit {
-  flex-basis: var(--confirm-review-height, 86%);
+  flex-basis: var(--confirm-review-height, 85%);
 }
 
 .confirm-sheet-auto-edit > .confirm-sheet-body {
   grid-template-rows: minmax(0, 1fr);
   padding: 0;
   overflow: hidden;
+  container-type: size;
 }
 
 .auto-edit-summary {
@@ -29,7 +30,7 @@
 .auto-edit-body {
   --auto-edit-muted: #7fa992;
   --auto-edit-bright: #d5f8e4;
-  --auto-edit-preview-width: clamp(220px, 27%, 400px);
+  --auto-edit-preview-width: clamp(200px, calc((100cqh - 170px) * var(--auto-edit-aspect, 0.5625)), 46%);
   display: grid;
   grid-template-columns: var(--auto-edit-preview-width) minmax(0, 1fr);
   gap: 16px;
@@ -38,10 +39,6 @@
   min-height: 0;
   min-width: 0;
   padding: 12px 16px;
-}
-
-.auto-edit-body[data-orientation='landscape'] {
-  --auto-edit-preview-width: minmax(280px, 38%);
 }
 
 .auto-edit-body-empty {
@@ -211,10 +208,10 @@
 }
 
 .auto-edit-transport {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 6px 8px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -230,7 +227,6 @@
 
 .auto-edit-clock {
   display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
   line-height: 1.25;
@@ -238,8 +234,11 @@
 }
 
 .auto-edit-clock strong {
+  overflow: hidden;
   color: var(--auto-edit-bright);
-  font-size: 13px;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .auto-edit-clock span {
@@ -251,7 +250,7 @@
 }
 
 .auto-edit-transport input[type='range'] {
-  flex: 1 1 100%;
+  grid-column: 1 / -1;
   min-width: 0;
   margin: 0;
   accent-color: var(--green);
@@ -455,6 +454,15 @@
   border-color: #f3fff8;
 }
 
+.auto-edit-segment-cut {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 0;
+  border-left: 2px dashed rgba(240, 126, 126, 0.85);
+  pointer-events: none;
+}
+
 .auto-edit-segment-name,
 .auto-edit-segment-length {
   max-width: 100%;
@@ -540,6 +548,8 @@
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
+  cursor: ew-resize;
+  touch-action: none;
   transform: translateX(-50%);
 }
 
@@ -581,6 +591,7 @@
   background: #08170f;
   box-shadow: inset 0 0 0 1px rgba(101, 190, 145, 0.3);
   cursor: pointer;
+  touch-action: none;
 }
 
 .auto-edit-filmstrip {
@@ -715,8 +726,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
-  padding: 4px 0;
+  min-height: 30px;
+  padding: 2px 0;
   border-top: 1px solid rgba(101, 190, 145, 0.12);
   cursor: pointer;
 }
@@ -753,20 +764,27 @@
 .auto-edit-beat-text {
   display: flex;
   flex: 1 1 auto;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 10px;
   min-width: 0;
 }
 
 .auto-edit-beat-name {
+  flex: 0 0 auto;
+  min-width: 9ch;
   color: var(--auto-edit-bright);
   font-size: 12px;
   font-weight: 700;
 }
 
 .auto-edit-beat-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
   color: var(--auto-edit-muted);
   font-size: 11px;
-  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .auto-edit-beat-amount {
@@ -816,11 +834,35 @@
 .auto-edit-inspector-swatch[data-anchor^='hook'] { background: #5fbfcf; }
 .auto-edit-inspector-swatch[data-anchor='moment.peak'] { background: #a48cff; }
 
-.auto-edit-inspector-actions {
+.auto-edit-anchor-controls,
+.auto-edit-anchor-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+.auto-edit-anchor-row {
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid rgba(101, 190, 145, 0.12);
+}
+
+.auto-edit-body .auto-edit-anchor-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 0;
+  border-color: transparent;
+  color: var(--auto-edit-bright);
+  background: transparent;
+  font-weight: 700;
+}
+
+.auto-edit-cut-name {
+  color: #f4b4b4;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .auto-edit-body .auto-edit-to-playhead {
@@ -883,6 +925,10 @@
   .confirm-sheet-auto-edit > .confirm-sheet-body {
     grid-template-rows: auto;
     overflow: auto;
+  }
+
+  .confirm-sheet-auto-edit > .confirm-sheet-body {
+    container-type: normal;
   }
 
   .auto-edit-body {

@@ -93,13 +93,103 @@ export function autoEditAnchorsForSegment(
   })
 }
 
-export function autoEditSegmentsForAnchor(
-  ranges: readonly AutoEditSegmentRange[],
+export function autoEditSegmentLengthText(range: AutoEditSegmentRange): string {
+  const speed = range.segment.speed
+  const suffix = speed === 1 ? '' : Math.abs(speed - 0.5) < 1e-6 ? ' · ½×' : ` · ${speed}×`
+  return `${range.outputDurationSeconds.toFixed(2)}s${suffix}`
+}
+
+function autoEditSegmentTone(range: AutoEditSegmentRange): string {
+  if (range.label === 'Punch-in') return 'punch'
+  if (range.segment.role === 'cold_open') return 'cold'
+  if (range.segment.role === 'push_in') return 'push'
+  return range.segment.role
+}
+
+interface AutoEditTimedSpan {
+  outputFrames: number
+  outputStartSeconds: number
+  outputEndSeconds: number
+  outputDurationSeconds: number
+}
+
+/* One block on the edit lane. Body pieces that a cut separates stay one block,
+   "Body · 2 cuts", and the body after the moment's beats reads "Ending". */
+export interface AutoEditLaneItem extends AutoEditTimedSpan {
+  index: number
+  key: string
+  label: string
+  tone: string
+  lengthText: string
+  ranges: AutoEditSegmentRange[]
+  sourceStartSeconds: number
+  sourceEndSeconds: number
+}
+
+function laneItemFrom(ranges: AutoEditSegmentRange[], label: string): AutoEditLaneItem {
+  const first = ranges[0]!
+  const last = ranges[ranges.length - 1]!
+  const cuts = ranges.length - 1
+  const outputDurationSeconds = last.outputEndSeconds - first.outputStartSeconds
+  const lengthText = cuts > 0
+    ? `${outputDurationSeconds.toFixed(2)}s · ${cuts} ${cuts === 1 ? 'cut' : 'cuts'}`
+    : autoEditSegmentLengthText(first)
+  return {
+    index: first.index,
+    key: first.segment.id,
+    label,
+    tone: autoEditSegmentTone(first),
+    lengthText,
+    ranges,
+    outputFrames: ranges.reduce((sum, range) => sum + range.outputFrames, 0),
+    outputStartSeconds: first.outputStartSeconds,
+    outputEndSeconds: last.outputEndSeconds,
+    outputDurationSeconds,
+    sourceStartSeconds: Math.min(...ranges.map((range) => range.sourceStartSeconds)),
+    sourceEndSeconds: Math.max(...ranges.map((range) => range.sourceEndSeconds)),
+  }
+}
+
+export function buildAutoEditLaneItems(ranges: readonly AutoEditSegmentRange[]): AutoEditLaneItem[] {
+  const groups: Array<{ ranges: AutoEditSegmentRange[]; label: string; body: boolean }> = []
+  let afterBeats = false
+  for (const range of ranges) {
+    const body = range.segment.role === 'body'
+    if (!body && range.segment.role !== 'cold_open') afterBeats = true
+    const last = groups[groups.length - 1]
+    if (body && last?.body) {
+      last.ranges.push(range)
+      continue
+    }
+    groups.push({ ranges: [range], body, label: body ? (afterBeats ? 'Ending' : 'Body') : range.label })
+  }
+  return groups.map((group) => laneItemFrom(group.ranges, group.label))
+}
+
+export function autoEditLaneItemAt(items: readonly AutoEditLaneItem[], rangeIndex: number): AutoEditLaneItem | null {
+  return items.find((item) => item.ranges.some((range) => range.index === rangeIndex)) ?? null
+}
+
+export function autoEditAnchorsForItem(item: AutoEditLaneItem, anchors: AutoEditAnchors, fps: number): AutoEditAnchorKey[] {
+  const keys = new Set(item.ranges.flatMap((range) => autoEditAnchorsForSegment(range.segment, anchors, fps)))
+  return [...AUTO_EDIT_HOOK_ANCHORS, ...AUTO_EDIT_MOMENT_ANCHORS].filter((key) => keys.has(key))
+}
+
+export function autoEditItemsForAnchor(
+  items: readonly AutoEditLaneItem[],
   anchors: AutoEditAnchors,
   key: AutoEditAnchorKey,
   fps: number,
-): AutoEditSegmentRange[] {
-  return ranges.filter((range) => autoEditAnchorsForSegment(range.segment, anchors, fps).includes(key))
+): AutoEditLaneItem[] {
+  return items.filter((item) => autoEditAnchorsForItem(item, anchors, fps).includes(key))
+}
+
+export function autoEditCutsInItem(item: AutoEditLaneItem, anchors: AutoEditAnchors): number[] {
+  if (item.ranges.length < 2) return []
+  const tolerance = 1e-3
+  return anchors.cuts.flatMap((cut, index) => (
+    cut.start >= item.sourceStartSeconds - tolerance && cut.end <= item.sourceEndSeconds + tolerance ? [index] : []
+  ))
 }
 
 export interface AutoEditTimelineBlock {
@@ -108,15 +198,9 @@ export interface AutoEditTimelineBlock {
   widthPercent: number
 }
 
-export function autoEditSegmentLengthText(range: AutoEditSegmentRange): string {
-  const speed = range.segment.speed
-  const suffix = speed === 1 ? '' : Math.abs(speed - 0.5) < 1e-6 ? ' · ½×' : ` · ${speed}×`
-  return `${range.outputDurationSeconds.toFixed(2)}s${suffix}`
-}
-
-function minimumShare(range: AutoEditSegmentRange, laneWidthPx: number, count: number): number {
+function minimumShare(item: AutoEditLaneItem, laneWidthPx: number, count: number): number {
   if (laneWidthPx <= 0) return Math.min(MIN_BLOCK_FRACTION, MAX_MIN_BLOCK_SHARE / count)
-  const characters = Math.max(range.label.length, autoEditSegmentLengthText(range).length)
+  const characters = Math.max(item.label.length, item.lengthText.length)
   return (characters * LABEL_CHARACTER_PX + LABEL_PADDING_PX) / laneWidthPx
 }
 
@@ -144,45 +228,38 @@ function fitShares(weights: readonly number[], minimums: readonly number[]): num
 /* Blocks in edit order, each wide enough for its label at the lane's width and
    the rest of the lane shared by length, so a 0.4 s replay still reads. */
 export function buildAutoEditTimelineLayout(
-  ranges: readonly AutoEditSegmentRange[],
+  items: readonly AutoEditLaneItem[],
   laneWidthPx = 0,
 ): AutoEditTimelineBlock[] {
-  const totalFrames = ranges.reduce((sum, range) => sum + range.outputFrames, 0)
-  if (ranges.length === 0 || totalFrames <= 0) return []
+  const totalFrames = items.reduce((sum, item) => sum + item.outputFrames, 0)
+  if (items.length === 0 || totalFrames <= 0) return []
   const shares = fitShares(
-    ranges.map((range) => range.outputFrames / totalFrames),
-    ranges.map((range) => minimumShare(range, laneWidthPx, ranges.length)),
+    items.map((item) => item.outputFrames / totalFrames),
+    items.map((item) => minimumShare(item, laneWidthPx, items.length)),
   )
   let left = 0
-  return ranges.map((range, index) => {
+  return items.map((item, index) => {
     const widthPercent = shares[index]! * 100
-    const block = { index: range.index, leftPercent: left, widthPercent }
+    const block = { index: item.index, leftPercent: left, widthPercent }
     left += widthPercent
     return block
   })
 }
 
 export function autoEditEditPercentAt(
-  ranges: readonly AutoEditSegmentRange[],
+  spans: readonly AutoEditTimedSpan[],
   blocks: readonly AutoEditTimelineBlock[],
   outputSeconds: number,
 ): number {
-  if (ranges.length === 0 || blocks.length === 0) return 0
-  const index = ranges.findIndex((range) => outputSeconds < range.outputEndSeconds)
-  const rangeIndex = index < 0 ? ranges.length - 1 : index
-  const range = ranges[rangeIndex]!
-  const block = blocks[rangeIndex]!
-  const progress = range.outputDurationSeconds > 0
-    ? Math.min(1, Math.max(0, (outputSeconds - range.outputStartSeconds) / range.outputDurationSeconds))
+  if (spans.length === 0 || blocks.length === 0) return 0
+  const found = spans.findIndex((span) => outputSeconds < span.outputEndSeconds)
+  const position = found < 0 ? spans.length - 1 : found
+  const span = spans[position]!
+  const block = blocks[position]!
+  const progress = span.outputDurationSeconds > 0
+    ? Math.min(1, Math.max(0, (outputSeconds - span.outputStartSeconds) / span.outputDurationSeconds))
     : 0
   return block.leftPercent + progress * block.widthPercent
-}
-
-export function autoEditSegmentTone(range: AutoEditSegmentRange): string {
-  if (range.label === 'Punch-in') return 'punch'
-  if (range.segment.role === 'cold_open') return 'cold'
-  if (range.segment.role === 'push_in') return 'push'
-  return range.segment.role
 }
 
 export function autoEditSourcePercent(secondsValue: number, durationSeconds: number): number {
@@ -192,13 +269,13 @@ export function autoEditSourcePercent(secondsValue: number, durationSeconds: num
 
 export function autoEditConnectorClip(
   block: AutoEditTimelineBlock,
-  range: AutoEditSegmentRange,
+  item: Pick<AutoEditLaneItem, 'sourceStartSeconds' | 'sourceEndSeconds'>,
   durationSeconds: number,
 ): string {
   const topLeft = block.leftPercent
   const topRight = block.leftPercent + block.widthPercent
-  const bottomLeft = autoEditSourcePercent(range.sourceStartSeconds, durationSeconds)
-  const bottomRight = autoEditSourcePercent(range.sourceEndSeconds, durationSeconds)
+  const bottomLeft = autoEditSourcePercent(item.sourceStartSeconds, durationSeconds)
+  const bottomRight = autoEditSourcePercent(item.sourceEndSeconds, durationSeconds)
   return `polygon(${topLeft.toFixed(3)}% 0, ${topRight.toFixed(3)}% 0, ${bottomRight.toFixed(3)}% 100%, ${bottomLeft.toFixed(3)}% 100%)`
 }
 

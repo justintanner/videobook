@@ -5,7 +5,7 @@ import type { SegmentSource } from '../../server/src/auto-edit/plan'
 import { buildAutoEditPlan, DEFAULT_AUTO_EDIT_SECTIONS, type AutoEditAnchors } from '../../server/src/auto-edit/style'
 import { AutoEditBody, AutoEditSheet } from '@/components/videobook/auto-edit/AutoEditSheet'
 import { buildAutoEditSegmentRanges } from '@/videobook/auto-edit-preview'
-import { buildAutoEditTimelineLayout } from '@/videobook/auto-edit-review'
+import { buildAutoEditLaneItems, buildAutoEditTimelineLayout } from '@/videobook/auto-edit-review'
 import type { AutoEditEditor, AutoEditState } from '@/videobook/useAutoEdit'
 
 const SOURCE: SegmentSource = {
@@ -89,11 +89,11 @@ describe('AutoEditSheet server render', () => {
   it('renders the timeline with readable segments, markers, beats, and the key-missing reason', () => {
     const editor = makeEditor({ analysisAvailable: false })
     const html = renderToStaticMarkup(createElement(AutoEditBody, { editor }))
-    const ranges = buildAutoEditSegmentRanges(editor.state.plan!)
-    const blocks = buildAutoEditTimelineLayout(ranges)
+    const items = buildAutoEditLaneItems(buildAutoEditSegmentRanges(editor.state.plan!))
+    const blocks = buildAutoEditTimelineLayout(items)
 
-    expect(segmentNames(html)).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Body'])
-    expect(blocks).toHaveLength(ranges.length)
+    expect(segmentNames(html)).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Ending'])
+    expect(blocks).toHaveLength(items.length)
     for (const block of blocks) {
       expect(html).toContain(`left:${block.leftPercent.toFixed(3)}%;width:${block.widthPercent.toFixed(3)}%`)
     }
@@ -118,6 +118,7 @@ describe('AutoEditSheet server render', () => {
   it('omits switched-off blocks and shows normalizeAnchors changes as non-blocking notices', () => {
     const notice = 'Trimmed the cold-open hook to end before the moment peak.'
     const editor = makeEditor({
+      anchors: { ...FIXED_ANCHORS, cuts: [{ start: 2, end: 2.5 }] },
       sections: { ...DEFAULT_AUTO_EDIT_SECTIONS, coldOpen: false, crash: false },
       changes: [notice],
       analysisPhase: { step: 'ready', summary: 'Person leaps across sofa.', confidence: 'high' },
@@ -128,8 +129,14 @@ describe('AutoEditSheet server render', () => {
       onClose: () => undefined,
     }))
 
-    expect(segmentNames(html)).toEqual(['Body', 'Replay', 'Punch-in', 'Push-in', 'Body'])
+    expect(segmentNames(html)).toEqual(['Body', 'Replay', 'Punch-in', 'Push-in', 'Ending'])
     expect(html).not.toContain('aria-label="Hook start')
+    expect(html).toMatch(/<span class="auto-edit-segment-length">[\d.]+s · 1 cut<\/span>/)
+    expect(html).toContain('class="auto-edit-segment-cut"')
+    expect(html).toContain('aria-label="Body segment"')
+    expect(html).toContain('Cut 2.00–2.50 s')
+    expect(html).toContain('Keep this part')
+    expect(html).toContain('aria-label="Moment end"')
 
     expect(html).toContain(`role="status"`)
     expect(html).toContain(notice)

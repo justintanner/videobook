@@ -14,12 +14,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
   in, pushed in and once more at half speed under a colour-cycling crash look
   with the sound pitched down. The sheet plays the planned edit on the source
   before anything is rendered, beside a timeline that draws each segment of
-  the edit above the part of the clip it comes from. Pick the hook and the
-  moment's start, peak and end on the timeline and move them a frame at a
+  the edit above the part of the clip it comes from. Drag the hook and the
+  moment's start, peak and end along the timeline or move them a frame at a
   time (the arrow keys work too), click the paused picture to say where the
   subject is, or press **Find the moment**, the one paid step, which asks the
-  OpenAI model after showing its estimate. Cold open, Replays, Push-in, Crash
-  and Sounds each switch off, and each says how much it adds. **Render** makes
+  OpenAI model after showing its estimate. Stretches the analysis cuts stay
+  inside one Body block, each listed so it can be put back. Cold open,
+  Replays, Push-in, Crash and Sounds each switch off, and each says how much
+  it adds. **Render** makes
   the edit locally with one FFmpeg encode into a new cell under the source,
   and rendering the same video again adds a version to that cell. Over MCP
   this is the `auto_edit` tool (`get`, `analyze`, `render`), which also

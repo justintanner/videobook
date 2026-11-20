@@ -4,15 +4,19 @@ import { buildAutoEditPlan, DEFAULT_AUTO_EDIT_SECTIONS, type AutoEditAnchors } f
 import { autoEditPlanDurationSeconds, buildAutoEditSegmentRanges } from './auto-edit-preview'
 import {
   autoEditAnchorRule,
+  autoEditAnchorsForItem,
   autoEditAnchorsForSegment,
   autoEditBeats,
   autoEditConnectorClip,
+  autoEditCutsInItem,
   autoEditEditPercentAt,
+  autoEditItemsForAnchor,
+  autoEditLaneItemAt,
   autoEditSegmentFacts,
   autoEditSegmentLengthText,
-  autoEditSegmentsForAnchor,
   autoEditTicks,
   autoEditWithAnchor,
+  buildAutoEditLaneItems,
   buildAutoEditTimelineLayout,
 } from './auto-edit-review'
 
@@ -41,67 +45,92 @@ const ANCHORS: AutoEditAnchors = {
 describe('auto-edit review timeline', () => {
   const built = buildAutoEditPlan(SOURCE, ANCHORS, DEFAULT_AUTO_EDIT_SECTIONS)
   const ranges = buildAutoEditSegmentRanges(built.plan)
-  const blocks = buildAutoEditTimelineLayout(ranges)
+  const items = buildAutoEditLaneItems(ranges)
+  const blocks = buildAutoEditTimelineLayout(items)
   const total = autoEditPlanDurationSeconds(built.plan)
 
+  it('names the blocks, calling the body after the beats the ending', () => {
+    expect(items.map((item) => item.label)).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Ending'])
+    expect(items.map((item) => item.index)).toEqual(ranges.map((range) => range.index))
+    expect(autoEditLaneItemAt(items, 5)?.label).toBe('Crash')
+  })
+
   it('gives every segment room for its label and keeps the blocks end to end', () => {
-    expect(blocks).toHaveLength(ranges.length)
+    expect(blocks).toHaveLength(items.length)
     expect(blocks.reduce((sum, block) => sum + block.widthPercent, 0)).toBeCloseTo(100, 6)
     for (const [index, block] of blocks.entries()) {
       expect(block.widthPercent).toBeGreaterThan(7)
       if (index > 0) expect(block.leftPercent).toBeCloseTo(blocks[index - 1]!.leftPercent + blocks[index - 1]!.widthPercent, 6)
     }
-    const replay = ranges.findIndex((range) => range.label === 'Replay')
+    const replay = items.findIndex((item) => item.label === 'Replay')
     expect(blocks[replay]!.widthPercent).toBeGreaterThan(ranges[replay]!.widthPercent)
   })
 
   it('fits every label at the measured lane width and shares the rest by length', () => {
     const laneWidth = 600
-    const fitted = buildAutoEditTimelineLayout(ranges, laneWidth)
+    const fitted = buildAutoEditTimelineLayout(items, laneWidth)
     expect(fitted.reduce((sum, block) => sum + block.widthPercent, 0)).toBeCloseTo(100, 6)
     for (const [index, block] of fitted.entries()) {
-      const range = ranges[index]!
-      const characters = Math.max(range.label.length, autoEditSegmentLengthText(range).length)
+      const item = items[index]!
+      const characters = Math.max(item.label.length, item.lengthText.length)
       expect((block.widthPercent / 100) * laneWidth).toBeGreaterThanOrEqual(characters * 6.8 + 18 - 1e-6)
     }
-    const bodies = ranges.flatMap((range, index) => (range.label === 'Body' ? [index] : []))
-    expect(fitted[bodies[0]!]!.widthPercent).toBeGreaterThan(fitted[bodies[1]!]!.widthPercent)
-    const tooNarrow = buildAutoEditTimelineLayout(ranges, 120)
+    const body = items.findIndex((item) => item.label === 'Body')
+    const ending = items.findIndex((item) => item.label === 'Ending')
+    expect(fitted[body]!.widthPercent).toBeGreaterThan(fitted[ending]!.widthPercent)
+    const tooNarrow = buildAutoEditTimelineLayout(items, 120)
     expect(tooNarrow.reduce((sum, block) => sum + block.widthPercent, 0)).toBeCloseTo(100, 6)
     expect(autoEditSegmentLengthText(ranges.find((range) => range.label === 'Crash')!)).toBe('1.40s · ½×')
   })
 
   it('maps edit time onto the stretched blocks', () => {
-    expect(autoEditEditPercentAt(ranges, blocks, 0)).toBe(0)
-    expect(autoEditEditPercentAt(ranges, blocks, total)).toBeCloseTo(100, 6)
-    for (const [index, range] of ranges.entries()) {
-      expect(autoEditEditPercentAt(ranges, blocks, range.outputStartSeconds)).toBeCloseTo(blocks[index]!.leftPercent, 6)
+    expect(autoEditEditPercentAt(items, blocks, 0)).toBe(0)
+    expect(autoEditEditPercentAt(items, blocks, total)).toBeCloseTo(100, 6)
+    for (const [index, item] of items.entries()) {
+      expect(autoEditEditPercentAt(items, blocks, item.outputStartSeconds)).toBeCloseTo(blocks[index]!.leftPercent, 6)
     }
-    const crash = ranges.findIndex((range) => range.label === 'Crash')
-    const middle = (ranges[crash]!.outputStartSeconds + ranges[crash]!.outputEndSeconds) / 2
-    expect(autoEditEditPercentAt(ranges, blocks, middle)).toBeCloseTo(blocks[crash]!.leftPercent + blocks[crash]!.widthPercent / 2, 6)
+    const crash = items.findIndex((item) => item.label === 'Crash')
+    const middle = (items[crash]!.outputStartSeconds + items[crash]!.outputEndSeconds) / 2
+    expect(autoEditEditPercentAt(items, blocks, middle)).toBeCloseTo(blocks[crash]!.leftPercent + blocks[crash]!.widthPercent / 2, 6)
   })
 
   it('joins a block to its source range', () => {
-    const crash = ranges.findIndex((range) => range.label === 'Crash')
-    const clip = autoEditConnectorClip(blocks[crash]!, ranges[crash]!, 10)
+    const crash = items.findIndex((item) => item.label === 'Crash')
+    const clip = autoEditConnectorClip(blocks[crash]!, items[crash]!, 10)
     expect(clip).toBe(
       `polygon(${blocks[crash]!.leftPercent.toFixed(3)}% 0, ${(blocks[crash]!.leftPercent + blocks[crash]!.widthPercent).toFixed(3)}% 0, 72.000% 100%, 65.000% 100%)`,
     )
   })
 
   it('links each marker to the segments it moves', () => {
-    const labels = (key: Parameters<typeof autoEditSegmentsForAnchor>[2]) =>
-      autoEditSegmentsForAnchor(ranges, built.anchors, key, SOURCE.fps).map((range) => range.label)
+    const labels = (key: Parameters<typeof autoEditItemsForAnchor>[2]) =>
+      autoEditItemsForAnchor(items, built.anchors, key, SOURCE.fps).map((item) => item.label)
     expect(labels('hook.start')).toEqual(['Cold open'])
     expect(labels('moment.start')).toEqual(['Replay', 'Punch-in', 'Push-in'])
     expect(labels('moment.peak')).toEqual(['Replay', 'Punch-in', 'Crash'])
-    expect(labels('moment.end')).toEqual(['Body', 'Push-in', 'Crash', 'Body'])
+    expect(labels('moment.end')).toEqual(['Body', 'Push-in', 'Crash', 'Ending'])
     const crash = ranges.find((range) => range.label === 'Crash')!
     expect(autoEditAnchorsForSegment(crash.segment, built.anchors, SOURCE.fps)).toEqual(['moment.peak', 'moment.end'])
     const noHook = { ...built.anchors, hook: null }
     const firstBody = ranges.find((range) => range.label === 'Body')!
     expect(autoEditAnchorsForSegment(firstBody.segment, noHook, SOURCE.fps)).toEqual(['moment.end'])
+  })
+
+  it('keeps body pieces that cuts separate as one block and lists its cuts', () => {
+    const withCuts = buildAutoEditPlan(SOURCE, { ...ANCHORS, cuts: [{ start: 2, end: 2.5 }, { start: 3, end: 3.4 }] }, DEFAULT_AUTO_EDIT_SECTIONS)
+    const cutItems = buildAutoEditLaneItems(buildAutoEditSegmentRanges(withCuts.plan))
+    expect(cutItems.map((item) => item.label)).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Ending'])
+    const body = cutItems[1]!
+    expect(body.ranges).toHaveLength(3)
+    expect(body.lengthText).toBe(`${body.outputDurationSeconds.toFixed(2)}s · 2 cuts`)
+    expect([body.sourceStartSeconds, body.sourceEndSeconds]).toEqual([0.5, 7.2])
+    expect(autoEditCutsInItem(body, withCuts.anchors)).toEqual([0, 1])
+    expect(autoEditCutsInItem(cutItems[0]!, withCuts.anchors)).toEqual([])
+    expect(autoEditAnchorsForItem(body, withCuts.anchors, SOURCE.fps)).toEqual(['moment.end'])
+
+    const plain = buildAutoEditPlan(SOURCE, withCuts.anchors, { ...DEFAULT_AUTO_EDIT_SECTIONS, replays: false, pushIn: false, crash: false })
+    const plainItems = buildAutoEditLaneItems(buildAutoEditSegmentRanges(plain.plan))
+    expect(plainItems.map((item) => [item.label, item.ranges.length])).toEqual([['Cold open', 1], ['Body', 3]])
   })
 
   it('creates a hook when a hook marker moves on a draft without one', () => {

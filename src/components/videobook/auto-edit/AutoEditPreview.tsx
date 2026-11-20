@@ -401,8 +401,8 @@ export function AutoEditPreview({
         </defs>
       </svg>
       <div className="auto-edit-mode" role="group" aria-label="Preview mode">
-        <button type="button" aria-pressed={mode === 'plan'} onClick={() => onModeChange('plan')}>Edit preview</button>
-        <button type="button" aria-pressed={mode === 'source'} onClick={() => onModeChange('source')}>Source</button>
+        <button type="button" aria-pressed={mode === 'plan'} title="Play the edit" onClick={() => onModeChange('plan')}>Edit</button>
+        <button type="button" aria-pressed={mode === 'source'} title="Play the source clip" onClick={() => onModeChange('source')}>Source</button>
       </div>
       <div className="auto-edit-stage-frame">
         <div
@@ -469,7 +469,7 @@ export function AutoEditPreview({
           onChange={(event) => handleScrub(Number(event.target.value))}
         />
       </div>
-      <p className="auto-edit-preview-note">Click the paused picture to place the subject. Preview approximates looks and slow motion; the render is exact.</p>
+      <p className="auto-edit-preview-note" title="Preview approximates looks and slow motion; the render is exact.">Click the paused picture to set the subject.</p>
       {playbackError && <p className="auto-edit-alert" role="alert">{playbackError}</p>}
     </div>
   )

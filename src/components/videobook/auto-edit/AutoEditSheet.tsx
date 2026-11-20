@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import type { SegmentPlan } from '../../../../server/src/auto-edit/plan'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { secondsToFrame, type SegmentPlan } from '../../../../server/src/auto-edit/plan'
 import { CRASH_REPLAY, type AutoEditAnchors, type AutoEditSections } from '../../../../server/src/auto-edit/style'
 import {
   autoEditNudgeSeconds,
@@ -12,9 +12,11 @@ import {
   autoEditAnchorSeconds,
   autoEditBeats,
   autoEditEditPercentAt,
-  autoEditSegmentsForAnchor,
+  autoEditItemsForAnchor,
+  autoEditLaneItemAt,
   autoEditSourcePercent,
   autoEditWithAnchor,
+  buildAutoEditLaneItems,
   buildAutoEditTimelineLayout,
   type AutoEditAnchorKey,
 } from '@/videobook/auto-edit-review'
@@ -67,8 +69,9 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
   const [seekCommand, setSeekCommand] = useState<AutoEditSeekCommand | null>(null)
 
   const ranges = useMemo(() => buildAutoEditSegmentRanges(plan), [plan])
+  const items = useMemo(() => buildAutoEditLaneItems(ranges), [ranges])
   const laneWidth = useLaneWidth(editLaneRef)
-  const blocks = useMemo(() => buildAutoEditTimelineLayout(ranges, laneWidth), [laneWidth, ranges])
+  const blocks = useMemo(() => buildAutoEditTimelineLayout(items, laneWidth), [items, laneWidth])
   const totalSeconds = autoEditPlanDurationSeconds(plan)
   const fps = source.fps
   const duration = source.duration
@@ -85,12 +88,12 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
     if (edit) {
       edit.hidden = position.outputSeconds === null
       if (position.outputSeconds !== null) {
-        edit.style.left = `${autoEditEditPercentAt(ranges, blocks, position.outputSeconds).toFixed(3)}%`
+        edit.style.left = `${autoEditEditPercentAt(items, blocks, position.outputSeconds).toFixed(3)}%`
       }
     }
     const sourceHead = sourcePlayheadRef.current
     if (sourceHead) sourceHead.style.left = `${autoEditSourcePercent(position.sourceSeconds, duration).toFixed(3)}%`
-  }, [blocks, duration, ranges])
+  }, [blocks, duration, items])
 
   const showSourceAt = (seconds: number) => {
     setMode('source')
@@ -104,11 +107,27 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
     issueSeek({ kind: 'segment', segmentIndex: index, play: true })
   }
 
-  const selectAnchor = (key: AutoEditAnchorKey) => {
+  const markSelectedAnchor = (key: AutoEditAnchorKey) => {
     setSelection({ kind: 'anchor', key })
     const focus = AUTO_EDIT_ANCHOR_INFO[key].focus
     if (focus) editor.setFocusAnchor(focus)
+  }
+
+  const selectAnchor = (key: AutoEditAnchorKey) => {
+    markSelectedAnchor(key)
     showSourceAt(autoEditAnchorSeconds(anchors, key))
+  }
+
+  const dragAnchor = (key: AutoEditAnchorKey, seconds: number) => {
+    const snapped = autoEditSnapSeconds(seconds, fps, duration)
+    if (selection.kind !== 'anchor' || selection.key !== key) markSelectedAnchor(key)
+    if (secondsToFrame(autoEditAnchorSeconds(anchors, key), fps) === secondsToFrame(snapped, fps)) return
+    editor.setAnchors((current) => autoEditWithAnchor(current, key, snapped, duration))
+    showSourceAt(snapped)
+  }
+
+  const removeCut = (cutIndex: number) => {
+    editor.setAnchors((current) => ({ ...current, cuts: current.cuts.filter((_, index) => index !== cutIndex) }))
   }
 
   const nudgeAnchor = (key: AutoEditAnchorKey, deltaFrames: number) => {
@@ -137,17 +156,18 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
     if (selection.kind === 'segment') setSelection({ kind: 'segment', index: 0 })
   }
 
-  const linkedSegmentIndexes = new Set(
+  const linkedItemIndexes = new Set(
     selection.kind === 'anchor'
-      ? autoEditSegmentsForAnchor(ranges, anchors, selection.key, fps).map((range) => range.index)
+      ? autoEditItemsForAnchor(items, anchors, selection.key, fps).map((item) => item.index)
       : [],
   )
-  const connectorIndex = mode === 'plan'
-    ? safeSegmentIndex
+  const activeItemIndex = mode === 'plan'
+    ? autoEditLaneItemAt(items, safeSegmentIndex)?.index ?? null
     : selection.kind === 'segment' ? selection.index : null
+  const bodyStyle = { '--auto-edit-aspect': `${source.width / source.height}` } as CSSProperties
 
   return (
-    <div className="auto-edit-body" data-orientation={source.height > source.width ? 'portrait' : 'landscape'}>
+    <div className="auto-edit-body" style={bodyStyle}>
       <AutoEditPreview
         key={target.artifactId}
         plan={plan}
@@ -176,7 +196,7 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
           onDismissEstimate={editor.dismissAnalysisEstimate}
         />
         <AutoEditTimeline
-          ranges={ranges}
+          items={items}
           blocks={blocks}
           cues={state.sections.sounds ? state.cues : []}
           anchors={anchors}
@@ -186,8 +206,8 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
           mediaUrl={target.mediaUrl}
           portrait={source.height > source.width}
           selection={selection}
-          activeSegmentIndex={connectorIndex}
-          linkedSegmentIndexes={linkedSegmentIndexes}
+          activeItemIndex={activeItemIndex}
+          linkedItemIndexes={linkedItemIndexes}
           disabled={disabled}
           editLaneRef={editLaneRef}
           editPlayheadRef={editPlayheadRef}
@@ -195,6 +215,7 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
           onSelectSegment={selectSegment}
           onSelectAnchor={selectAnchor}
           onNudgeAnchor={nudgeAnchor}
+          onDragAnchor={dragAnchor}
           onSeekSource={showSourceAt}
         />
         <div className="auto-edit-panels">
@@ -207,13 +228,14 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
           <AutoEditInspector
             selection={selection}
             anchors={anchors}
-            ranges={ranges}
+            items={items}
             fps={fps}
             changes={state.changes}
             disabled={disabled}
             onNudgeAnchor={nudgeAnchor}
             onSetToPlayhead={setAnchorToPlayhead}
             onSelectAnchor={selectAnchor}
+            onRemoveCut={removeCut}
           />
         </div>
       </div>

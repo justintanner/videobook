@@ -23,7 +23,7 @@ export function AutoEditBeats({
           const detailId = `${idPrefix}-${beat.key}`
           return (
             <li key={beat.key}>
-              <label className="auto-edit-beat" data-on={on ? 'true' : 'false'}>
+              <label className="auto-edit-beat" data-on={on ? 'true' : 'false'} title={beat.detail}>
                 <input
                   type="checkbox"
                   role="switch"

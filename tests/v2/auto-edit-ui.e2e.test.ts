@@ -122,7 +122,7 @@ describe('auto-edit review sheet in the browser', () => {
               end: { x: 0.6, y: 0.5 },
             },
             keep: { start: 0.3, end: 8.5 },
-            cuts: [],
+            cuts: [{ start: 3.4, end: 3.9, reason: 'Nothing happens.' }],
             summary: 'Stubbed sofa leap highlight.',
             confidence: 'high',
           }))))
@@ -251,21 +251,21 @@ describe('auto-edit review sheet in the browser', () => {
     await expect.poll(async () => {
       const box = await stageBox()
       return box ? Math.max(box.width, box.height) : 0
-    }).toBeGreaterThan(420)
+    }).toBeGreaterThan(300)
 
     const segmentNames = () => sheet().locator('.auto-edit-segment-name').allInnerTexts()
-    await expect.poll(segmentNames).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Body'])
+    await expect.poll(segmentNames).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Ending'])
 
     const editLength = () => sheet().locator('.auto-edit-lane-label strong').first().innerText()
     const fullLength = await editLength()
     const coldSwitch = sheet().getByRole('switch', { name: 'Cold open', exact: true })
     const crashSwitch = sheet().getByRole('switch', { name: 'Crash', exact: true })
     await coldSwitch.uncheck()
-    expect(await segmentNames()).toEqual(['Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Body'])
+    expect(await segmentNames()).toEqual(['Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Ending'])
     expect(await editLength()).not.toBe(fullLength)
     await coldSwitch.check()
     await crashSwitch.uncheck()
-    expect(await segmentNames()).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Body'])
+    expect(await segmentNames()).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Ending'])
     await crashSwitch.check()
 
     const hookStartMarker = marker('hook.start')
@@ -301,6 +301,18 @@ describe('auto-edit review sheet in the browser', () => {
     expect(box).not.toBeNull()
     await page.mouse.click(box!.x + box!.width * 0.25, box!.y + box!.height * 0.75)
     await expect.poll(() => peakGroup.textContent()).toContain('25% across, 75% down')
+
+    const markerSeconds = async (anchor: string) => Number((await marker(anchor).getAttribute('aria-label'))!.match(/([\d.]+)s$/)![1])
+    const endBefore = await markerSeconds('moment.end')
+    const endBox = (await marker('moment.end').boundingBox())!
+    await page.mouse.move(endBox.x + endBox.width / 2, endBox.y + endBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(endBox.x + endBox.width / 2 + 15, endBox.y + endBox.height / 2, { steps: 3 })
+    await page.mouse.move(endBox.x + endBox.width / 2 + 30, endBox.y + endBox.height / 2, { steps: 3 })
+    await page.mouse.up()
+    await expect.poll(() => markerSeconds('moment.end')).toBeGreaterThan(endBefore)
+    expect(await marker('moment.end').getAttribute('aria-pressed')).toBe('true')
+    await expect.poll(() => sheet().getByRole('group', { name: 'Moment end', exact: true }).textContent()).toContain(`${(await markerSeconds('moment.end')).toFixed(2)}s`)
 
     await hookStartMarker.click()
     await hookStartGroup.getByRole('button', { name: 'Move to playhead', exact: true }).click()
@@ -351,7 +363,7 @@ describe('auto-edit review sheet in the browser', () => {
     await crashSwitch.check()
 
     await sheet().getByRole('button', { name: /^Cold open / }).click()
-    expect(await sheet().getByRole('button', { name: 'Edit preview', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await sheet().getByRole('button', { name: 'Edit', exact: true }).getAttribute('aria-pressed')).toBe('true')
     await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.dataset.segmentId)).toBe('cold-open')
     await sheet().getByRole('button', { name: /^Crash / }).click()
     await expect.poll(() => video.evaluate((el: HTMLVideoElement) => ({
@@ -422,6 +434,13 @@ describe('auto-edit review sheet in the browser', () => {
     expect(stubRequests.filter((req) => req.kind === 'analysis')).toHaveLength(analyzeCountBefore + 1)
     const peakLabel = () => marker('moment.peak').getAttribute('aria-label')
     await expect.poll(peakLabel).toBe('Moment peak 5.50s')
+
+    const bodyLength = () => sheet().locator('.auto-edit-segment[data-tone="body"] .auto-edit-segment-length').first().innerText()
+    await expect.poll(bodyLength).toContain('1 cut')
+    await sheet().getByRole('button', { name: /^Body / }).click()
+    const cutRow = sheet().getByRole('group', { name: /^Cut 3\.4\d–3\.9\d s$/ })
+    await cutRow.getByRole('button', { name: 'Keep this part', exact: true }).click()
+    await expect.poll(bodyLength).not.toContain('cut')
 
     await sheet().getByRole('button', { name: /^Cancel/ }).focus()
     await page.keyboard.press('Escape')
