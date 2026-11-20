@@ -6,7 +6,20 @@ import type {
 } from '../../server/src/workspace-action-contract'
 import type { ServerCommand } from '../lib/command-registry'
 
-export type ActionChoice = { value: string; label: string; detail?: string; group?: string; available?: boolean; frontier?: readonly ModelFrontierRanking[] }
+export type ActionChoice = {
+  value: string
+  label: string
+  detail?: string
+  group?: string
+  available?: boolean
+  frontier?: readonly ModelFrontierRanking[]
+  provider?: string
+  providerLabel?: string
+  operations?: readonly string[]
+  family?: { id: string; title: string }
+  variant?: string
+  modes?: readonly { id: string }[]
+}
 
 export function workspaceCropPreset(ratio: string, sourceWidth: number | null, sourceHeight: number | null): Record<string, unknown> {
   const sourceRatio = sourceWidth && sourceHeight ? sourceWidth / sourceHeight : 16 / 9

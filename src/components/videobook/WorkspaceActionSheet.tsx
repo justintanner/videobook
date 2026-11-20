@@ -26,11 +26,13 @@ import {
   type WorkspaceActionReview,
 } from '@/videobook/workspace-action-draft'
 import { WORKSPACE_ACTION_FORM_ID } from '@/videobook/workspace-action-form'
+import { generationModelsSplit } from '@/videobook/generation-frontier'
 import { ConfirmSheet } from './confirm/ConfirmSheet'
 import type { ConfirmSheetEffect } from './confirm/ConfirmSheetHints'
 import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
 import { BuiltinSoundField } from './BuiltinSoundField'
 import { WorkspaceActionField } from './WorkspaceActionField'
+import { WorkspaceGenerationModelField } from './WorkspaceGenerationModelField'
 import { WorkspaceActionResultLinks } from './WorkspaceActionResultLinks'
 import { WorkspaceCropPreview } from './WorkspaceCropPreview'
 import { WorkspaceZoomPreview } from './WorkspaceZoomPreview'
@@ -133,6 +135,11 @@ function WorkspaceActionResultSection({ action, result, values, onOpenAction }: 
   </section>
 }
 
+function variantForTitle(variants: readonly WorkspaceAction[], action: WorkspaceAction, title: string): WorkspaceAction | undefined {
+  return variants.find((variant) => variant.title === title && variant.generation?.provider === action.generation?.provider)
+    ?? variants.find((variant) => variant.title === title)
+}
+
 function WorkspaceActionVariants({ action, variants, values, busy, onOpenAction }: {
   action: WorkspaceAction
   variants: readonly WorkspaceAction[]
@@ -140,11 +147,25 @@ function WorkspaceActionVariants({ action, variants, values, busy, onOpenAction 
   busy: boolean
   onOpenAction: OpenAction
 }) {
-  if (variants.length < 2) return null
-  return <details className="workspace-action-variants"><summary>Advanced provider and model</summary>
-    <label>Provider and model<select aria-label="Provider and model" value={action.id} disabled={busy} onChange={(event) => onOpenAction(event.target.value, values)}>
-      {variants.map((variant) => <option key={variant.id} value={variant.id}>{variant.generation?.provider} · {variant.title}</option>)}
-    </select></label>
+  if (variants.length < 2 || action.inputSchema.properties?.model) return null
+  const modelTitles = [...new Set(variants.map((variant) => variant.title))]
+  const providers = variants.filter((variant) => variant.title === action.title)
+  return <details className="workspace-action-variants"><summary>Model and provider</summary>
+    <div className="workspace-generation-models">
+      <label><span>Model</span>
+        <select aria-label="Model" value={action.title} disabled={busy || modelTitles.length < 2} onChange={(event) => {
+          const next = variantForTitle(variants, action, event.target.value)
+          if (next) onOpenAction(next.id, values)
+        }}>
+          {modelTitles.map((title) => <option key={title} value={title}>{title}</option>)}
+        </select>
+      </label>
+      <label><span>Provider</span>
+        <select aria-label="Provider" value={action.id} disabled={busy || providers.length < 2} onChange={(event) => onOpenAction(event.target.value, values)}>
+          {providers.map((variant) => <option key={variant.id} value={variant.id}>{variant.generation?.provider ?? variant.title}</option>)}
+        </select>
+      </label>
+    </div>
   </details>
 }
 
@@ -195,6 +216,12 @@ function WorkspaceActionBody({ action, variants, context, draft, review, result,
         if (workspaceActionBuiltinSoundField(action, name)) return <BuiltinSoundField key={name} name={name}
           label={schema.title ?? actionFieldLabel(name)} value={values[name]} required={required.has(name)} disabled={busy}
           preview={soundPreview} onChange={(value) => onChange(name, value)} />
+        if (name === 'model' && action.generation && generationModelsSplit(context.choices.model ?? [])) {
+          return <WorkspaceGenerationModelField key={name} media={action.generation.mediaType} values={values}
+            value={typeof values.model === 'string' ? values.model : ''} choices={context.choices.model ?? []}
+            required={required.has(name)} disabled={busy} hint={schema.description}
+            onChange={(value) => onChange(name, value)} />
+        }
         const entityField = entityEditor && name === 'entity'
         return <WorkspaceActionField key={entityField ? `${name}:${entityId}` : name} name={name} schema={entityField ? ENTITY_EDITOR_SCHEMA : schema}
           value={values[name]} choices={choices} required={required.has(name)}

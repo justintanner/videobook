@@ -398,15 +398,24 @@ describe('workspace action launcher with real endpoints', () => {
 
   it('switches the generation model while retaining the draft and reviews cost without generating', async () => {
     const action = catalog.actions.find(entry => entry.id === 'tool.generate_image')!
-    const listed = record(await call('list_generation_models', { media: 'image', operation: 'text_to_image' }))
-    const [first, second] = (listed?.models as Record<string, unknown>[]).filter(model => model.available === true).map(model => String(model.id))
+    const listed = record(await call('list_generation_models', { media: 'image' }))
+    const models = (listed?.models as Record<string, unknown>[]).filter(model => model.available === true)
+    const familyId = (model: Record<string, unknown>) => {
+      const family = record(model.family)
+      return typeof family?.id === 'string' ? family.id : ''
+    }
+    const families = [...new Set(models.map(familyId).filter(Boolean))]
     await openActions(action.command)
     const prompt = page.getByRole('textbox', { name: /^Prompt\b/u })
     await prompt.fill('Keep the same scene and use a watercolor style')
     const model = page.getByRole('combobox', { name: /^Model\b/u })
-    await expect.poll(() => model.locator(`option[value="${second}"]`).count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(1)
-    await model.selectOption(first!)
-    await model.selectOption(second!)
+    const provider = page.getByRole('combobox', { name: /^Provider\b/u })
+    await expect.poll(() => model.locator('option').count(), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(1)
+    await model.selectOption(families[0]!)
+    if (families[1]) await model.selectOption(families[1]!)
+    await expect.poll(() => provider.inputValue(), { timeout: MCP_ROUNDTRIP_MS }).not.toBe('')
+    const providerId = await provider.inputValue()
+    expect(models.some(entry => String(entry.id) === providerId)).toBe(true)
     expect(await prompt.inputValue()).toBe('Keep the same scene and use a watercolor style')
     const before = JSON.stringify(await call('list_jobs'))
     const cost = page.locator('.workspace-action-review strong')

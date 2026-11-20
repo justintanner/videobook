@@ -3,6 +3,13 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { scopedEngine } from '../../server/src/engine.js'
+import { listModels, modelListing } from '../../server/src/media/listing.js'
+import {
+  generationModelIdForChange,
+  generationProviderChoices,
+} from '../../src/videobook/generation-frontier'
+import { loadWorkspaceActionResources } from '../../src/videobook/workspace-action-resources'
+import { WorkspaceGenerationModelField } from '../../src/components/videobook/WorkspaceGenerationModelField'
 import { adaptCommandArgs, parseSlashCommandArgs, type ServerCommand } from '../../src/lib/command-registry'
 import { getCanonicalCommands } from '../../server/src/tools/commands.js'
 import { getAllToolDefs } from '../../server/src/tools/index.js'
@@ -55,10 +62,11 @@ function renderActionSheet(action: WorkspaceAction, overrides: {
   result?: WorkspaceActionResult
   loading?: boolean
   context?: WorkspaceActionContext
+  variants?: readonly WorkspaceAction[]
 } = {}): string {
   return renderToStaticMarkup(createElement(WorkspaceActionSheet, {
     action,
-    variants: workspaceActionVariants(catalog.actions, action),
+    variants: overrides.variants ?? workspaceActionVariants(catalog.actions, action),
     context: overrides.context ?? context,
     draft: overrides.draft === undefined ? seedWorkspaceActionDraft(action, context) : overrides.draft,
     review: overrides.review ?? null,
@@ -293,6 +301,119 @@ describe('workspace action sheet', () => {
       .toEqual({ blocking: 'This action is no longer available.', notice: null })
     expect(workspaceActionValidation({ action: rename, context, loading: false, error: null, ready: true }))
       .toEqual({ blocking: null, notice: null })
+  })
+
+  it('splits image and video generation into model and provider selects', async () => {
+    const image = catalogAction('tool.generate_image')
+    const loaded = await loadWorkspaceActionResources(image, {}, async (name, args) => {
+      if (name !== 'list_generation_models') return {}
+      return { models: listModels({ media: args.media === 'video' ? 'video' : 'image' }).map(modelListing) }
+    })
+    const choices = (loaded.choices.model ?? []).map(choice => ({ ...choice, available: true }))
+    const sunburst = 'image:gpt-image-2-6-sunburst'
+    const wavespeedText = 'wavespeed:openai/gpt-image-2.6-sunburst/text-to-image'
+    const wavespeedEdit = 'wavespeed:openai/gpt-image-2.6-sunburst/edit'
+    const nano = 'image:nano-banana-2-1'
+    const withModels = { ...context, choices: { ...context.choices, model: choices } }
+    const selectMarkup = (html: string, label: string) => {
+      const start = html.indexOf(`aria-label="${label}"`)
+      return html.slice(start, html.indexOf('</select>', start))
+    }
+    expect(generationProviderChoices(choices, sunburst, 'image', {}).find(choice => choice.provider === 'wavespeed')?.value).toBe(wavespeedText)
+    expect(generationProviderChoices(choices, sunburst, 'image', { refs: { image: ['image-1'] } }).find(choice => choice.provider === 'wavespeed')?.value).toBe(wavespeedEdit)
+    expect(generationModelIdForChange(choices, 'image', { model: wavespeedText }, { familyId: nano }))
+      .toBe(generationProviderChoices(choices, nano, 'image', {}).find(choice => choice.provider === 'wavespeed')?.value)
+    expect(generationModelIdForChange(choices, 'image', { model: wavespeedEdit, refs: { image: ['image-1'] } }, { familyId: nano }))
+      .toBe(generationProviderChoices(choices, nano, 'image', { refs: { image: ['image-1'] } }).find(choice => choice.provider === 'wavespeed')?.value)
+
+    const draft = { ...seedWorkspaceActionDraft(image, withModels), model: wavespeedText }
+    const html = renderActionSheet(image, { draft, context: withModels })
+    const model = selectMarkup(html, 'Model')
+    const provider = selectMarkup(html, 'Provider')
+    expect(model).toMatch(/value="image:gpt-image-2-6-sunburst"[^>]*>#\d+ · GPT Image 2.6 Sunburst · Elo \d+/)
+    expect(model).not.toMatch(/WaveSpeed|MachGen|Nunchux|>Fal</)
+    expect(provider).toContain(`value="${wavespeedText}"`)
+    expect(provider).toContain('>WaveSpeed')
+    expect(provider).not.toContain('GPT Image 2.6 Sunburst')
+    expect(html).toContain('>Choose model</option>')
+    expect(html).not.toContain('Provider and model')
+    expect(html).not.toContain('Advanced provider and model')
+    const empty = renderActionSheet(image, { draft: seedWorkspaceActionDraft(image, withModels), context: withModels })
+    expect(empty).toContain('>Choose model</option>')
+    expect(empty).toContain('>Choose provider</option>')
+
+    const edit = renderActionSheet(image, { draft: { ...draft, refs: { image: ['image-1'] } }, context: withModels })
+    expect(selectMarkup(edit, 'Provider')).toContain(`value="${wavespeedEdit}"`)
+
+    const unavailable = choices.map(choice => choice.value === wavespeedText ? { ...choice, available: false } : choice)
+    const unavailableHtml = renderActionSheet(image, {
+      draft,
+      context: { ...context, choices: { ...context.choices, model: unavailable } },
+    })
+    expect(selectMarkup(unavailableHtml, 'Provider')).toMatch(new RegExp(`value="${wavespeedText}" disabled=""[^>]*>WaveSpeed · .+ · not configured`))
+
+    const single = choices.map(choice => choice.family?.id).find((familyId, _index, familyIds) => {
+      if (!familyId || familyIds.indexOf(familyId) !== _index) return false
+      return generationProviderChoices(choices, familyId, 'image', {}).length === 1
+    })
+    expect(single).toBeTruthy()
+    const only = generationProviderChoices(choices, single!, 'image', {})[0]!
+    const singleHtml = renderActionSheet(image, {
+      draft: { ...draft, model: only.value },
+      context: withModels,
+    })
+    const singleProvider = selectMarkup(singleHtml, 'Provider')
+    expect(singleProvider.startsWith('aria-label="Provider" disabled=""')).toBe(true)
+    expect(singleProvider).toContain(`value="${only.value}" selected=""`)
+    expect(singleProvider).not.toContain(choices.find(choice => choice.value === only.value)?.family?.title ?? 'missing-family')
+
+    const optional = renderToStaticMarkup(createElement(WorkspaceGenerationModelField, {
+      media: 'image', values: {}, value: '', choices, required: false, onChange: () => undefined,
+    }))
+    expect(optional).toContain('>Use default</option>')
+    expect(optional).not.toContain('>Choose model</option>')
+
+    const video = catalogAction('tool.generate_video')
+    const videoLoaded = await loadWorkspaceActionResources(video, {}, async (name) => (
+      name === 'list_generation_models' ? { models: listModels({ media: 'video' }).map(modelListing) } : {}
+    ))
+    const videoChoices = (videoLoaded.choices.model ?? []).map(choice => ({ ...choice, available: true }))
+    const videoModel = videoChoices.find(choice => choice.family && choice.providerLabel)
+    expect(videoModel?.family?.id.startsWith('video:')).toBe(true)
+    const videoHtml = renderActionSheet(video, {
+      draft: { ...seedWorkspaceActionDraft(video, context), model: videoModel!.value },
+      context: { ...context, choices: { ...context.choices, model: videoChoices } },
+    })
+    expect(selectMarkup(videoHtml, 'Model')).toContain(`value="${videoModel!.family!.id}"`)
+    expect(selectMarkup(videoHtml, 'Provider')).toContain(videoModel!.providerLabel!)
+    expect(selectMarkup(videoHtml, 'Provider')).not.toContain(videoModel!.family!.title)
+    expect(videoHtml).not.toContain('Provider and model')
+  })
+
+  it('keeps a generation variant switch on separate model and provider selects', () => {
+    const base = catalogAction('tool.generate_image')
+    const properties = { ...base.inputSchema.properties }
+    delete properties.model
+    const variant = (id: string, title: string, provider: string): WorkspaceAction => ({
+      ...base,
+      id,
+      title,
+      inputSchema: { ...base.inputSchema, properties },
+      generation: { provider, operation: 'generate_image', mediaType: 'image' },
+    })
+    const fal = variant('gen.fal', 'GPT Image 2.6 Sunburst', 'fal')
+    const wavespeed = variant('gen.wavespeed', 'GPT Image 2.6 Sunburst', 'wavespeed')
+    const kie = variant('gen.kie', 'Nano Banana 2.1', 'kie')
+    const html = renderActionSheet(fal, { variants: [fal, wavespeed, kie] })
+    const model = html.slice(html.indexOf('aria-label="Model"'), html.indexOf('</select>', html.indexOf('aria-label="Model"')))
+    const provider = html.slice(html.indexOf('aria-label="Provider"'), html.indexOf('</select>', html.indexOf('aria-label="Provider"')))
+    expect(model).toContain('>GPT Image 2.6 Sunburst</option>')
+    expect(model).toContain('>Nano Banana 2.1</option>')
+    expect(model).not.toContain('fal ·')
+    expect(provider).toContain('>fal</option>')
+    expect(provider).toContain('>wavespeed</option>')
+    expect(provider).not.toContain('Nano Banana')
+    expect(html).not.toContain('Provider and model')
   })
 })
 

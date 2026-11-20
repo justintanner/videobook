@@ -42,6 +42,13 @@ function clientManualChunk(id: string): string | undefined {
   ) {
     return 'goal-ui'
   }
+  if (
+    id.includes('/src/components/videobook/WorkspaceActionSheet')
+    || id.includes('/src/components/videobook/WorkspaceGenerationModelField')
+    || id.includes('/src/components/videobook/WorkspaceActionField')
+  ) {
+    return 'workspace-actions'
+  }
   if (id.includes('/src/components/')) {
     return 'ui'
   }

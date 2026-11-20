@@ -18,6 +18,49 @@ function rows(value: unknown, key: string): Record<string, unknown>[] {
   return Array.isArray(entries) ? entries.flatMap((entry) => { const item = record(entry); return item ? [item] : [] }) : []
 }
 
+const PROVIDER_LABELS: Readonly<Record<string, string>> = {
+  kie: 'Kie',
+  fal: 'Fal',
+  xai: 'xAI',
+  alibaba: 'Alibaba',
+  elevenlabs: 'ElevenLabs',
+  machgen: 'MachGen',
+  wavespeed: 'WaveSpeed',
+  nunchux: 'Nunchux',
+  local: 'Local',
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0) : []
+}
+
+function generationModelChoice(model: Record<string, unknown>): ActionChoice | null {
+  const id = typeof model.id === 'string' ? model.id : ''
+  if (!id) return null
+  const title = typeof model.title === 'string' && model.title ? model.title : id
+  const provider = typeof model.provider === 'string' ? model.provider : ''
+  const familyRecord = record(model.family)
+  const familyId = typeof familyRecord?.id === 'string' ? familyRecord.id : ''
+  const familyTitle = typeof familyRecord?.title === 'string' ? familyRecord.title : ''
+  const operations = stringList(model.operations)
+  const variant = typeof model.variant === 'string' && model.variant ? model.variant : undefined
+  const modes = Array.isArray(model.modes) ? model.modes.flatMap((entry) => {
+    const row = record(entry)
+    return typeof row?.id === 'string' ? [{ id: row.id }] : []
+  }) : []
+  return {
+    value: id,
+    label: title,
+    ...(typeof model.available === 'boolean' ? { available: model.available } : {}),
+    frontier: parseFrontierRankings(model.frontier),
+    ...(provider ? { provider, providerLabel: PROVIDER_LABELS[provider] ?? provider } : {}),
+    ...(operations.length > 0 ? { operations } : {}),
+    ...(familyId && familyTitle ? { family: { id: familyId, title: familyTitle } } : {}),
+    ...(variant ? { variant } : {}),
+    ...(modes.length > 0 ? { modes } : {}),
+  }
+}
+
 function choices(entries: Record<string, unknown>[], idKeys: string[], labelKeys: string[]): ActionChoice[] {
   return entries.flatMap((entry) => {
     const id = idKeys.map((key) => entry[key]).find((value): value is string => typeof value === 'string' && Boolean(value))
@@ -91,11 +134,7 @@ export async function loadWorkspaceActionResources(
   })())
   if (fields.model && action.generation) requests.push((async () => {
     const models = rows(await call('list_generation_models', { media: action.generation?.mediaType }), 'models')
-    result.choices.model = models.flatMap(model => choices([model], ['id'], ['title']).map(choice => ({
-      ...choice,
-      ...(typeof model.available === 'boolean' ? { available: model.available } : {}),
-      frontier: parseFrontierRankings(model.frontier),
-    })))
+    result.choices.model = models.flatMap(model => generationModelChoice(model) ?? [])
   })())
   if (fields.voice_id) requests.push((async () => {
     result.choices.voice_id = choices(rows(await call('list_elevenlabs_voices', {}), 'voices'), ['voice_id', 'id'], ['name'])

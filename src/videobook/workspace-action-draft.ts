@@ -2,7 +2,7 @@ import { frameAspectRatio } from '../../server/src/media/frame-options'
 import { isSeedanceEdit } from '../../server/src/media/seedance-edit'
 import type { ActionConfirmation, ActionInputSchema, WorkspaceAction } from '../../server/src/workspace-action-contract'
 import { VALID_CONFIRMATION, type ConfirmValidation } from './confirm-validation'
-import { generationModelChoices } from './generation-frontier'
+import { generationModelChoices, generationModelsSplit } from './generation-frontier'
 import { workspaceEstimateCost } from './provider-payload-preview'
 import {
   actionUnavailableReason,
@@ -201,9 +201,8 @@ export function workspaceActionChoices(
           .filter((choice) => mediaKinds.some((kind) => kind === choice.detail)),
       }
     : context.choices
-  return action.generation && base.model
-    ? { ...base, model: generationModelChoices(base.model, action.generation.mediaType, values) }
-    : base
+  if (!action.generation || !base.model || generationModelsSplit(base.model)) return base
+  return { ...base, model: generationModelChoices(base.model, action.generation.mediaType, values) }
 }
 
 export function workspaceActionVariants(actions: readonly WorkspaceAction[], action: WorkspaceAction | null): WorkspaceAction[] {

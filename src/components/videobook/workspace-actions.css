@@ -478,6 +478,25 @@
   padding-top: 8px;
 }
 
+.workspace-generation-models {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 8px 12px;
+}
+
+.workspace-generation-models > .workspace-action-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.workspace-generation-models > label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  font-weight: 600;
+}
+
 .workspace-action-sound {
   display: grid;
   gap: 4px;
