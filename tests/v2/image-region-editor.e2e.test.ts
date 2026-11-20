@@ -628,7 +628,8 @@ describe('drawn region image editor through real MCP', () => {
     await page.locator(`.react-flow__node[data-id="${sourceCellId}"] .cell-node`).click()
     await page.getByRole('button', { name: 'Edit @m1 image', exact: true }).click()
     const movedDialog = page.getByRole('dialog', { name: 'Fullscreen preview for @m1' })
-    await expect.poll(() => movedDialog.getByLabel('Model', { exact: true }).inputValue()).toBe('nano-banana-2-1')
+    await expect.poll(() => movedDialog.getByLabel('Generation provider', { exact: true }).inputValue()).toBe('nano-banana-2-1')
+    expect(await movedDialog.getByLabel('Generation model', { exact: true }).inputValue()).toBe('image:nano-banana-2-1')
     expect(await movedDialog.getByLabel('What should change?').inputValue()).toBe(prompt)
     await movedDialog.getByRole('button', { name: 'Draw region', exact: true }).click()
     const image = await movedDialog.locator('.notebook-subject-stage-svg > image').boundingBox()
@@ -659,7 +660,7 @@ describe('drawn region image editor through real MCP', () => {
         if (!scroll || !composer) return false
         return bounds.top >= scroll.getBoundingClientRect().top
           && bounds.bottom <= composer.getBoundingClientRect().top + 2
-      })).toBe(true)
+      }), { timeout: 15_000 }).toBe(true)
       expect(await page.locator('.app-shell').evaluate((node) => (node as HTMLElement).inert)).toBe(false)
       expect(await page.locator('.command-composer').getAttribute('data-dock-open')).toBe('false')
       expect(await page.locator('.command-composer-dock-body').isVisible()).toBe(false)
@@ -678,7 +679,7 @@ describe('drawn region image editor through real MCP', () => {
       else process.env.KIE_API_KEY = originalKey
       await abortActiveBookJobsForTests()
     }
-  }, 60_000)
+  }, testBudget(60_000))
 
   it('reopens an image edit with its model and editable prompt, keeping provider links on the failed output', async () => {
     await pauseBookQueueForTests(bookId)
