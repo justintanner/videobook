@@ -97,6 +97,7 @@ import {
   readGenerationProviderMemory,
   rememberGenerationProvider,
 } from "../generation-memory.js";
+import { readGenerationModelMemory, rememberGenerationModel } from "../generation-model-memory.js";
 import { generationInputMentions, remapGenerationInputPrompt } from "../generation-input-mentions.js";
 import { applyPreviewPlaceholderUrls } from "../preview-payload.js";
 import { jobProviderTaskStatus } from "../provider-task-status.js";
@@ -794,6 +795,7 @@ function notebookPayload(
     edges: normalized.edges,
     generation_settings_memory: readNotebookStickySettings(engine, normalized.id),
     generation_provider_memory: readGenerationProviderMemory(engine),
+    generation_model_memory: readGenerationModelMemory(engine),
   };
 }
 
@@ -1586,7 +1588,7 @@ export function videobookDomainDefs(
                 );
               }
             const notebook = args.make_room === true ? withRoomForCell(current, cell) : current;
-            cell = normalizeCellActionFields(cell, notebook);
+            cell = normalizeCellActionFields(cell, notebook, readGenerationModelMemory(engine));
             requestedCell = cell;
             cell = seedNotebookStickySettings(cell, readNotebookStickySettings(engine, String(args.notebook_id)));
             const withCell = seedInitialGenerationPrompt({
@@ -1735,7 +1737,7 @@ export function videobookDomainDefs(
                   ...(patch.pinned_results === undefined
                     ? {}
                     : { pinnedResults: patch.pinned_results.map(pinnedResultFromInput) }),
-                }, document);
+                }, document, readGenerationModelMemory(engine));
                 const reconciled = reconcileInitialGenerationPrompt(cell, normalized);
                 const next = reconciled.model !== cell.model
                   ? seedNotebookStickySettings(reconciled, readNotebookStickySettings(engine, String(args.notebook_id)))
@@ -2460,6 +2462,7 @@ export function videobookDomainDefs(
           }).catch(() => undefined);
           return failure(message);
         }
+        rememberGenerationModel(engine, cell);
         const outputCellId = generationPlan
           ? generationPlanClaimOutputCellId(generationPlan)
           : null;

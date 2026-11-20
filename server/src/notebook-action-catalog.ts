@@ -10,10 +10,15 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { modelFrontierRankings, type ModelFrontierRanking } from "./media/frontier.js";
 import { PROVIDER_ENV_KEYS } from "./media/adapters/index.js";
 import { listModels } from "./media/listing.js";
-import { resolveModel } from "./media/descriptor.js";
+import { resolveModel, tryResolveModel } from "./media/descriptor.js";
 import { modelFamily, type ModelFamily, type ModelFamilyFields } from "./media/model-family.js";
 import type { ResolvedModel } from "./media/types.js";
-import { notebookGenerationInputContract } from "./notebook-generation-contract.js";
+import { notebookGenerationInputContract, notebookGenerationInputsAreCompatible } from "./notebook-generation-contract.js";
+import {
+  generationModelMedia,
+  type GenerationModelMedia,
+  type GenerationModelMemory,
+} from "./generation-model-memory.js";
 import { controlsForModel } from "./notebook-generation-controls.js";
 import {
   ANALYSIS_REASONING_EFFORT,
@@ -476,9 +481,40 @@ function actionsForCell(
   });
 }
 
+const SIBLING_OPERATION_ORDER = [
+  "text_to_image", "edit_image", "text_to_video", "image_to_video", "reference_to_video", "edit_video",
+];
+
+export function rememberedGenerationAction(
+  actions: readonly NotebookAction[],
+  media: GenerationModelMedia,
+  remembered: string | undefined,
+  accepts: (action: NotebookAction) => boolean,
+): NotebookAction | null {
+  if (!remembered) return null;
+  const usable = actions.filter((action) => action.kind === "generation"
+    && action.tool === `generate_${media}`
+    && action.available !== false
+    && accepts(action));
+  const exact = usable.find((action) => action.model === remembered);
+  if (exact) return exact;
+  const model = tryResolveModel(remembered);
+  if (!model) return null;
+  const { family, variant } = modelFamily(model);
+  const operationRank = (action: NotebookAction) => {
+    const rank = SIBLING_OPERATION_ORDER.indexOf(action.operation);
+    return rank === -1 ? SIBLING_OPERATION_ORDER.length : rank;
+  };
+  return usable
+    .filter((action) => action.provider === model.provider && action.family?.id === family.id)
+    .sort((left, right) => Number(left.variant !== variant) - Number(right.variant !== variant)
+      || operationRank(left) - operationRank(right))[0] ?? null;
+}
+
 function defaultActionForCell(
   cell: NotebookCell,
   document: NotebookDocument,
+  memory: GenerationModelMemory = {},
 ): NotebookAction | null {
   const normalizedCell = normalizeLegacyAnalyzeCell(cell);
   const actions = actionsForCell(normalizedCell, document);
@@ -511,6 +547,13 @@ function defaultActionForCell(
     return actions.find((action) => action.operation === "splice_video")
       ?? null;
   }
+  const media = generationModelMedia(normalizedCell.type);
+  const remembered = media
+    ? rememberedGenerationAction(actions, media, memory[media], (action) =>
+      action.inputContract !== undefined
+        && notebookGenerationInputsAreCompatible(action.inputContract, document, normalizedCell))
+    : null;
+  if (remembered) return remembered;
   const defaultModel = normalizedCell.type === "generate_video"
     ? DEFAULT_VIDEO_MODEL
     : normalizedCell.type === "generate_image"
@@ -524,6 +567,7 @@ function defaultActionForCell(
 export function validateCellConfiguration(
   cell: NotebookCell,
   document: NotebookDocument,
+  memory: GenerationModelMemory = {},
 ): { ok: true; action: NotebookAction | null } | { ok: false; message: string } {
   const normalizedCell = normalizeLegacyAnalyzeCell(cell);
   const actions = actionsForCell(
@@ -537,7 +581,7 @@ export function validateCellConfiguration(
   if (!hasActionConfiguration) {
     return {
       ok: true,
-      action: defaultActionForCell(normalizedCell, document),
+      action: defaultActionForCell(normalizedCell, document, memory),
     };
   }
   if (actions.length === 0) {
@@ -629,9 +673,10 @@ export function normalizeLegacyAnalyzeDocument(
 export function normalizeCellActionFields(
   cell: NotebookCell,
   document: NotebookDocument,
+  memory: GenerationModelMemory = {},
 ): NotebookCell {
   const normalizedCell = normalizeLegacyAnalyzeCell(cell);
-  const validated = validateCellConfiguration(normalizedCell, document);
+  const validated = validateCellConfiguration(normalizedCell, document, memory);
   if (!validated.ok || !validated.action) return normalizedCell;
   const action = validated.action;
   return {

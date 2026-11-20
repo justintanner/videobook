@@ -8,6 +8,7 @@ import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 import {
   asNotebookGenerationActions,
+  initialGenerationSelection,
   type NotebookGenerationAction,
 } from '../../src/videobook/notebook-generation-actions'
 import {
@@ -116,6 +117,47 @@ describe('selection generation planning', () => {
     expect(draft.sourceAddresses).toEqual(['@c1', '@c2', '@c3'])
     expect(draft.connections.map((connection) => connection.sourceCellId))
       .toEqual([left.id, middle.id, right.id])
+  })
+
+  it('starts a context-menu generation on the remembered model, or its same-provider sibling that takes the source', async () => {
+    const savedKey = process.env.FAL_API_KEY
+    process.env.FAL_API_KEY = 'test-key'
+    try {
+      const actions = await notebookActions('generate_video')
+      const plan = (rememberedModel: string) => planContextMenuGeneration({
+        actions,
+        cellId: '01900000-0000-7000-8000-000000000085',
+        cellType: 'generate_video',
+        document,
+        rememberedModel,
+        sourceCellIds: [left.id],
+      })
+      expect(plan('fal:minimax/h3/image-to-video').action.model).toBe('fal:minimax/h3/image-to-video')
+      expect(plan('fal:minimax/h3/text-to-video').action.model).toBe('fal:minimax/h3/image-to-video')
+      expect(initialGenerationSelection({ type: 'generate_video' }, actions, [], 'fal:minimax/h3/text-to-video'))
+        .toMatchObject({ provider: 'fal', model: 'fal:minimax/h3/text-to-video' })
+      expect(initialGenerationSelection({ type: 'generate_video' }, actions, [{ kind: 'image', target: 'first_frame' }], 'fal:minimax/h3/text-to-video'))
+        .toMatchObject({ provider: 'fal', model: 'fal:minimax/h3/image-to-video' })
+      expect(initialGenerationSelection({ type: 'generate_video', model: 'kie:bytedance/seedance-2-5' }, actions, [], 'fal:minimax/h3/text-to-video'))
+        .toMatchObject({ model: 'kie:bytedance/seedance-2-5' })
+    } finally {
+      if (savedKey === undefined) delete process.env.FAL_API_KEY
+      else process.env.FAL_API_KEY = savedKey
+    }
+  })
+
+  it('keeps the Lightning default when the remembered provider is not configured', async () => {
+    const savedKey = process.env.FAL_API_KEY
+    delete process.env.FAL_API_KEY
+    try {
+      const actions = await notebookActions('generate_video')
+      expect(initialGenerationSelection({ type: 'generate_video' }, actions, [], 'fal:minimax/h3/text-to-video'))
+        .toMatchObject({ model: 'kie:bytedance/seedance-2-5' })
+      expect(initialGenerationSelection({ type: 'generate_video' }, actions, [], 'kie:retired-video-model'))
+        .toMatchObject({ model: 'kie:bytedance/seedance-2-5' })
+    } finally {
+      if (savedKey !== undefined) process.env.FAL_API_KEY = savedKey
+    }
   })
 
   it('plans one image generation from the same selection', async () => {

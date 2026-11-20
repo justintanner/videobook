@@ -33,6 +33,7 @@ export function planContextMenuGeneration(input: {
   cellId: string
   cellType: ContextMenuGenerationCellType
   document: NotebookDocument
+  rememberedModel?: string
   sourceCellIds: readonly string[]
 }): NotebookChatGenerationDraft {
   const sourceReferences = input.sourceCellIds.map((sourceCellId) => {
@@ -50,6 +51,7 @@ export function planContextMenuGeneration(input: {
       sourceReferences,
     },
     document: input.document,
+    ...(input.rememberedModel ? { rememberedModel: input.rememberedModel } : {}),
   })
 }
 

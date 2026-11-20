@@ -20,7 +20,7 @@ import type {
 } from 'videobook-engine'
 import type { ServerCommand } from '@/lib/command-registry'
 import { type ChatModelCatalog, asChatModelCatalog } from '@/videobook/chat-models'
-import { type NotebookGenerationAction, asNotebookGenerationActions } from '@/videobook/notebook-generation-actions'
+import { type GenerationModelMemory, type NotebookGenerationAction, asNotebookGenerationActions } from '@/videobook/notebook-generation-actions'
 import { parseProviderTaskStatus, type ProviderTaskStatus } from '../../server/src/provider-status-link'
 import type { CellAssetRevision } from '@/components/videobook/NotebookCellInspector'
 import {
@@ -400,6 +400,7 @@ export type NotebookSnapshot = NotebookDocument & {
   posts?: PostView[]
   generationSettingsMemory?: StickySettings
   generationProviderMemory?: Record<string, string>
+  generationModelMemory?: GenerationModelMemory
 }
 
 export function asGenerationProviderMemory(value: unknown): Record<string, string> | null {
@@ -411,6 +412,11 @@ export function asGenerationProviderMemory(value: unknown): Record<string, strin
     memory[familyId] = provider.trim()
   }
   return memory
+}
+
+function parseGenerationModelMemory(value: Record<string, unknown>): GenerationModelMemory {
+  return Object.fromEntries((['image', 'video'] as const).flatMap((media) =>
+    typeof value[media] === 'string' && value[media] !== '' ? [[media, value[media]]] : []))
 }
 
 export function asNotebook(value: unknown): NotebookSnapshot | null {
@@ -478,6 +484,9 @@ export function asNotebook(value: unknown): NotebookSnapshot | null {
       : {}),
     ...(recordValue(item.generation_provider_memory)
       ? { generationProviderMemory: asGenerationProviderMemory(recordValue(item.generation_provider_memory)!) ?? {} }
+      : {}),
+    ...(recordValue(item.generation_model_memory)
+      ? { generationModelMemory: parseGenerationModelMemory(recordValue(item.generation_model_memory)!) }
       : {}),
     cells,
     edges,

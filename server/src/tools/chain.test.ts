@@ -15,6 +15,7 @@ import { withBookContext } from "../book-context.js";
 import { chatActionPlanSchema, prepareVoiceChatAction } from "./chat.js";
 import { previewGeneration } from "../media/preview.js";
 import { testBudget } from "../test-budget.js";
+import { readGenerationModelMemory } from "../generation-model-memory.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -426,6 +427,29 @@ describe("chain MCP tool", () => {
     const secondApproval = parseText(again);
     expect(again.isError).toBeFalsy();
     expect(publicSteps(secondApproval)[1]?.status).toBe("failed");
+  });
+
+  it("leaves the remembered generation models alone when a chain step generates, as goal runs do", async () => {
+    await setupBook("model-memory");
+    const savedKey = process.env.KIE_API_KEY;
+    process.env.KIE_API_KEY = "test-key";
+    try {
+      const seeded = engine.settings.set("generation-model-memory", { video: "fal:minimax/h3/text-to-video" });
+      expect(seeded.ok).toBe(true);
+      const accepted = await runChain(extractThenGenerate());
+      const chainId = String(accepted.chain_id);
+      await waitForChainRun(engine, chainId, testBudget(180_000));
+      await chainAction("approve", chainId, { step_id: "animate", actor: "chat" });
+      await waitForChainRun(engine, chainId, testBudget(180_000));
+      const notebook = engine.notebooks.read(notebookId);
+      if (!notebook.ok) throw new Error(notebook.error.message);
+      expect(notebook.value.cells.some((cell) => cell.type === "generate_video"
+        && cell.model === "kie:bytedance/seedance-2-5")).toBe(true);
+      expect(readGenerationModelMemory(engine)).toEqual({ video: "fal:minimax/h3/text-to-video" });
+    } finally {
+      if (savedKey === undefined) delete process.env.KIE_API_KEY;
+      else process.env.KIE_API_KEY = savedKey;
+    }
   });
 
   it("keeps a paused chain paused across a restart", async () => {

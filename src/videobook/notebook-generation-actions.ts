@@ -642,6 +642,44 @@ export function compatibleGenerationActions(
     .sort(compareGenerationActions)
 }
 
+export type GenerationModelMemory = { image?: string; video?: string }
+
+export function rememberedGenerationModel(
+  memory: GenerationModelMemory | undefined,
+  type: string,
+): string | undefined {
+  if (type === 'generate_image') return memory?.image
+  if (type === 'generate_video') return memory?.video
+  return undefined
+}
+
+const siblingOperationOrder = [
+  'text_to_image', 'edit_image', 'text_to_video', 'image_to_video', 'reference_to_video', 'edit_video',
+]
+
+function rememberedGenerationAction(
+  actions: readonly NotebookGenerationAction[],
+  type: NotebookGenerationCellType,
+  inputs: readonly GenerationConnectedInput[],
+  remembered: string | undefined,
+): NotebookGenerationAction | null {
+  if (!remembered) return null
+  const usable = compatibleGenerationActions(actions, type, inputs)
+    .filter((action) => action.available !== false)
+  const exact = usable.find((action) => action.model === remembered)
+  if (exact) return exact
+  const source = generationActionsForCell(actions, type).find((action) => action.model === remembered)
+  if (!source) return null
+  const operationRank = (action: NotebookGenerationAction) => {
+    const rank = siblingOperationOrder.indexOf(action.operation)
+    return rank === -1 ? siblingOperationOrder.length : rank
+  }
+  return usable
+    .filter((action) => action.provider === source.provider && action.family.id === source.family.id)
+    .sort((left, right) => Number(left.variant !== source.variant) - Number(right.variant !== source.variant)
+      || operationRank(left) - operationRank(right))[0] ?? null
+}
+
 export function initialGenerationSelection(
   cell: Pick<
     NotebookCell,
@@ -649,13 +687,15 @@ export function initialGenerationSelection(
   >,
   actions: readonly NotebookGenerationAction[],
   inputs: readonly GenerationConnectedInput[] = [],
+  rememberedModel?: string,
 ): GenerationSelection | null {
   if (!isNotebookGenerationCellType(cell.type)) return null
   const current = currentSelection(cell)
   const configured = generationActionForSelection(actions, cell.type, current)
   if (configured) return actionSelection(configured)
   if (Object.values(current).every(Boolean)) return current
-  const fallback = compatibleGenerationActions(actions, cell.type, inputs)[0]
+  const fallback = rememberedGenerationAction(actions, cell.type, inputs, rememberedModel)
+    ?? compatibleGenerationActions(actions, cell.type, inputs)[0]
   return fallback ? actionSelection(fallback) : null
 }
 

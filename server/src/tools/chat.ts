@@ -36,6 +36,7 @@ import type { ChatRoutingNotebookContext } from "../chat-router.js";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
 import { applyGenerationRoutingDefaults } from "../chat-generation-routing.js";
+import { readGenerationModelMemory } from "../generation-model-memory.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getApiKey } from "../api-key.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
@@ -933,7 +934,7 @@ async function handleChatRequest(
   // Generation routes: default the model, fold flat ref fields into refs, and
   // default the ElevenLabs voice. Runs after the script injection above so
   // script content reaches the prompt.
-  Object.assign(params, await applyGenerationRoutingDefaults(decision.tool, params));
+  Object.assign(params, await applyGenerationRoutingDefaults(decision.tool, params, readGenerationModelMemory(engine)));
 
   // The voice model writes its own params, so a bare address can survive there
   // even when the query carried none.

@@ -288,6 +288,7 @@ import {
   compatibleGenerationModes,
   generationActionIsCompatible,
   generationRequiresPrompt,
+  rememberedGenerationModel,
   type GenerationControlValue,
   type GenerationPreviewDraft,
   type NotebookGenerationAction,
@@ -6716,6 +6717,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...(options?.preferredModel
           ? { preferredModel: options.preferredModel }
           : {}),
+        rememberedModel: rememberedGenerationModel(currentNotebook.generationModelMemory, command.cellType),
         ...(options?.routedParams
           ? { routedParams: options.routedParams }
           : {}),
@@ -9513,7 +9515,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       const draft = followUp
         ? planNotebookFollowUp({ ...draftInput, followUp, sourceCellId })
-        : planContextMenuGeneration({ ...draftInput, cellType, sourceCellIds })
+        : planContextMenuGeneration({
+          ...draftInput,
+          cellType,
+          sourceCellIds,
+          rememberedModel: rememberedGenerationModel(currentNotebook.generationModelMemory, cellType),
+        })
       if (!draft) throw new Error(`No available model can ${followUp === 'upscale_video' ? 'upscale' : 'extend'} this video`)
       const materialized = await materializeNotebookChatGeneration({
         bookId,
@@ -10709,6 +10716,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           generationSettingsMemory={(notebook as NotebookSnapshot | null)?.generationSettingsMemory}
           generationProviderMemory={(notebook as NotebookSnapshot | null)?.generationProviderMemory}
           onRememberProvider={rememberGenerationProvider}
+          generationModelMemory={(notebook as NotebookSnapshot | null)?.generationModelMemory}
           mentionAssets={commandMentionAssets}
           voiceCatalog={elevenLabsVoices}
           busy={busy || Boolean(selectedMediaSlotState?.operation)}

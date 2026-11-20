@@ -156,13 +156,15 @@ function generationChoiceForSources(input: {
   actions: readonly NotebookGenerationAction[]
   cellType: NotebookGenerationCellType
   sources: readonly NotebookChatGenerationSource[]
+  rememberedModel?: string
 }): GenerationChoice | null {
   const candidates = connectedInputCandidates(input.sources)
   const derived = input.action ? slotDerivedInputs(input.action, input.sources) : []
   return generationChoiceFor(input.action, uniqueLayouts([...candidates, ...derived]))
-    ?? defaultGenerationChoice(input.actions, input.cellType, candidates)
+    ?? defaultGenerationChoice(input.actions, input.cellType, candidates, input.rememberedModel)
     ?? defaultGenerationChoice(input.actions, input.cellType, uniqueLayouts(
-      generationActionsForCell(input.actions, input.cellType).flatMap((action) => slotDerivedInputs(action, input.sources))))
+      generationActionsForCell(input.actions, input.cellType).flatMap((action) => slotDerivedInputs(action, input.sources))),
+    input.rememberedModel)
 }
 
 function generationChoiceFor(
@@ -179,9 +181,10 @@ function defaultGenerationChoice(
   actions: readonly NotebookGenerationAction[],
   cellType: NotebookGenerationCellType,
   candidates: readonly GenerationConnectedInput[][],
+  rememberedModel?: string,
 ): GenerationChoice | null {
   for (const connectedInputs of candidates) {
-    const action = selectGenerationAction({ actions, cellType, connectedInputs })
+    const action = selectGenerationAction({ actions, cellType, connectedInputs, rememberedModel })
     if (action) return { action, connectedInputs }
   }
   return null
@@ -191,11 +194,13 @@ function selectGenerationAction(input: {
   actions: readonly NotebookGenerationAction[]
   cellType: NotebookGenerationCellType
   connectedInputs: readonly GenerationConnectedInput[]
+  rememberedModel?: string
 }): NotebookGenerationAction | null {
   const selection = initialGenerationSelection(
     { type: input.cellType },
     input.actions,
     input.connectedInputs,
+    input.rememberedModel,
   )
   return selection
     ? generationActionForSelection(input.actions, input.cellType, selection)
@@ -304,6 +309,7 @@ export function planNotebookChatGeneration(input: {
   command: NotebookChatGenerationCommand
   document: NotebookDocument
   preferredModel?: string
+  rememberedModel?: string
   routedParams?: Record<string, unknown>
 }): NotebookChatGenerationDraft {
   const sources = resolveNotebookChatGenerationSources(
@@ -331,6 +337,7 @@ export function planNotebookChatGeneration(input: {
     actions: input.actions,
     cellType: input.command.cellType,
     sources,
+    ...(input.rememberedModel ? { rememberedModel: input.rememberedModel } : {}),
   })
   if (!choice) {
     throw new Error(

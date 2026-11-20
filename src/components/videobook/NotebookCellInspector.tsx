@@ -127,10 +127,12 @@ import {
   generationSelectionForAction,
   initialGenerationSelection,
   initialGenerationMode,
+  rememberedGenerationModel,
   type GenerationControl,
   type GenerationControlValue,
   type GenerationInputAttachment,
   type GenerationPreviewDraft,
+  type GenerationModelMemory,
   type GenerationSelection,
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
@@ -257,8 +259,9 @@ function cellFormDraft(
   cell: NotebookCell,
   actions: readonly NotebookGenerationAction[],
   inputs: Parameters<typeof initialGenerationSelection>[2] = [],
+  rememberedModel?: string,
 ): CellFormDraft {
-  const selection = initialGenerationSelection(cell, actions, inputs)
+  const selection = initialGenerationSelection(cell, actions, inputs, rememberedModel)
   if (!selection || !isNotebookGenerationCellType(cell.type)) {
     return persistedCellFormDraft(cell)
   }
@@ -276,8 +279,9 @@ function openedCellFormDraft(
   cells: readonly NotebookCell[],
   edges: readonly NotebookEdge[],
   actions: readonly NotebookGenerationAction[],
+  rememberedModel?: string,
 ): CellFormDraft {
-  const initial = cellFormDraft(cell, actions, generationConnectedInputs(cell.id, cells, edges))
+  const initial = cellFormDraft(cell, actions, generationConnectedInputs(cell.id, cells, edges), rememberedModel)
   if (!isNotebookGenerationCellType(cell.type) || initial.generationMode !== 'r2v') return initial
   return {
     ...initial,
@@ -492,6 +496,7 @@ type NotebookCellInspectorProps = {
   generationSettingsMemory?: StickySettings
   generationProviderMemory?: Readonly<Record<string, string>>
   onRememberProvider?: (familyId: string, provider: string) => void
+  generationModelMemory?: GenerationModelMemory
   mentionAssets?: readonly AssetMentionCandidate[]
   voiceCatalog?: ElevenLabsVoicesState
   /** Transcribe / analyze progress, keyed by artifact id. */
@@ -2661,6 +2666,7 @@ function ExecutableCellInspector({
   generationSettingsMemory,
   generationProviderMemory,
   onRememberProvider,
+  generationModelMemory,
   mentionAssets = [],
   voiceCatalog,
 }: Pick<
@@ -2692,6 +2698,7 @@ function ExecutableCellInspector({
   | 'generationSettingsMemory'
   | 'generationProviderMemory'
   | 'onRememberProvider'
+  | 'generationModelMemory'
   | 'mentionAssets'
   | 'voiceCatalog'
 > & {
@@ -2702,7 +2709,8 @@ function ExecutableCellInspector({
   const allGenerationControls = generationActions.flatMap((candidate) =>
     candidate.controls)
   const storedDraft = persistedCellFormDraft(cell, allGenerationControls)
-  const openedDraft = openedCellFormDraft(cell, cells, edges, generationActions)
+  const openedDraft = openedCellFormDraft(cell, cells, edges, generationActions,
+    rememberedGenerationModel(generationModelMemory, cell.type))
   const [draft, setDraft] = useState(openedDraft)
   const [followedPrompt, setFollowedPrompt] = useState(openedDraft.prompt)
   const [synced, setSynced] = useState<CellFormSync>(() => ({ stored: storedDraft, draft }))
@@ -4191,6 +4199,7 @@ export function NotebookCellInspector({
   generationSettingsMemory,
   generationProviderMemory,
   onRememberProvider,
+  generationModelMemory,
   mediaInsightWork,
   onUpdate,
   onSetInput,
@@ -4376,6 +4385,7 @@ export function NotebookCellInspector({
       generationSettingsMemory={generationSettingsMemory}
       generationProviderMemory={generationProviderMemory}
       onRememberProvider={onRememberProvider}
+      generationModelMemory={generationModelMemory}
       mentionAssets={mentionAssets}
       voiceCatalog={voiceCatalog}
     />
