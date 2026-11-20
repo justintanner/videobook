@@ -1,4 +1,5 @@
 import { resolveModel } from "./media/descriptor.js";
+import { modelFamily, type ModelFamily } from "./media/model-family.js";
 import type { ResolvedModel } from "./media/types.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID } from "./image-edit-default.js";
 export { DEFAULT_IMAGE_EDIT_MODEL_ID } from "./image-edit-default.js";
@@ -11,6 +12,8 @@ export interface ImageEditModelInfo {
   /** Media catalog model id this edit runs on. */
   readonly catalogModel: string;
   readonly label: string;
+  readonly family: ModelFamily;
+  readonly variant?: string;
   readonly provider: "kie" | "fal";
   readonly envKey: "KIE_API_KEY" | "FAL_API_KEY";
   /** Max image inputs from the catalog model's image slot; null = unbounded. */
@@ -27,11 +30,18 @@ const STANDARD_IMAGE_EDIT_CAPABILITIES = {
 
 const EDIT_MODELS: ReadonlyArray<{ catalogModel: string; label: string }> = [
   { catalogModel: `kie:${DEFAULT_IMAGE_EDIT_MODEL_ID}`, label: "Nano Banana 2.1 Edit" },
+  { catalogModel: "fal:google/nano-banana-2.1/edit", label: "Nano Banana 2.1 Edit" },
   { catalogModel: "kie:flux-3/klein-edit-image", label: "FLUX 3 Klein Edit" },
   { catalogModel: "kie:seedream/5-pro-image-to-image", label: "Seedream 5 Pro" },
+  { catalogModel: "kie:gpt-image-2-6/sunburst-image-to-image", label: "GPT Image 2.6 Sunburst" },
+  { catalogModel: "fal:openai/gpt-image-2.6/sunburst/edit", label: "GPT Image 2.6 Sunburst" },
+  { catalogModel: "kie:gpt-image-2-6/flare-image-to-image", label: "GPT Image 2.6 Flare" },
+  { catalogModel: "fal:openai/gpt-image-2.6/flare/edit", label: "GPT Image 2.6 Flare" },
   { catalogModel: "kie:gpt-image-2-5-flare-image-to-image", label: "GPT Image 2.5 Flare" },
   { catalogModel: "kie:gpt-image-2-5-sunburst-image-to-image", label: "GPT Image 2.5 Sunburst" },
   { catalogModel: "kie:gpt-image-2-image-to-image", label: "GPT Image 2" },
+  { catalogModel: "fal:openai/gpt-image-2/edit", label: "GPT Image 2" },
+  { catalogModel: "kie:nano-banana-pro", label: "Nano Banana Pro" },
   { catalogModel: "fal:fal-ai/nano-banana-pro/edit", label: "Nano Banana Pro" },
   { catalogModel: "fal:fal-ai/nano-banana-2/edit", label: "Nano Banana 2" },
   { catalogModel: "fal:alibaba/qwen-image-3/edit", label: "Qwen 3.0 Edit" },
@@ -50,6 +60,7 @@ function editModelInfo(entry: { catalogModel: string; label: string }): ImageEdi
     id: model.apiId,
     catalogModel: model.id,
     label: entry.label,
+    ...modelFamily(model),
     provider,
     envKey: provider === "fal" ? "FAL_API_KEY" : "KIE_API_KEY",
     maxInputImages: imageSlotMax(model),

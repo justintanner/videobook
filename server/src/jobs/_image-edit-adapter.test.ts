@@ -66,7 +66,7 @@ function imageUrlsOf(request: ImageEditProviderRequest): unknown {
 
 describe("image edit adapters", () => {
   it("exposes one adapter per catalog model with matching ids", () => {
-    expect(IMAGE_EDIT_ADAPTERS.length).toBe(11);
+    expect(IMAGE_EDIT_ADAPTERS.length).toBe(18);
     for (const adapter of IMAGE_EDIT_ADAPTERS) {
       expect(findImageEditModel(adapter.id)?.envKey, adapter.id).toBe(adapter.envKey);
     }

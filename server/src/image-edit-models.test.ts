@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   NanoBanana21RequestSchema,
+  NanoBananaProRequestSchema,
   Flux3KleinEditImageRequestSchema,
   GptImage25FlareImageToImageRequestSchema,
   GptImage25SunburstImageToImageRequestSchema,
+  GptImage26FlareImageToImageRequestSchema,
+  GptImage26SunburstImageToImageRequestSchema,
   GptImage2ImageToImageRequestSchema,
   SeedreamProImageToImageRequestSchema,
 } from "@apicity/kie/zod";
@@ -11,10 +14,15 @@ import {
   FalAlibabaQwenImage3EditRequestSchema,
   FalBriaFibo2EditRequestSchema,
   FalNanoBanana2EditRequestSchema,
+  FalNanoBanana2p1EditRequestSchema,
   FalNanoBananaProEditRequestSchema,
+  FalOpenaiGptImage2EditRequestSchema,
+  FalOpenaiGptImage2p6FlareEditRequestSchema,
+  FalOpenaiGptImage2p6SunburstEditRequestSchema,
   FalWanV2p7EditRequestSchema,
 } from "@apicity/fal/zod";
 import { resolveModel } from "./media/descriptor.js";
+import { modelFamily } from "./media/model-family.js";
 import {
   DEFAULT_IMAGE_EDIT_MODEL_ID,
   findImageEditModel,
@@ -27,14 +35,28 @@ function imageFieldFor(entryId: string): { safeParse(value: unknown): { success:
       return Flux3KleinEditImageRequestSchema.shape.input.shape.image_urls;
     case "nano-banana-2-1":
       return NanoBanana21RequestSchema.shape.input.shape.image_input;
+    case "google/nano-banana-2.1/edit":
+      return FalNanoBanana2p1EditRequestSchema.shape.image_urls;
     case "seedream/5-pro-image-to-image":
       return SeedreamProImageToImageRequestSchema.shape.input.shape.image_urls;
     case "gpt-image-2-5-flare-image-to-image":
       return GptImage25FlareImageToImageRequestSchema.shape.input.shape.input_urls;
     case "gpt-image-2-5-sunburst-image-to-image":
       return GptImage25SunburstImageToImageRequestSchema.shape.input.shape.input_urls;
+    case "gpt-image-2-6/sunburst-image-to-image":
+      return GptImage26SunburstImageToImageRequestSchema.shape.input.shape.input_urls;
+    case "openai/gpt-image-2.6/sunburst/edit":
+      return FalOpenaiGptImage2p6SunburstEditRequestSchema.shape.image_urls;
+    case "gpt-image-2-6/flare-image-to-image":
+      return GptImage26FlareImageToImageRequestSchema.shape.input.shape.input_urls;
+    case "openai/gpt-image-2.6/flare/edit":
+      return FalOpenaiGptImage2p6FlareEditRequestSchema.shape.image_urls;
     case "gpt-image-2-image-to-image":
       return GptImage2ImageToImageRequestSchema.shape.input.shape.input_urls;
+    case "openai/gpt-image-2/edit":
+      return FalOpenaiGptImage2EditRequestSchema.shape.image_urls;
+    case "nano-banana-pro":
+      return NanoBananaProRequestSchema.shape.input.shape.image_input;
     case "fal-ai/nano-banana-pro/edit":
       return FalNanoBananaProEditRequestSchema.shape.image_urls;
     case "fal-ai/nano-banana-2/edit":
@@ -83,6 +105,41 @@ describe("image edit model catalog", () => {
     expect(DEFAULT_IMAGE_EDIT_MODEL_ID).toBe("nano-banana-2-1");
     expect(findImageEditModel(DEFAULT_IMAGE_EDIT_MODEL_ID)?.provider).toBe("kie");
     expect(new Set(IMAGE_EDIT_MODELS.map((entry) => entry.id)).size).toBe(IMAGE_EDIT_MODELS.length);
+  });
+
+  it("keeps every pre-split edit model id resolvable for saved edits", () => {
+    for (const id of [
+      "nano-banana-2-1",
+      "flux-3/klein-edit-image",
+      "seedream/5-pro-image-to-image",
+      "gpt-image-2-5-flare-image-to-image",
+      "gpt-image-2-5-sunburst-image-to-image",
+      "gpt-image-2-image-to-image",
+      "fal-ai/nano-banana-pro/edit",
+      "fal-ai/nano-banana-2/edit",
+      "alibaba/qwen-image-3/edit",
+      "fal-ai/wan/v2.7/edit",
+      "bria/fibo-2/edit",
+    ]) {
+      expect(findImageEditModel(id)?.id, id).toBe(id);
+    }
+  });
+
+  it("groups edit endpoints by catalog family with one endpoint per provider", () => {
+    const providers = new Map<string, string[]>();
+    for (const entry of IMAGE_EDIT_MODELS) {
+      expect(entry.family, entry.id).toEqual(modelFamily(resolveModel(entry.catalogModel)).family);
+      providers.set(entry.family.id, [...providers.get(entry.family.id) ?? [], entry.provider]);
+    }
+    for (const [family, list] of providers) expect(new Set(list).size, family).toBe(list.length);
+    expect(Object.fromEntries([...providers].filter(([, list]) => list.length > 1))).toEqual({
+      "image:nano-banana-2-1": ["kie", "fal"],
+      "image:gpt-image-2-6-sunburst": ["kie", "fal"],
+      "image:gpt-image-2-6-flare": ["kie", "fal"],
+      "image:gpt-image-2": ["kie", "fal"],
+      "image:nano-banana-pro": ["kie", "fal"],
+    });
+    expect(findImageEditModel("fal:google/nano-banana-2.1/edit")?.id).toBe("google/nano-banana-2.1/edit");
   });
 
   it("matches env keys and provider families", () => {

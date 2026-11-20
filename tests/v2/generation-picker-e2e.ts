@@ -2,7 +2,10 @@ import type { Locator } from 'playwright'
 import { listNotebookActions } from '../../server/src/notebook-action-catalog.js'
 
 const familyByAction = new Map(listNotebookActions({ includeHiddenGeneration: true })
-  .flatMap(action => action.family ? [[action.id, action.family.id] as const] : []))
+  .flatMap(action => !action.family ? [] : [
+    [action.id, action.family.id] as const,
+    ...action.tool === 'edit_image_subjects' ? [[action.model, action.family.id] as const] : [],
+  ]))
 
 function generationFamilyId(actionId: string): string {
   const familyId = familyByAction.get(actionId)

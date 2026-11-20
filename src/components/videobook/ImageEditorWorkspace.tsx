@@ -28,6 +28,7 @@ import {
   type ImageReplacementTarget,
 } from '@/videobook/image-edit-regions'
 import { imageEditInstructionPlaceholder, imageEditTargetSummary } from '@/videobook/image-editor-copy'
+import { actionForFamily, generationFamilyGroups, generationProviderOptions } from '@/videobook/generation-provider-picker'
 import { notebookReferences } from '@/videobook/notebook-addressing'
 import type { ImageEditModelOption } from '@/videobook/use-image-edit-models'
 
@@ -563,6 +564,8 @@ function ReplacementPicker({
   )
 }
 
+const editFrontierType = 'i2i'
+
 export function ImageEditorWorkspace({
   address,
   mediaUrl,
@@ -591,6 +594,7 @@ export function ImageEditorWorkspace({
   const instructionId = useId()
   const hintId = useId()
   const modelSelectId = useId()
+  const providerSelectId = useId()
   const mountedRef = useRef(false)
   const drawStartRef = useRef<{ x: number; y: number } | null>(null)
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -635,6 +639,17 @@ export function ImageEditorWorkspace({
     ?? null
   const modelSupportsTarget = (model: ImageEditModelOption) =>
     model.capabilities[replacing ? 'regionReplace' : 'semantic']
+  const models = imageEditModels ?? []
+  const currentModel = models.find((model) => model.id === effectiveModelId) ?? null
+  const familyGroups = generationFamilyGroups(models, editFrontierType)
+  const providerOptions = currentModel
+    ? generationProviderOptions(models, currentModel.family.id, {
+      frontierType: editFrontierType,
+      compatible: modelSupportsTarget,
+      selectedId: currentModel.id,
+      alternatives: true,
+    })
+    : []
   const refreshCostEstimate = (modelId: string) => {
     if (!onEstimateImageEditCost) return
     void onEstimateImageEditCost(modelId, editOperation)
@@ -644,6 +659,19 @@ export function ImageEditorWorkspace({
       .catch(() => {
         if (mountedRef.current) setCostEstimate(null)
       })
+  }
+  const selectModel = (modelId: string) => {
+    setSelectedModelId(modelId)
+    setCostEstimate(null)
+    refreshCostEstimate(modelId)
+  }
+  const changeFamily = (familyId: string) => {
+    const next = actionForFamily(models, familyId, {
+      frontierType: editFrontierType,
+      compatible: modelSupportsTarget,
+      currentProvider: currentModel?.provider,
+    })
+    if (next) selectModel(next.id)
   }
   const hoveredRegion = regions.find((region) => region.id === hoveredRegionId) ?? null
   const snapOffer = hoveredRegion ? bestSubjectSnap(hoveredRegion.box, subjects) : null
@@ -944,32 +972,48 @@ export function ImageEditorWorkspace({
           <p id={hintId} className="image-editor-hint">
             The result lands in a new cell next to @{address}.
           </p>
-          {(imageEditModels?.length ?? 0) > 0 && (
-            <div className="image-editor-model">
+          {models.length > 0 && (
+            <div
+              className="image-editor-model"
+              onFocus={() => {
+                if (effectiveModelId && costEstimate === null) {
+                  refreshCostEstimate(effectiveModelId)
+                }
+              }}
+            >
               <label htmlFor={modelSelectId}>Model</label>
               <select
                 id={modelSelectId}
-                value={effectiveModelId ?? ''}
+                aria-label="Generation model"
+                value={currentModel?.family.id ?? ''}
                 disabled={imageEditModelsLoading}
-                onChange={(event) => {
-                  setSelectedModelId(event.target.value)
-                  setCostEstimate(null)
-                  refreshCostEstimate(event.target.value)
-                }}
-                onFocus={() => {
-                  if (effectiveModelId && costEstimate === null) {
-                    refreshCostEstimate(effectiveModelId)
-                  }
-                }}
+                onChange={(event) => changeFamily(event.target.value)}
               >
-                {(imageEditModels ?? []).map((model) => (
-                  <option
-                    key={model.id}
-                    value={model.id}
-                    disabled={!modelSupportsTarget(model)}
-                  >
-                    {model.label}
-                    {modelSupportsTarget(model) ? '' : ' — cannot edit this target'}
+                {familyGroups.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.rows.map(({ family, actions, ranking }) => {
+                      const compatible = actions.some(modelSupportsTarget)
+                      return (
+                        <option key={family.id} value={family.id} disabled={!compatible}>
+                          {ranking ? `#${ranking.rank} · ${family.title} · Elo ${ranking.elo}` : family.title}
+                          {compatible ? '' : ' · incompatible'}
+                        </option>
+                      )
+                    })}
+                  </optgroup>
+                ))}
+              </select>
+              <label htmlFor={providerSelectId}>Provider</label>
+              <select
+                id={providerSelectId}
+                aria-label="Generation provider"
+                value={currentModel?.id ?? ''}
+                disabled={imageEditModelsLoading || providerOptions.length <= 1}
+                onChange={(event) => selectModel(event.target.value)}
+              >
+                {providerOptions.map(({ action, label, priceLabel, available, compatible }) => (
+                  <option key={action.id} value={action.id} disabled={!compatible}>
+                    {[label, priceLabel, available ? null : 'not configured', compatible ? null : 'incompatible'].filter(Boolean).join(' · ')}
                   </option>
                 ))}
               </select>

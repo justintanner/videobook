@@ -26,6 +26,7 @@ import {
   type ImageEditModelInfo,
 } from "../image-edit-models.js";
 import { readLastImageEditModel, writeLastImageEditModel } from "../image-edit-settings.js";
+import { modelFrontierRankings } from "../media/frontier.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { isPublishedPostCell } from "../notebook-published-post.js";
 import { slotRight } from "../notebook-placement.js";
@@ -325,10 +326,13 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
         models: IMAGE_EDIT_MODELS.map((entry) => ({
           id: entry.id,
           label: entry.label,
+          family: entry.family,
+          ...(entry.variant ? { variant: entry.variant } : {}),
           provider: entry.provider,
           capabilities: entry.capabilities,
           max_input_images: entry.maxInputImages,
           available: Boolean(process.env[entry.envKey]),
+          frontier: modelFrontierRankings(entry.catalogModel),
         })),
         default_model: DEFAULT_IMAGE_EDIT_MODEL_ID,
         last_used_model: readLastImageEditModel(engine),

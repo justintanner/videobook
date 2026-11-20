@@ -1507,6 +1507,86 @@ describe("image subject tools", () => {
     });
   }
 
+  it("runs a Nano Banana 2.1 edit through the Fal endpoint when Fal is the provider", async () => {
+    const originalFalKey = process.env.FAL_API_KEY;
+    process.env.FAL_API_KEY = "fal-stub-key";
+    const realFetch = globalThis.fetch;
+    const edited = await solidPng(100, 100, { r: 240, g: 200, b: 10 });
+    const calls: Array<{ method: string; url: string; body: unknown }> = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+      if (url.hostname === "127.0.0.1" || url.hostname === "localhost") return realFetch(input, init);
+      calls.push({ method, url: url.href, body: typeof init?.body === "string" ? JSON.parse(init.body) : null });
+      if (url.href.startsWith("https://rest.fal.ai/storage/upload/initiate")) {
+        return Response.json({ upload_url: "https://upload.fal.test/source", file_url: "https://v3.fal.media/files/source.png" });
+      }
+      if (url.href === "https://upload.fal.test/source") return new Response(null, { status: 200 });
+      if (url.href === "https://queue.fal.run/google/nano-banana-2.1/edit" && method === "POST") {
+        return Response.json({ request_id: "fal-edit-1", status: "IN_QUEUE" });
+      }
+      if (url.href === "https://queue.fal.run/google/nano-banana-2.1/requests/fal-edit-1/status") {
+        return Response.json({ status: "COMPLETED", request_id: "fal-edit-1" });
+      }
+      if (url.href === "https://queue.fal.run/google/nano-banana-2.1/requests/fal-edit-1") {
+        return Response.json({ images: [{ url: "https://v3.fal.media/files/edited.png" }] });
+      }
+      if (url.href === "https://v3.fal.media/files/edited.png") {
+        return new Response(new Uint8Array(edited), { headers: { "Content-Type": "image/png" } });
+      }
+      return new Response("unexpected provider call", { status: 418 });
+    }) as typeof fetch;
+    try {
+      const source = await createSource();
+      const result = await client.callTool({
+        name: "edit_image_subjects",
+        arguments: {
+          book_id: bookId,
+          notebook_id: source.notebookId,
+          source_cell_id: source.sourceCellId,
+          artifact_id: source.artifactId,
+          object_hash: source.objectHash,
+          operation: "edit",
+          subject_ids: ["person"],
+          prompt: "Make the person yellow",
+          model: "google/nano-banana-2.1/edit",
+        },
+      });
+      expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+      const parsed = resultJson(result) as { job_id: string; output_artifact_id: string; producer_cell_id: string };
+      await waitForJob(parsed.job_id, testBudget(30_000));
+
+      expect(calls[2]?.body).toMatchObject({
+        prompt: expect.stringContaining("Modify only these selected subjects"),
+        image_urls: ["https://v3.fal.media/files/source.png"],
+        output_format: "png",
+      });
+      expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+        "POST https://rest.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3",
+        "PUT https://upload.fal.test/source",
+        "POST https://queue.fal.run/google/nano-banana-2.1/edit",
+        "GET https://queue.fal.run/google/nano-banana-2.1/requests/fal-edit-1/status",
+        "GET https://queue.fal.run/google/nano-banana-2.1/requests/fal-edit-1",
+        "GET https://v3.fal.media/files/edited.png",
+      ]);
+      const payload = await engine.metadata.artifacts.read(parsed.output_artifact_id, "generation-payload");
+      expect(payload.ok && payload.value).toMatchObject({ endpoint_id: "google/nano-banana-2.1/edit" });
+      const output = await engine.files.read(parsed.output_artifact_id, "original.png");
+      expect(output.ok).toBe(true);
+      const notebook = engine.notebooks.read(source.notebookId);
+      if (!notebook.ok) throw new Error(notebook.error.message);
+      expect(notebook.value.cells.find((cell) => cell.id === parsed.producer_cell_id)).toMatchObject({
+        provider: "fal",
+        model: "google/nano-banana-2.1/edit",
+        inputs: expect.objectContaining({ state: "completed" }),
+      });
+    } finally {
+      globalThis.fetch = realFetch;
+      if (originalFalKey) process.env.FAL_API_KEY = originalFalKey;
+      else delete process.env.FAL_API_KEY;
+    }
+  });
+
   it.each(["edit", "remove"] as const)("enqueues a drawn-region %s without analysis or a replacement image", async (operation) => {
     await pauseBookQueueForTests(bookId);
     const originalKey = process.env.KIE_API_KEY;
@@ -1713,14 +1793,16 @@ describe("image subject tools", () => {
         models: Array<{
           id: string;
           label: string;
+          family: { id: string; title: string };
           provider: string;
           available: boolean;
           max_input_images: number | null;
+          frontier: unknown[];
         }>;
         default_model: string;
         last_used_model: string | null;
       };
-      expect(catalog.models).toHaveLength(11);
+      expect(catalog.models).toHaveLength(18);
       expect(catalog.models.find((model) => model.id === "flux-3/klein-edit-image")).toMatchObject({
         label: "FLUX 3 Klein Edit", provider: "kie", available: true, max_input_images: 10,
       });
@@ -1735,6 +1817,18 @@ describe("image subject tools", () => {
       });
       expect(catalog.default_model).toBe("nano-banana-2-1");
       expect(catalog.last_used_model).toBeNull();
+      expect(catalog.models.filter((model) => model.family.id === "image:nano-banana-2-1")).toEqual([
+        expect.objectContaining({ id: "nano-banana-2-1", provider: "kie", available: true }),
+        expect.objectContaining({ id: "google/nano-banana-2.1/edit", provider: "fal", available: false }),
+      ]);
+      expect(catalog.models[0]).toMatchObject({
+        family: { id: "image:nano-banana-2-1", title: "Nano Banana 2.1" },
+        frontier: expect.arrayContaining([expect.objectContaining({ type: "i2i", rank: expect.any(Number), elo: expect.any(Number) })]),
+      });
+      for (const family of ["image:gpt-image-2-6-sunburst", "image:gpt-image-2-6-flare", "image:gpt-image-2", "image:nano-banana-pro"]) {
+        expect(catalog.models.filter((model) => model.family.id === family).map((model) => model.provider), family)
+          .toEqual(["kie", "fal"]);
+      }
       const falEntry = catalog.models.find((model) => model.id === "fal-ai/nano-banana-2/edit");
       expect(falEntry?.available).toBe(false);
       const qwenEntry = catalog.models.find((model) => model.id === "alibaba/qwen-image-3/edit");

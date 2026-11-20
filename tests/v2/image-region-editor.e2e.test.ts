@@ -460,7 +460,8 @@ describe('drawn region image editor through real MCP', () => {
     await page.getByRole('button', { name: 'Edit @a1 image', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Fullscreen preview for @a1' })
     const instruction = dialog.getByLabel('What should change?')
-    await expect.poll(() => dialog.getByLabel('Model', { exact: true }).inputValue()).toBe('nano-banana-2-1')
+    await expect.poll(() => dialog.getByLabel('Generation provider', { exact: true }).inputValue()).toBe('nano-banana-2-1')
+    expect(await dialog.getByLabel('Generation model', { exact: true }).inputValue()).toBe('image:nano-banana-2-1')
     const draw = dialog.getByRole('button', { name: 'Draw region', exact: true })
     const drawRegion = async (left: number, top: number, width: number, height: number) => {
       await draw.click()
@@ -495,7 +496,10 @@ describe('drawn region image editor through real MCP', () => {
       operation: 'remove', edit_regions: observed[0]!.arguments.edit_regions,
       model: 'nano-banana-2-1',
     })
-    await dialog.getByLabel('Model', { exact: true }).selectOption('seedream/5-pro-image-to-image')
+    expect(await dialog.getByLabel('Generation provider', { exact: true }).locator('option').allTextContents())
+      .toEqual([expect.stringMatching(/^Kie · /), expect.stringMatching(/^Fal · /)])
+    await selectGenerationAction(dialog, 'seedream/5-pro-image-to-image')
+    expect(await dialog.getByLabel('Generation provider', { exact: true }).isDisabled()).toBe(true)
     await instruction.fill('')
     await dialog.getByRole('listbox', { name: 'Replacement for Region 1' })
       .getByRole('option', { name: '@a2', exact: true }).click()
@@ -519,6 +523,19 @@ describe('drawn region image editor through real MCP', () => {
       operation: 'edit',
       edit_regions: [{ x: expect.closeTo(0.6, 2), y: expect.closeTo(0.5, 2), width: expect.closeTo(0.2, 2), height: expect.closeTo(0.3, 2) }],
     })
+
+    const originalFalKey = process.env.FAL_API_KEY
+    delete process.env.FAL_API_KEY
+    try {
+      await selectGenerationAction(dialog, 'google/nano-banana-2.1/edit')
+      await instruction.fill('Make this area green')
+      await instruction.press('Control+Enter')
+      await expect.poll(() => dialog.locator('.image-editor-status.error').textContent())
+        .toContain('FAL_API_KEY environment variable is not set')
+      expect(observed[4]?.arguments).toMatchObject({ operation: 'edit', model: 'google/nano-banana-2.1/edit' })
+    } finally {
+      if (originalFalKey !== undefined) process.env.FAL_API_KEY = originalFalKey
+    }
     await page.screenshot({ path: '/tmp/videobook-region-editor-check.png' })
   }, 60_000)
 

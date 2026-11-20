@@ -1,11 +1,19 @@
 import { DEFAULT_IMAGE_EDIT_MODEL_ID } from '../../server/src/image-edit-default'
+import type { ModelFrontierRanking } from '../../server/src/media/frontier'
 import { useCallback, useRef, useState } from 'react'
+import { parseFrontierRankings } from './generation-frontier'
+import type { GenerationFamily } from './notebook-generation-actions'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
 export interface ImageEditModelOption {
   id: string
   label: string
+  family: GenerationFamily
+  variant?: string
   provider: 'kie' | 'fal'
+  providerLabel: string
+  operation: 'edit_image'
+  frontier: ModelFrontierRanking[]
   capabilities: {
     semantic: boolean
     regionReplace: boolean
@@ -32,6 +40,15 @@ export interface ImageEditModelsState extends ImageEditModelCatalog {
   loading: boolean
   error: string | null
   ensureLoaded: (bookId: string) => void
+}
+
+const providerLabels = { kie: 'Kie', fal: 'Fal' } as const
+
+function parseModelFamily(value: unknown, id: string, label: string): GenerationFamily {
+  const record = recordValue(value)
+  const familyId = nonBlankStringValue(record?.id)
+  const title = nonBlankStringValue(record?.title)
+  return familyId && title ? { id: familyId, title } : { id, title: label }
 }
 
 function parseModelCapabilities(value: unknown): ImageEditModelOption['capabilities'] | null {
@@ -61,10 +78,16 @@ function parseImageEditModelCatalog(payload: unknown): ImageEditModelCatalog {
       && Number.isFinite(item.max_input_images)
       ? item.max_input_images
       : null
+    const variant = nonBlankStringValue(item?.variant)
     models.push({
       id,
       label,
+      family: parseModelFamily(item?.family, id, label),
+      ...(variant ? { variant } : {}),
       provider,
+      providerLabel: providerLabels[provider],
+      operation: 'edit_image',
+      frontier: parseFrontierRankings(item?.frontier),
       capabilities,
       maxInputImages,
       available: item?.available === true,
