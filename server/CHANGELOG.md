@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-11-20
+
 ### Added
 
 - KIE models: Kling 4.0 Image for text-to-image and edits of up to 10 images,
