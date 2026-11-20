@@ -99,6 +99,9 @@ import { AnalysisCellSummary } from '@/components/videobook/AnalysisCellSummary'
 import { CellMediaFrame } from '@/components/videobook/CellMediaFrame'
 import { PublishedPostTileChrome } from '@/components/videobook/PublishedPostChrome'
 import { CellStateOverlay } from '@/components/videobook/cell-overlays/CellStateOverlay'
+import { CellGeneratorIdentity } from '@/components/videobook/cell-overlays/CellGeneratorIdentity'
+import { generationIdentity } from '@/videobook/output-generation'
+import { publishedPostPresentation } from '@/videobook/notebook-published-post'
 import { NotebookTimeline } from '@/components/videobook/NotebookTimeline'
 
 export function CellIcon({ kind }: { kind: NotebookCellType }) {
@@ -387,14 +390,16 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const statusLabel = data.post ? postTileStatus(data.post) : notebookCellStatusLabel(data.kind, data.status)
   const inputKind = data.outputArtifactId ? notebookGenerationInputKind({ type: data.kind }) : null
   const generationCell = isNotebookGenerationCellType(data.kind)
-  const generationRun = generationCell || isImageVideoGenerationResultCell({
+  const generationResult = isImageVideoGenerationResultCell({
     type: data.kind,
     inputs: data.inputs,
   })
-  const generatorLine = generationRun
-    ? [data.provider ?? data.producerProvider, data.model ?? data.producerModel]
-      .filter((part): part is string => typeof part === 'string' && part.length > 0)
-      .join(' · ') || null
+  const generationRun = generationCell || generationResult
+  const generator = generationRun
+    ? generationIdentity(
+      data.provider ?? data.producerProvider,
+      data.model ?? data.producerModel,
+    )
     : null
   const toolTitle = generationCell && data.model
     ? generationTitles.get(data.model) ?? null
@@ -441,9 +446,6 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const imagePrompt = imageMediaCell
     ? resolvedPrompt ?? data.asset?.prompt ?? null
     : null
-  const imageToolTitle = imageMediaCell && data.model
-    ? generationTitles.get(data.model) ?? null
-    : null
   const promptCell = textCell || (generationCell && Boolean(data.prompt))
   const address = notebookGridTag(data.slot)
   const frameProvenance = data.frameProvenance
@@ -463,6 +465,19 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const audioPreviewCell = audioCell && playableAudio
   const visualPreviewCell = visualMediaCell && Boolean(mediaUrl || thumbnailUrl)
   const mediaTile = visualPreviewCell && !emptyMediaSlot && data.kind !== 'post'
+  const running = notebookCellIsActiveStatus(data.status)
+  const failed = data.status === 'error'
+  const generatorChip = mediaTile
+    && generationResult
+    && !running
+    && !failed
+    && !publishedPostPresentation(data.inputs)
+    ? generator
+    : null
+  const footerGeneratorTool = !generatorChip && data.model
+    ? generationTitles.get(data.model) ?? null
+    : null
+  const footerGeneratorModel = generatorChip ? null : data.model ?? data.tool ?? null
   const audioBadges = audioPreviewCell ? audioPreviewBadges(audioPreviewInput) : []
   const audioMeter = audioPreviewCell ? audioPreviewMeter(audioPreviewInput) : null
   const visualBadges = !visualPreviewCell
@@ -471,16 +486,16 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
       ? imagePreviewBadges({
         width: data.asset?.width ?? null,
         height: data.asset?.height ?? null,
-        tool: imageToolTitle,
-        model: data.model ?? data.tool ?? null,
+        tool: footerGeneratorTool,
+        model: footerGeneratorModel,
         provenance: frameProvenance,
       })
       : videoPreviewBadges({
         aspectRatio: data.videoAspectRatio ?? null,
         width: data.asset?.width ?? null,
         height: data.asset?.height ?? null,
-        tool: data.model ? generationTitles.get(data.model) ?? null : null,
-        model: data.model ?? data.tool ?? null,
+        tool: footerGeneratorTool,
+        model: footerGeneratorModel,
         provenance: frameProvenance,
       })
   const visualMeter = visualPreviewCell && playableVideo
@@ -489,8 +504,6 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const visualMetadataLabel = previewMetadataLabel(typeLabel, visualBadges, visualMeter, imagePrompt)
   const incomingBadge = notebookIncomingRouteBadge(data.incomingRoutes ?? [])
   const outgoingBadge = notebookOutgoingRouteBadge(data.outgoingRoutes ?? [])
-  const running = notebookCellIsActiveStatus(data.status)
-  const failed = data.status === 'error'
   const outputVersions = notebookOutputVersionArtifactIds(
     data.inputs,
     data.outputArtifactId,
@@ -714,6 +727,9 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             pendingIcon={<Film size={26} aria-hidden="true" />}
           >
             <PublishedPostTileChrome inputs={data.inputs} />
+            {generatorChip && (
+              <CellGeneratorIdentity identity={generatorChip} className="cell-generator-chip" />
+            )}
           </CellMediaFrame>
         ) : (
           <div className={`cell-copy ${promptCell ? 'cell-copy-text' : ''}`}>
@@ -731,7 +747,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           statusStartedAt={data.statusStartedAt}
           statusError={data.statusError}
           icon={<CellIcon kind={data.kind} />}
-          generator={generatorLine}
+          generator={generator}
           generation={generationRun}
           onRepair={generationRun ? () => {
             void cellActions.repairCell(id)

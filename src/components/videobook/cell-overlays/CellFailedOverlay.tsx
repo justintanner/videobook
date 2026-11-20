@@ -1,5 +1,7 @@
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { RotateCcw, Trash2, Wrench } from 'lucide-react'
+import type { GenerationIdentity } from '@/videobook/output-generation'
+import { CellGeneratorIdentity } from './CellGeneratorIdentity'
 
 export type DownloadRetry = 'standard' | 'chrome'
 
@@ -21,7 +23,7 @@ export function CellFailedOverlay({
   error: string
   label: string
   address: string
-  meta?: string | null
+  meta?: GenerationIdentity | null
   onRepair?: () => void
   onRetry?: () => void
   downloadRetry?: DownloadRetry
@@ -46,7 +48,7 @@ export function CellFailedOverlay({
       <div className="cell-state-overlay-body cell-state-failed-body">
         <strong>{label}</strong>
         <p className="cell-state-failed-message">{downloadRetry ? error.split('\n', 1)[0] : error}</p>
-        {meta && <span className="cell-state-meta" title={meta}>{meta}</span>}
+        {meta && <CellGeneratorIdentity identity={meta} className="cell-state-meta" />}
         {(onRepair || onRetry || onDelete) && (
           <div className="cell-state-actions">
             {onRetry && (

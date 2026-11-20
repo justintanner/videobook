@@ -3,7 +3,9 @@ import {
   notebookCellGenerationPhaseCount,
   type NotebookCellGenerationPhase,
 } from '@/videobook/notebook-cell-presentation'
+import type { GenerationIdentity } from '@/videobook/output-generation'
 import { CellAnimatedBackground } from './CellAnimatedBackground'
+import { CellGeneratorIdentity } from './CellGeneratorIdentity'
 
 const TICK_MS = 1000
 
@@ -64,7 +66,7 @@ export function CellClockOverlay({
   address: string
   startedAt: number | null
   variant?: 'rise' | 'stream'
-  meta?: string | null
+  meta?: GenerationIdentity | null
   phase?: NotebookCellGenerationPhase | null
 }) {
   const [fallbackStart] = useState(() => Date.now())
@@ -98,7 +100,7 @@ export function CellClockOverlay({
             </span>
           </div>
         </div>
-        {meta && <span className="cell-state-meta" title={meta}>{meta}</span>}
+        {meta && <CellGeneratorIdentity identity={meta} className="cell-state-meta" />}
         {phase && <CellPhaseRail phase={phase} />}
       </div>
     </div>

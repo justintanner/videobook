@@ -2376,14 +2376,52 @@ textarea:focus-visible {
 }
 
 .cell-state-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   color: color-mix(in srgb, var(--cell-state-color) 55%, white);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: var(--cell-label-font-size);
   letter-spacing: 0.02em;
   line-height: 1;
+  white-space: nowrap;
+}
+
+.cell-generator-provider {
+  flex: none;
+  color: var(--cyan);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.cell-generator-model {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-generator-chip {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 1;
+  display: inline-flex;
+  max-width: calc(100% - 16px);
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  border: 1px solid rgba(101, 190, 145, 0.35);
+  border-radius: 3px;
+  color: #e1ffed;
+  background: rgba(3, 9, 7, 0.82);
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: var(--cell-label-font-size);
+  letter-spacing: 0.02em;
+  line-height: 1.5;
   white-space: nowrap;
 }
 

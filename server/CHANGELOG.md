@@ -6,6 +6,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- A generated image or video tile names the provider and model that made it
+  in a chip on its preview, such as `Kie bytedance/seedance-2-5`, instead of
+  in its footer, where the model was usually cut off. While it generates or
+  after it fails, the line under its status names them the same way. The
+  model no longer repeats the provider, as in `kie · kie:minimax-h3/refer…`.
+
 ## [0.8.3] - 2026-11-20
 
 ### Added

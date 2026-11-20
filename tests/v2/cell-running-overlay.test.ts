@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CellStateOverlay } from '../../src/components/videobook/cell-overlays/CellStateOverlay'
 import { isGenerationCreditError } from '../../server/src/generation-credit-error'
+import { generationIdentity } from '../../src/videobook/output-generation'
 
 describe('CellStateOverlay', () => {
   it.each([
@@ -95,13 +96,13 @@ describe('CellStateOverlay', () => {
       address: 'c5',
       status: 'generating',
       icon: createElement('span', { 'data-icon': 'video' }),
-      generator: 'fal · bytedance/seedance-2-5',
+      generator: generationIdentity('fal', 'fal:bytedance/seedance-2-5'),
       generation: true,
     }))
 
     expect(html).toContain('>GENERATING</strong>')
-    expect(html).toContain('class="cell-state-meta" title="fal · bytedance/seedance-2-5"')
-    expect(html).toContain('fal · bytedance/seedance-2-5</span>')
+    expect(html).toContain('class="cell-state-meta" title="Fal · bytedance/seedance-2-5"')
+    expect(html).toContain('<span class="cell-generator-provider">Fal</span><span class="cell-generator-model">bytedance/seedance-2-5</span>')
     expect(html).toContain('class="cell-state-phase-step" data-status="done"')
     expect(html).toContain('class="cell-state-phase-step" data-status="active"')
     expect(html).toContain('class="cell-state-phase-step" data-status="pending"')
@@ -145,7 +146,7 @@ describe('CellStateOverlay', () => {
       status: 'error',
       statusError: 'Job lease expired',
       icon: createElement('span', { 'data-icon': 'img' }),
-      generator: 'fal · bytedance/seedream-4',
+      generator: generationIdentity('fal', 'fal:bytedance/seedream-4'),
       onRepair: () => undefined,
       onDelete: () => undefined,
     }))
@@ -154,7 +155,7 @@ describe('CellStateOverlay', () => {
     expect(html).toContain('role="alert"')
     expect(html).toContain('GENERATION FAILED')
     expect(html).toContain('Job lease expired')
-    expect(html).toContain('fal · bytedance/seedream-4</span>')
+    expect(html).toContain('<span class="cell-generator-model">bytedance/seedream-4</span>')
     expect(html).toContain('class="cell-state-action cell-state-repair nodrag"')
     expect(html).toContain('aria-label="Repair @a1 in chat"')
     expect(html).toContain('REPAIR')

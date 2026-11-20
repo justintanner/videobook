@@ -6,6 +6,7 @@ import {
   notebookCellGenerationPhase,
   notebookCellStateFromStatus,
 } from '@/videobook/notebook-cell-presentation'
+import type { GenerationIdentity } from '@/videobook/output-generation'
 import { CellClockOverlay } from './CellClockOverlay'
 import { CellFailedOverlay, type DownloadRetry } from './CellFailedOverlay'
 
@@ -30,7 +31,7 @@ export function CellStateOverlay({
   statusStartedAt?: string
   statusError?: string
   icon: ReactNode
-  generator?: string | null
+  generator?: GenerationIdentity | null
   generation?: boolean
   onRepair?: () => void
   onRetry?: () => void

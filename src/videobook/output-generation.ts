@@ -106,6 +106,27 @@ export function generationProviderLabel(provider: string | null): string | null 
   return provider ? providerDisplayLabel(provider) : null
 }
 
+export type GenerationIdentity = {
+  provider: string | null
+  model: string | null
+  label: string
+}
+
+/** Provider and model as a tile names them, the model once, without the provider prefix. */
+export function generationIdentity(
+  provider: string | null | undefined,
+  model: string | null | undefined,
+): GenerationIdentity | null {
+  const providerLabel = generationProviderLabel(provider || null)
+  const modelLabel = generationModelLabel(model || null, provider || null)
+  if (!providerLabel && !modelLabel) return null
+  return {
+    provider: providerLabel,
+    model: modelLabel,
+    label: [providerLabel, modelLabel].filter(Boolean).join(' · '),
+  }
+}
+
 /** Prompt text split around `@image1`-style input slot tokens. */
 export function generationPromptSegments(prompt: string): PromptSegment[] {
   const segments: PromptSegment[] = []
