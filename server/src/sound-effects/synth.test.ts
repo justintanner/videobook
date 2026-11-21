@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fftInPlace } from "../rhythm/fft.js";
-import { BUILTIN_SOUND_IDS, BUILTIN_SOUNDS, builtinSound, builtinSoundId } from "./catalog.js";
+import { BUILTIN_SOUND_IDS, BUILTIN_SOUNDS, SYNTH_SOUND_IDS, builtinSound, builtinSoundId, isRecordedSound } from "./catalog.js";
 import { renderBuiltinSound } from "./synth.js";
 
 function rms(samples: Float32Array): number {
@@ -44,13 +44,18 @@ function loudestWindow(left: Float32Array, right: Float32Array): number {
 
 describe("built-in sound synthesis", () => {
   it("keeps the picker order and normalizes user names", () => {
-    expect(BUILTIN_SOUND_IDS).toEqual(["zoom_in", "zoom_out", "whoosh", "swish", "pop", "click", "ding", "impact", "riser", "glitch", "power_down", "error"]);
+    expect(BUILTIN_SOUND_IDS).toEqual(["zoom_in", "zoom_out", "whoosh", "swish", "pop", "click", "ding", "impact", "riser", "glitch", "shutdown", "error"]);
     expect(BUILTIN_SOUNDS.map((sound) => sound.id)).toEqual(BUILTIN_SOUND_IDS);
     for (const text of ["zoom-in", "Zoom In", "zoom in", " zoom_in "]) expect(builtinSoundId(text)).toBe("zoom_in");
     expect(builtinSoundId("unknown")).toBeNull();
   });
 
-  it.each(BUILTIN_SOUND_IDS)("%s is deterministic, bounded and aligned to its accent", (id) => {
+  it("synthesizes every sound except the recorded shutdown", () => {
+    expect(BUILTIN_SOUND_IDS.filter(isRecordedSound)).toEqual(["shutdown"]);
+    expect(SYNTH_SOUND_IDS).toEqual(BUILTIN_SOUND_IDS.filter((id) => id !== "shutdown"));
+  });
+
+  it.each(SYNTH_SOUND_IDS)("%s is deterministic, bounded and aligned to its accent", (id) => {
     const spec = builtinSound(id);
     const audio = renderBuiltinSound(id);
     const again = renderBuiltinSound(id);
@@ -135,14 +140,6 @@ describe("built-in sound synthesis", () => {
     }
     expect(builtinSound("glitch").durationSeconds).toBeLessThanOrEqual(0.4);
     expect(gaps).toBeGreaterThanOrEqual(3);
-  });
-
-  it("glides power_down downward so its last third is below half the first third", () => {
-    const samples = renderBuiltinSound("power_down").left;
-    const third = Math.floor(samples.length / 3);
-    const first = spectrum(samples.slice(0, third)).strongest;
-    const last = spectrum(samples.slice(-third)).strongest;
-    expect(last).toBeLessThan(first / 2);
   });
 
   it("splits error into two bursts separated by silence with the second lower", () => {

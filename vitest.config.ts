@@ -139,6 +139,7 @@ export default defineConfig({
       'server/src/sound-effects/synth.test.ts',
       'server/src/sound-effects/wav.test.ts',
       'server/src/sound-effects/mix.test.ts',
+      'server/src/sound-effects/recordings.test.ts',
       'server/src/audio-cue.test.ts',
       'server/src/audio-sync.test.ts',
       'server/src/character-name.test.ts',

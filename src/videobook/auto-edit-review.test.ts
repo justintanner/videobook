@@ -149,7 +149,7 @@ describe('auto-edit review timeline', () => {
       ['Sounds', '5 cues'],
     ])
     expect(beats[3]!.detail).toBe('6.50–7.20 s at half speed, crash look, pitch drop')
-    expect(beats[4]!.detail).toBe('riser, impact ×2, glitch, power down')
+    expect(beats[4]!.detail).toBe('riser, impact ×2, glitch, shutdown')
     const quiet = autoEditBeats(built.anchors, { ...DEFAULT_AUTO_EDIT_SECTIONS, replays: false, pushIn: false, crash: false }, [])
     expect(quiet[4]!.detail).toBe('Nothing to cue without replays, push-in or crash')
   })

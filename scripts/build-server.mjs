@@ -19,4 +19,5 @@ const compiled = spawnSync(process.execPath, [tsc, '-p', join(server, 'tsconfig.
 if (compiled.status !== 0) process.exit(compiled.status ?? 1)
 await replaceDirectory(join(server, 'src', 'guides'), join(dist, 'guides'))
 await replaceDirectory(join(server, 'src', 'remotion', 'public'), join(dist, 'remotion', 'public'))
+await replaceDirectory(join(server, 'src', 'sound-effects', 'recordings'), join(dist, 'sound-effects', 'recordings'))
 await copyFile(join(root, 'LICENSE'), join(server, 'LICENSE'))

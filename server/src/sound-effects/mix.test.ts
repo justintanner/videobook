@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildBuiltinSfxFilter, writeBuiltinSfxFiles } from "./mix.js";
+import { builtinRecordingPath } from "./recordings.js";
 
 const cues = [{ sound: "pop", startSeconds: 1.25, gain: 0.35 }, { sound: "ding", startSeconds: 2, gain: 0.7 }] as const;
 
@@ -33,6 +34,18 @@ describe("built-in sound mixing graph", () => {
       expect(paths[0]).toBe(paths[1]);
       expect(paths[2]).not.toBe(paths[0]);
       expect((await readdir(dir)).sort()).toEqual(["ding.wav", "pop.wav"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("points a recorded sound at its bundled file instead of writing one", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "builtin-cues-"));
+    try {
+      const paths = await writeBuiltinSfxFiles(dir, [{ sound: "shutdown", startSeconds: 0, gain: 0.7 }, cues[0]]);
+      expect(paths[0]).toBe(builtinRecordingPath("shutdown"));
+      expect(paths[0]!.endsWith(join("recordings", "windows_shutdown.mp3"))).toBe(true);
+      expect(await readdir(dir)).toEqual(["pop.wav"]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

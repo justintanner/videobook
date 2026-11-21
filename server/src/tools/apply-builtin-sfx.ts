@@ -16,7 +16,7 @@ const cueSchema = z.object({
 export function applyBuiltinSfxDef(engine: Engine): ToolDef {
   return {
     name: "apply_builtin_sfx",
-    description: "Mix local, free sound effects into a video: zoom_in, zoom_out, whoosh, swish, pop, click, ding, impact, riser, glitch, power_down, error. For other sounds, use apply_sfx to generate them.",
+    description: "Mix local, free sound effects into a video: zoom_in, zoom_out, whoosh, swish, pop, click, ding, impact, riser, glitch, shutdown, error. For other sounds, use apply_sfx to generate them.",
     schema: {
       asset_id: z.string().describe("Video asset ID"),
       book_id: z.string().describe("Book id"),

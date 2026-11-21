@@ -1,5 +1,5 @@
 import { builtinSound } from "./catalog.js";
-import type { BuiltinSoundId } from "./catalog.js";
+import type { SynthSoundId } from "./catalog.js";
 
 const SAMPLE_RATE = 48_000;
 type Curve = (u: number) => number;
@@ -20,7 +20,7 @@ function noise(length: number, seed: number): Float32Array {
   });
 }
 
-function svf(samples: Float32Array, cutoff: Curve, mode: "band" | "low"): Float32Array {
+function bandpass(samples: Float32Array, cutoff: Curve): Float32Array {
   let low = 0;
   let band = 0;
   return samples.map((sample, index) => {
@@ -29,16 +29,8 @@ function svf(samples: Float32Array, cutoff: Curve, mode: "band" | "low"): Float3
     const high = sample - low - band / 1.2;
     band += f * high;
     low += f * band;
-    return mode === "band" ? band : low;
+    return band;
   });
-}
-
-function bandpass(samples: Float32Array, cutoff: Curve): Float32Array {
-  return svf(samples, cutoff, "band");
-}
-
-function lowpass(samples: Float32Array, cutoff: Curve): Float32Array {
-  return svf(samples, cutoff, "low");
 }
 
 function sine(length: number, pitch: Curve): Float32Array {
@@ -86,12 +78,6 @@ function glitch(length: number): Float32Array {
   });
 }
 
-function powerDown(length: number): Float32Array {
-  const tone = sine(length, sweep(440, 55));
-  const hum = lowpass(noise(length, 97), sweep(900, 120));
-  return envelope(mix(tone, hum, 0.15), decay(0.35, 0.045 / 1.4));
-}
-
 function errorTone(length: number): Float32Array {
   const tone = sine(length, (u) => u < 0.45 ? 330 : 220);
   const peak = 0.015 / 0.35;
@@ -105,7 +91,7 @@ function errorTone(length: number): Float32Array {
   });
 }
 
-const recipes: Record<BuiltinSoundId, (length: number) => Float32Array> = {
+const recipes: Record<SynthSoundId, (length: number) => Float32Array> = {
   zoom_in: (length) => rush(length, sweep(220, 5_200), 0.82, 11),
   zoom_out: (length) => rush(length, sweep(5_200, 220), 0.18, 11),
   whoosh: (length) => rush(length, (u) => 350 * (3_500 / 350) ** Math.sin(Math.PI * u), 0.5, 23),
@@ -116,7 +102,6 @@ const recipes: Record<BuiltinSoundId, (length: number) => Float32Array> = {
   impact: (length) => envelope(mix(sine(length, sweep(110, 45)), envelope(noise(length, 51), decay(0.018)), 0.12), decay(0.18)),
   riser: (length) => rush(length, sweep(180, 6_000), 0.95, 67),
   glitch,
-  power_down: powerDown,
   error: errorTone,
 };
 
@@ -151,7 +136,7 @@ function normalize(audio: BuiltinAudio): void {
   }
 }
 
-export function renderBuiltinSound(id: BuiltinSoundId): BuiltinAudio {
+export function renderBuiltinSound(id: SynthSoundId): BuiltinAudio {
   const length = Math.round(builtinSound(id).durationSeconds * SAMPLE_RATE);
   const audio = pan(recipes[id](length), (u) => -0.2 + 0.4 * u);
   fade(audio.left);

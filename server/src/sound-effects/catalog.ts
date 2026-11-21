@@ -1,8 +1,23 @@
 export const BUILTIN_SOUND_IDS = [
-  "zoom_in", "zoom_out", "whoosh", "swish", "pop", "click", "ding", "impact", "riser", "glitch", "power_down", "error",
+  "zoom_in", "zoom_out", "whoosh", "swish", "pop", "click", "ding", "impact", "riser", "glitch", "shutdown", "error",
 ] as const;
 
 export type BuiltinSoundId = typeof BUILTIN_SOUND_IDS[number];
+
+/* Sounds that ship as a recording under ./recordings instead of being
+   synthesized; everything else is rendered by ./synth.ts. */
+export const BUILTIN_SOUND_RECORDINGS = {
+  shutdown: "windows_shutdown.mp3",
+} as const satisfies Partial<Record<BuiltinSoundId, string>>;
+
+export type RecordedSoundId = keyof typeof BUILTIN_SOUND_RECORDINGS;
+export type SynthSoundId = Exclude<BuiltinSoundId, RecordedSoundId>;
+
+export function isRecordedSound(id: BuiltinSoundId): id is RecordedSoundId {
+  return Object.hasOwn(BUILTIN_SOUND_RECORDINGS, id);
+}
+
+export const SYNTH_SOUND_IDS: readonly SynthSoundId[] = BUILTIN_SOUND_IDS.filter((id): id is SynthSoundId => !isRecordedSound(id));
 
 interface BuiltinSound {
   id: BuiltinSoundId;
@@ -23,7 +38,7 @@ export const BUILTIN_SOUNDS: readonly BuiltinSound[] = [
   { id: "impact", title: "Impact", description: "A deep thump lands with a brief noisy edge.", durationSeconds: 0.6, accentSeconds: 0.01 },
   { id: "riser", title: "Riser", description: "A climbing tone and rush build anticipation.", durationSeconds: 1.5, accentSeconds: 1.425 },
   { id: "glitch", title: "Glitch", description: "Short digital bursts stutter between silent gaps.", durationSeconds: 0.3, accentSeconds: 0.01 },
-  { id: "power_down", title: "Power down", description: "A falling tone and soft hum fade as power drops.", durationSeconds: 1.4, accentSeconds: 0.05 },
+  { id: "shutdown", title: "Shutdown", description: "The Windows shutdown chime, a recording.", durationSeconds: 3.24, accentSeconds: 0.02 },
   { id: "error", title: "Error", description: "Two short low tones mark an error.", durationSeconds: 0.35, accentSeconds: 0.02 },
 ];
 

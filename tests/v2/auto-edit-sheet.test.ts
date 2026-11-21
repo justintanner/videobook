@@ -102,7 +102,7 @@ describe('AutoEditSheet server render', () => {
       expect(html).toMatch(new RegExp(`role="switch" aria-label="${label}"[^>]*checked=""`))
     }
     expect(html).toContain('+2.00 s')
-    expect(html).toContain('riser, impact ×2, glitch, power down')
+    expect(html).toContain('riser, impact ×2, glitch, shutdown')
 
     for (const marker of ['Hook start 1.50s', 'Hook end 3.50s', 'Moment start 6.00s', 'Moment peak 6.50s', 'Moment end 7.20s']) {
       expect(html).toContain(`aria-label="${marker}"`)

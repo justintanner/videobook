@@ -4,16 +4,17 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { probeVideo } from "../ffmpeg.js";
 import { testBudget } from "../test-budget.js";
-import { BUILTIN_SOUNDS } from "./catalog.js";
+import { SYNTH_SOUND_IDS, builtinSound } from "./catalog.js";
 import { renderBuiltinSound } from "./synth.js";
 import { encodeWav } from "./wav.js";
 
 describe("built-in sound WAV encoding", () => {
-  it.each(BUILTIN_SOUNDS)("encodes $id as stereo 48 kHz PCM with its catalog duration", async (sound) => {
+  it.each(SYNTH_SOUND_IDS)("encodes %s as stereo 48 kHz PCM with its catalog duration", async (id) => {
+    const sound = builtinSound(id);
     const dir = await mkdtemp(join(tmpdir(), "builtin-sound-"));
     try {
       const path = join(dir, "sound.wav");
-      const bytes = encodeWav(renderBuiltinSound(sound.id));
+      const bytes = encodeWav(renderBuiltinSound(id));
       expect(bytes.length).toBe(44 + Math.round(sound.durationSeconds * 48_000) * 4);
       await writeFile(path, bytes);
       const probe = await probeVideo(path, { timeoutMs: testBudget(10_000) });

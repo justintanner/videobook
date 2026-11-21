@@ -127,7 +127,7 @@ export const CRASH_REPLAY: AutoEditStyle = {
     { sound: "impact", targetSegmentId: "replay-1", align: "start" },
     { sound: "impact", targetSegmentId: "replay-2", align: "start" },
     { sound: "glitch", targetSegmentId: "crash", align: "start" },
-    { sound: "power_down", targetSegmentId: "crash", align: "start" },
+    { sound: "shutdown", targetSegmentId: "crash", align: "start" },
   ],
 };
 

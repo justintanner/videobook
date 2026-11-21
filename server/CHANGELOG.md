@@ -27,8 +27,9 @@ and the package uses [Semantic Versioning](https://semver.org/).
   this is the `auto_edit` tool (`get`, `analyze`, `render`), which also
   renders an explicit segment plan.
 - Two built-in sounds for `/sfx`, `apply_builtin_sfx`, `/zoom` and auto-edit:
-  `power_down`, a falling tone that fades as power drops, and `error`, two
-  short low tones.
+  `shutdown`, the Windows shutdown chime, which ships as a recording
+  rather than being synthesized like the others and plays under the
+  auto-edit crash, and `error`, two short low tones.
 
 - The **Made with** card of a generated image or video lists the inputs its
   run sent under **Inputs**: each slot, such as `@firstframe` or `@image1`,

@@ -1,7 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { AUDIO_OPTS, probeVideo, runFfmpeg } from "../ffmpeg.js";
-import type { BuiltinSoundId } from "./catalog.js";
+import { isRecordedSound, type BuiltinSoundId } from "./catalog.js";
+import { builtinRecordingPath } from "./recordings.js";
 import { renderBuiltinSound } from "./synth.js";
 import { encodeWav } from "./wav.js";
 
@@ -15,6 +16,10 @@ export async function writeBuiltinSfxFiles(scratchDir: string, cues: readonly Bu
   const paths = new Map<BuiltinSoundId, string>();
   for (const { sound } of cues) {
     if (paths.has(sound)) continue;
+    if (isRecordedSound(sound)) {
+      paths.set(sound, builtinRecordingPath(sound));
+      continue;
+    }
     const path = join(scratchDir, `${sound}.wav`);
     await writeFile(path, encodeWav(renderBuiltinSound(sound)));
     paths.set(sound, path);

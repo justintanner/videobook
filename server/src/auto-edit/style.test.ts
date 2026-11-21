@@ -116,7 +116,7 @@ describe("crash replay auto-edit style", () => {
     const replay2Start = frameToSeconds(starts[3]!, REFERENCE_SOURCE.fps);
     const crashStart = frameToSeconds(starts[5]!, REFERENCE_SOURCE.fps);
 
-    expect(cues.map((cue) => cue.sound)).toEqual(["riser", "impact", "impact", "glitch", "power_down"]);
+    expect(cues.map((cue) => cue.sound)).toEqual(["riser", "impact", "impact", "glitch", "shutdown"]);
     expect(cues.every((cue) => cue.volume === 70)).toBe(true);
     expect(cues[0]!.startSeconds).toBeCloseTo(replay1Start - builtinSound("riser").accentSeconds, 6);
     expect(cues[1]!.startSeconds).toBeCloseTo(replay1Start, 6);
@@ -137,19 +137,19 @@ describe("crash replay auto-edit style", () => {
         name: "coldOpen off",
         override: { coldOpen: false },
         roles: ["body", "replay", "replay", "push_in", "crash", "body", "body"],
-        cues: ["riser", "impact", "impact", "glitch", "power_down"],
+        cues: ["riser", "impact", "impact", "glitch", "shutdown"],
       },
       {
         name: "replays off",
         override: { replays: false },
         roles: ["cold_open", "body", "push_in", "crash", "body", "body"],
-        cues: ["glitch", "power_down"],
+        cues: ["glitch", "shutdown"],
       },
       {
         name: "pushIn off",
         override: { pushIn: false },
         roles: ["cold_open", "body", "replay", "replay", "crash", "body", "body"],
-        cues: ["riser", "impact", "impact", "glitch", "power_down"],
+        cues: ["riser", "impact", "impact", "glitch", "shutdown"],
       },
       {
         name: "crash off",
