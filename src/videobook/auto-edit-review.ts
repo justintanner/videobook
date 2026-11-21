@@ -8,11 +8,28 @@ import {
 } from '../../server/src/auto-edit/style'
 import type { AutoEditSegmentRange } from './auto-edit-preview'
 
-export type AutoEditAnchorKey = 'hook.start' | 'hook.end' | 'moment.start' | 'moment.peak' | 'moment.end'
+export type AutoEditAnchorKey =
+  | 'keep.start'
+  | 'keep.end'
+  | 'hook.start'
+  | 'hook.end'
+  | 'moment.start'
+  | 'moment.peak'
+  | 'moment.end'
 export type AutoEditFocusKey = 'start' | 'peak' | 'end'
 
+export const AUTO_EDIT_KEEP_ANCHORS: readonly AutoEditAnchorKey[] = ['keep.start', 'keep.end']
 export const AUTO_EDIT_HOOK_ANCHORS: readonly AutoEditAnchorKey[] = ['hook.start', 'hook.end']
 export const AUTO_EDIT_MOMENT_ANCHORS: readonly AutoEditAnchorKey[] = ['moment.start', 'moment.peak', 'moment.end']
+const ANCHOR_ORDER: readonly AutoEditAnchorKey[] = [
+  'keep.start',
+  'hook.start',
+  'hook.end',
+  'moment.start',
+  'moment.peak',
+  'moment.end',
+  'keep.end',
+]
 
 interface AutoEditAnchorInfo {
   label: string
@@ -21,6 +38,8 @@ interface AutoEditAnchorInfo {
 }
 
 export const AUTO_EDIT_ANCHOR_INFO: Readonly<Record<AutoEditAnchorKey, AutoEditAnchorInfo>> = {
+  'keep.start': { label: 'Body start', short: 'start', focus: null },
+  'keep.end': { label: 'Body end', short: 'end', focus: null },
   'hook.start': { label: 'Hook start', short: 'start', focus: null },
   'hook.end': { label: 'Hook end', short: 'end', focus: null },
   'moment.start': { label: 'Moment start', short: 'start', focus: 'start' },
@@ -39,6 +58,8 @@ function seconds(value: number): string {
 }
 
 export function autoEditAnchorSeconds(anchors: AutoEditAnchors, key: AutoEditAnchorKey): number {
+  if (key === 'keep.start') return anchors.keep.start
+  if (key === 'keep.end') return anchors.keep.end
   if (key === 'hook.start') return anchors.hook?.start ?? anchors.keep.start
   if (key === 'hook.end') return anchors.hook?.end ?? Math.min(anchors.keep.end, anchors.keep.start + DEFAULT_HOOK_SECONDS)
   if (key === 'moment.start') return anchors.moment.start
@@ -52,6 +73,12 @@ export function autoEditWithAnchor(
   nextSeconds: number,
   durationSeconds: number,
 ): AutoEditAnchors {
+  if (key === 'keep.start') {
+    return { ...anchors, keep: { ...anchors.keep, start: Math.max(0, Math.min(anchors.moment.start, nextSeconds)) } }
+  }
+  if (key === 'keep.end') {
+    return { ...anchors, keep: { ...anchors.keep, end: Math.min(durationSeconds, Math.max(anchors.moment.end, nextSeconds)) } }
+  }
   if (key === 'hook.start') {
     const end = anchors.hook?.end ?? Math.min(durationSeconds, nextSeconds + DEFAULT_HOOK_SECONDS)
     return { ...anchors, hook: { start: nextSeconds, end } }
@@ -69,6 +96,10 @@ export function autoEditAnchorRule(key: AutoEditAnchorKey): string {
   const limits = AUTO_EDIT_ANCHOR_LIMITS
   const startToPeak = `${seconds(limits.minStartToPeakSeconds)}–${seconds(limits.maxStartToPeakSeconds)} s`
   const peakToEnd = `${seconds(limits.minPeakToEndSeconds)}–${seconds(limits.maxPeakToEndSeconds)} s`
+  if (key === 'keep.start') return 'The edit leaves out everything before it. It stays at or before the moment start, and a hook it passes moves inside.'
+  if (key === 'keep.end') {
+    return `The edit leaves out everything after it. It stays at or after the moment end, at least ${seconds(limits.minKeepSeconds)} s after Body start, and a hook it passes moves inside.`
+  }
   if (key === 'hook.start' || key === 'hook.end') {
     return `The hook stays ${seconds(limits.minHookSeconds)}–${seconds(limits.maxHookSeconds)} s long.`
   }
@@ -79,6 +110,7 @@ export function autoEditAnchorRule(key: AutoEditAnchorKey): string {
 
 function anchorKeysFor(segment: PlanSegment, anchors: AutoEditAnchors): readonly AutoEditAnchorKey[] {
   if (segment.role === 'cold_open') return anchors.hook ? AUTO_EDIT_HOOK_ANCHORS : []
+  if (segment.role === 'body') return [...AUTO_EDIT_KEEP_ANCHORS, ...AUTO_EDIT_MOMENT_ANCHORS]
   return AUTO_EDIT_MOMENT_ANCHORS
 }
 
@@ -172,7 +204,7 @@ export function autoEditLaneItemAt(items: readonly AutoEditLaneItem[], rangeInde
 
 export function autoEditAnchorsForItem(item: AutoEditLaneItem, anchors: AutoEditAnchors, fps: number): AutoEditAnchorKey[] {
   const keys = new Set(item.ranges.flatMap((range) => autoEditAnchorsForSegment(range.segment, anchors, fps)))
-  return [...AUTO_EDIT_HOOK_ANCHORS, ...AUTO_EDIT_MOMENT_ANCHORS].filter((key) => keys.has(key))
+  return ANCHOR_ORDER.filter((key) => keys.has(key))
 }
 
 export function autoEditItemsForAnchor(

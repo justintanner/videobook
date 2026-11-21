@@ -3,6 +3,7 @@ import type { AutoEditAnchors, AutoEditCue, AutoEditSections } from '../../../..
 import {
   AUTO_EDIT_ANCHOR_INFO,
   AUTO_EDIT_HOOK_ANCHORS,
+  AUTO_EDIT_KEEP_ANCHORS,
   AUTO_EDIT_MOMENT_ANCHORS,
   autoEditAnchorSeconds,
   autoEditConnectorClip,
@@ -101,7 +102,7 @@ function useLaneDrag(onFraction: (fraction: number) => void, originFraction: num
 
 function markerAlign(key: AutoEditAnchorKey, percent: number): 'before' | 'center' | 'after' {
   if (key === 'moment.peak') return percent < 4 ? 'after' : percent > 96 ? 'before' : 'center'
-  if (key === 'hook.start' || key === 'moment.start') return percent < 8 ? 'after' : 'before'
+  if (key === 'keep.start' || key === 'hook.start' || key === 'moment.start') return percent < 8 ? 'after' : 'before'
   return percent > 92 ? 'before' : 'after'
 }
 
@@ -238,7 +239,7 @@ function SourceLane({
   const at = (value: number) => autoEditSourcePercent(value, durationSeconds)
   const active = activeItemIndex === null ? null : items.find((item) => item.index === activeItemIndex) ?? null
   const showHook = sections.coldOpen && anchors.hook !== null
-  const lineKeys = showHook ? [...AUTO_EDIT_HOOK_ANCHORS, ...AUTO_EDIT_MOMENT_ANCHORS] : AUTO_EDIT_MOMENT_ANCHORS
+  const lineKeys = [...AUTO_EDIT_KEEP_ANCHORS, ...(showHook ? AUTO_EDIT_HOOK_ANCHORS : []), ...AUTO_EDIT_MOMENT_ANCHORS]
   const seekFromClick = (event: MouseEvent<HTMLDivElement>) => {
     if (drag.takeClick()) onSeekSource(laneFraction(event.currentTarget, event.clientX) * durationSeconds)
   }
@@ -350,6 +351,15 @@ export function AutoEditTimeline(props: AutoEditTimelineProps) {
               style={{ clipPath: autoEditConnectorClip(activeBlock, activeItem, durationSeconds) }}
             />
           )}
+        </div>
+      </div>
+
+      <div className="auto-edit-lane-row">
+        <span className="auto-edit-lane-caption">body</span>
+        <div className="auto-edit-marker-lane" data-lane="body" role="group" aria-label="Body markers">
+          {AUTO_EDIT_KEEP_ANCHORS.map((key) => (
+            <AnchorMarker key={key} anchorKey={key} selected={isSelected(key)} {...markerProps} />
+          ))}
         </div>
       </div>
 

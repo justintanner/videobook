@@ -565,6 +565,12 @@
   transform: translateX(-1px);
 }
 
+.auto-edit-body .auto-edit-marker[data-anchor^='keep'] {
+  border-color: rgba(198, 234, 214, 0.7);
+  color: #c6ead6;
+  background: #143023;
+}
+
 .auto-edit-body .auto-edit-marker[data-anchor^='hook'] {
   border-color: #5fbfcf;
   color: #c4f1f8;
@@ -648,6 +654,10 @@
   width: 2px;
   margin-left: -1px;
   background: rgba(213, 248, 228, 0.75);
+}
+
+.auto-edit-source-line[data-anchor^='keep'] {
+  background: rgba(198, 234, 214, 0.9);
 }
 
 .auto-edit-source-line[data-anchor^='hook'] {
@@ -831,6 +841,7 @@
   background: var(--tone, var(--auto-edit-bright));
 }
 
+.auto-edit-inspector-swatch[data-anchor^='keep'] { background: #c6ead6; }
 .auto-edit-inspector-swatch[data-anchor^='hook'] { background: #5fbfcf; }
 .auto-edit-inspector-swatch[data-anchor='moment.peak'] { background: #a48cff; }
 

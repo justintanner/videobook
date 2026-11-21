@@ -25,6 +25,7 @@ export const AUTO_EDIT_ANCHOR_LIMITS = {
   maxPeakToEndSeconds: MAX_PEAK_TO_END_SECONDS,
   minHookSeconds: MIN_HOOK_SECONDS,
   maxHookSeconds: MAX_HOOK_SECONDS,
+  minKeepSeconds: MIN_KEEP_SECONDS,
 } as const;
 
 const MIN_CUT_SECONDS = 0.3;

@@ -285,6 +285,16 @@ describe('auto-edit review sheet in the browser', () => {
     await page.keyboard.press('ArrowLeft')
     await expect.poll(() => hookStartGroup.textContent()).toContain(`frame ${beforeFrame}`)
 
+    const editBefore = await editLength()
+    const bodyStartBefore = await marker('keep.start').getAttribute('aria-label')
+    await marker('keep.start').click()
+    const bodyStartGroup = sheet().getByRole('group', { name: 'Body start', exact: true })
+    await bodyStartGroup.getByRole('button', { name: '+1 frame', exact: true }).click()
+    await expect.poll(editLength).not.toBe(editBefore)
+    await expect.poll(() => marker('keep.start').getAttribute('aria-label')).not.toBe(bodyStartBefore)
+    await bodyStartGroup.getByRole('button', { name: '-1 frame', exact: true }).click()
+    await expect.poll(() => marker('keep.start').getAttribute('aria-label')).toBe(bodyStartBefore)
+
     const video = sheet().getByLabel('Auto-edit preview', { exact: true })
     const pauseButton = sheet().getByRole('button', { name: 'Pause', exact: true })
     if (await pauseButton.isVisible()) await pauseButton.click()
@@ -437,7 +447,7 @@ describe('auto-edit review sheet in the browser', () => {
 
     const bodyLength = () => sheet().locator('.auto-edit-segment[data-tone="body"] .auto-edit-segment-length').first().innerText()
     await expect.poll(bodyLength).toContain('1 cut')
-    await sheet().getByRole('button', { name: /^Body / }).click()
+    await sheet().locator('.auto-edit-segment[data-tone="body"]').first().click()
     const cutRow = sheet().getByRole('group', { name: /^Cut 3\.4\d–3\.9\d s$/ })
     await cutRow.getByRole('button', { name: 'Keep this part', exact: true }).click()
     await expect.poll(bodyLength).not.toContain('cut')

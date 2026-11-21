@@ -109,11 +109,14 @@ describe('auto-edit review timeline', () => {
     expect(labels('moment.start')).toEqual(['Replay', 'Punch-in', 'Push-in'])
     expect(labels('moment.peak')).toEqual(['Replay', 'Punch-in', 'Crash'])
     expect(labels('moment.end')).toEqual(['Body', 'Push-in', 'Crash', 'Ending'])
+    expect(labels('keep.start')).toEqual(['Body'])
+    expect(labels('keep.end')).toEqual(['Ending'])
     const crash = ranges.find((range) => range.label === 'Crash')!
     expect(autoEditAnchorsForSegment(crash.segment, built.anchors, SOURCE.fps)).toEqual(['moment.peak', 'moment.end'])
     const noHook = { ...built.anchors, hook: null }
     const firstBody = ranges.find((range) => range.label === 'Body')!
-    expect(autoEditAnchorsForSegment(firstBody.segment, noHook, SOURCE.fps)).toEqual(['moment.end'])
+    expect(autoEditAnchorsForSegment(firstBody.segment, noHook, SOURCE.fps)).toEqual(['keep.start', 'moment.end'])
+    expect(autoEditAnchorsForItem(items[items.length - 1]!, built.anchors, SOURCE.fps)).toEqual(['moment.end', 'keep.end'])
   })
 
   it('keeps body pieces that cuts separate as one block and lists its cuts', () => {
@@ -126,11 +129,24 @@ describe('auto-edit review timeline', () => {
     expect([body.sourceStartSeconds, body.sourceEndSeconds]).toEqual([0.5, 7.2])
     expect(autoEditCutsInItem(body, withCuts.anchors)).toEqual([0, 1])
     expect(autoEditCutsInItem(cutItems[0]!, withCuts.anchors)).toEqual([])
-    expect(autoEditAnchorsForItem(body, withCuts.anchors, SOURCE.fps)).toEqual(['moment.end'])
+    expect(autoEditAnchorsForItem(body, withCuts.anchors, SOURCE.fps)).toEqual(['keep.start', 'moment.end'])
 
     const plain = buildAutoEditPlan(SOURCE, withCuts.anchors, { ...DEFAULT_AUTO_EDIT_SECTIONS, replays: false, pushIn: false, crash: false })
     const plainItems = buildAutoEditLaneItems(buildAutoEditSegmentRanges(plain.plan))
     expect(plainItems.map((item) => [item.label, item.ranges.length])).toEqual([['Cold open', 1], ['Body', 3]])
+  })
+
+  it('moves the body start and end but never across the moment', () => {
+    expect(autoEditWithAnchor(ANCHORS, 'keep.start', 1.2, 10).keep).toEqual({ start: 1.2, end: 9 })
+    expect(autoEditWithAnchor(ANCHORS, 'keep.start', 6.5, 10).keep.start).toBe(6)
+    expect(autoEditWithAnchor(ANCHORS, 'keep.start', -1, 10).keep.start).toBe(0)
+    expect(autoEditWithAnchor(ANCHORS, 'keep.end', 8, 10).keep).toEqual({ start: 0.5, end: 8 })
+    expect(autoEditWithAnchor(ANCHORS, 'keep.end', 7, 10).keep.end).toBe(7.2)
+    expect(autoEditWithAnchor(ANCHORS, 'keep.end', 12, 10).keep.end).toBe(10)
+    const trimmed = buildAutoEditPlan(SOURCE, autoEditWithAnchor(ANCHORS, 'keep.start', 2, 10), DEFAULT_AUTO_EDIT_SECTIONS)
+    expect(trimmed.anchors.keep.start).toBe(2)
+    expect(trimmed.anchors.hook!.start).toBeGreaterThanOrEqual(2)
+    expect(trimmed.changes).toContain('Moved the cold-open hook inside the kept range.')
   })
 
   it('creates a hook when a hook marker moves on a draft without one', () => {

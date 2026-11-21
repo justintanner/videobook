@@ -104,7 +104,7 @@ describe('AutoEditSheet server render', () => {
     expect(html).toContain('+2.00 s')
     expect(html).toContain('riser, impact ×2, glitch, shutdown')
 
-    for (const marker of ['Hook start 1.50s', 'Hook end 3.50s', 'Moment start 6.00s', 'Moment peak 6.50s', 'Moment end 7.20s']) {
+    for (const marker of ['Body start 0.50s', 'Body end 9.00s', 'Hook start 1.50s', 'Hook end 3.50s', 'Moment start 6.00s', 'Moment peak 6.50s', 'Moment end 7.20s']) {
       expect(html).toContain(`aria-label="${marker}"`)
     }
     expect(html).toContain('aria-label="Cold open segment"')
@@ -137,6 +137,7 @@ describe('AutoEditSheet server render', () => {
     expect(html).toContain('Cut 2.00–2.50 s')
     expect(html).toContain('Keep this part')
     expect(html).toContain('aria-label="Moment end"')
+    expect(html).toContain('aria-label="Body start"')
 
     expect(html).toContain(`role="status"`)
     expect(html).toContain(notice)
