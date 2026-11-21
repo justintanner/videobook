@@ -251,7 +251,12 @@ describe("analyze_auto_edit job", () => {
     expect(got.draft.anchors.moment.peak).toBeCloseTo(5.5, 1);
     expect(got.draft.anchors.moment.end).toBeCloseTo(6.2, 1);
     expect(got.draft.anchors.hook).toEqual({ start: 1, end: expect.closeTo(3.2, 1) });
+    expect(got.draft.anchors.keep).toEqual({ start: 0, end: expect.closeTo(8.5, 1) });
     expect(got.draft.anchors.cuts).toHaveLength(1);
+    const coldOpen = got.plan.segments[0]!;
+    const body = got.plan.segments[1]!;
+    expect(coldOpen.role).toBe("cold_open");
+    expect(body).toMatchObject({ role: "body", startFrame: 0 });
   }, testBudget(90_000));
 
   it("makes two requests on a 40 s clip with the second framing around the first moment", async () => {

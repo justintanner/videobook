@@ -282,6 +282,11 @@ export function saveAutoEditDraft(
   return draft;
 }
 
+function bodyFromClipStartAfterHook(anchors: AutoEditAnchors): AutoEditAnchors {
+  if (anchors.hook === null || anchors.keep.start === 0) return anchors;
+  return { ...anchors, keep: { ...anchors.keep, start: 0 } };
+}
+
 export function writeAutoEditAnalyzedDraft(
   engine: Engine,
   artifactId: string,
@@ -293,7 +298,7 @@ export function writeAutoEditAnalyzedDraft(
   const sections = existing && existing.sourceHash === sourceHash
     ? existing.sections
     : { ...DEFAULT_AUTO_EDIT_SECTIONS };
-  return saveAutoEditDraft(engine, artifactId, sourceHash, anchors, sections, changes);
+  return saveAutoEditDraft(engine, artifactId, sourceHash, bodyFromClipStartAfterHook(anchors), sections, changes);
 }
 
 export function deleteAutoEditDraft(engine: Engine, artifactId: string): void {

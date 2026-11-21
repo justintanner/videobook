@@ -184,7 +184,7 @@ export const ANALYZE_AUTO_EDIT_PROMPT = [
   "- moment: the one action a viewer would want to see again. start is where it begins, peak is the instant of the hit, jump, fall or reveal, end is where it has played out.",
   "- focus: where the subject is at start, peak and end, as x and y from 0 to 1 from the top left.",
   "- hook: a 2 to 4 s stretch for a cold open that makes a viewer stay. Prefer the first surprising event. It must not show the moment's peak (or null only if the clip is too short).",
-  "- keep: the range worth showing, dropping a slow start or a dead ending.",
+  "- keep: the range worth showing, dropping a dead ending. Drop a slow start only when hook is null: after a cold open the edit starts again from the clip's start.",
   "- cuts: up to three stretches inside keep where nothing happens, each with a reason.",
   "- summary: one sentence describing the moment.",
   "- confidence: high, medium or low.",
