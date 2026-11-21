@@ -6,6 +6,18 @@ export { DEFAULT_IMAGE_EDIT_MODEL_ID } from "./image-edit-default.js";
 
 export type ImageEditCapability = "semantic" | "regionReplace" | "wholeImage" | "exactMask";
 
+const IMAGE_EDIT_ENV_KEYS = {
+  kie: "KIE_API_KEY",
+  fal: "FAL_API_KEY",
+  machgen: "MACHGEN_API_KEY",
+  wavespeed: "WAVESPEED_API_KEY",
+  nunchux: "NUNCHUX_API_KEY",
+} as const;
+
+export type ImageEditProvider = keyof typeof IMAGE_EDIT_ENV_KEYS;
+
+const BARE_ID_PROVIDERS: ReadonlySet<ImageEditProvider> = new Set(["kie", "fal"]);
+
 export interface ImageEditModelInfo {
   /** Provider model/endpoint identifier; the subject-edit adapter id. */
   readonly id: string;
@@ -14,8 +26,8 @@ export interface ImageEditModelInfo {
   readonly label: string;
   readonly family: ModelFamily;
   readonly variant?: string;
-  readonly provider: "kie" | "fal";
-  readonly envKey: "KIE_API_KEY" | "FAL_API_KEY";
+  readonly provider: ImageEditProvider;
+  readonly envKey: (typeof IMAGE_EDIT_ENV_KEYS)[ImageEditProvider];
   /** Max image inputs from the catalog model's image slot; null = unbounded. */
   readonly maxInputImages: number | null;
   readonly capabilities: Readonly<Record<ImageEditCapability, boolean>>;
@@ -31,19 +43,32 @@ const STANDARD_IMAGE_EDIT_CAPABILITIES = {
 const EDIT_MODELS: ReadonlyArray<{ catalogModel: string; label: string }> = [
   { catalogModel: `kie:${DEFAULT_IMAGE_EDIT_MODEL_ID}`, label: "Nano Banana 2.1 Edit" },
   { catalogModel: "fal:google/nano-banana-2.1/edit", label: "Nano Banana 2.1 Edit" },
+  { catalogModel: "wavespeed:google/nano-banana-2.1/edit", label: "Nano Banana 2.1 Edit" },
+  { catalogModel: "machgen:Nano-Banana-2.1", label: "Nano Banana 2.1 Edit" },
+  { catalogModel: "nunchux:gemini-nano-banana-2.1", label: "Nano Banana 2.1 Edit" },
   { catalogModel: "kie:flux-3/klein-edit-image", label: "FLUX 3 Klein Edit" },
   { catalogModel: "kie:seedream/5-pro-image-to-image", label: "Seedream 5 Pro" },
   { catalogModel: "kie:gpt-image-2-6/sunburst-image-to-image", label: "GPT Image 2.6 Sunburst" },
   { catalogModel: "fal:openai/gpt-image-2.6/sunburst/edit", label: "GPT Image 2.6 Sunburst" },
+  { catalogModel: "wavespeed:openai/gpt-image-2.6-sunburst/edit", label: "GPT Image 2.6 Sunburst" },
+  { catalogModel: "machgen:GPT-Image-2.6-Sunburst", label: "GPT Image 2.6 Sunburst" },
+  { catalogModel: "nunchux:gpt-image-2.6-sunburst", label: "GPT Image 2.6 Sunburst" },
   { catalogModel: "kie:gpt-image-2-6/flare-image-to-image", label: "GPT Image 2.6 Flare" },
   { catalogModel: "fal:openai/gpt-image-2.6/flare/edit", label: "GPT Image 2.6 Flare" },
+  { catalogModel: "wavespeed:openai/gpt-image-2.6-flare/edit", label: "GPT Image 2.6 Flare" },
+  { catalogModel: "machgen:GPT-Image-2.6-Flare", label: "GPT Image 2.6 Flare" },
+  { catalogModel: "nunchux:gpt-image-2.6-flare", label: "GPT Image 2.6 Flare" },
   { catalogModel: "kie:gpt-image-2-5-flare-image-to-image", label: "GPT Image 2.5 Flare" },
+  { catalogModel: "machgen:GPT-Image-2.5-Flare", label: "GPT Image 2.5 Flare" },
   { catalogModel: "kie:gpt-image-2-5-sunburst-image-to-image", label: "GPT Image 2.5 Sunburst" },
+  { catalogModel: "machgen:GPT-Image-2.5-Sunburst", label: "GPT Image 2.5 Sunburst" },
   { catalogModel: "kie:gpt-image-2-image-to-image", label: "GPT Image 2" },
   { catalogModel: "fal:openai/gpt-image-2/edit", label: "GPT Image 2" },
+  { catalogModel: "machgen:GPT-Image-2", label: "GPT Image 2" },
   { catalogModel: "kie:nano-banana-pro", label: "Nano Banana Pro" },
   { catalogModel: "fal:fal-ai/nano-banana-pro/edit", label: "Nano Banana Pro" },
   { catalogModel: "fal:fal-ai/nano-banana-2/edit", label: "Nano Banana 2" },
+  { catalogModel: "machgen:Nano-Banana-2", label: "Nano Banana 2" },
   { catalogModel: "fal:alibaba/qwen-image-3/edit", label: "Qwen 3.0 Edit" },
   { catalogModel: "fal:fal-ai/wan/v2.7/edit", label: "Wan 2.7 Edit" },
   { catalogModel: "fal:bria/fibo-2/edit", label: "Fibo 2 Edit" },
@@ -53,16 +78,21 @@ function imageSlotMax(model: ResolvedModel): number | null {
   return model.slots.find((slot) => slot.role === "image")?.max ?? null;
 }
 
+function isImageEditProvider(provider: string): provider is ImageEditProvider {
+  return Object.hasOwn(IMAGE_EDIT_ENV_KEYS, provider);
+}
+
 function editModelInfo(entry: { catalogModel: string; label: string }): ImageEditModelInfo {
   const model = resolveModel(entry.catalogModel);
-  const provider = model.provider === "fal" ? "fal" : "kie";
+  const provider = model.provider;
+  if (!isImageEditProvider(provider)) throw new Error(`No image edit adapter for ${model.id}`);
   return {
-    id: model.apiId,
+    id: BARE_ID_PROVIDERS.has(provider) ? model.apiId : model.id,
     catalogModel: model.id,
     label: entry.label,
     ...modelFamily(model),
     provider,
-    envKey: provider === "fal" ? "FAL_API_KEY" : "KIE_API_KEY",
+    envKey: IMAGE_EDIT_ENV_KEYS[provider],
     maxInputImages: imageSlotMax(model),
     capabilities: STANDARD_IMAGE_EDIT_CAPABILITIES,
   };

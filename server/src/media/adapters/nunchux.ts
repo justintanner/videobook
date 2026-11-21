@@ -10,10 +10,10 @@ import { createNunchux } from "../../usage-providers.js";
 import { requireApiKey } from "../../api-key.js";
 import { uploadAssetFile } from "../../upload.js";
 import { providerEndpoints } from "../endpoints.js";
-import { nunchuxFamily, type NunchuxPendingImagePart } from "../nunchux.js";
+import { isNunchuxTaskModel, nunchuxFamily, type NunchuxPendingImagePart } from "../nunchux.js";
 import { assetRef, readAssetRef } from "./asset-ref.js";
 import { nonEmpty, writePendingTask } from "./pending.js";
-import { MEDIA_TASK_TYPES, type ProviderAdapter, type ProviderOutput, type SubmitContext, type SubmitResult } from "./types.js";
+import { MEDIA_TASK_TYPES, type ProviderAdapter, type SubmitContext, type SubmitResult } from "./types.js";
 
 const IMAGE_TIMEOUT_MS = 5 * 60_000;
 
@@ -41,7 +41,9 @@ async function inlineImage(engine: Engine, part: NunchuxPendingImagePart): Promi
   return { type: "image", data: bytes.toString("base64"), mime_type: mimeType };
 }
 
-function imageOutputs(response: NunchuxGoogleInteractionsResponse): ProviderOutput[] {
+type NunchuxImageOutput = { bytes: Buffer; extension: string };
+
+function imageOutputs(response: NunchuxGoogleInteractionsResponse): NunchuxImageOutput[] {
   return response.steps.flatMap((step) => step.content ?? []).flatMap((part) => {
     const extension = part.mime_type ? EXTENSIONS[part.mime_type] : undefined;
     return part.type === "image" && part.data && extension ? [{ bytes: Buffer.from(part.data, "base64"), extension }] : [];
@@ -52,17 +54,19 @@ function modelText(response: NunchuxGoogleInteractionsResponse): string {
   return response.steps.flatMap((step) => step.content ?? []).flatMap((part) => part.type === "text" && part.text ? [part.text.trim()] : []).join(" ");
 }
 
-async function generateImage(request: Record<string, unknown>, context: SubmitContext): Promise<SubmitResult> {
+type NunchuxImageResult = { taskId: string; outputs: NunchuxImageOutput[] };
+
+async function generateImage(engine: Engine, request: Record<string, unknown>, signal?: AbortSignal): Promise<NunchuxImageResult> {
   const parts = Array.isArray(request.input) ? request.input as Array<Record<string, unknown>> : [];
-  const input = await Promise.all(parts.map((part) => part.type === "image" ? inlineImage(context.engine, part as NunchuxPendingImagePart) : part));
+  const input = await Promise.all(parts.map((part) => part.type === "image" ? inlineImage(engine, part as NunchuxPendingImagePart) : part));
   const body = NunchuxGoogleInteractionsRequestSchema.parse({ ...request, input });
-  const response = await nunchuxProvider(IMAGE_TIMEOUT_MS).v1.google.v1beta.interactions(body, context.ctx.signal);
+  const response = await nunchuxProvider(IMAGE_TIMEOUT_MS).v1.google.v1beta.interactions(body, signal);
   const outputs = imageOutputs(response);
   if (outputs.length === 0) {
     const reason = modelText(response);
     throw new Error(`Nunchux ${response.model} returned no image (status ${response.status})${reason ? `: ${reason}` : ""}`);
   }
-  return { kind: "done", taskId: response.id, outputs };
+  return { taskId: response.id, outputs };
 }
 
 async function inlineImageUrl(engine: Engine, ref: string): Promise<string> {
@@ -87,17 +91,24 @@ async function inlineGptImageRequest(engine: Engine, request: Record<string, unk
   return inlined;
 }
 
-async function generateGptImage(request: Record<string, unknown>, context: SubmitContext): Promise<SubmitResult> {
+async function generateGptImage(engine: Engine, apiId: string, request: Record<string, unknown>, signal?: AbortSignal): Promise<NunchuxImageResult> {
   const images = nunchuxProvider(IMAGE_TIMEOUT_MS).v2.openai.images;
-  const body = await inlineGptImageRequest(context.engine, request);
+  const body = await inlineGptImageRequest(engine, request);
   const response = Array.isArray(body.images)
-    ? await images.edits(NunchuxOpenAiImagesEditsRequestSchema.parse(body), context.ctx.signal)
-    : await images.generations(NunchuxOpenAiImagesGenerationsRequestSchema.parse(body), context.ctx.signal);
+    ? await images.edits(NunchuxOpenAiImagesEditsRequestSchema.parse(body), signal)
+    : await images.generations(NunchuxOpenAiImagesGenerationsRequestSchema.parse(body), signal);
   const extension = typeof response.output_format === "string" ? response.output_format : String(request.output_format ?? "png");
   const outputs = response.data.flatMap((image) => image.b64_json ? [{ bytes: Buffer.from(image.b64_json, "base64"), extension }] : []);
-  if (outputs.length === 0) throw new Error(`Nunchux ${context.model.apiId} returned no image`);
+  if (outputs.length === 0) throw new Error(`Nunchux ${apiId} returned no image`);
   const generationId = response.data.find((image) => image.generation_id)?.generation_id;
-  return { kind: "done", taskId: generationId ?? `${context.model.apiId}-${response.created}`, outputs };
+  return { taskId: generationId ?? `${apiId}-${response.created}`, outputs };
+}
+
+export function runNunchuxImage(engine: Engine, apiId: string, request: Record<string, unknown>, signal?: AbortSignal): Promise<NunchuxImageResult> {
+  const family = nunchuxFamily(apiId);
+  if (family === "google") return generateImage(engine, request, signal);
+  if (family === "openai") return generateGptImage(engine, apiId, request, signal);
+  throw new Error(`Nunchux ${apiId} runs as a task, not an image call`);
 }
 
 async function submitTask(request: Record<string, unknown>, context: SubmitContext): Promise<string | null> {
@@ -118,9 +129,10 @@ async function submitTask(request: Record<string, unknown>, context: SubmitConte
 
 async function submit(request: Record<string, unknown>, context: SubmitContext): Promise<SubmitResult> {
   await writeCostHints(context);
-  const family = nunchuxFamily(context.model.apiId);
-  if (family === "google") return generateImage(request, context);
-  if (family === "openai") return generateGptImage(request, context);
+  if (!isNunchuxTaskModel(context.model.apiId)) {
+    const { taskId, outputs } = await runNunchuxImage(context.engine, context.model.apiId, request, context.ctx.signal);
+    return { kind: "done", taskId, outputs };
+  }
   const taskId = await submitTask(request, context);
   if (!taskId) throw new Error("Nunchux accepted the request without a task id");
   await writePendingTask(context, taskId, MEDIA_TASK_TYPES.nunchux, { nunchuxModel: context.model.apiId });

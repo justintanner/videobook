@@ -1,8 +1,15 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { createEngineForTest } from '../../server/src/engine.js'
+import { createTestClient } from '../../server/src/test-client.js'
 import { ImageEditorWorkspace } from '../../src/components/videobook/ImageEditorWorkspace'
+import { parseImageEditModelCatalog } from '../../src/videobook/use-image-edit-models'
 import type { ImageEditModelOption } from '../../src/videobook/use-image-edit-models'
+import { providerDisplayLabel } from '../../src/videobook/workspace-action-resources'
 import type { ImageSubjectMap } from '../../src/videobook/image-subject-map'
 
 const capabilities = { semantic: true, regionReplace: true, wholeImage: true, exactMask: false }
@@ -10,7 +17,7 @@ const capabilities = { semantic: true, regionReplace: true, wholeImage: true, ex
 function editModel(
   id: string,
   family: string,
-  provider: 'kie' | 'fal',
+  provider: ImageEditModelOption['provider'],
   overrides: Partial<ImageEditModelOption> = {},
 ): ImageEditModelOption {
   return {
@@ -18,7 +25,7 @@ function editModel(
     label: family,
     family: { id: `image:${family.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, title: family },
     provider,
-    providerLabel: provider === 'kie' ? 'Kie' : 'Fal',
+    providerLabel: providerDisplayLabel(provider),
     operation: 'edit_image',
     frontier: [],
     capabilities,
@@ -151,6 +158,51 @@ describe('image editor model picker', () => {
     })
     expect(selectMarkup(html, 'Generation model')).toMatch(/value="image:nano-banana-2-1"[^>]*selected/)
     expect(selectMarkup(html, 'Generation provider')).toMatch(/value="google\/nano-banana-2.1\/edit"[^>]*selected/)
+  })
+
+  it('offers WaveSpeed, MachGen and Nunchux endpoints as providers of their family', () => {
+    const html = renderEditor({
+      imageEditModels: [
+        ...models,
+        editModel('wavespeed:google/nano-banana-2.1/edit', 'Nano Banana 2.1', 'wavespeed'),
+        editModel('machgen:Nano-Banana-2.1', 'Nano Banana 2.1', 'machgen', { available: false }),
+        editModel('nunchux:gemini-nano-banana-2.1', 'Nano Banana 2.1', 'nunchux'),
+      ],
+      defaultImageEditModelId: 'wavespeed:google/nano-banana-2.1/edit',
+    })
+    expect(selectMarkup(html, 'Generation model')).toMatch(/value="image:nano-banana-2-1"[^>]*selected/)
+    const provider = selectMarkup(html, 'Generation provider')
+    expect(provider.match(/<option /g)).toHaveLength(5)
+    expect(provider).toMatch(/value="wavespeed:google\/nano-banana-2.1\/edit"[^>]*selected/)
+    expect(optionText(provider, 'wavespeed:google/nano-banana-2.1/edit')).toBe('WaveSpeed')
+    expect(optionText(provider, 'machgen:Nano-Banana-2.1')).toBe('MachGen · not configured')
+    expect(optionText(provider, 'nunchux:gemini-nano-banana-2.1')).toBe('Nunchux')
+  })
+
+  it('keeps every provider the server lists when it parses the edit catalog', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'videobook-edit-models-'))
+    const client = await createTestClient(root)
+    try {
+      const bookId = createEngineForTest(root).book.get().bookId
+      const response = await client.callTool({ name: 'list_image_edit_models', arguments: { book_id: bookId } })
+      expect(response.isError).not.toBe(true)
+      const catalog = parseImageEditModelCatalog(JSON.parse((response.content as Array<{ text: string }>)[0]!.text))
+      expect(catalog.models).toHaveLength(31)
+      const html = renderEditor({ imageEditModels: catalog.models, defaultImageEditModelId: 'machgen:GPT-Image-2.6-Sunburst' })
+      expect(selectMarkup(html, 'Generation model')).toMatch(/value="image:gpt-image-2-6-sunburst"[^>]*selected/)
+      const provider = selectMarkup(html, 'Generation provider')
+      expect(provider).toMatch(/value="machgen:GPT-Image-2.6-Sunburst"[^>]*selected/)
+      expect([
+        'gpt-image-2-6/sunburst-image-to-image',
+        'openai/gpt-image-2.6/sunburst/edit',
+        'wavespeed:openai/gpt-image-2.6-sunburst/edit',
+        'machgen:GPT-Image-2.6-Sunburst',
+        'nunchux:gpt-image-2.6-sunburst',
+      ].map((id) => optionText(provider, id).split(' · ')[0])).toEqual(['Kie', 'Fal', 'WaveSpeed', 'MachGen', 'Nunchux'])
+    } finally {
+      await client.close()
+      await rm(root, { recursive: true, force: true, maxRetries: 3 })
+    }
   })
 
   it('disables the Provider select for a single-provider model', () => {

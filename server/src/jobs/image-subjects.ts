@@ -20,6 +20,7 @@ import {
   IMAGE_EDIT_ADAPTERS,
   type ImageEditAdapter,
   type ImageEditProviderRequest,
+  type ImageEditSubmission,
 } from "./_image-edit-adapter.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID } from "../image-edit-models.js";
 import { requireApiKey } from "../api-key.js";
@@ -762,8 +763,10 @@ async function runAdapterImageSubjectEdit(
   const stored = await readStoredImageSubjectEditTask(engine, payload.imageAssetId);
   const storedMatch = stored?.adapterId === adapter.id ? stored : null;
   let request = storedMatch?.request as ImageEditProviderRequest | null ?? null;
-  let taskId = storedMatch?.taskId ?? null;
-  if (!request || !taskId) {
+  let submitted: ImageEditSubmission | null = storedMatch
+    ? { kind: "pending", taskId: storedMatch.taskId }
+    : null;
+  if (!request || !submitted) {
     const imageUrls = [
       await adapter.uploadAsset(engine, payload.sourceArtifactId, sourceFilename),
     ];
@@ -775,20 +778,24 @@ async function runAdapterImageSubjectEdit(
     request = route === "semantic"
       ? adapter.buildSemanticRequest({ ...prepared, imageUrls })
       : adapter.buildRegionRequest({ ...prepared, imageUrls });
-    taskId = await adapter.submit(engine, payload.imageAssetId, request);
+    submitted = await adapter.submit(engine, payload.imageAssetId, request, signal);
   }
-  if (payload.generationId) {
-    const generation = await engine.generations.update(payload.generationId, {
-      status: "awaiting_provider",
-      error: null,
-    });
-    if (!generation.ok) throw new Error(generation.error.message);
+  if (submitted.kind === "pending") {
+    if (payload.generationId) {
+      const generation = await engine.generations.update(payload.generationId, {
+        status: "awaiting_provider",
+        error: null,
+      });
+      if (!generation.ok) throw new Error(generation.error.message);
+    }
+    await updateNotebookEditProgress(engine, payload, "awaiting_provider");
   }
-  await updateNotebookEditProgress(engine, payload, "awaiting_provider");
-  const images = await adapter.awaitResult(taskId, signal);
+  const images = submitted.kind === "done"
+    ? submitted.images
+    : await adapter.awaitResult(submitted.taskId, signal);
   const [output, ...extras] = images;
   if (!output) throw new Error(`${adapter.id} image edit returned no image`);
-  return { output, extras, taskId, request };
+  return { output, extras, taskId: submitted.taskId, request };
 }
 
 async function generateSemanticSubjectEdit(

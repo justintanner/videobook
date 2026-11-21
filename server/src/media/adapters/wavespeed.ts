@@ -6,6 +6,8 @@ import { wavespeedMethod } from "../wavespeed.js";
 import { nonEmpty, writePendingTask } from "./pending.js";
 import { MEDIA_TASK_TYPES, type ProviderAdapter, type SubmitContext, type SubmitResult } from "./types.js";
 
+export const WAVESPEED_FAILED_STATUSES: ReadonlySet<string> = new Set(["failed", "cancelled", "timeout", "deleted"]);
+
 export function wavespeedProvider(timeout = 60_000, baseURL = providerEndpoints().wavespeedBaseURL): ReturnType<typeof createWaveSpeed> {
   return createWaveSpeed({
     apiKey: requireApiKey("WAVESPEED_API_KEY"),

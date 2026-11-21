@@ -181,6 +181,78 @@ function stubSubjectProvider(original: Buffer, segmentMapFails = false) {
   };
 }
 
+const CATALOG_EDIT_KEYS = ["MACHGEN_API_KEY", "WAVESPEED_API_KEY", "NUNCHUX_API_KEY"] as const;
+
+function setProviderKeys(keys: readonly string[], value: string): () => void {
+  const saved = new Map(keys.map((key) => [key, process.env[key]]));
+  for (const key of keys) process.env[key] = value;
+  return () => {
+    for (const [key, previous] of saved) {
+      if (previous === undefined) delete process.env[key];
+      else process.env[key] = previous;
+    }
+  };
+}
+
+function stubCatalogEditProviders(edited: Buffer) {
+  const realFetch = globalThis.fetch;
+  const submits: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const unexpected: string[] = [];
+  let uploads = 0;
+  const image = () => new Response(new Uint8Array(edited), { headers: { "Content-Type": "image/png" } });
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    if (url.protocol === "data:" || url.hostname === "127.0.0.1" || url.hostname === "localhost") return realFetch(input, init);
+    if (url.hostname === "litterbox.catbox.moe" || url.hostname === "uguu.se" || url.hostname === "tmpfile.link") {
+      uploads += 1;
+      const uploaded = `https://files.upload.test/upload-${uploads}.png`;
+      if (url.hostname === "litterbox.catbox.moe") return new Response(uploaded);
+      return Response.json(url.hostname === "uguu.se" ? { success: true, files: [{ url: uploaded }] } : { downloadLink: uploaded });
+    }
+    if (method === "POST" && typeof init?.body === "string") {
+      const body = JSON.parse(init.body) as Record<string, unknown>;
+      submits.push({ url: url.href, body });
+      const id = `edit-${submits.length}`;
+      if (url.hostname === "api.wavespeed.ai") {
+        return Response.json({ code: 200, message: "success", data: { id, model: url.pathname, status: "created", outputs: [] } });
+      }
+      if (url.href === "https://api.machgen.ai/api/v0/generate") return Response.json({ task_id: id });
+      if (url.href === "https://api.nunchux.com/v1/google/v1beta/interactions") {
+        return Response.json({ id, object: "interaction", model: body.model, status: "completed",
+          steps: [{ type: "model_output", content: [{ type: "image", mime_type: "image/png", data: edited.toString("base64") }] }] });
+      }
+      if (url.href === "https://api.nunchux.com/v2/openai/images/edits") {
+        return Response.json({ created: 1795170000, output_format: "png", data: [{ b64_json: edited.toString("base64"), generation_id: id }] });
+      }
+    }
+    const prediction = /^\/api\/v3\/predictions\/([^/]+)\/result$/u.exec(url.pathname);
+    if (url.hostname === "api.wavespeed.ai" && prediction) {
+      return Response.json({ code: 200, message: "success", data: {
+        id: prediction[1], model: "edit", status: "completed", outputs: [`https://cdn.edit.test/${prediction[1]}.png`],
+      } });
+    }
+    const task = /^\/api\/v0\/tasks\/([^/]+)$/u.exec(url.pathname);
+    if (url.hostname === "api.machgen.ai" && task) {
+      return Response.json({ task_id: task[1], status: "COMPLETED", metadata: {},
+        task_output: { image: `https://api.machgen.ai/api/v0/assets/${task[1]}` } });
+    }
+    if (url.hostname === "cdn.edit.test" || (url.hostname === "api.machgen.ai" && url.pathname.startsWith("/api/v0/assets/"))) {
+      return image();
+    }
+    unexpected.push(`${method} ${url.href}`);
+    return new Response("unexpected provider call", { status: 418 });
+  }) as typeof fetch;
+  return {
+    submits,
+    unexpected,
+    uploadCount: () => uploads,
+    restore() {
+      globalThis.fetch = realFetch;
+    },
+  };
+}
+
 describe("image subject tools", () => {
   let tempDir: string;
   let client: Client;
@@ -1639,6 +1711,7 @@ describe("image subject tools", () => {
       const originalFalKey = process.env.FAL_API_KEY;
       process.env.KIE_API_KEY = "test-key";
       process.env.FAL_API_KEY = "test-key";
+      const restoreCatalogKeys = setProviderKeys(CATALOG_EDIT_KEYS, "test-key");
       try {
         const source = await createSource();
         const result = await client.callTool({
@@ -1681,6 +1754,7 @@ describe("image subject tools", () => {
         const submittedText = previewBody.payload.input.prompt ?? previewBody.payload.input.instruction;
         expect(submittedText).toEqual(expect.stringContaining("Modify only these selected subjects"));
       } finally {
+        restoreCatalogKeys();
         if (originalKieKey) process.env.KIE_API_KEY = originalKieKey;
         else delete process.env.KIE_API_KEY;
         if (originalFalKey) process.env.FAL_API_KEY = originalFalKey;
@@ -1768,6 +1842,69 @@ describe("image subject tools", () => {
       else delete process.env.FAL_API_KEY;
     }
   });
+
+  for (const entry of IMAGE_EDIT_MODELS.filter((model) => model.provider !== "kie" && model.provider !== "fal")) {
+    it(`runs subject, region replacement and whole-image edits through ${entry.id}`, async () => {
+      const restoreKeys = setProviderKeys(CATALOG_EDIT_KEYS, "stub-key");
+      const edited = await solidPng(100, 100, { r: 240, g: 200, b: 10 });
+      const stub = stubCatalogEditProviders(edited);
+      try {
+        const source = await createSource();
+        const replacement = await engine.artifacts.create({ kind: "image", label: "Actor" });
+        if (!replacement.ok) throw new Error(replacement.error.message);
+        const replacementWrite = await engine.files.write(replacement.value.artifactId, "original.png",
+          await solidPng(32, 32, { r: 12, g: 34, b: 56 }));
+        if (!replacementWrite.ok) throw new Error(replacementWrite.error.message);
+        const edit = async (args: Record<string, unknown>) => {
+          const result = await client.callTool({ name: "edit_image_subjects", arguments: {
+            book_id: bookId,
+            notebook_id: source.notebookId,
+            source_cell_id: source.sourceCellId,
+            artifact_id: source.artifactId,
+            object_hash: source.objectHash,
+            model: entry.id,
+            ...args,
+          } });
+          expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+          const parsed = resultJson(result) as { job_id: string; output_artifact_id: string; producer_cell_id: string };
+          await waitForJob(parsed.job_id, testBudget(30_000));
+          return parsed;
+        };
+        const runs = [
+          { origin: "image_subject_edit", images: 1, run: await edit({ operation: "edit", subject_ids: ["person"], prompt: "Make the person smile" }) },
+          { origin: "image_subject_replace", images: 2, run: await edit({ operation: "replace", regions: [{
+            box: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 }, replacement_artifact_id: replacement.value.artifactId,
+          }] }) },
+          { origin: "image_whole_edit", images: 1, run: await edit({ operation: "whole_image", prompt: "Turn the scene to dusk" }) },
+        ];
+        expect(stub.unexpected).toEqual([]);
+        expect(stub.submits).toHaveLength(3);
+        const notebook = engine.notebooks.read(source.notebookId);
+        if (!notebook.ok) throw new Error(notebook.error.message);
+        for (const [index, { origin, images, run }] of runs.entries()) {
+          const submitted = stub.submits[index]!.body;
+          const sent = submitted.images ?? submitted.src_image_urls ?? (Array.isArray(submitted.input)
+            ? submitted.input.filter((part: { type: string }) => part.type === "image")
+            : undefined);
+          expect(sent, `${entry.id} ${origin}`).toHaveLength(images);
+          const original = await engine.metadata.artifacts.read<Record<string, unknown>>(run.output_artifact_id, "original");
+          expect(original.ok && original.value).toMatchObject({ origin, model: entry.id, kie_task_id: `edit-${index + 1}` });
+          const payload = await engine.metadata.artifacts.read<Record<string, unknown>>(run.output_artifact_id, "generation-payload");
+          expect(payload.ok && payload.value).toMatchObject({ model: entry.id, input: expect.any(Object) });
+          expect((await engine.files.read(run.output_artifact_id, "original.png")).ok).toBe(true);
+          expect(notebook.value.cells.find((cell) => cell.id === run.producer_cell_id)).toMatchObject({
+            provider: entry.provider,
+            model: entry.id,
+            inputs: expect.objectContaining({ state: "completed" }),
+          });
+        }
+        expect(stub.uploadCount()).toBe(entry.provider === "nunchux" ? 0 : 4);
+      } finally {
+        stub.restore();
+        restoreKeys();
+      }
+    });
+  }
 
   it.each(["edit", "remove"] as const)("enqueues a drawn-region %s without analysis or a replacement image", async (operation) => {
     await pauseBookQueueForTests(bookId);
@@ -1965,6 +2102,8 @@ describe("image subject tools", () => {
     const originalFalKey = process.env.FAL_API_KEY;
     process.env.KIE_API_KEY = "test-key";
     delete process.env.FAL_API_KEY;
+    const restoreCatalogKeys = setProviderKeys(CATALOG_EDIT_KEYS, "test-key");
+    delete process.env.MACHGEN_API_KEY;
     try {
       const listed = await client.callTool({
         name: "list_image_edit_models",
@@ -1984,7 +2123,7 @@ describe("image subject tools", () => {
         default_model: string;
         last_used_model: string | null;
       };
-      expect(catalog.models).toHaveLength(18);
+      expect(catalog.models).toHaveLength(31);
       expect(catalog.models.find((model) => model.id === "flux-3/klein-edit-image")).toMatchObject({
         label: "FLUX 3 Klein Edit", provider: "kie", available: true, max_input_images: 10,
       });
@@ -2002,14 +2141,25 @@ describe("image subject tools", () => {
       expect(catalog.models.filter((model) => model.family.id === "image:nano-banana-2-1")).toEqual([
         expect.objectContaining({ id: "nano-banana-2-1", provider: "kie", available: true }),
         expect.objectContaining({ id: "google/nano-banana-2.1/edit", provider: "fal", available: false }),
+        expect.objectContaining({ id: "wavespeed:google/nano-banana-2.1/edit", provider: "wavespeed", available: true, max_input_images: 14 }),
+        expect.objectContaining({ id: "machgen:Nano-Banana-2.1", provider: "machgen", available: false, max_input_images: 14 }),
+        expect.objectContaining({ id: "nunchux:gemini-nano-banana-2.1", provider: "nunchux", available: true, max_input_images: 14 }),
       ]);
       expect(catalog.models[0]).toMatchObject({
         family: { id: "image:nano-banana-2-1", title: "Nano Banana 2.1" },
         frontier: expect.arrayContaining([expect.objectContaining({ type: "i2i", rank: expect.any(Number), elo: expect.any(Number) })]),
       });
-      for (const family of ["image:gpt-image-2-6-sunburst", "image:gpt-image-2-6-flare", "image:gpt-image-2", "image:nano-banana-pro"]) {
+      for (const [family, providers] of [
+        ["image:gpt-image-2-6-sunburst", ["kie", "fal", "wavespeed", "machgen", "nunchux"]],
+        ["image:gpt-image-2-6-flare", ["kie", "fal", "wavespeed", "machgen", "nunchux"]],
+        ["image:gpt-image-2-5-flare", ["kie", "machgen"]],
+        ["image:gpt-image-2-5-sunburst", ["kie", "machgen"]],
+        ["image:gpt-image-2", ["kie", "fal", "machgen"]],
+        ["image:nano-banana-pro", ["kie", "fal"]],
+        ["image:nano-banana-2", ["fal", "machgen"]],
+      ] as const) {
         expect(catalog.models.filter((model) => model.family.id === family).map((model) => model.provider), family)
-          .toEqual(["kie", "fal"]);
+          .toEqual(providers);
       }
       const falEntry = catalog.models.find((model) => model.id === "fal-ai/nano-banana-2/edit");
       expect(falEntry?.available).toBe(false);
@@ -2054,6 +2204,7 @@ describe("image subject tools", () => {
       })) as { last_used_model: string | null };
       expect(after.last_used_model).toBe("fal-ai/nano-banana-2/edit");
     } finally {
+      restoreCatalogKeys();
       if (originalKieKey) process.env.KIE_API_KEY = originalKieKey;
       else delete process.env.KIE_API_KEY;
       if (originalFalKey) process.env.FAL_API_KEY = originalFalKey;

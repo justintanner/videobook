@@ -10,11 +10,14 @@ import { IMAGE_EDIT_ADAPTERS } from "./_image-edit-adapter.js";
 
 /**
  * Live per-model image-edit submissions. Consumes provider credits, so it is a
- * manual run only: `npm run test:image-edit:live` with KIE_API_KEY / FAL_API_KEY
+ * manual run only: `npm run test:image-edit:live` with the provider keys
+ * (KIE_API_KEY, FAL_API_KEY, MACHGEN_API_KEY, WAVESPEED_API_KEY, NUNCHUX_API_KEY)
  * exported. Each model gates on its own provider key; models without a key skip.
  */
-const KIE_LIVE = !!process.env.KIE_API_KEY && !isPlaceholderApiKey(process.env.KIE_API_KEY);
-const FAL_LIVE = !!process.env.FAL_API_KEY && !isPlaceholderApiKey(process.env.FAL_API_KEY);
+function live(key: string): boolean {
+  const value = process.env[key];
+  return !!value && !isPlaceholderApiKey(value);
+}
 
 const EDIT_PROMPTS: Record<string, string> = {
   "nano-banana-2-1": "Change the entire image to a uniform deep blue color",
@@ -28,10 +31,6 @@ const EDIT_PROMPTS: Record<string, string> = {
   "fal-ai/wan/v2.7/edit": "Solid deep blue",
 };
 
-const LIVE_BY_PROVIDER: Record<string, boolean> = {
-  kie: KIE_LIVE,
-  fal: FAL_LIVE,
-};
 
 async function makeEngine(): Promise<{ engine: Engine; dispose: () => Promise<void> }> {
   const tempDir = await mkdtemp(join(tmpdir(), "videobook-image-edit-live-"));
@@ -59,7 +58,7 @@ async function makeSourceArtifact(engine: Engine): Promise<string> {
 }
 
 for (const adapter of IMAGE_EDIT_ADAPTERS) {
-  const providerLive = LIVE_BY_PROVIDER[findProvider(adapter.id)] ?? false;
+  const providerLive = live(adapter.envKey);
 
   describe.skipIf(!providerLive)(`image edit adapter live: ${adapter.id}`, () => {
     it("submits a semantic edit and returns a normalized image buffer", { timeout: 600_000 }, async () => {
@@ -76,10 +75,13 @@ for (const adapter of IMAGE_EDIT_ADAPTERS) {
           width: 64,
           height: 64,
         });
-        const taskId = await adapter.submit(engine, output.value.artifactId, request);
-        expect(taskId).toBeTruthy();
+        const signal = new AbortController().signal;
+        const submitted = await adapter.submit(engine, output.value.artifactId, request, signal);
+        expect(submitted.taskId).toBeTruthy();
 
-        const images = await adapter.awaitResult(taskId, new AbortController().signal);
+        const images = submitted.kind === "done"
+          ? submitted.images
+          : await adapter.awaitResult(submitted.taskId, signal);
         expect(images.length).toBeGreaterThan(0);
         const metadata = await sharp(images[0]!).metadata();
         expect(metadata.format).toBe("png");
@@ -89,8 +91,4 @@ for (const adapter of IMAGE_EDIT_ADAPTERS) {
       }
     });
   });
-}
-
-function findProvider(adapterId: string): "kie" | "fal" {
-  return adapterId.startsWith("fal") ? "fal" : "kie";
 }

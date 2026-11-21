@@ -21,7 +21,19 @@ import {
   FalOpenaiGptImage2p6SunburstEditRequestSchema,
   FalWanV2p7EditRequestSchema,
 } from "@apicity/fal/zod";
+import { MachGenGenerateRequestSchema } from "@apicity/machgen/zod";
+import {
+  NunchuxGoogleInteractionsRequestSchema,
+  NunchuxOpenAiImagesEditsRequestSchema,
+} from "@apicity/nunchux/zod";
+import {
+  WaveSpeedGoogleNanoBanana2p1EditRequestSchema,
+  WaveSpeedOpenaiGptImage2p6FlareEditRequestSchema,
+  WaveSpeedOpenaiGptImage2p6SunburstEditRequestSchema,
+} from "@apicity/wavespeed/zod";
 import { resolveModel } from "./media/descriptor.js";
+import { listModels } from "./media/listing.js";
+import { buildWireRequest } from "./media/request.js";
 import { modelFamily } from "./media/model-family.js";
 import {
   DEFAULT_IMAGE_EDIT_MODEL_ID,
@@ -29,7 +41,33 @@ import {
   IMAGE_EDIT_MODELS,
 } from "./image-edit-models.js";
 
-function imageFieldFor(entryId: string): { safeParse(value: unknown): { success: boolean } } | null {
+type ImageField = { safeParse(value: unknown): { success: boolean } };
+
+function machgenImageField(catalogModel: string): ImageField {
+  const built = buildWireRequest(resolveModel(catalogModel), {
+    prompt: "x",
+    refUrls: { image: ["https://example.com/base.png"] },
+  });
+  if (!built.ok) throw new Error(built.error);
+  return {
+    safeParse: (urls) => MachGenGenerateRequestSchema.safeParse({ ...built.request, src_image_urls: urls }),
+  };
+}
+
+const nunchuxNanoBananaField: ImageField = {
+  safeParse: (urls) => NunchuxGoogleInteractionsRequestSchema.shape.input.safeParse([
+    { type: "text", text: "x" },
+    ...(urls as string[]).map(() => ({ type: "image", data: "AA==", mime_type: "image/png" })),
+  ]),
+};
+
+const nunchuxGptImageField: ImageField = {
+  safeParse: (urls) => NunchuxOpenAiImagesEditsRequestSchema.shape.images
+    .safeParse((urls as string[]).map((url) => ({ image_url: url }))),
+};
+
+function imageFieldFor(entryId: string): ImageField | null {
+  if (entryId.startsWith("machgen:")) return machgenImageField(entryId);
   switch (entryId) {
     case "flux-3/klein-edit-image":
       return Flux3KleinEditImageRequestSchema.shape.input.shape.image_urls;
@@ -67,6 +105,17 @@ function imageFieldFor(entryId: string): { safeParse(value: unknown): { success:
       return FalWanV2p7EditRequestSchema.shape.image_urls;
     case "bria/fibo-2/edit":
       return FalBriaFibo2EditRequestSchema.shape.image_urls;
+    case "wavespeed:google/nano-banana-2.1/edit":
+      return WaveSpeedGoogleNanoBanana2p1EditRequestSchema.shape.images;
+    case "wavespeed:openai/gpt-image-2.6-sunburst/edit":
+      return WaveSpeedOpenaiGptImage2p6SunburstEditRequestSchema.shape.images;
+    case "wavespeed:openai/gpt-image-2.6-flare/edit":
+      return WaveSpeedOpenaiGptImage2p6FlareEditRequestSchema.shape.images;
+    case "nunchux:gemini-nano-banana-2.1":
+      return nunchuxNanoBananaField;
+    case "nunchux:gpt-image-2.6-sunburst":
+    case "nunchux:gpt-image-2.6-flare":
+      return nunchuxGptImageField;
     default:
       return null;
   }
@@ -81,7 +130,7 @@ describe("image edit model catalog", () => {
     for (const entry of IMAGE_EDIT_MODELS) {
       const model = resolveModel(entry.catalogModel);
       expect(model.media, entry.id).toBe("image");
-      expect(model.apiId, entry.id).toBe(entry.id);
+      expect(entry.id).toBe(entry.provider === "kie" || entry.provider === "fal" ? model.apiId : model.id);
       expect(model.slots.some((slot) => slot.role === "image"), entry.id).toBe(true);
     }
   });
@@ -133,18 +182,39 @@ describe("image edit model catalog", () => {
     }
     for (const [family, list] of providers) expect(new Set(list).size, family).toBe(list.length);
     expect(Object.fromEntries([...providers].filter(([, list]) => list.length > 1))).toEqual({
-      "image:nano-banana-2-1": ["kie", "fal"],
-      "image:gpt-image-2-6-sunburst": ["kie", "fal"],
-      "image:gpt-image-2-6-flare": ["kie", "fal"],
-      "image:gpt-image-2": ["kie", "fal"],
+      "image:nano-banana-2-1": ["kie", "fal", "wavespeed", "machgen", "nunchux"],
+      "image:gpt-image-2-6-sunburst": ["kie", "fal", "wavespeed", "machgen", "nunchux"],
+      "image:gpt-image-2-6-flare": ["kie", "fal", "wavespeed", "machgen", "nunchux"],
+      "image:gpt-image-2-5-flare": ["kie", "machgen"],
+      "image:gpt-image-2-5-sunburst": ["kie", "machgen"],
+      "image:gpt-image-2": ["kie", "fal", "machgen"],
       "image:nano-banana-pro": ["kie", "fal"],
+      "image:nano-banana-2": ["fal", "machgen"],
     });
     expect(findImageEditModel("fal:google/nano-banana-2.1/edit")?.id).toBe("google/nano-banana-2.1/edit");
+    expect(findImageEditModel("wavespeed:google/nano-banana-2.1/edit")?.id).toBe("wavespeed:google/nano-banana-2.1/edit");
+  });
+
+  it("lists every catalog edit endpoint in a family the picker already offers", () => {
+    const families = new Set(IMAGE_EDIT_MODELS.map((entry) => entry.family.id));
+    const listed = new Set(IMAGE_EDIT_MODELS.map((entry) => entry.catalogModel));
+    const missing = listModels({ includeHidden: true })
+      .filter((model) => model.entry.operations.includes("edit_image"))
+      .filter((model) => families.has(modelFamily(model).family.id) && !listed.has(model.id))
+      .map((model) => model.id);
+    expect(missing).toEqual([]);
   });
 
   it("matches env keys and provider families", () => {
+    const envKeys = {
+      kie: "KIE_API_KEY",
+      fal: "FAL_API_KEY",
+      machgen: "MACHGEN_API_KEY",
+      wavespeed: "WAVESPEED_API_KEY",
+      nunchux: "NUNCHUX_API_KEY",
+    };
     for (const entry of IMAGE_EDIT_MODELS) {
-      expect(entry.envKey).toBe(entry.provider === "kie" ? "KIE_API_KEY" : "FAL_API_KEY");
+      expect(entry.envKey).toBe(envKeys[entry.provider]);
       expect(entry.capabilities.semantic).toBe(true);
       expect(entry.capabilities.exactMask).toBe(false);
     }

@@ -55,7 +55,7 @@ import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-u
 import { planVideoTranscriptJobs } from "../jobs/process-video.js";
 import { providerEndpoints } from "../media/endpoints.js";
 import { machgenProvider } from "../media/adapters/machgen.js";
-import { wavespeedProvider } from "../media/adapters/wavespeed.js";
+import { WAVESPEED_FAILED_STATUSES, wavespeedProvider } from "../media/adapters/wavespeed.js";
 import { nunchuxProvider } from "../media/adapters/nunchux.js";
 import { isNunchuxTaskModel, nunchuxFamily } from "../media/nunchux.js";
 import { MEDIA_TASK_TYPES } from "../media/adapters/types.js";
@@ -880,7 +880,6 @@ async function enqueueTaskCompletion(
 }
 
 const WAVESPEED_RETRYABLE_STATUSES = new Set([408, 429, 499]);
-const WAVESPEED_FAILED_STATUSES = new Set(["failed", "cancelled", "timeout", "deleted"]);
 
 function wavespeedPollFailureIsFinal(error: unknown): boolean {
   if (!(error instanceof WaveSpeedError)) return false;

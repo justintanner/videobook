@@ -26,10 +26,12 @@ export async function readProviderTaskStatus(
   const payload = payloadResult?.ok ? record(payloadResult.value) : {};
   const storedId = idResult?.ok ? record(idResult.value) : {};
   const endpoint = firstString(payload.endpoint_id, saved?.meta.falEndpointId, saved?.meta.endpointId, saved?.meta.endpoint_id);
+  const payloadModel = parseModelId(firstString(payload.model) ?? "");
   const catalogModelId = firstString(saved?.meta.model, hints.model) ?? "";
-  const catalogModel = parseModelId(catalogModelId);
-  if (catalogModelId.includes(":") && !catalogModel) return null;
-  const model = firstString(endpoint, payload.model, catalogModel?.apiId, saved?.meta.apiModel, saved?.meta.model, hints.model);
+  const hintedModel = parseModelId(catalogModelId);
+  if (catalogModelId.includes(":") && !hintedModel) return null;
+  const catalogModel = hintedModel ?? payloadModel;
+  const model = firstString(endpoint, payloadModel?.apiId, payload.model, catalogModel?.apiId, saved?.meta.apiModel, saved?.meta.model, hints.model);
   const taskId = firstString(saved?.taskId, storedId.taskId, hints.taskId);
   const machgenTask = saved?.taskType === MEDIA_TASK_TYPES.machgen;
   const wavespeedTask = saved?.taskType === MEDIA_TASK_TYPES.wavespeed;

@@ -2,15 +2,24 @@ import { DEFAULT_IMAGE_EDIT_MODEL_ID } from '../../server/src/image-edit-default
 import type { ModelFrontierRanking } from '../../server/src/media/frontier'
 import { useCallback, useRef, useState } from 'react'
 import { parseFrontierRankings } from './generation-frontier'
+import { providerDisplayLabel } from './workspace-action-resources'
 import type { GenerationFamily } from './notebook-generation-actions'
 import { nonBlankStringValue, recordValue } from './value-decoders'
+
+const IMAGE_EDIT_PROVIDERS = ['kie', 'fal', 'machgen', 'wavespeed', 'nunchux'] as const
+
+type ImageEditProvider = typeof IMAGE_EDIT_PROVIDERS[number]
+
+function isImageEditProvider(value: string | null): value is ImageEditProvider {
+  return (IMAGE_EDIT_PROVIDERS as readonly (string | null)[]).includes(value)
+}
 
 export interface ImageEditModelOption {
   id: string
   label: string
   family: GenerationFamily
   variant?: string
-  provider: 'kie' | 'fal'
+  provider: ImageEditProvider
   providerLabel: string
   operation: 'edit_image'
   frontier: ModelFrontierRanking[]
@@ -42,8 +51,6 @@ export interface ImageEditModelsState extends ImageEditModelCatalog {
   ensureLoaded: (bookId: string) => void
 }
 
-const providerLabels = { kie: 'Kie', fal: 'Fal' } as const
-
 function parseModelFamily(value: unknown, id: string, label: string): GenerationFamily {
   const record = recordValue(value)
   const familyId = nonBlankStringValue(record?.id)
@@ -63,7 +70,7 @@ function parseModelCapabilities(value: unknown): ImageEditModelOption['capabilit
   }
 }
 
-function parseImageEditModelCatalog(payload: unknown): ImageEditModelCatalog {
+export function parseImageEditModelCatalog(payload: unknown): ImageEditModelCatalog {
   const record = recordValue(payload)
   const rawModels = Array.isArray(record?.models) ? record.models : []
   const models: ImageEditModelOption[] = []
@@ -73,7 +80,7 @@ function parseImageEditModelCatalog(payload: unknown): ImageEditModelCatalog {
     const label = nonBlankStringValue(item?.label)
     const provider = nonBlankStringValue(item?.provider)
     const capabilities = parseModelCapabilities(item?.capabilities)
-    if (!id || !label || (provider !== 'kie' && provider !== 'fal') || !capabilities) continue
+    if (!id || !label || !isImageEditProvider(provider) || !capabilities) continue
     const maxInputImages = typeof item?.max_input_images === 'number'
       && Number.isFinite(item.max_input_images)
       ? item.max_input_images
@@ -85,7 +92,7 @@ function parseImageEditModelCatalog(payload: unknown): ImageEditModelCatalog {
       family: parseModelFamily(item?.family, id, label),
       ...(variant ? { variant } : {}),
       provider,
-      providerLabel: providerLabels[provider],
+      providerLabel: providerDisplayLabel(provider),
       operation: 'edit_image',
       frontier: parseFrontierRankings(item?.frontier),
       capabilities,

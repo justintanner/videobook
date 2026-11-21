@@ -94,6 +94,21 @@ describe("provider status details", () => {
     expect(providerStatusUrl("machgen", "Seedance-2.5")).toBeNull();
   });
 
+  it.each([
+    { model: "wavespeed:google/nano-banana-2.1/edit", provider: "wavespeed", apiId: "google/nano-banana-2.1/edit" },
+    { model: "machgen:GPT-Image-2.6-Sunburst", provider: "machgen", apiId: "GPT-Image-2.6-Sunburst" },
+  ])("reports a $provider image edit under its own provider instead of Kie", async ({ model, provider, apiId }) => {
+    const asset = await engine.artifacts.create("image", "catalog edit");
+    if (!asset.ok) throw new Error(asset.error.message);
+    const artifactId = asset.value.artifactId;
+    await engine.metadata.artifacts.write(artifactId, "generation-payload", { model, input: { prompt: "edit" } });
+    await engine.metadata.artifacts.write(artifactId, "kie-task-id", { taskId: "catalog-edit-task" });
+    const expected = { provider, model: apiId, taskId: "catalog-edit-task" };
+    expect(await readProviderTaskStatus(engine, artifactId)).toEqual(expected);
+    expect(await readProviderTaskStatus(engine, artifactId, { provider, model })).toEqual(expected);
+    expect(providerStatusUrl(provider, apiId)).toBeNull();
+  });
+
   it("does not identify another provider or an unsafe model as a fal or Kie page", async () => {
     expect(await readProviderTaskStatus(engine, null, { provider: "xai", taskId: "xai-task" })).toBeNull();
     expect(providerStatusUrl("fal", "https://example.test/api-key")).toBeNull();
