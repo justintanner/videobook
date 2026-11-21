@@ -1557,15 +1557,11 @@ version pins the minor. 0.29.0 carries two breaking changes.
     `image-edit` form is not an exact edit and still fails as before. A job
     that failed at submit stored no task id and simply submits a new
     segment-edit.
-  - *A segment-edit result is not a source for a new segment map.* KIE
-    documents the segment-map `task_id` as a
-    `grok-imagine-image-2-0/text-to-image` task, or a segment-map task made
-    from an `image_url`. `GROK_IMAGE_2_SOURCE_MODELS` therefore holds only
-    text-to-image, and the old `image-edit` id (which was never documented as a
-    source) leaves it. An edited image gets the semantic route. Segmenting any
-    book image through `segment-map` with an `image_url` would open the exact
-    route to edited and uploaded images; that is follow-up work, not part of
-    this adoption.
+  - Subject analysis reuses the generation task ID for Grok Image 2.0
+    text-to-image outputs. For uploads, segment-edit results and other models'
+    outputs, it sends the source image URL to segment-map. An exact edit uses
+    the task ID returned by that URL-based map and the matched mask indexes.
+    Subjects without a matching segment keep their semantic edit route.
   - *The new `image-edit` is catalogued* as
     `kie:grok-imagine-image-2-0/image-edit`, an edit of 1-5 images by URL with
     a required aspect ratio, priced at $0.02. It is on no frontier board, so it

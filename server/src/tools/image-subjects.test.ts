@@ -1,3 +1,4 @@
+import { computeEstimate } from "@apicity/cost";
 import type { Client } from "@modelcontextprotocol/client";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -126,6 +127,58 @@ async function pixel(
 
 function asDataUrl(buffer: Buffer): string {
   return `data:image/png;base64,${buffer.toString("base64")}`;
+}
+
+function stubSubjectProvider(original: Buffer, segmentMapFails = false) {
+  const image = asDataUrl(original);
+  const results: Record<string, unknown> = {
+    "5-pro-layer-decomposition-id": { layers_data: [
+      { url: image, z_index: 0 }, { url: image, z_index: 1, name: "Calico cat" },
+    ] },
+    "segment-map-id": { resultObject: { segments_count: 2, segments: [
+      { name: "calico cat", index: 0, maskUrl: "https://cdn.example.test/seg_0.png" },
+      { name: "white door", index: 1, maskUrl: "https://cdn.example.test/seg_1.png" },
+    ] } },
+    "segment-edit-id": { resultUrls: [image] },
+  };
+  const realFetch = globalThis.fetch;
+  const originalKey = process.env.KIE_API_KEY;
+  process.env.KIE_API_KEY = "kie-stub-key";
+  const requests: unknown[] = [];
+  let uploads = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.protocol === "data:" || url.hostname === "127.0.0.1" || url.hostname === "localhost") {
+      return realFetch(input, init);
+    }
+    if (url.pathname === "/api/file-stream-upload") {
+      uploads++;
+      return Response.json({ code: 200, msg: "success", data: { downloadUrl: "https://cdn.example.test/upload.png" } });
+    }
+    if (url.pathname === "/api/v1/jobs/createTask" && typeof init?.body === "string") {
+      const request = JSON.parse(init.body) as { model: string };
+      requests.push(request);
+      const taskId = `${request.model.split("/").at(-1)}-id`;
+      return Response.json({ code: 200, msg: "success", data: { taskId } });
+    }
+    const taskId = url.searchParams.get("taskId");
+    if (url.pathname === "/api/v1/jobs/recordInfo" && taskId && Object.hasOwn(results, taskId)) {
+      const result = segmentMapFails && taskId === "segment-map-id"
+        ? { state: "fail", failMsg: "segment map unavailable" }
+        : { state: "success", resultJson: JSON.stringify(results[taskId]) };
+      return Response.json({ code: 200, msg: "success", data: { taskId, ...result } });
+    }
+    throw new Error(`Unexpected KIE request to ${url.pathname}`);
+  };
+  return {
+    requests,
+    uploadCount: () => uploads,
+    restore() {
+      globalThis.fetch = realFetch;
+      if (originalKey) process.env.KIE_API_KEY = originalKey;
+      else delete process.env.KIE_API_KEY;
+    },
+  };
 }
 
 describe("image subject tools", () => {
@@ -265,6 +318,88 @@ describe("image subject tools", () => {
       original,
     };
   }
+
+  it.each(["upload", "grok-generation"] as const)("analyzes a %s and submits the matched mask to segment-edit", async (origin) => {
+    const source = await createSource();
+    if (origin === "grok-generation") {
+      await engine.metadata.artifacts.write(source.artifactId, "generation-payload", {
+        model: "grok-imagine-image-2-0/text-to-image",
+      });
+      await engine.metadata.artifacts.write(source.artifactId, "kie-task-id", { taskId: "generation-id" });
+    }
+    const imageUrl = "https://cdn.example.test/upload.png";
+    const segmentInput = origin === "upload" ? { image_url: imageUrl } : { task_id: "generation-id" };
+    const segments = { model: "grok-imagine-image-2-0/segment-map", input: segmentInput };
+    const layers = seedreamLayerDecompositionRequest(imageUrl, 100, 100);
+    const analysisArgs = { book_id: bookId, artifact_id: source.artifactId, object_hash: source.objectHash };
+    const estimate = async (force: boolean) => resultJson(await client.callTool({
+      name: "estimate_cost",
+      arguments: { calls: [{ tool_name: "analyze_image_subjects", input: { ...analysisArgs, force } }] },
+    })).estimate;
+    expect(await estimate(false)).toMatchObject({ usd: 0, source: "free" });
+    const segmentUsd = computeEstimate({ provider: "kie", payload: segments }).usd;
+    const layerUsd = computeEstimate({ provider: "kie", payload: layers, costHints: { outputImages: 1 } }).usd;
+    expect(await estimate(true)).toMatchObject({
+      usd: layerUsd + segmentUsd,
+      notes: [`Includes one Grok segment map at ${segmentUsd} USD.`],
+      warnings: [expect.stringContaining("Lower bound")],
+    });
+
+    const stub = stubSubjectProvider(source.original);
+    try {
+      const analysis = await client.callTool({ name: "analyze_image_subjects", arguments: { ...analysisArgs, force: true } });
+      expect(analysis.isError, JSON.stringify(analysis.content)).not.toBe(true);
+      await waitForJob(String(resultJson(analysis).job_id), testBudget(30_000));
+      const presented = resultJson(await client.callTool({ name: "get_image_subject_map", arguments: analysisArgs }));
+      expect(presented).toMatchObject({
+        status: "ready", subjects: [{ capabilities: { exact_edit: true }, label: "Calico cat" }],
+      });
+      const [{ id }] = presented.subjects as Array<{ id: string }>;
+      const edit = await client.callTool({
+        name: "edit_image_subjects",
+        arguments: {
+          ...analysisArgs, notebook_id: source.notebookId, source_cell_id: source.sourceCellId,
+          operation: "edit", subject_ids: [id], prompt: "Give the cat a red collar",
+        },
+      });
+      expect(edit.isError, JSON.stringify(edit.content)).not.toBe(true);
+      await waitForJob(String(resultJson(edit).job_id), testBudget(30_000));
+      expect(stub.uploadCount()).toBe(1);
+      expect(stub.requests).toEqual([layers, segments, {
+        model: "grok-imagine-image-2-0/segment-edit",
+        input: { task_id: origin === "upload" ? "segment-map-id" : "generation-id", mask_indexs: [0], prompt: "Give the cat a red collar" },
+      }]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it.each([false, true])("resumes a submitted URL-based map when the segment task fails = %s", async (fails) => {
+    const source = await createSource();
+    const jobId = `resume-segment-map-${source.artifactId}`;
+    await writeImageSubjectMapRecord(engine, {
+      version: 1, status: "analyzing", artifactId: source.artifactId, objectHash: source.objectHash,
+      width: 100, height: 100, jobId, startedAt: new Date().toISOString(),
+      taskId: "5-pro-layer-decomposition-id",
+      segmentMap: { taskId: "segment-map-id", editSourceTaskId: "segment-map-id" },
+    });
+    const stub = stubSubjectProvider(source.original, fails);
+    try {
+      await queue.enqueue(jobId, {
+        type: "analyze_image_subjects", bookId, jobId,
+        sourceArtifactId: source.artifactId, sourceObjectHash: source.objectHash,
+      });
+      await waitForJob(jobId, testBudget(30_000));
+      const map = await readImageSubjectMapRecord(engine, source.artifactId);
+      expect(map).toMatchObject({
+        status: "ready", subjects: [{ label: "Calico cat", exactEdit: !fails }],
+      });
+      expect(stub.requests).toEqual([]);
+      expect(stub.uploadCount()).toBe(0);
+    } finally {
+      stub.restore();
+    }
+  });
 
   it("routes selected exact_edit subjects to Grok segment-edit and otherwise Seedream", async () => {
     const source = await createSource();

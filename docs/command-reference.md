@@ -12,7 +12,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
-- `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
+- `analyze_image_subjects` — Find and cache image subjects with Seedream 5 Pro and match them to Grok masks for exact edits
 - `analyze_jokes` — Find and classify the jokes in a clip from its ElevenLabs transcript (verbatim text, start and end times, why each works) in a background job. Run transcribe first when there is no transcript. Returns status cached with the earlier jokes when the current transcript was already analysed; pass force to analyse again.
 - `analyze_music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.
 - `analyze_video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.
@@ -236,7 +236,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
 - `/add-sequence-track` — Append a canonical video, audio, or caption track; MCP: `add_sequence_track`
 - `/analyze-editing-moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.; MCP: `analyze_editing_moments`
-- `/analyze-image-subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro; MCP: `analyze_image_subjects`
+- `/analyze-image-subjects` — Find and cache image subjects with Seedream 5 Pro and match them to Grok masks for exact edits; MCP: `analyze_image_subjects`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
 - `/analyze-music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.; MCP: `analyze_music`
 - `/analyze-video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.; MCP: `analyze_video`

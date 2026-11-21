@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CostEstimate, CostHints } from "@apicity/cost";
+import { computeEstimate, type CostEstimate, type CostHints } from "@apicity/cost";
 import type { Engine } from "videobook-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { forecastLanguageCall } from "../cost.js";
@@ -7,6 +7,9 @@ import type { BookManager } from "../book-manager.js";
 import { INTELLIGENCE_MODEL, OPENAI_ANALYSIS_TOOL } from "../openai-intelligence.js";
 import { DEFAULT_CHAT_MODEL } from "../chat-models.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
+import { readImageSubjectMapRecord, resolveImageSubjectSource } from "../image-subject-map.js";
+import { grokSegmentMapRequest, readGrokImagineImage2SourceTaskId, seedreamLayerDecompositionRequest } from "../jobs/image-subjects.js";
+import { imageSubjectAnalysisJobIsActive, reuseImageSubjectAnalysis } from "./image-subjects.js";
 import { previewPlaceholderUrl } from "../preview-payload.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID, findImageEditModel } from "../image-edit-models.js";
 import { tryResolveModel } from "../media/descriptor.js";
@@ -107,6 +110,34 @@ async function estimateMedia(engine: Engine, input: Record<string, unknown>): Pr
   return result.ok ? result.estimate : unavailable(result.error);
 }
 
+async function estimateSubjectAnalysis(engine: Engine, input: Record<string, unknown>): Promise<CostEstimate> {
+  const artifactId = text(input.artifact_id);
+  if (!artifactId) return unavailable("Subject analysis requires an image artifact_id.");
+  const source = await resolveImageSubjectSource(engine, artifactId);
+  if (source.objectHash !== input.object_hash) return unavailable("The requested image version is stale.");
+  const existing = await readImageSubjectMapRecord(engine, artifactId);
+  const active = existing?.status === "analyzing" && imageSubjectAnalysisJobIsActive(engine, existing.jobId);
+  if (reuseImageSubjectAnalysis(existing, source.objectHash, input.force === true, active)) return FREE_ESTIMATE;
+
+  const url = previewPlaceholderUrl(artifactId);
+  const layers = computeEstimate({
+    provider: "kie",
+    payload: seedreamLayerDecompositionRequest(url, source.width, source.height),
+    costHints: { outputImages: 1 },
+  });
+  const sourceTaskId = await readGrokImagineImage2SourceTaskId(engine, artifactId);
+  const segments = computeEstimate({
+    provider: "kie",
+    payload: grokSegmentMapRequest(sourceTaskId ? { task_id: sourceTaskId } : { image_url: url }),
+  });
+  const estimate = sumEstimates([layers, segments]);
+  return {
+    ...estimate,
+    warnings: [...estimate.warnings, "Lower bound for one Seedream output image. Each additional layer is billed."],
+    notes: [...(estimate.notes ?? []), `Includes one Grok segment map at ${segments.usd} USD.`],
+  };
+}
+
 async function estimateImageEdit(input: Record<string, unknown>): Promise<CostEstimate> {
   if (input.model === "sharp/layer-composite" && input.operation === "remove") return { ...FREE_ESTIMATE };
   const editModel = findImageEditModel(text(input.model) ?? DEFAULT_IMAGE_EDIT_MODEL_ID);
@@ -181,6 +212,7 @@ async function estimateAutoEdit(engine: Engine, input: Record<string, unknown>):
 
 async function estimateOne(engine: Engine, toolName: string, input: Record<string, unknown>): Promise<CostEstimate> {
   if (GENERATION_TOOLS.has(toolName)) return estimateMedia(engine, input);
+  if (toolName === "analyze_image_subjects") return estimateSubjectAnalysis(engine, input);
   if (toolName === "edit_image_subjects") return estimateImageEdit(input);
   if (toolName === "auto_edit") return estimateAutoEdit(engine, input);
   if (toolName === "rewrite_prompt" || toolName === "chat" || ANALYSIS_TOOLS.has(toolName)) return estimateLanguageCall(toolName, input);

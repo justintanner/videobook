@@ -68,6 +68,10 @@ const analyzingRecordSchema = recordBaseSchema.extend({
   status: z.literal("analyzing"),
   startedAt: z.string().min(1),
   taskId: z.string().min(1).optional(),
+  segmentMap: z.object({
+    taskId: z.string().min(1),
+    editSourceTaskId: z.string().min(1),
+  }).optional(),
 });
 
 const failedRecordSchema = recordBaseSchema.extend({

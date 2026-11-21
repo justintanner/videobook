@@ -37,6 +37,7 @@ import {
   resolveImageSubjectSource,
   writeCurrentImageSubjectAnalysisRecord,
   type ImageSubjectMapReadyV1,
+  type ImageSubjectMapRecordV1,
   type ImageSubjectNormalizedBox,
   type ImageSubjectSource,
   type SeedreamLayerInput,
@@ -972,44 +973,57 @@ async function generateExactSubjectEdit(
   return { output, extras, taskId, request };
 }
 
+export function grokSegmentMapRequest(input: { task_id: string } | { image_url: string }) {
+  return GrokImagineImage2SegmentMapRequestSchema.parse({
+    model: "grok-imagine-image-2-0/segment-map",
+    input,
+  });
+}
+
 async function augmentMapWithGrokSegments(
   engine: Engine,
-  sourceArtifactId: string,
+  analysis: Extract<ImageSubjectMapRecordV1, { status: "analyzing" }>,
   map: ImageSubjectMapReadyV1,
   provider: KieProvider,
+  getImageUrl: () => Promise<string>,
   signal: AbortSignal,
   deadlineAt: number,
 ): Promise<ImageSubjectMapReadyV1> {
-  const grokSourceTaskId = await readGrokImagineImage2SourceTaskId(
-    engine,
-    sourceArtifactId,
-  );
-  if (!grokSourceTaskId) return map;
+  if (!map.subjects.length) return map;
+  let segmentMap = analysis.segmentMap;
   try {
-    const request = GrokImagineImage2SegmentMapRequestSchema.parse({
-      model: "grok-imagine-image-2-0/segment-map",
-      input: { task_id: grokSourceTaskId },
-    });
-    const segmentTaskId = await submitMediaJob(provider, request, {
-      otp: mintKieOtp(request),
-    });
+    if (!segmentMap) {
+      const sourceTaskId = await readGrokImagineImage2SourceTaskId(engine, map.artifactId);
+      const request = grokSegmentMapRequest(sourceTaskId
+        ? { task_id: sourceTaskId }
+        : { image_url: await getImageUrl() });
+      signal.throwIfAborted();
+      if (Date.now() >= deadlineAt) return map;
+      const taskId = await submitMediaJob(provider, request, { otp: mintKieOtp(request) });
+      segmentMap = { taskId, editSourceTaskId: sourceTaskId ?? taskId };
+      const current = await writeCurrentImageSubjectAnalysisRecord(engine, {
+        ...analysis, taskId: map.taskId, segmentMap,
+      });
+      if (!current) return map;
+    }
     const resultJson = await waitForKieResult(
       provider,
-      segmentTaskId,
+      segmentMap.taskId,
       signal,
       deadlineAt,
       "subject-analysis",
     );
     return {
       ...map,
-      grokSourceTaskId,
+      grokSourceTaskId: segmentMap.editSourceTaskId,
       subjects: applyGrokSegmentsToSubjects(
         map.subjects,
         parseGrokSegmentMapResult(resultJson),
       ),
     };
   } catch {
-    return { ...map, grokSourceTaskId };
+    signal.throwIfAborted();
+    return map;
   }
 }
 
@@ -1193,9 +1207,9 @@ async function submitLayerDecompositionTask(
   jobId: string,
   startedAt: string,
   deadlineAt: number,
+  imageUrl: string,
   prompt?: string,
 ): Promise<string> {
-  const imageUrl = await uploadAssetToKie(engine, source.artifactId, source.file.name);
   if (Date.now() >= deadlineAt) {
     throw new Error("Subject analysis did not finish within 25 minutes. Retry the analysis.");
   }
@@ -1251,6 +1265,8 @@ export function registerImageSubjectJobs(engine: Engine): void {
         throw new Error("Subject analysis did not finish within 25 minutes. Retry the analysis.");
       }
       const provider = kieProvider();
+      let uploaded: Promise<string> | undefined;
+      const getImageUrl = () => uploaded ??= uploadAssetToKie(engine, source.artifactId, source.file.name, context.signal);
       if (!taskId) {
         taskId = await submitLayerDecompositionTask(
           engine,
@@ -1259,6 +1275,7 @@ export function registerImageSubjectJobs(engine: Engine): void {
           payload.jobId,
           startedAt,
           deadlineAt,
+          await getImageUrl(),
         );
       }
       let resultJson: string;
@@ -1280,6 +1297,7 @@ export function registerImageSubjectJobs(engine: Engine): void {
           payload.jobId,
           startedAt,
           deadlineAt,
+          await getImageUrl(),
           SEEDREAM_LAYER_FALLBACK_PROMPT,
         );
         try {
@@ -1309,9 +1327,10 @@ export function registerImageSubjectJobs(engine: Engine): void {
       });
       const ready = await augmentMapWithGrokSegments(
         engine,
-        source.artifactId,
+        existing,
         seedreamReady,
         provider,
+        getImageUrl,
         context.signal,
         deadlineAt,
       );

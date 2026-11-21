@@ -373,7 +373,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
     },
     {
       name: "analyze_image_subjects",
-      description: "Automatically decompose an image into cached subjects using Seedream 5 Pro",
+      description: "Find and cache image subjects with Seedream 5 Pro and match them to Grok masks for exact edits",
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

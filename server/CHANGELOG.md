@@ -8,6 +8,9 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Subject analysis now finds exact edit masks for uploaded photos and images
+  from any model. Select a matched subject to edit it using its mask.
+  Analyzing again refreshes a previously cached subject map.
 - `/auto-edit @a1`, also **Auto-edit** in a video cell's menu and "auto edit
   @a1" in chat or voice, turns one clip into a short built around its best
   moment: a cold open, then the clip, with the moment replayed wide, punched
