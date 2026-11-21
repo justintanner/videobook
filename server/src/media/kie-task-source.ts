@@ -70,6 +70,42 @@ async function geminiExtendCostHints(engine: Engine, model: string, options: Rec
   return typeof resolution === "string" && GEMINI_EXTEND_RESOLUTIONS.has(resolution) ? { inputResolution: resolution } : {};
 }
 
+const GEMINI_EXTEND_MAX_SECONDS = 15;
+const GEMINI_EXTEND_REQUIREMENT = "Gemini Omni 1.2 Flash Extend takes only a 360p or 720p Gemini Omni 1.2 Flash video of at most 15 s that Kie generated in this book";
+
+async function geminiSourceSeconds(engine: Engine, artifactId: string, payload: Record<string, unknown>): Promise<number | undefined> {
+  const requested = payload.model === GEMINI_EXTEND_SOURCE ? seconds(record(payload.input).duration) : undefined;
+  if (requested !== undefined) return requested;
+  const probed = seconds((await readRecord(engine, artifactId, "original")).duration);
+  return probed === undefined ? undefined : Math.round(probed);
+}
+
+async function geminiExtendSourceProblem(engine: Engine, artifactId: string): Promise<string | null> {
+  const pending = engine.jobs.pending.read(artifactId);
+  if (pending.ok && pending.value) return "is still generating; wait for it to finish";
+  const payload = await readRecord(engine, artifactId, "generation-payload");
+  const model = payload.model;
+  if (typeof model === "string" && model !== GEMINI_EXTEND_SOURCE && model !== GEMINI_EXTEND_MODEL.slice("kie:".length)) {
+    return `is a ${model} video`;
+  }
+  const resolution = await geminiSourceResolution(engine, artifactId);
+  if (typeof resolution === "string" && !GEMINI_EXTEND_RESOLUTIONS.has(resolution)) return `is ${resolution}`;
+  const length = await geminiSourceSeconds(engine, artifactId, payload);
+  return length !== undefined && length > GEMINI_EXTEND_MAX_SECONDS ? `is ${length} s long` : null;
+}
+
+export function kieTaskSourceModel(model: string): boolean {
+  return model === GEMINI_EXTEND_MODEL;
+}
+
+export async function kieTaskSourceError(engine: Engine, model: string, options: Record<string, unknown>): Promise<string | null> {
+  if (model !== GEMINI_EXTEND_MODEL) return null;
+  const taskId = typeof options.task_id === "string" ? options.task_id.trim() : "";
+  const artifactId = taskId ? await kieTaskArtifact(engine, taskId) : null;
+  const problem = artifactId ? await geminiExtendSourceProblem(engine, artifactId) : null;
+  return problem ? `The video of Kie task ${taskId} ${problem}; ${GEMINI_EXTEND_REQUIREMENT}` : null;
+}
+
 export async function kieTaskSourceCostHints(engine: Engine, model: string, options: Record<string, unknown>): Promise<CostHints> {
   return { ...await seedanceDraftCostHints(engine, model, options), ...await geminiExtendCostHints(engine, model, options) };
 }

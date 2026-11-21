@@ -5,6 +5,7 @@ import { MEDIA_TASK_TYPES } from "./adapters/types.js";
 import { tryResolveModel } from "./descriptor.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { machgenTaskUrl, machgenTopaz, machgenUpscale, machgenUpscaleRequirement, type MachGenUpscaleSpec } from "./machgen.js";
+import { kieTaskSourceError, kieTaskSourceModel } from "./kie-task-source.js";
 import { isNunchuxGptImage, isNunchuxSeedance, nunchuxFamily } from "./nunchux.js";
 import { normalizeRefs, resolveRefInput } from "./refs.js";
 import type { MediaRefs, ResolvedModel } from "./types.js";
@@ -166,8 +167,15 @@ export async function resolveGenerationSource(engine: Engine, model: ResolvedMod
   const upscale = model.provider === "machgen" ? machgenUpscale(model.apiId) : null;
   if (upscale) return resolveMachGenUpscale(engine, model, upscale, refs);
   if (model.provider === "nunchux") return resolveNunchuxSource(engine, model, refs);
+  const taskSourceError = await kieTaskSourceError(engine, model.id, options);
+  if (taskSourceError) return refused(taskSourceError);
   const costHints = model.id === KIE_IMAGE_UPSCALE ? await sourceImageSize(engine, refs) : {};
   return { ok: true, refs, sourceVideoIds: [], costHints, options: {} };
+}
+
+function sourcedModel(model: ResolvedModel): boolean {
+  if (model.provider === "machgen") return !!machgenUpscale(model.apiId) || machgenTopaz(model.apiId);
+  return kieTaskSourceModel(model.id);
 }
 
 export async function sourcedGenerationInput(
@@ -175,7 +183,7 @@ export async function sourcedGenerationInput(
   input: Record<string, unknown>,
 ): Promise<{ ok: true; input: Record<string, unknown> } | { ok: false; error: string }> {
   const model = typeof input.model === "string" ? tryResolveModel(input.model.trim()) : null;
-  if (!model || model.provider !== "machgen" || !(machgenUpscale(model.apiId) || machgenTopaz(model.apiId))) return { ok: true, input };
+  if (!model || !sourcedModel(model)) return { ok: true, input };
   const source = await resolveGenerationSource(engine, model, normalizeRefs(input.refs), record(input.options));
   if (!source.ok) return source;
   return { ok: true, input: { ...input, refs: source.refs, options: { ...record(input.options), ...source.options } } };

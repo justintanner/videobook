@@ -330,6 +330,7 @@ import {
   notebookFollowUpLabels,
   notebookFollowUps,
   planNotebookFollowUp,
+  readNotebookFollowUpSourceTask,
   type NotebookFollowUp,
 } from '@/videobook/notebook-follow-up-generation'
 import {
@@ -9565,8 +9566,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         cellId: uuidv7(),
         document: currentNotebook,
       }
+      const sourceTaskId = followUp
+        ? await readNotebookFollowUpSourceTask({ bookId, callTool: call, document: currentNotebook, followUp, sourceCellId })
+        : undefined
       const draft = followUp
-        ? planNotebookFollowUp({ ...draftInput, followUp, sourceCellId })
+        ? planNotebookFollowUp({ ...draftInput, followUp, sourceCellId, sourceTaskId })
         : planContextMenuGeneration({
           ...draftInput,
           cellType,

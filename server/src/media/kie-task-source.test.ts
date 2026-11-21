@@ -6,7 +6,7 @@ import { createEngine, type Engine } from "videobook-engine";
 import { getAllToolDefs } from "../tools/index.js";
 import { resolveModel } from "./descriptor.js";
 import { buildWireRequest } from "./request.js";
-import { kieTaskSourceCostHints } from "./kie-task-source.js";
+import { kieTaskSourceCostHints, kieTaskSourceError } from "./kie-task-source.js";
 
 const DRAFT_COMPLETE = "kie:bytedance/seedance-2-5-draft";
 const GEMINI_EXTEND = "kie:google/gemini-omni-flash-1-2-extend";
@@ -106,5 +106,51 @@ describe("Seedance 2.5 draft completion", () => {
     expect((await estimate({ task_id: "kie-omni-2", duration: 5 }, GEMINI_EXTEND, "on")).usd).toBeCloseTo(5 * 0.02, 6);
     expect(await estimate({ task_id: "elsewhere", duration: 5 }, GEMINI_EXTEND, "on"))
       .toMatchObject({ usd: 0, warnings: [expect.stringContaining("inputResolution")] });
+  });
+
+  it("refuses to extend a 1080p, 4k, over-15 s, unfinished or non-Omni source before calling Kie", async () => {
+    const omni = (input: Record<string, unknown>) => ({ model: "google/gemini-omni-flash-1-2", input: { prompt: "a fox", ...input } });
+    await draft("kie-omni-720", omni({ resolution: "720p", duration: 15 }), { original: { duration: 15.04 } });
+    await draft("kie-omni-1080", omni({ resolution: "1080p", duration: 8 }));
+    await draft("kie-omni-4k", omni({ resolution: "4k", duration: 8 }));
+    await draft("kie-omni-long", omni({ resolution: "360p" }), { original: { duration: 16.2 } });
+    await draft("kie-extend-ok", { model: "google/gemini-omni-flash-1-2-extend", input: { task_id: "kie-omni-720", duration: 3 } },
+      { "generation-cost-hints": { inputResolution: "720p" }, original: { duration: 14.96 } });
+    await draft("kie-extend-long", { model: "google/gemini-omni-flash-1-2-extend", input: { task_id: "kie-omni-720", duration: 10 } },
+      { "generation-cost-hints": { inputResolution: "720p" }, original: { duration: 25.01 } });
+    await draft("kie-seedance", { model: "bytedance/seedance-2-5", input: { prompt: "a boat", resolution: "720p", duration: 6 } });
+    const running = await draft("kie-omni-running", omni({ resolution: "360p", duration: 8 }));
+    const lease = await engine.jobs.artifactWork.begin(running, { kind: "generate", ownerKind: "job", durationMs: 60_000 });
+    if (!lease) throw new Error("artifactWork.begin failed");
+    const pending = await engine.jobs.pending.write({ artifactId: running, taskId: "kie-omni-running", taskType: "media_kie" }, lease.ownerId);
+    expect(pending.ok && pending.value).toBeTruthy();
+
+    const refusal = (taskId: string) => kieTaskSourceError(engine, GEMINI_EXTEND, { task_id: taskId });
+    expect(await refusal("kie-omni-720")).toBeNull();
+    expect(await refusal(" kie-extend-ok ")).toBeNull();
+    expect(await refusal("elsewhere")).toBeNull();
+    expect(await kieTaskSourceError(engine, "kie:google/gemini-omni-flash-1-2", { task_id: "kie-omni-1080" })).toBeNull();
+    expect(await refusal("kie-omni-1080")).toBe("The video of Kie task kie-omni-1080 is 1080p; Gemini Omni 1.2 Flash Extend takes only a 360p or 720p Gemini Omni 1.2 Flash video of at most 15 s that Kie generated in this book");
+    expect(await refusal("kie-omni-4k")).toContain("kie-omni-4k is 4k;");
+    expect(await refusal("kie-omni-long")).toContain("kie-omni-long is 16 s long;");
+    expect(await refusal("kie-extend-long")).toContain("kie-extend-long is 25 s long;");
+    expect(await refusal("kie-seedance")).toContain("kie-seedance is a bytedance/seedance-2-5 video;");
+    expect(await refusal("kie-omni-running")).toContain("kie-omni-running is still generating; wait for it to finish;");
+
+    expect(await estimate({ task_id: "kie-omni-1080", duration: 5 }, GEMINI_EXTEND, "on"))
+      .toMatchObject({ usd: 0, warnings: [expect.stringContaining("kie-omni-1080 is 1080p")] });
+    const saved = process.env.KIE_API_KEY;
+    process.env.KIE_API_KEY = "local-kie-key";
+    try {
+      const generate = getAllToolDefs(engine).find((definition) => definition.name === "generate_video")!;
+      const before = engine.artifacts.list().length;
+      const result = await generate.handler({ model: GEMINI_EXTEND, prompt: "on", options: { task_id: "kie-omni-4k", duration: 5 } });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]!.text).toContain("kie-omni-4k is 4k");
+      expect(engine.artifacts.list()).toHaveLength(before);
+    } finally {
+      if (saved === undefined) delete process.env.KIE_API_KEY;
+      else process.env.KIE_API_KEY = saved;
+    }
   });
 });

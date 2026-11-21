@@ -40,6 +40,13 @@ and the package uses [Semantic Versioning](https://semver.org/).
   whose cell is gone reads "not on the grid". Over MCP,
   `list_cell_generations` attempts carry `inputs` (`slot`, `kind`,
   `artifactId`, `sourceCellId`, `thumbnailUrl`).
+- **Extend video** on a KIE Gemini Omni 1.2 Flash cell, or on an extend of
+  one, adds a Gemini Omni 1.2 Flash Extend cell with the source's KIE task id
+  already filled in, priced at the source's resolution. An Omni cell with no
+  KIE task is extended by a model that takes its video instead. KIE extends
+  only 360p or 720p videos of at most 15 s, so a 1080p, 4k or longer source,
+  or one still generating, is refused in the preview, the estimate and the
+  run before anything is sent to KIE.
 
 ### Changed
 
