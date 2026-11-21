@@ -4,17 +4,16 @@ import {
   AUTO_EDIT_ANCHOR_INFO,
   autoEditAnchorRule,
   autoEditAnchorSeconds,
-  autoEditAnchorsForItem,
   autoEditCutsInItem,
   autoEditItemsForAnchor,
   autoEditSegmentFacts,
   type AutoEditAnchorKey,
   type AutoEditLaneItem,
 } from '@/videobook/auto-edit-review'
-import type { AutoEditSelection } from './AutoEditTimeline'
 
 interface AutoEditInspectorProps {
-  selection: AutoEditSelection
+  selectedMarker: AutoEditAnchorKey | null
+  item?: AutoEditLaneItem
   anchors: AutoEditAnchors
   items: readonly AutoEditLaneItem[]
   fps: number
@@ -22,7 +21,6 @@ interface AutoEditInspectorProps {
   disabled: boolean
   onNudgeAnchor: (key: AutoEditAnchorKey, deltaFrames: number) => void
   onSetToPlayhead: (key: AutoEditAnchorKey) => void
-  onSelectAnchor: (key: AutoEditAnchorKey) => void
   onRemoveCut: (cutIndex: number) => void
 }
 
@@ -50,11 +48,11 @@ function AnchorControls({ anchorKey, disabled, onNudgeAnchor, onSetToPlayhead }:
   )
 }
 
-function AnchorDetails(props: Omit<AutoEditInspectorProps, 'selection' | 'changes' | 'onSelectAnchor' | 'onRemoveCut'> & { anchorKey: AutoEditAnchorKey }) {
+function AnchorDetails(props: Omit<AutoEditInspectorProps, 'selectedMarker' | 'changes' | 'item' | 'onRemoveCut'> & { anchorKey: AutoEditAnchorKey }) {
   const { anchorKey, anchors, items, fps } = props
   const info = AUTO_EDIT_ANCHOR_INFO[anchorKey]
   const secs = autoEditAnchorSeconds(anchors, anchorKey)
-  const moves = [...new Set(autoEditItemsForAnchor(items, anchors, anchorKey, fps).map((item) => item.label))]
+  const moves = [...new Set(autoEditItemsForAnchor(items, anchorKey).map((item) => item.label))]
   const focus = info.focus ? anchors.focus[info.focus] : null
   return (
     <div className="auto-edit-inspector-body" role="group" aria-label={info.label}>
@@ -77,8 +75,8 @@ function AnchorDetails(props: Omit<AutoEditInspectorProps, 'selection' | 'change
   )
 }
 
-function SegmentDetails(props: Omit<AutoEditInspectorProps, 'selection' | 'changes' | 'items'> & { item: AutoEditLaneItem }) {
-  const { item, anchors, fps, disabled, onSelectAnchor, onRemoveCut } = props
+function SegmentDetails(props: Pick<AutoEditInspectorProps, 'anchors' | 'disabled' | 'onRemoveCut'> & { item: AutoEditLaneItem }) {
+  const { item, anchors, disabled, onRemoveCut } = props
   const cutIndexes = autoEditCutsInItem(item, anchors)
   const sourceText = cutIndexes.length > 0
     ? `${range(item.sourceStartSeconds, item.sourceEndSeconds)}, skipping ${cutIndexes.length} ${cutIndexes.length === 1 ? 'cut' : 'cuts'}`
@@ -98,18 +96,6 @@ function SegmentDetails(props: Omit<AutoEditInspectorProps, 'selection' | 'chang
         <dt>Treatment</dt>
         <dd>{autoEditSegmentFacts(item.ranges[0]!.segment)}</dd>
       </dl>
-      {autoEditAnchorsForItem(item, anchors, fps).map((key) => {
-        const secs = autoEditAnchorSeconds(anchors, key)
-        return (
-          <div key={key} className="auto-edit-anchor-row" role="group" aria-label={AUTO_EDIT_ANCHOR_INFO[key].label}>
-            <button type="button" className="auto-edit-anchor-name" disabled={disabled} onClick={() => onSelectAnchor(key)}>
-              <span className="auto-edit-inspector-swatch" data-anchor={key} aria-hidden="true" />
-              {`${AUTO_EDIT_ANCHOR_INFO[key].label} ${secs.toFixed(2)}s`}
-            </button>
-            <AnchorControls {...props} anchorKey={key} />
-          </div>
-        )
-      })}
       {cutIndexes.map((cutIndex) => {
         const cut = anchors.cuts[cutIndex]!
         return (
@@ -127,14 +113,13 @@ function SegmentDetails(props: Omit<AutoEditInspectorProps, 'selection' | 'chang
 }
 
 export function AutoEditInspector(props: AutoEditInspectorProps) {
-  const { selection, items, changes } = props
-  const item = selection.kind === 'segment' ? items.find((entry) => entry.index === selection.index) : undefined
+  const { selectedMarker, item, changes } = props
   return (
     <section className="auto-edit-panel auto-edit-inspector" aria-label="Selected">
       <h3 className="auto-edit-panel-title">Selected</h3>
-      {selection.kind === 'anchor' && <AnchorDetails {...props} anchorKey={selection.key} />}
-      {item && <SegmentDetails {...props} item={item} />}
-      {selection.kind === 'segment' && !item && (
+      {selectedMarker && <AnchorDetails {...props} anchorKey={selectedMarker} />}
+      {!selectedMarker && item && <SegmentDetails {...props} item={item} />}
+      {!selectedMarker && !item && (
         <p className="auto-edit-muted">Pick a segment or a marker on the timeline.</p>
       )}
       {changes.length > 0 && (

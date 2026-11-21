@@ -14,11 +14,11 @@ and the package uses [Semantic Versioning](https://semver.org/).
   in, pushed in and once more at half speed under a colour-cycling crash look
   with the sound pitched down. The sheet plays the planned edit on the source
   before anything is rendered, beside a timeline that draws each segment of
-  the edit above the part of the clip it comes from. Drag where the body
-  starts and ends, the hook, and the moment's start, peak and end along the
-  timeline or move them a frame at a time (the arrow keys work too), click
-  the paused picture to say where the
-  subject is, or press **Find the moment**, the one paid step, which asks the
+  the edit above the part of the clip it comes from. Select a clip to trim it on the source
+  filmstrip. Drag either handle, enter a Start or End time, or set either edge
+  at the playhead. Shared edges list the other clips they affect. **All timing
+  markers** opens the body, hook and moment controls. Click the paused picture
+  to say where the subject is, or press **Find the moment**, the one paid step, which asks the
   OpenAI model after showing its estimate. Stretches the analysis cuts stay
   inside one Body block, each listed so it can be put back. Cold open,
   Replays, Push-in, Crash and Sounds each switch off, and each says how much

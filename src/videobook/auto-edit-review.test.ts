@@ -4,14 +4,14 @@ import { buildAutoEditPlan, DEFAULT_AUTO_EDIT_SECTIONS, type AutoEditAnchors } f
 import { autoEditPlanDurationSeconds, buildAutoEditSegmentRanges } from './auto-edit-preview'
 import {
   autoEditAnchorRule,
-  autoEditAnchorsForItem,
-  autoEditAnchorsForSegment,
+  autoEditAnchorSeconds,
+  autoEditTrimClip,
+  autoEditTrimEdges,
   autoEditBeats,
   autoEditConnectorClip,
   autoEditCutsInItem,
   autoEditEditPercentAt,
   autoEditItemsForAnchor,
-  autoEditLaneItemAt,
   autoEditSegmentFacts,
   autoEditSegmentLengthText,
   autoEditTicks,
@@ -45,14 +45,13 @@ const ANCHORS: AutoEditAnchors = {
 describe('auto-edit review timeline', () => {
   const built = buildAutoEditPlan(SOURCE, ANCHORS, DEFAULT_AUTO_EDIT_SECTIONS)
   const ranges = buildAutoEditSegmentRanges(built.plan)
-  const items = buildAutoEditLaneItems(ranges)
+  const items = buildAutoEditLaneItems(ranges, built.anchors)
   const blocks = buildAutoEditTimelineLayout(items)
   const total = autoEditPlanDurationSeconds(built.plan)
 
   it('names the blocks, calling the body after the beats the ending', () => {
     expect(items.map((item) => item.label)).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Ending'])
     expect(items.map((item) => item.index)).toEqual(ranges.map((range) => range.index))
-    expect(autoEditLaneItemAt(items, 5)?.label).toBe('Crash')
   })
 
   it('gives every segment room for its label and keeps the blocks end to end', () => {
@@ -103,25 +102,28 @@ describe('auto-edit review timeline', () => {
   })
 
   it('links each marker to the segments it moves', () => {
-    const labels = (key: Parameters<typeof autoEditItemsForAnchor>[2]) =>
-      autoEditItemsForAnchor(items, built.anchors, key, SOURCE.fps).map((item) => item.label)
+    const labels = (key: Parameters<typeof autoEditItemsForAnchor>[1]) =>
+      autoEditItemsForAnchor(items, key).map((item) => item.label)
     expect(labels('hook.start')).toEqual(['Cold open'])
     expect(labels('moment.start')).toEqual(['Replay', 'Punch-in', 'Push-in'])
     expect(labels('moment.peak')).toEqual(['Replay', 'Punch-in', 'Crash'])
     expect(labels('moment.end')).toEqual(['Body', 'Push-in', 'Crash', 'Ending'])
     expect(labels('keep.start')).toEqual(['Body'])
     expect(labels('keep.end')).toEqual(['Ending'])
-    const crash = ranges.find((range) => range.label === 'Crash')!
-    expect(autoEditAnchorsForSegment(crash.segment, built.anchors, SOURCE.fps)).toEqual(['moment.peak', 'moment.end'])
-    const noHook = { ...built.anchors, hook: null }
-    const firstBody = ranges.find((range) => range.label === 'Body')!
-    expect(autoEditAnchorsForSegment(firstBody.segment, noHook, SOURCE.fps)).toEqual(['keep.start', 'moment.end'])
-    expect(autoEditAnchorsForItem(items[items.length - 1]!, built.anchors, SOURCE.fps)).toEqual(['moment.end', 'keep.end'])
+    expect(items.map((item) => item.trim)).toEqual([
+      { start: 'hook.start', end: 'hook.end' },
+      { start: 'keep.start', end: 'moment.end' },
+      { start: 'moment.start', end: 'moment.peak' },
+      { start: 'moment.start', end: 'moment.peak' },
+      { start: 'moment.start', end: 'moment.end' },
+      { start: 'moment.peak', end: 'moment.end' },
+      { start: 'moment.end', end: 'keep.end' },
+    ])
   })
 
   it('keeps body pieces that cuts separate as one block and lists its cuts', () => {
     const withCuts = buildAutoEditPlan(SOURCE, { ...ANCHORS, cuts: [{ start: 2, end: 2.5 }, { start: 3, end: 3.4 }] }, DEFAULT_AUTO_EDIT_SECTIONS)
-    const cutItems = buildAutoEditLaneItems(buildAutoEditSegmentRanges(withCuts.plan))
+    const cutItems = buildAutoEditLaneItems(buildAutoEditSegmentRanges(withCuts.plan), withCuts.anchors)
     expect(cutItems.map((item) => item.label)).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Ending'])
     const body = cutItems[1]!
     expect(body.ranges).toHaveLength(3)
@@ -129,11 +131,61 @@ describe('auto-edit review timeline', () => {
     expect([body.sourceStartSeconds, body.sourceEndSeconds]).toEqual([0.5, 7.2])
     expect(autoEditCutsInItem(body, withCuts.anchors)).toEqual([0, 1])
     expect(autoEditCutsInItem(cutItems[0]!, withCuts.anchors)).toEqual([])
-    expect(autoEditAnchorsForItem(body, withCuts.anchors, SOURCE.fps)).toEqual(['keep.start', 'moment.end'])
+    expect(body.trim).toEqual({ start: 'keep.start', end: 'moment.end' })
 
     const plain = buildAutoEditPlan(SOURCE, withCuts.anchors, { ...DEFAULT_AUTO_EDIT_SECTIONS, replays: false, pushIn: false, crash: false })
-    const plainItems = buildAutoEditLaneItems(buildAutoEditSegmentRanges(plain.plan))
+    const plainItems = buildAutoEditLaneItems(buildAutoEditSegmentRanges(plain.plan), plain.anchors)
     expect(plainItems.map((item) => [item.label, item.ranges.length])).toEqual([['Cold open', 1], ['Body', 3]])
+  })
+
+  it('uses the outer kept range when the moment effects are off, even when a cut consumes its first frames', () => {
+    const plain = buildAutoEditPlan(SOURCE, { ...ANCHORS, cuts: [{ start: 0.5, end: 2 }] }, {
+      ...DEFAULT_AUTO_EDIT_SECTIONS, replays: false, pushIn: false, crash: false,
+    })
+    const clips = buildAutoEditLaneItems(buildAutoEditSegmentRanges(plain.plan), plain.anchors)
+    const body = clips[1]!
+    expect(body.ranges[0]!.sourceStartSeconds).toBe(2)
+    expect(body.sourceStartSeconds).toBe(0.5)
+    expect(autoEditCutsInItem(body, plain.anchors)).toEqual([0])
+    const edges = autoEditTrimEdges(body, clips, plain.anchors, SOURCE)
+    expect(edges.map((edge) => [edge.key, edge.seconds])).toEqual([['keep.start', 0.5], ['keep.end', 9]])
+    const trimmed = autoEditTrimClip(body, edges[1]!, 2, plain.anchors, SOURCE)
+    expect(buildAutoEditPlan(SOURCE, trimmed).anchors.keep).toEqual({ start: 0.5, end: 2 })
+  })
+
+  it('trims every edge to the requested frame within its limits and holds the opposite edge in place', () => {
+    for (const fps of [24, 29.97, 60]) {
+      const source = { ...SOURCE, fps, frames: Math.round(fps * 10) }
+      const draft = buildAutoEditPlan(source, ANCHORS)
+      const clips = buildAutoEditLaneItems(buildAutoEditSegmentRanges(draft.plan), draft.anchors)
+      for (const clip of clips) {
+        const edges = autoEditTrimEdges(clip, clips, draft.anchors, source)
+        for (const edge of edges) {
+          const opposite = edges.find((other) => other.side !== edge.side)!
+          for (const requested of [-1, (edge.min + edge.max) / 2, 20]) {
+            const trimmed = autoEditTrimClip(clip, edge, requested, draft.anchors, source)
+            const next = buildAutoEditPlan(source, trimmed)
+            const expectedFrame = Math.round(Math.max(edge.min, Math.min(requested, edge.max)) * fps)
+            expect(autoEditAnchorSeconds(next.anchors, edge.key)).toBeCloseTo(expectedFrame / fps, 6)
+            expect(autoEditAnchorSeconds(next.anchors, opposite.key)).toBe(opposite.seconds)
+            expect(buildAutoEditLaneItems(buildAutoEditSegmentRanges(next.plan), next.anchors).some((entry) => entry.key === clip.key)).toBe(true)
+          }
+        }
+      }
+    }
+  })
+
+  it('can shorten the body past the old peak and keeps distinct edges when the moment and ending coincide', () => {
+    const body = items[1]!
+    const end = autoEditTrimEdges(body, items, built.anchors, SOURCE)[1]!
+    const trimmed = buildAutoEditPlan(SOURCE, autoEditTrimClip(body, end, 4, built.anchors, SOURCE))
+    expect(trimmed.anchors.moment.end).toBe(4)
+    expect(trimmed.anchors.moment.peak).toBeLessThan(4)
+    expect(trimmed.anchors.keep).toEqual(ANCHORS.keep)
+    const coincident = buildAutoEditPlan(SOURCE, { ...ANCHORS, keep: { start: 0.5, end: ANCHORS.moment.end } })
+    const clips = buildAutoEditLaneItems(buildAutoEditSegmentRanges(coincident.plan), coincident.anchors)
+    expect(clips[1]!.trim?.end).toBe('moment.end')
+    expect(autoEditItemsForAnchor(clips, 'keep.end')).toEqual([])
   })
 
   it('moves the body start and end but never across the moment', () => {

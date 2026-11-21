@@ -1,7 +1,8 @@
-import { secondsToFrame, type PlanSegment } from '../../server/src/auto-edit/plan'
+import { secondsToFrame, type PlanSegment, type SegmentSource } from '../../server/src/auto-edit/plan'
 import {
   AUTO_EDIT_ANCHOR_LIMITS,
   CRASH_REPLAY,
+  autoEditFrameLimits,
   type AutoEditAnchors,
   type AutoEditCue,
   type AutoEditSections,
@@ -21,16 +22,6 @@ export type AutoEditFocusKey = 'start' | 'peak' | 'end'
 export const AUTO_EDIT_KEEP_ANCHORS: readonly AutoEditAnchorKey[] = ['keep.start', 'keep.end']
 export const AUTO_EDIT_HOOK_ANCHORS: readonly AutoEditAnchorKey[] = ['hook.start', 'hook.end']
 export const AUTO_EDIT_MOMENT_ANCHORS: readonly AutoEditAnchorKey[] = ['moment.start', 'moment.peak', 'moment.end']
-const ANCHOR_ORDER: readonly AutoEditAnchorKey[] = [
-  'keep.start',
-  'hook.start',
-  'hook.end',
-  'moment.start',
-  'moment.peak',
-  'moment.end',
-  'keep.end',
-]
-
 interface AutoEditAnchorInfo {
   label: string
   short: string
@@ -108,23 +99,6 @@ export function autoEditAnchorRule(key: AutoEditAnchorKey): string {
   return `End sits ${peakToEnd} after the peak.`
 }
 
-function anchorKeysFor(segment: PlanSegment, anchors: AutoEditAnchors): readonly AutoEditAnchorKey[] {
-  if (segment.role === 'cold_open') return anchors.hook ? AUTO_EDIT_HOOK_ANCHORS : []
-  if (segment.role === 'body') return [...AUTO_EDIT_KEEP_ANCHORS, ...AUTO_EDIT_MOMENT_ANCHORS]
-  return AUTO_EDIT_MOMENT_ANCHORS
-}
-
-export function autoEditAnchorsForSegment(
-  segment: PlanSegment,
-  anchors: AutoEditAnchors,
-  fps: number,
-): AutoEditAnchorKey[] {
-  return anchorKeysFor(segment, anchors).filter((key) => {
-    const frame = secondsToFrame(autoEditAnchorSeconds(anchors, key), fps)
-    return frame === segment.startFrame || frame === segment.endFrame
-  })
-}
-
 export function autoEditSegmentLengthText(range: AutoEditSegmentRange): string {
   const speed = range.segment.speed
   const suffix = speed === 1 ? '' : Math.abs(speed - 0.5) < 1e-6 ? ' · ½×' : ` · ${speed}×`
@@ -153,14 +127,36 @@ export interface AutoEditLaneItem extends AutoEditTimedSpan {
   label: string
   tone: string
   lengthText: string
+  trim: { start: AutoEditAnchorKey; end: AutoEditAnchorKey } | null
   ranges: AutoEditSegmentRange[]
   sourceStartSeconds: number
   sourceEndSeconds: number
 }
 
-function laneItemFrom(ranges: AutoEditSegmentRange[], label: string): AutoEditLaneItem {
+function trimEdges(role: PlanSegment['role'], ending: boolean, hasMomentEffects: boolean): AutoEditLaneItem['trim'] {
+  switch (role) {
+    case 'cold_open': return { start: 'hook.start', end: 'hook.end' }
+    case 'replay': return { start: 'moment.start', end: 'moment.peak' }
+    case 'push_in': return { start: 'moment.start', end: 'moment.end' }
+    case 'crash': return { start: 'moment.peak', end: 'moment.end' }
+    case 'body': return ending
+      ? { start: 'moment.end', end: 'keep.end' }
+      : { start: 'keep.start', end: hasMomentEffects ? 'moment.end' : 'keep.end' }
+    case 'custom': return null
+  }
+}
+
+function laneItemFrom(
+  ranges: AutoEditSegmentRange[],
+  anchors: AutoEditAnchors,
+  afterBeats: boolean,
+  hasMomentEffects: boolean,
+): AutoEditLaneItem {
   const first = ranges[0]!
   const last = ranges[ranges.length - 1]!
+  const body = first.segment.role === 'body'
+  const ending = body && afterBeats
+  const trim = trimEdges(first.segment.role, ending, hasMomentEffects)
   const cuts = ranges.length - 1
   const outputDurationSeconds = last.outputEndSeconds - first.outputStartSeconds
   const lengthText = cuts > 0
@@ -168,8 +164,9 @@ function laneItemFrom(ranges: AutoEditSegmentRange[], label: string): AutoEditLa
     : autoEditSegmentLengthText(first)
   return {
     index: first.index,
-    key: first.segment.id,
-    label,
+    key: body ? (ending ? 'ending' : 'body') : first.segment.id,
+    label: ending ? 'Ending' : first.label,
+    trim,
     tone: autoEditSegmentTone(first),
     lengthText,
     ranges,
@@ -177,13 +174,13 @@ function laneItemFrom(ranges: AutoEditSegmentRange[], label: string): AutoEditLa
     outputStartSeconds: first.outputStartSeconds,
     outputEndSeconds: last.outputEndSeconds,
     outputDurationSeconds,
-    sourceStartSeconds: Math.min(...ranges.map((range) => range.sourceStartSeconds)),
-    sourceEndSeconds: Math.max(...ranges.map((range) => range.sourceEndSeconds)),
+    sourceStartSeconds: trim ? autoEditAnchorSeconds(anchors, trim.start) : first.sourceStartSeconds,
+    sourceEndSeconds: trim ? autoEditAnchorSeconds(anchors, trim.end) : last.sourceEndSeconds,
   }
 }
 
-export function buildAutoEditLaneItems(ranges: readonly AutoEditSegmentRange[]): AutoEditLaneItem[] {
-  const groups: Array<{ ranges: AutoEditSegmentRange[]; label: string; body: boolean }> = []
+export function buildAutoEditLaneItems(ranges: readonly AutoEditSegmentRange[], anchors: AutoEditAnchors): AutoEditLaneItem[] {
+  const groups: Array<{ ranges: AutoEditSegmentRange[]; afterBeats: boolean; body: boolean }> = []
   let afterBeats = false
   for (const range of ranges) {
     const body = range.segment.role === 'body'
@@ -193,35 +190,146 @@ export function buildAutoEditLaneItems(ranges: readonly AutoEditSegmentRange[]):
       last.ranges.push(range)
       continue
     }
-    groups.push({ ranges: [range], body, label: body ? (afterBeats ? 'Ending' : 'Body') : range.label })
+    groups.push({ ranges: [range], body, afterBeats })
   }
-  return groups.map((group) => laneItemFrom(group.ranges, group.label))
+  return groups.map((group) => laneItemFrom(group.ranges, anchors, group.afterBeats, afterBeats))
 }
 
-export function autoEditLaneItemAt(items: readonly AutoEditLaneItem[], rangeIndex: number): AutoEditLaneItem | null {
-  return items.find((item) => item.ranges.some((range) => range.index === rangeIndex)) ?? null
+export function autoEditItemsForAnchor(items: readonly AutoEditLaneItem[], key: AutoEditAnchorKey): AutoEditLaneItem[] {
+  return items.filter((item) => item.trim?.start === key || item.trim?.end === key)
 }
 
-export function autoEditAnchorsForItem(item: AutoEditLaneItem, anchors: AutoEditAnchors, fps: number): AutoEditAnchorKey[] {
-  const keys = new Set(item.ranges.flatMap((range) => autoEditAnchorsForSegment(range.segment, anchors, fps)))
-  return ANCHOR_ORDER.filter((key) => keys.has(key))
+function autoEditTrimBounds(
+  item: AutoEditLaneItem,
+  key: AutoEditAnchorKey,
+  anchors: AutoEditAnchors,
+  source: Pick<SegmentSource, 'fps' | 'frames'>,
+): { min: number; max: number } {
+  const frame = (seconds: number) => secondsToFrame(seconds, source.fps)
+  const { minBodyFrames, minKeepFrames, minLeadFrames, maxLeadFrames, minTailFrames, maxTailFrames, minHookFrames, maxHookFrames } = autoEditFrameLimits(source)
+  const start = frame(anchors.moment.start)
+  const peak = frame(anchors.moment.peak)
+  const end = frame(anchors.moment.end)
+  const keepStart = frame(anchors.keep.start)
+  const keepEnd = frame(anchors.keep.end)
+  const endingFrames = item.key === 'ending' ? minBodyFrames : 0
+  const fixed = key === item.trim?.start ? item.trim.end : item.trim?.start
+  let min = keepStart
+  let max = keepEnd
+  switch (key) {
+    case 'keep.start':
+      min = 0
+      max = fixed === 'keep.end' ? keepEnd - minKeepFrames : Math.min(start, keepEnd - minKeepFrames)
+      break
+    case 'keep.end':
+      min = fixed === 'keep.start' ? keepStart + minKeepFrames : Math.max(end + endingFrames, keepStart + minKeepFrames)
+      max = source.frames
+      break
+    case 'hook.start': {
+      const hookEnd = frame(autoEditAnchorSeconds(anchors, 'hook.end'))
+      min = Math.max(keepStart, hookEnd - maxHookFrames, hookEnd > peak ? peak + 1 : 0)
+      max = hookEnd - minHookFrames
+      break
+    }
+    case 'hook.end': {
+      const hookStart = frame(autoEditAnchorSeconds(anchors, 'hook.start'))
+      min = hookStart + minHookFrames
+      max = Math.min(hookStart + maxHookFrames, hookStart <= peak ? peak : keepEnd)
+      break
+    }
+    case 'moment.start':
+      min = Math.max(keepStart, fixed === 'moment.end' ? end - maxTailFrames - maxLeadFrames : peak - maxLeadFrames)
+      max = fixed === 'moment.end' ? end - minTailFrames - minLeadFrames : peak - minLeadFrames
+      break
+    case 'moment.peak':
+      min = fixed === 'moment.end' ? Math.max(keepStart + minLeadFrames, end - maxTailFrames) : start + minLeadFrames
+      max = fixed === 'moment.end' ? end - minTailFrames : Math.min(keepEnd - minTailFrames, start + maxLeadFrames)
+      break
+    case 'moment.end':
+      min = (fixed === 'moment.start' ? start : keepStart) + minLeadFrames + minTailFrames
+      max = keepEnd - endingFrames
+      if (fixed === 'moment.peak') {
+        min = peak + minTailFrames
+        max = Math.min(max, peak + maxTailFrames)
+      } else if (fixed === 'moment.start') {
+        max = Math.min(max, start + maxLeadFrames + maxTailFrames)
+      }
+      break
+  }
+  const current = frame(autoEditAnchorSeconds(anchors, key))
+  return { min: Math.min(current, min) / source.fps, max: Math.max(current, max) / source.fps }
 }
 
-export function autoEditItemsForAnchor(
+export interface AutoEditTrimEdge {
+  side: 'start' | 'end'
+  key: AutoEditAnchorKey
+  seconds: number
+  min: number
+  max: number
+  linked: string[]
+}
+
+export function autoEditTrimEdges(
+  item: AutoEditLaneItem,
   items: readonly AutoEditLaneItem[],
   anchors: AutoEditAnchors,
-  key: AutoEditAnchorKey,
-  fps: number,
-): AutoEditLaneItem[] {
-  return items.filter((item) => autoEditAnchorsForItem(item, anchors, fps).includes(key))
+  source: Pick<SegmentSource, 'fps' | 'frames'>,
+): AutoEditTrimEdge[] {
+  const trim = item.trim
+  if (!trim) return []
+  return (['start', 'end'] as const).map((side) => {
+    const key = trim[side]
+    return {
+      side,
+      key,
+      seconds: autoEditAnchorSeconds(anchors, key),
+      ...autoEditTrimBounds(item, key, anchors, source),
+      linked: autoEditItemsForAnchor(items, key).filter((other) => other !== item).map((other) => other.label),
+    }
+  })
+}
+
+export function autoEditTrimClip(
+  item: AutoEditLaneItem,
+  edge: AutoEditTrimEdge,
+  seconds: number,
+  anchors: AutoEditAnchors,
+  source: Pick<SegmentSource, 'fps' | 'frames'>,
+): AutoEditAnchors {
+  const frame = (value: number) => secondsToFrame(value, source.fps)
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+  const time = clamp(frame(seconds), frame(edge.min), frame(edge.max)) / source.fps
+  if (item.trim?.start === 'keep.start' && item.trim.end === 'keep.end') {
+    return { ...anchors, keep: { ...anchors.keep, [edge.side]: time } }
+  }
+  const next = autoEditWithAnchor(anchors, edge.key, time, source.frames / source.fps)
+  if (!item.trim || !edge.key.startsWith('moment.')) return next
+
+  const { minLeadFrames, maxLeadFrames, minTailFrames, maxTailFrames } = autoEditFrameLimits(source)
+  const keepStart = frame(next.keep.start)
+  const keepEnd = frame(next.keep.end)
+  const start = frame(next.moment.start)
+  const end = frame(next.moment.end)
+  const fixStart = item.trim.start === 'moment.start'
+  const fixEnd = item.trim.end === 'moment.end' || item.trim.start === 'moment.end'
+  const peak = clamp(
+    frame(next.moment.peak),
+    Math.max(keepStart + minLeadFrames, fixStart ? start + minLeadFrames : 0, fixEnd ? end - maxTailFrames : 0),
+    Math.min(keepEnd - minTailFrames, fixStart ? start + maxLeadFrames : keepEnd, fixEnd ? end - minTailFrames : keepEnd),
+  )
+  return {
+    ...next,
+    moment: {
+      start: clamp(start, Math.max(keepStart, peak - maxLeadFrames), peak - minLeadFrames) / source.fps,
+      peak: peak / source.fps,
+      end: clamp(end, peak + minTailFrames, Math.min(keepEnd, peak + maxTailFrames)) / source.fps,
+    },
+  }
 }
 
 export function autoEditCutsInItem(item: AutoEditLaneItem, anchors: AutoEditAnchors): number[] {
-  if (item.ranges.length < 2) return []
-  const tolerance = 1e-3
-  return anchors.cuts.flatMap((cut, index) => (
-    cut.start >= item.sourceStartSeconds - tolerance && cut.end <= item.sourceEndSeconds + tolerance ? [index] : []
-  ))
+  if (item.ranges[0]?.segment.role !== 'body') return []
+  return anchors.cuts.flatMap((cut, index) => cut.start >= item.sourceStartSeconds && cut.end <= item.sourceEndSeconds ? [index] : [])
 }
 
 export interface AutoEditTimelineBlock {

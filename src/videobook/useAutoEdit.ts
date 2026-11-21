@@ -363,7 +363,7 @@ export function useAutoEdit({ bookId, ready, call }: { bookId: string | null; re
     flags: { anchorsDirty?: boolean; sectionsDirty?: boolean },
   ) => {
     const current = stateRef.current
-    if (!current.source) return
+    if (!current.source) return null
     const built = buildAutoEditPlan(segmentSourceFrom(current.source), nextAnchors, nextSections)
     persistKept(built.anchors, nextSections, flags)
     commit((value) => ({
@@ -375,12 +375,13 @@ export function useAutoEdit({ bookId, ready, call }: { bookId: string | null; re
       changes: built.changes,
       error: null,
     }))
+    return built.anchors
   }, [commit, persistKept])
 
   const setAnchors = useCallback((updater: (current: AutoEditAnchors, fps: number, duration: number) => AutoEditAnchors) => {
     const current = stateRef.current
-    if (!current.anchors || !current.source) return
-    applyDraft(updater(current.anchors, current.source.fps, current.source.duration), current.sections, { anchorsDirty: true })
+    if (!current.anchors || !current.source) return null
+    return applyDraft(updater(current.anchors, current.source.fps, current.source.duration), current.sections, { anchorsDirty: true })
   }, [applyDraft])
 
   const setSection = useCallback((section: keyof AutoEditSections, enabled: boolean) => {

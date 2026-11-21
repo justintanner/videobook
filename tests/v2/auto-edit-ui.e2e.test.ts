@@ -222,7 +222,7 @@ describe('auto-edit review sheet in the browser', () => {
       calls.push(...toolCalls(request.postDataJSON()).map((item) => item.name))
     })
     await page.addInitScript((id) => localStorage.setItem('videobook.active-book', id), bookId)
-    await page.goto(appUrl)
+    await page.goto(appUrl, { waitUntil: 'commit' })
   }, testBudget(60_000))
 
   afterAll(async () => {
@@ -256,11 +256,15 @@ describe('auto-edit review sheet in the browser', () => {
     const segmentNames = () => sheet().locator('.auto-edit-segment-name').allInnerTexts()
     await expect.poll(segmentNames).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Ending'])
 
+    const video = sheet().getByLabel('Auto-edit preview', { exact: true })
+    const selectClip = (name: string) => sheet().getByRole('button', { name: new RegExp(`^${name} [0-9]`) }).click()
     const editLength = () => sheet().locator('.auto-edit-lane-label strong').first().innerText()
     const fullLength = await editLength()
     const coldSwitch = sheet().getByRole('switch', { name: 'Cold open', exact: true })
     const crashSwitch = sheet().getByRole('switch', { name: 'Crash', exact: true })
+    await selectClip('Replay')
     await coldSwitch.uncheck()
+    await expect.poll(() => video.getAttribute('data-segment-id')).toBe('replay-1')
     expect(await segmentNames()).toEqual(['Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Ending'])
     expect(await editLength()).not.toBe(fullLength)
     await coldSwitch.check()
@@ -268,6 +272,45 @@ describe('auto-edit review sheet in the browser', () => {
     expect(await segmentNames()).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Ending'])
     await crashSwitch.check()
 
+    const field = (name: string) => sheet().getByRole('spinbutton', { name: `${name} in seconds`, exact: true })
+    const handle = (name: string) => sheet().getByRole('slider', { name, exact: true })
+    const markerToggle = sheet().getByText('All timing markers', { exact: true })
+    expect(await marker('keep.start').isVisible()).toBe(false)
+
+    await selectClip('Body')
+    expect(await video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true)
+    const bodyEnd = field('Body end')
+    const originalEnd = await bodyEnd.inputValue()
+    await bodyEnd.fill('4.75')
+    await bodyEnd.press('Enter')
+    expect(errors).toEqual([])
+    expect(await bodyEnd.count()).toBe(1)
+    await expect.poll(() => bodyEnd.inputValue()).toBe('4.75')
+    expect(await sheet().getByRole('button', { name: /^Body [0-9]/ }).getAttribute('aria-pressed')).toBe('true')
+    await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeCloseTo(4.75, 2)
+    await selectClip('Ending')
+    expect(await field('Ending start').inputValue()).toBe('4.75')
+    await selectClip('Body')
+    await bodyEnd.fill(originalEnd)
+    await bodyEnd.press('Tab')
+    await expect.poll(() => bodyEnd.inputValue()).toBe(originalEnd)
+
+    const startHandle = handle('Body start')
+    const grip = (await startHandle.boundingBox())!
+    const film = (await sheet().locator('.auto-edit-source-scrub').boundingBox())!
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(grip.x + grip.width / 2 + film.width / 9, grip.y + grip.height / 2, { steps: 6 })
+    await page.mouse.up()
+    expect(await field('Body start').inputValue()).toBe('1.00')
+    await startHandle.press('ArrowRight')
+    expect(await field('Body start').inputValue()).toBe('1.04')
+    await sheet().locator('.auto-edit-source-scrub').click({ position: { x: film.width / 6, y: 40 } })
+    await sheet().getByRole('button', { name: 'Set Body start to playhead', exact: true }).click()
+    expect(await field('Body start').inputValue()).toBe('1.50')
+    await startHandle.press('Home')
+
+    await markerToggle.click()
     const hookStartMarker = marker('hook.start')
     await hookStartMarker.click()
     const hookStartGroup = sheet().getByRole('group', { name: 'Hook start', exact: true })
@@ -295,7 +338,6 @@ describe('auto-edit review sheet in the browser', () => {
     await bodyStartGroup.getByRole('button', { name: '-1 frame', exact: true }).click()
     await expect.poll(() => marker('keep.start').getAttribute('aria-label')).toBe(bodyStartBefore)
 
-    const video = sheet().getByLabel('Auto-edit preview', { exact: true })
     const pauseButton = sheet().getByRole('button', { name: 'Pause', exact: true })
     if (await pauseButton.isVisible()) await pauseButton.click()
 
@@ -345,7 +387,15 @@ describe('auto-edit review sheet in the browser', () => {
     }))
     expect(bodyTabFocus.inside).toBe(true)
 
+    await markerToggle.click()
     await page.setViewportSize({ width: 390, height: 844 })
+    await selectClip('Crash')
+    const startBox = (await handle('Crash start').boundingBox())!
+    const endBoxMobile = (await handle('Crash end').boundingBox())!
+    expect(startBox.y + startBox.height).toBeLessThanOrEqual(endBoxMobile.y + 1)
+    await selectClip('Ending')
+    await field('Ending end').fill('8.50')
+    await field('Ending end').press('Enter')
     await expect.poll(() => sheet().evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
     const renderBtn = sheet().getByRole('button', { name: /^Render/ })
     const cancelBtn = sheet().getByRole('button', { name: /^Cancel/ })
@@ -368,6 +418,9 @@ describe('auto-edit review sheet in the browser', () => {
     await page.getByRole('menuitem', { name: 'Auto-edit', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     expect(await crashSwitch.isChecked()).toBe(false)
+    await selectClip('Ending')
+    expect(await field('Ending end').inputValue()).toBe('8.50')
+    await markerToggle.click()
     await marker('moment.peak').click()
     expect(await peakGroup.textContent()).toContain('25% across, 75% down')
     await crashSwitch.check()
@@ -388,11 +441,13 @@ describe('auto-edit review sheet in the browser', () => {
     })
     const filterValue = await video.evaluate((el: HTMLVideoElement) => el.style.filter)
     expect(filterValue).toContain('hue-rotate(')
+    await sheet().getByRole('button', { name: 'Play', exact: true }).click()
     await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.dataset.firedCues ?? ''), { timeout: testBudget(10_000) }).toContain('glitch')
     expect(await sheet().getByRole('group', { name: 'Crash segment', exact: true }).textContent()).toContain('crash look')
     await sheet().getByRole('button', { name: 'Source', exact: true }).click()
     await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.dataset.look)).toBe('none')
 
+    const expectedDuration = Number.parseFloat(await editLength())
     await renderBtn.click()
     await sheet().waitFor({ state: 'hidden', timeout: testBudget(45_000) })
     await expect.poll(async () => (await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells.length, { timeout: testBudget(45_000) }).toBe(2)
@@ -411,6 +466,7 @@ describe('auto-edit review sheet in the browser', () => {
       el.remove()
       return result
     }, { book: bookId, artifact: outputCell.output_artifact_id })
+    expect(Math.abs(outputDuration.duration - expectedDuration)).toBeLessThanOrEqual(2 / 24)
     expect(outputDuration.width).toBe(160)
     expect(outputDuration.currentTime).toBeGreaterThan(0)
 

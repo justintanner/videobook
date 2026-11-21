@@ -20,10 +20,8 @@ export type AutoEditPreviewMode = 'plan' | 'source'
 
 export interface AutoEditSeekCommand {
   nonce: number
-  kind: 'segment' | 'source' | 'resume-plan' | 'source-current'
-  segmentIndex?: number
+  kind: 'segment' | 'source' | 'source-current'
   sourceSeconds?: number
-  play?: boolean
 }
 
 export interface AutoEditPreviewPosition {
@@ -42,6 +40,7 @@ interface AutoEditPreviewProps {
   seekCommand: AutoEditSeekCommand | null
   readSourceTimeRef: RefObject<() => number>
   activeSegmentIndex: number
+  selectedSegmentIndex: number
   onActiveSegmentChange: (segmentIndex: number) => void
   onModeChange: (mode: AutoEditPreviewMode) => void
   onPlaceFocus: (point: { x: number; y: number }) => void
@@ -59,6 +58,7 @@ export function AutoEditPreview({
   seekCommand,
   readSourceTimeRef,
   activeSegmentIndex,
+  selectedSegmentIndex,
   onActiveSegmentChange,
   onModeChange,
   onPlaceFocus,
@@ -76,6 +76,7 @@ export function AutoEditPreview({
   const lastOutputTimeRef = useRef(0)
   const firedCuesRef = useRef(new Set<number>())
   const playingAudioRef = useRef(new Set<HTMLAudioElement>())
+  const lastSeekNonceRef = useRef(0)
   const initializedPlanRef = useRef(false)
   const [playing, setPlaying] = useState(false)
   const pausedZoomRef = useRef<{ scale: number; x: number; y: number }>({ scale: 1, x: 0.5, y: 0.5 })
@@ -176,6 +177,7 @@ export function AutoEditPreview({
     video.currentTime = range.sourceStartSeconds
     applySampleVisuals(range.outputStartSeconds)
     if (shouldPlay) startPlayback(video, 'Press Play to preview this video.')
+    else video.pause()
   }, [applySampleVisuals, cues, onActiveSegmentChange, ranges, startPlayback])
 
   const playFromOutputTime = useCallback((outputTimeSeconds: number, shouldPlay: boolean) => {
@@ -219,22 +221,18 @@ export function AutoEditPreview({
   useEffect(() => {
     if (initializedPlanRef.current) return
     initializedPlanRef.current = true
-    enterSegment(0, true)
+    enterSegment(0, false)
   }, [enterSegment])
 
   useEffect(() => {
-    if (!seekCommand) return
+    if (!seekCommand || seekCommand.nonce === lastSeekNonceRef.current) return
     const video = videoRef.current
     if (!video) return
+    lastSeekNonceRef.current = seekCommand.nonce
     stopCueAudio()
     setPlaybackError(null)
-    if (seekCommand.kind === 'segment' && typeof seekCommand.segmentIndex === 'number') {
-      enterSegment(Math.max(0, Math.min(ranges.length - 1, seekCommand.segmentIndex)), seekCommand.play ?? true, true)
-      return
-    }
-    if (seekCommand.kind === 'resume-plan') {
-      video.pause()
-      playFromOutputTime(lastOutputTimeRef.current, false)
+    if (seekCommand.kind === 'segment') {
+      enterSegment(selectedSegmentIndex, false, true)
       return
     }
     if (seekCommand.kind === 'source-current') {
@@ -244,7 +242,7 @@ export function AutoEditPreview({
     if (seekCommand.kind === 'source' && typeof seekCommand.sourceSeconds === 'number') {
       seekSource(seekCommand.sourceSeconds)
     }
-  }, [enterSegment, playFromOutputTime, ranges.length, seekCommand, seekSource, stopCueAudio])
+  }, [enterSegment, seekCommand, seekSource, selectedSegmentIndex, stopCueAudio])
 
   useEffect(() => {
     const video = videoRef.current

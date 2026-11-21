@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
-import { secondsToFrame, type SegmentPlan } from '../../../../server/src/auto-edit/plan'
+import type { SegmentPlan } from '../../../../server/src/auto-edit/plan'
 import { CRASH_REPLAY, type AutoEditAnchors, type AutoEditSections } from '../../../../server/src/auto-edit/style'
 import {
   autoEditNudgeSeconds,
@@ -13,12 +13,14 @@ import {
   autoEditBeats,
   autoEditEditPercentAt,
   autoEditItemsForAnchor,
-  autoEditLaneItemAt,
+  autoEditTrimClip,
+  autoEditTrimEdges,
   autoEditSourcePercent,
   autoEditWithAnchor,
   buildAutoEditLaneItems,
   buildAutoEditTimelineLayout,
   type AutoEditAnchorKey,
+  type AutoEditTrimEdge,
 } from '@/videobook/auto-edit-review'
 import type { AutoEditEditor, AutoEditSource, AutoEditTarget } from '@/videobook/useAutoEdit'
 import { ConfirmSheet } from '../confirm/ConfirmSheet'
@@ -31,7 +33,7 @@ import {
   type AutoEditPreviewPosition,
   type AutoEditSeekCommand,
 } from './AutoEditPreview'
-import { AutoEditTimeline, type AutoEditSelection } from './AutoEditTimeline'
+import { AutoEditTimeline } from './AutoEditTimeline'
 import './AutoEditSheet.css'
 
 interface AutoEditReviewProps {
@@ -64,12 +66,15 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
   const sourcePlayheadRef = useRef<HTMLSpanElement>(null)
   const seekNonceRef = useRef(0)
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0)
-  const [selection, setSelection] = useState<AutoEditSelection>({ kind: 'segment', index: 0 })
+  const [selectedClip, setSelectedClip] = useState<string | null>(null)
+  const [selectedMarker, setSelectedMarker] = useState<AutoEditAnchorKey | null>(null)
   const [mode, setMode] = useState<AutoEditPreviewMode>('plan')
   const [seekCommand, setSeekCommand] = useState<AutoEditSeekCommand | null>(null)
 
   const ranges = useMemo(() => buildAutoEditSegmentRanges(plan), [plan])
-  const items = useMemo(() => buildAutoEditLaneItems(ranges), [ranges])
+  const items = useMemo(() => buildAutoEditLaneItems(ranges, anchors), [ranges, anchors])
+  const item = items.find((entry) => entry.key === selectedClip) ?? items[0]
+  const edges = item ? autoEditTrimEdges(item, items, anchors, source) : []
   const laneWidth = useLaneWidth(editLaneRef)
   const blocks = useMemo(() => buildAutoEditTimelineLayout(items, laneWidth), [items, laneWidth])
   const totalSeconds = autoEditPlanDurationSeconds(plan)
@@ -97,73 +102,75 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
 
   const showSourceAt = (seconds: number) => {
     setMode('source')
-    issueSeek({ kind: 'source', sourceSeconds: seconds, play: false })
+    issueSeek({ kind: 'source', sourceSeconds: seconds })
   }
 
   const selectSegment = (index: number) => {
-    setSelection({ kind: 'segment', index })
+    const next = items.find((entry) => entry.index === index)
+    if (!next) return
+    setSelectedClip(next.key)
+    setSelectedMarker(null)
     setActiveSegmentIndex(index)
     setMode('plan')
-    issueSeek({ kind: 'segment', segmentIndex: index, play: true })
+    issueSeek({ kind: 'segment' })
   }
 
-  const markSelectedAnchor = (key: AutoEditAnchorKey) => {
-    setSelection({ kind: 'anchor', key })
+  const focusAnchor = (key: AutoEditAnchorKey) => {
     const focus = AUTO_EDIT_ANCHOR_INFO[key].focus
-    if (focus) editor.setFocusAnchor(focus)
+    if (focus && state.focusAnchor !== focus) editor.setFocusAnchor(focus)
+  }
+
+  const selectMarker = (key: AutoEditAnchorKey) => {
+    setSelectedMarker(key)
+    const linked = autoEditItemsForAnchor(items, key)
+    if (linked.length && linked.every((entry) => entry.key !== item?.key)) setSelectedClip(linked[0]!.key)
+    focusAnchor(key)
   }
 
   const selectAnchor = (key: AutoEditAnchorKey) => {
-    markSelectedAnchor(key)
+    selectMarker(key)
     showSourceAt(autoEditAnchorSeconds(anchors, key))
   }
 
-  const dragAnchor = (key: AutoEditAnchorKey, seconds: number) => {
+  const moveAnchor = (key: AutoEditAnchorKey, seconds: number) => {
     const snapped = autoEditSnapSeconds(seconds, fps, duration)
-    if (selection.kind !== 'anchor' || selection.key !== key) markSelectedAnchor(key)
-    if (secondsToFrame(autoEditAnchorSeconds(anchors, key), fps) === secondsToFrame(snapped, fps)) return
-    editor.setAnchors((current) => autoEditWithAnchor(current, key, snapped, duration))
-    showSourceAt(snapped)
+    const applied = editor.setAnchors(() => autoEditWithAnchor(anchors, key, snapped, duration))
+    if (applied) showSourceAt(autoEditAnchorSeconds(applied, key))
+  }
+
+  const dragAnchor = (key: AutoEditAnchorKey, seconds: number) => {
+    selectMarker(key)
+    moveAnchor(key, seconds)
+  }
+
+  const nudgeAnchor = (key: AutoEditAnchorKey, deltaFrames: number) => {
+    dragAnchor(key, autoEditNudgeSeconds(autoEditAnchorSeconds(anchors, key), deltaFrames, fps, duration))
+  }
+
+  const trimEdge = (edge: AutoEditTrimEdge, seconds: number) => {
+    if (!item) return
+    setSelectedMarker(null)
+    focusAnchor(edge.key)
+    const applied = editor.setAnchors(() => autoEditTrimClip(item, edge, seconds, anchors, source))
+    if (applied) showSourceAt(autoEditAnchorSeconds(applied, edge.key))
   }
 
   const removeCut = (cutIndex: number) => {
     editor.setAnchors((current) => ({ ...current, cuts: current.cuts.filter((_, index) => index !== cutIndex) }))
-  }
-
-  const nudgeAnchor = (key: AutoEditAnchorKey, deltaFrames: number) => {
-    setSelection({ kind: 'anchor', key })
-    let nextTime = autoEditAnchorSeconds(anchors, key)
-    editor.setAnchors((current, currentFps, currentDuration) => {
-      nextTime = autoEditNudgeSeconds(autoEditAnchorSeconds(current, key), deltaFrames, currentFps, currentDuration)
-      return autoEditWithAnchor(current, key, nextTime, currentDuration)
-    })
-    showSourceAt(nextTime)
-  }
-
-  const setAnchorToPlayhead = (key: AutoEditAnchorKey) => {
-    const snapped = autoEditSnapSeconds(readSourceTimeRef.current(), fps, duration)
-    editor.setAnchors((current) => autoEditWithAnchor(current, key, snapped, duration))
-    showSourceAt(snapped)
+    if (mode === 'plan') issueSeek({ kind: 'segment' })
   }
 
   const changeMode = (next: AutoEditPreviewMode) => {
     setMode(next)
-    issueSeek({ kind: next === 'plan' ? 'resume-plan' : 'source-current' })
+    issueSeek({ kind: next === 'plan' ? 'segment' : 'source-current' })
   }
 
   const changeSection = (key: keyof AutoEditSections, enabled: boolean) => {
     editor.setSection(key, enabled)
-    if (selection.kind === 'segment') setSelection({ kind: 'segment', index: 0 })
+    setSelectedMarker(null)
+    if (mode === 'plan' && key !== 'sounds') issueSeek({ kind: 'segment' })
   }
 
-  const linkedItemIndexes = new Set(
-    selection.kind === 'anchor'
-      ? autoEditItemsForAnchor(items, anchors, selection.key, fps).map((item) => item.index)
-      : [],
-  )
-  const activeItemIndex = mode === 'plan'
-    ? autoEditLaneItemAt(items, safeSegmentIndex)?.index ?? null
-    : selection.kind === 'segment' ? selection.index : null
   const bodyStyle = { '--auto-edit-aspect': `${source.width / source.height}` } as CSSProperties
 
   return (
@@ -180,6 +187,7 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
         seekCommand={seekCommand}
         readSourceTimeRef={readSourceTimeRef}
         activeSegmentIndex={safeSegmentIndex}
+        selectedSegmentIndex={item?.index ?? 0}
         onActiveSegmentChange={setActiveSegmentIndex}
         onModeChange={changeMode}
         onPlaceFocus={(point) => editor.setFocusPoint(state.focusAnchor, point)}
@@ -205,9 +213,10 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
           totalSeconds={totalSeconds}
           mediaUrl={target.mediaUrl}
           portrait={source.height > source.width}
-          selection={selection}
-          activeItemIndex={activeItemIndex}
-          linkedItemIndexes={linkedItemIndexes}
+          item={item}
+          edges={edges}
+          fps={fps}
+          selectedMarker={selectedMarker}
           disabled={disabled}
           editLaneRef={editLaneRef}
           editPlayheadRef={editPlayheadRef}
@@ -216,6 +225,14 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
           onSelectAnchor={selectAnchor}
           onNudgeAnchor={nudgeAnchor}
           onDragAnchor={dragAnchor}
+          onCloseMarkers={() => setSelectedMarker(null)}
+          onTrim={trimEdge}
+          onSetEdgeToPlayhead={(edge) => trimEdge(edge, readSourceTimeRef.current())}
+          onInspectEdge={(edge) => {
+            setSelectedMarker(null)
+            focusAnchor(edge.key)
+            showSourceAt(edge.seconds)
+          }}
           onSeekSource={showSourceAt}
         />
         <div className="auto-edit-panels">
@@ -226,15 +243,15 @@ function AutoEditReview({ editor, source, anchors, plan, target }: AutoEditRevie
             onSectionChange={changeSection}
           />
           <AutoEditInspector
-            selection={selection}
+            item={item}
+            selectedMarker={selectedMarker}
             anchors={anchors}
             items={items}
             fps={fps}
             changes={state.changes}
             disabled={disabled}
             onNudgeAnchor={nudgeAnchor}
-            onSetToPlayhead={setAnchorToPlayhead}
-            onSelectAnchor={selectAnchor}
+            onSetToPlayhead={(key) => dragAnchor(key, readSourceTimeRef.current())}
             onRemoveCut={removeCut}
           />
         </div>

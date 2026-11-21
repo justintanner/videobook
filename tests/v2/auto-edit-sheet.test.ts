@@ -71,7 +71,7 @@ function makeEditor(overrides: Partial<AutoEditState> = {}): AutoEditEditor {
     state,
     open: () => undefined,
     close: () => undefined,
-    setAnchors: () => undefined,
+    setAnchors: () => null,
     setSection: () => undefined,
     setFocusAnchor: () => undefined,
     setFocusPoint: () => undefined,
@@ -89,7 +89,7 @@ describe('AutoEditSheet server render', () => {
   it('renders the timeline with readable segments, markers, beats, and the key-missing reason', () => {
     const editor = makeEditor({ analysisAvailable: false })
     const html = renderToStaticMarkup(createElement(AutoEditBody, { editor }))
-    const items = buildAutoEditLaneItems(buildAutoEditSegmentRanges(editor.state.plan!))
+    const items = buildAutoEditLaneItems(buildAutoEditSegmentRanges(editor.state.plan!), editor.state.anchors!)
     const blocks = buildAutoEditTimelineLayout(items)
 
     expect(segmentNames(html)).toEqual(['Cold open', 'Body', 'Replay', 'Punch-in', 'Push-in', 'Crash', 'Ending'])
@@ -136,8 +136,11 @@ describe('AutoEditSheet server render', () => {
     expect(html).toContain('aria-label="Body segment"')
     expect(html).toContain('Cut 2.00–2.50 s')
     expect(html).toContain('Keep this part')
-    expect(html).toContain('aria-label="Moment end"')
-    expect(html).toContain('aria-label="Body start"')
+    expect(html).toContain('aria-label="Trim Body"')
+    expect(html).toContain('aria-label="Body start in seconds"')
+    expect(html).toContain('aria-label="Body end in seconds"')
+    expect(html).toContain('Shared with Push-in, Ending')
+    expect(html).toContain('<summary>All timing markers</summary>')
 
     expect(html).toContain(`role="status"`)
     expect(html).toContain(notice)

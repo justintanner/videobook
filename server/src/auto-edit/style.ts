@@ -188,6 +188,20 @@ interface NormalizedFrameAnchors {
   changes: string[];
 }
 
+export function autoEditFrameLimits(source: Pick<SegmentSource, "fps" | "frames">) {
+  const frames = (seconds: number) => Math.max(MIN_BODY_FRAMES, secondsToFrame(seconds, source.fps));
+  return {
+    minBodyFrames: MIN_BODY_FRAMES,
+    minKeepFrames: Math.min(source.frames, frames(MIN_KEEP_SECONDS)),
+    minLeadFrames: frames(MIN_START_TO_PEAK_SECONDS),
+    maxLeadFrames: frames(MAX_START_TO_PEAK_SECONDS),
+    minTailFrames: frames(MIN_PEAK_TO_END_SECONDS),
+    maxTailFrames: frames(MAX_PEAK_TO_END_SECONDS),
+    minHookFrames: frames(MIN_HOOK_SECONDS),
+    maxHookFrames: frames(MAX_HOOK_SECONDS),
+  };
+}
+
 function normalizeFrameAnchors(
   source: Pick<SegmentSource, "fps" | "frames">,
   anchors: AutoEditAnchors,
@@ -221,7 +235,7 @@ function normalizeFrameAnchors(
     [keepStart, keepEnd] = [keepEnd, keepStart];
     pushUnique(changes, "Swapped kept range start and end into order.");
   }
-  const minKeepFrames = Math.min(total, Math.max(MIN_BODY_FRAMES, secondsToFrame(MIN_KEEP_SECONDS, fps)));
+  const { minKeepFrames, minLeadFrames, maxLeadFrames, minTailFrames, maxTailFrames, minHookFrames, maxHookFrames } = autoEditFrameLimits(source);
   if (keepEnd - keepStart < minKeepFrames) {
     keepEnd = Math.min(total, keepStart + minKeepFrames);
     if (keepEnd - keepStart < minKeepFrames) {
@@ -252,13 +266,8 @@ function normalizeFrameAnchors(
     pushUnique(changes, "Ordered moment start, peak and end.");
   }
 
-  const minSpFrames = Math.max(MIN_BODY_FRAMES, secondsToFrame(MIN_START_TO_PEAK_SECONDS, fps));
-  const maxSpFrames = Math.max(minSpFrames, secondsToFrame(MAX_START_TO_PEAK_SECONDS, fps));
-  const minPeFrames = Math.max(MIN_BODY_FRAMES, secondsToFrame(MIN_PEAK_TO_END_SECONDS, fps));
-  const maxPeFrames = Math.max(minPeFrames, secondsToFrame(MAX_PEAK_TO_END_SECONDS, fps));
-
-  const minAllowedPeak = Math.min(keepEnd - minPeFrames, keepStart + minSpFrames);
-  const maxAllowedPeak = Math.max(minAllowedPeak, keepEnd - minPeFrames);
+  const minAllowedPeak = Math.min(keepEnd - minTailFrames, keepStart + minLeadFrames);
+  const maxAllowedPeak = Math.max(minAllowedPeak, keepEnd - minTailFrames);
   if (momentPeak < minAllowedPeak) {
     momentPeak = minAllowedPeak;
     pushUnique(changes, "Shifted the moment peak inside the kept range so lead-in and tail fit.");
@@ -267,24 +276,22 @@ function normalizeFrameAnchors(
     pushUnique(changes, "Shifted the moment peak inside the kept range so lead-in and tail fit.");
   }
 
-  if (momentPeak - momentStart > maxSpFrames) {
-    momentStart = momentPeak - maxSpFrames;
+  if (momentPeak - momentStart > maxLeadFrames) {
+    momentStart = momentPeak - maxLeadFrames;
     pushUnique(changes, "Moved moment start closer to the peak (at most 0.8 s before).");
-  } else if (momentPeak - momentStart < minSpFrames) {
-    momentStart = Math.max(keepStart, momentPeak - minSpFrames);
+  } else if (momentPeak - momentStart < minLeadFrames) {
+    momentStart = Math.max(keepStart, momentPeak - minLeadFrames);
     pushUnique(changes, "Widened moment start to at least 0.2 s before the peak.");
   }
 
-  if (momentEnd - momentPeak > maxPeFrames) {
-    momentEnd = momentPeak + maxPeFrames;
+  if (momentEnd - momentPeak > maxTailFrames) {
+    momentEnd = momentPeak + maxTailFrames;
     pushUnique(changes, "Moved moment end closer to the peak (at most 2 s after).");
-  } else if (momentEnd - momentPeak < minPeFrames) {
-    momentEnd = Math.min(keepEnd, momentPeak + minPeFrames);
+  } else if (momentEnd - momentPeak < minTailFrames) {
+    momentEnd = Math.min(keepEnd, momentPeak + minTailFrames);
     pushUnique(changes, "Widened moment end to at least 0.3 s after the peak.");
   }
 
-  const minHookFrames = Math.max(MIN_BODY_FRAMES, secondsToFrame(MIN_HOOK_SECONDS, fps));
-  const maxHookFrames = Math.max(minHookFrames, secondsToFrame(MAX_HOOK_SECONDS, fps));
   let hook: { start: number; end: number } | null = null;
   if (anchors.hook !== null) {
     let hookStart = snap(anchors.hook.start);
