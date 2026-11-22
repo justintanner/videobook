@@ -11,6 +11,10 @@ describe('mcpToolRequestTimeout', () => {
     expect(mcpToolRequestTimeout('video_graphics', { op: 'check_placement' })).toBeUndefined()
   })
 
+  it('outlasts the five minutes the server waits for a crop re-encode', () => {
+    expect(mcpToolRequestTimeout('crop_asset')).toBe(6 * 60_000)
+  })
+
   it('leaves ordinary tool calls on the SDK default', () => {
     expect(mcpToolRequestTimeout('list_assets')).toBeUndefined()
     expect(mcpToolRequestTimeout('video_graphics')).toBeUndefined()

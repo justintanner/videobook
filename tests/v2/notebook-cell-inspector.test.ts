@@ -2394,6 +2394,39 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('Delete')
     expect(html).not.toContain('People &amp; objects')
     expect(html).not.toContain('Edit selected')
+    expect(html).not.toContain('aria-keyshortcuts="C"')
+  })
+
+  it('offers a crop for a playable fullscreen video only when cropping is wired', () => {
+    const video = {
+      artifactId: cell.outputArtifactId!,
+      id: 'vid-source',
+      type: 'video',
+      mediaUrl: '/files/vid-source/original.mp4',
+      thumbnailUrl: '/files/vid-source/original.jpg',
+      width: 1920,
+      height: 1080,
+      duration: 30,
+      audioInfo: null,
+    }
+    const onCropVideo = async () => undefined
+    const croppable = renderToStaticMarkup(createElement(NotebookMediaFullscreen, {
+      asset: video,
+      address: notebookGridAddress(cell.slot),
+      onCropVideo,
+      onClose: () => undefined,
+    }))
+    const posterOnly = renderToStaticMarkup(createElement(NotebookMediaFullscreen, {
+      asset: { ...video, mediaUrl: null },
+      address: notebookGridAddress(cell.slot),
+      onCropVideo,
+      onClose: () => undefined,
+    }))
+
+    expect(croppable).toMatch(/<button[^>]*aria-keyshortcuts="C"[^>]*>.*?Crop<\/button>/)
+    expect(croppable).toContain('controls=""')
+    expect(croppable).not.toContain('Crop area')
+    expect(posterOnly).not.toContain('aria-keyshortcuts="C"')
   })
 
   it('keeps thumbnail-only videos in playback-only fullscreen', () => {

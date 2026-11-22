@@ -2603,14 +2603,18 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await fullscreenVideo.evaluate((element) =>
       element instanceof HTMLVideoElement && !element.paused)).toBe(true)
 
+    const crop = dialog.getByRole('button', { name: 'Crop', exact: true })
     const capture = dialog.getByRole('button', { name: 'Extract frame', exact: true })
     for (let step = 0; step < 12; step += 1) {
       await page.keyboard.press('Tab')
       expect(await dialog.evaluate((element) => element.contains(document.activeElement)))
         .toBe(true)
-      if (await capture.evaluate((element) => document.activeElement === element)) break
+      if (await crop.evaluate((element) => document.activeElement === element)) break
     }
+    expect(await crop.evaluate((element) => document.activeElement === element)).toBe(true)
+    await page.keyboard.press('Tab')
     expect(await capture.evaluate((element) => document.activeElement === element)).toBe(true)
+    await page.keyboard.press('Shift+Tab')
     await page.keyboard.press('Shift+Tab')
     expect(await fullscreenVideo.evaluate((element) => document.activeElement === element))
       .toBe(true)

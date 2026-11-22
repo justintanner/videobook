@@ -171,6 +171,7 @@ import {
   type ImageSubjectEditInput,
 } from '@/components/videobook/NotebookMediaFullscreen'
 import type { MediaFullscreenMode } from '@/videobook/image-editor-copy'
+import type { VideoCropSelection } from '@/videobook/video-crop'
 import { materializeNotebookSpeakCommand } from './videobook/notebook-speak-command'
 import { useElevenLabsVoices } from './videobook/use-elevenlabs-voices'
 import { useImageEditModels } from './videobook/use-image-edit-models'
@@ -680,6 +681,14 @@ type MediaFullscreenSession = {
   subjectMapLoading: boolean
   mode: MediaFullscreenMode
   initialInstruction: string
+}
+
+function fullscreenAsset(
+  session: MediaFullscreenSession,
+  assetById: ReadonlyMap<string, NotebookCellInspectorAsset>,
+): NotebookCellInspectorAsset {
+  if (session.asset.type !== 'video') return session.asset
+  return assetById.get(session.asset.artifactId) ?? session.asset
 }
 
 type PendingCommandPlan = {
@@ -3776,6 +3785,24 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setCellQueued(cellId, false)
     })
     return addressTag
+  }
+
+  const cropFullscreenVideo = async (
+    session: MediaFullscreenSession,
+    selection: VideoCropSelection,
+  ): Promise<void> => {
+    await call('crop_asset', {
+      book_id: session.bookId,
+      asset_id: session.asset.artifactId,
+      ratio: selection.ratio,
+      x: selection.x,
+      y: selection.y,
+      w: selection.w,
+      h: selection.h,
+    })
+    const isCurrent = () => watchScopeRef.current.bookId === session.bookId
+      && watchScopeRef.current.notebookId === session.notebookId
+    await refreshBookData(session.bookId, session.notebookId, isCurrent).catch(() => undefined)
   }
 
   const analyzeFullscreenSubjects = useCallback(async (
@@ -11308,7 +11335,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       {mediaFullscreen && (
         <NotebookMediaFullscreen
           key={mediaFullscreen.key}
-          asset={mediaFullscreen.asset}
+          asset={fullscreenAsset(mediaFullscreen, assetById)}
           address={mediaFullscreen.address}
           initialMode={mediaFullscreen.mode}
           initialInstruction={mediaFullscreen.initialInstruction}
@@ -11334,6 +11361,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             || mediaFullscreen.asset.type === 'final'
               ? (timestampSeconds) =>
                   captureFullscreenFrame(mediaFullscreen, timestampSeconds)
+              : undefined
+          }
+          onCropVideo={
+            mediaFullscreen.asset.type === 'video'
+              ? (selection) => cropFullscreenVideo(mediaFullscreen, selection)
               : undefined
           }
           onEditingChange={setMediaFullscreenSidebarEditing}

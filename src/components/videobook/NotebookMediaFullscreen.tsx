@@ -1,8 +1,9 @@
-import { Camera, PencilLine, X } from 'lucide-react'
+import { Camera, Crop, PencilLine, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
+import { VideoCropOverlay } from '@/components/videobook/VideoCropOverlay'
 import {
   ImageEditorWorkspace,
   type ImageEditInstructionOutcome,
@@ -16,6 +17,7 @@ import type { ImageEditRegion, ImageEditSelection } from '@/videobook/image-edit
 import type { ImageEditModelOption } from '@/videobook/use-image-edit-models'
 import type { NotebookCellInspectorAsset } from './NotebookCellInspector'
 import { mediaDetailParts, type MediaFullscreenMode } from '@/videobook/image-editor-copy'
+import type { VideoCropSelection } from '@/videobook/video-crop'
 
 export type {
   ImageEditInstructionOutcome,
@@ -48,6 +50,7 @@ type NotebookMediaFullscreenProps = {
   ) => Promise<string | null>
   onAnalyzeSubjects?: (force?: boolean) => Promise<void>
   onCaptureFrame?: (timestampSeconds: number) => Promise<string>
+  onCropVideo?: (selection: VideoCropSelection) => Promise<void>
   onEditingChange?: (editing: boolean) => void
   onEditSubjects?: (input: ImageSubjectEditInput) => Promise<boolean>
   onSubmitEditInstruction?: (
@@ -76,11 +79,13 @@ function VideoStage({
   playbackUrl,
   posterUrl,
   videoRef,
+  cropping,
 }: {
   address: string
   playbackUrl: string | null
   posterUrl: string | null
   videoRef: React.RefObject<HTMLVideoElement | null>
+  cropping: boolean
 }) {
   if (!playbackUrl) {
     return (
@@ -97,8 +102,8 @@ function VideoStage({
       key={playbackUrl}
       src={playbackUrl}
       poster={posterUrl ?? undefined}
-      controls
-      tabIndex={0}
+      controls={!cropping}
+      tabIndex={cropping ? -1 : 0}
       controlsList="nofullscreen nodownload noremoteplayback"
       disablePictureInPicture
       playsInline
@@ -130,6 +135,7 @@ export function NotebookMediaFullscreen({
   onEstimateImageEditCost,
   onAnalyzeSubjects,
   onCaptureFrame,
+  onCropVideo,
   onEditingChange,
   onEditSubjects,
   onSubmitEditInstruction,
@@ -138,6 +144,7 @@ export function NotebookMediaFullscreen({
   const dialogRef = useRef<HTMLDialogElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const cropButtonRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
   const dismissFocusRef = useRef<(() => void) | null>(null)
   const mountedRef = useRef(false)
@@ -147,10 +154,13 @@ export function NotebookMediaFullscreen({
   const mediaUrl = playbackUrl ?? posterUrl
   const hasMedia = isVideo || Boolean(mediaUrl)
   const editable = !isVideo && Boolean(onEditSubjects || onSubmitEditInstruction)
+  const croppable = isVideo && Boolean(playbackUrl && onCropVideo)
   const [mode, setMode] = useState<MediaFullscreenMode>(isVideo ? 'view' : initialMode)
   const [instruction, setInstruction] = useState(initialInstruction)
   const [capturePending, setCapturePending] = useState(false)
-  const [captureStatus, setCaptureStatus] = useState<{ tone: 'error' | 'success'; text: string } | null>(null)
+  const [cropping, setCropping] = useState(false)
+  const [cropPending, setCropPending] = useState(false)
+  const [mediaStatus, setMediaStatus] = useState<{ tone: 'error' | 'success'; text: string } | null>(null)
   const editing = mode === 'edit' && !isVideo
 
   useEffect(() => {
@@ -229,25 +239,72 @@ export function NotebookMediaFullscreen({
         : Math.min(video.currentTime, Math.max(0, duration - 0.05)),
     )
     setCapturePending(true)
-    setCaptureStatus(null)
+    setMediaStatus(null)
     try {
       const savedAddress = await onCaptureFrame(timestamp)
-      if (mountedRef.current) setCaptureStatus({ tone: 'success', text: `Frame saved to ${savedAddress}` })
+      if (mountedRef.current) setMediaStatus({ tone: 'success', text: `Frame saved to ${savedAddress}` })
     } catch (error) {
       if (mountedRef.current) {
-        setCaptureStatus({ tone: 'error', text: error instanceof Error ? error.message : String(error) })
+        setMediaStatus({ tone: 'error', text: error instanceof Error ? error.message : String(error) })
       }
     } finally {
       if (mountedRef.current) setCapturePending(false)
     }
   }
 
+  const startCrop = () => {
+    videoRef.current?.pause()
+    setMediaStatus(null)
+    setCropping(true)
+  }
+
+  const leaveCrop = () => {
+    setCropping(false)
+    requestAnimationFrame(() => cropButtonRef.current?.focus())
+  }
+
+  const applyCrop = async (selection: VideoCropSelection) => {
+    if (!onCropVideo || cropPending) return
+    setCropPending(true)
+    setMediaStatus(null)
+    try {
+      await onCropVideo(selection)
+      if (!mountedRef.current) return
+      setMediaStatus({ tone: 'success', text: `Cropped @${address} to ${selection.ratio}` })
+      leaveCrop()
+    } catch (error) {
+      if (mountedRef.current) {
+        setMediaStatus({ tone: 'error', text: error instanceof Error ? error.message : String(error) })
+      }
+    } finally {
+      if (mountedRef.current) setCropPending(false)
+    }
+  }
+
+  const dismiss = () => {
+    if (editing) {
+      leaveEditor()
+      return
+    }
+    if (!cropping) {
+      onClose()
+      return
+    }
+    if (!cropPending) leaveCrop()
+  }
+
   const handleViewerKey = (event: ReactKeyboardEvent<HTMLDialogElement>) => {
-    if (editing || event.defaultPrevented || typingTarget(event.target)) return
+    if (editing || cropping || event.defaultPrevented || typingTarget(event.target)) return
     if (event.metaKey || event.ctrlKey || event.altKey) return
-    if (!editable || event.key.toLowerCase() !== 'e') return
+    const key = event.key.toLowerCase()
+    if (editable && key === 'e') {
+      event.preventDefault()
+      setMode('edit')
+      return
+    }
+    if (!croppable || key !== 'c') return
     event.preventDefault()
-    setMode('edit')
+    startCrop()
   }
 
   const viewer = (
@@ -266,7 +323,19 @@ export function NotebookMediaFullscreen({
               Edit image
             </button>
           )}
-          {isVideo && playbackUrl && onCaptureFrame && (
+          {croppable && !cropping && (
+            <button
+              ref={cropButtonRef}
+              type="button"
+              className="notebook-media-capture-button"
+              aria-keyshortcuts="C"
+              onClick={startCrop}
+            >
+              <Crop size={16} />
+              Crop
+            </button>
+          )}
+          {isVideo && playbackUrl && onCaptureFrame && !cropping && (
             <button
               type="button"
               className="notebook-media-capture-button"
@@ -288,17 +357,27 @@ export function NotebookMediaFullscreen({
           >
             <X size={20} />
           </button>
-          {captureStatus && (
-            <p className={`notebook-media-capture-status ${captureStatus.tone}`} role="status">
-              {captureStatus.text}
+          {mediaStatus && (
+            <p className={`notebook-media-capture-status ${mediaStatus.tone}`} role="status">
+              {mediaStatus.text}
             </p>
           )}
         </div>
       </header>
-      <div className="media-fullscreen-stage">
+      <div className={`media-fullscreen-stage${cropping ? ' cropping' : ''}`}>
         {isVideo
-          ? <VideoStage address={address} playbackUrl={playbackUrl} posterUrl={posterUrl} videoRef={videoRef} />
+          ? <VideoStage address={address} playbackUrl={playbackUrl} posterUrl={posterUrl} videoRef={videoRef} cropping={cropping} />
           : <img src={mediaUrl ?? ''} alt={`@${address}`} />}
+        {cropping && (
+          <VideoCropOverlay
+            videoRef={videoRef}
+            sourceWidth={asset.width}
+            sourceHeight={asset.height}
+            pending={cropPending}
+            onApply={(selection) => void applyCrop(selection)}
+            onCancel={leaveCrop}
+          />
+        )}
       </div>
       {editable && (
         <p className="media-fullscreen-keys" aria-hidden="true">
@@ -319,8 +398,7 @@ export function NotebookMediaFullscreen({
       onKeyDown={handleViewerKey}
       onCancel={(event) => {
         event.preventDefault()
-        if (editing) leaveEditor()
-        else onClose()
+        dismiss()
       }}
     >
       {actionsOpen && <div ref={composerPortalRef} className="notebook-media-composer-host actions-only" aria-label="Media actions input" />}
