@@ -44,7 +44,7 @@ const OPERATION_BY_TASK: Record<string, Operation> = {
   R2V: "reference_to_video",
 };
 
-const HIDDEN = ["MiniMax-H3-Omni", "Vidu-Q3", "Vidu-Q3-Pro", "Vidu-Q3-Pro-Fast", "Vidu-Q3-Turbo", "Vidu-Q4-Preview", "Wan2.2-A14B"];
+const HIDDEN = ["Vidu-Q3", "Vidu-Q3-Pro", "Vidu-Q3-Pro-Fast", "Vidu-Q3-Turbo", "Vidu-Q4-Preview", "Wan2.2-A14B"];
 
 function request(id: string, call: WireRequestInput): Record<string, unknown> {
   const built = buildWireRequest(resolveModel(id), call);
@@ -126,13 +126,6 @@ describe("MachGen catalog", () => {
       resolution: { enumValues: ["480p", "768p"], defaultValue: "768p" },
       duration: { minimum: 1, maximum: 15, defaultValue: 12 },
     });
-    expect(options("machgen:MiniMax-H3-Omni")).toMatchObject({
-      resolution: { enumValues: ["768p"], defaultValue: "768p" },
-      duration: { minimum: 1, maximum: 15, defaultValue: 12 },
-      aspect_ratio: { enumValues: ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], defaultValue: "9:16" },
-      generate_audio: { valueType: "boolean", defaultValue: true },
-      seed: { valueType: "integer" },
-    });
     expect(options("machgen:Seedance-2.5").aspect_ratio).toMatchObject({ defaultValue: "9:16" });
     expect(options("machgen:Seedance-2.5").seed).toBeUndefined();
     expect(options("machgen:Seedance-2.0").resolution).toMatchObject({ enumValues: ["480p", "720p", "1080p", "2160p"] });
@@ -203,7 +196,7 @@ describe("MachGen catalog", () => {
       }
     }
     expect(failures).toEqual([]);
-    expect(accepted).toBe(35_903);
+    expect(accepted).toBe(35_273);
     expect(refused).toEqual(EXPECTED_REFUSALS);
   });
 
@@ -241,10 +234,6 @@ describe("MachGen catalog", () => {
     }],
     ["machgen:MiniMax-H3-Turbo", { prompt: "a quick blink", options: { resolution: "480p", duration: 1 } }, {
       model: "MiniMax-H3-Turbo", task_type: "T2V", video_config: { height: 480, duration_secs: 1 },
-    }],
-    ["machgen:MiniMax-H3-Omni", { prompt: "the cat walks in", refUrls: { image: [FRAME], video: [CLIP], audio: [SONG] } }, {
-      model: "MiniMax-H3-Omni", task_type: "R2V", src_image_urls: [FRAME], src_video_urls: [CLIP], src_audio_urls: [SONG],
-      video_config: { height: 768, duration_secs: 12, aspect_ratio: "9:16", audio: true },
     }],
     ["machgen:Seedance-2.0-Fast", { prompt: "rally", refUrls: { first_frame: [FRAME] }, options: { aspect_ratio: "16:9" } }, {
       model: "Seedance-2.0-Fast", task_type: "I2V", src_image_urls: [FRAME],
@@ -326,12 +315,6 @@ describe("MachGen catalog", () => {
     ["machgen:Veo-3.1", { prompt: "x", options: { generate_audio: false } }, /not an option of machgen:Veo-3.1/],
     ["machgen:MiniMax-H3-Turbo", { prompt: "x", options: { resolution: "1080p" } }, /Resolution:/],
     ["machgen:Seedance-2.5", { prompt: "x", refUrls: { image: images(10) } }, /accepts at most 9 image refs/],
-    ["machgen:MiniMax-H3-Omni", { prompt: "x" }, /needs one of: image, video/],
-    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { audio: [SONG] } }, /needs one of: image, video/],
-    ["machgen:MiniMax-H3-Omni", { refUrls: { image: [FRAME] } }, /requires a prompt/],
-    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { image: images(10) } }, /accepts at most 9 image refs/],
-    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { image: images(9), video: [CLIP, CLIP, CLIP], audio: [SONG] } }, /at most 12 references in all/],
-    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { image: [FRAME] }, options: { resolution: "1080p" } }, /Resolution:/],
     [UPSCALE, { refUrls: { video: [CLIP] } }, /Video url: connect a video from this book; MachGen re-renders only its own MiniMax-H3 768p videos of 5-15 s/],
     [UPSCALE, { refUrls: { video: [machgenTaskUrl("task-1", 20)] } }, /Video url: the source is 20 s/],
     [SHARPEN, { refUrls: { video: [CLIP] } }, /Video url: connect a video from this book; MachGen sharpens only its own MiniMax-H3 480p or 768p videos of 1-30 s/],
@@ -355,8 +338,6 @@ describe("MachGen catalog", () => {
     ["machgen:Grok-Imagine-Video-1.5", { refUrls: { first_frame: [FRAME] }, options: { resolution: "480p", duration: 5 } }, {}, 0.475],
     ["machgen:MiniMax-H3-Turbo", { prompt: "x", options: { resolution: "768p", duration: 10 } }, {}, 0.15],
     ["machgen:MiniMax-H3-Turbo", { prompt: "x", options: { resolution: "480p", duration: 1 } }, {}, 0.015],
-    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { image: [FRAME] }, options: { duration: 5 } }, {}, 0.1],
-    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { video: [CLIP] }, options: { duration: 5 } }, { inputDurationSeconds: 4 }, 0.18],
     ["machgen:Seedance-2.0-Fast", { prompt: "x", options: { resolution: "720p", duration: 5 } }, {}, 0.6],
     ["machgen:Seedance-2.0-Fast", { prompt: "x", refUrls: { video: [CLIP] }, options: { resolution: "720p", duration: 5 } }, { inputDurationSeconds: 4 }, 0.63],
     ["machgen:Seedance-2.0-Mini", { prompt: "x", options: { resolution: "480p", duration: 5 } }, {}, 0.165],

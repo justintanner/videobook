@@ -16,6 +16,8 @@ import { createElevenLabs as elevenlabs } from "@apicity/elevenlabs";
 import { createMachGen as machgen } from "@apicity/machgen";
 import { createWaveSpeed as wavespeed } from "@apicity/wavespeed";
 import { createNunchux as nunchux } from "@apicity/nunchux";
+import { createGoogle as google } from "@apicity/google";
+import { createGoogleFlow as googleflow } from "@apicity/googleflow";
 import { capturedProvider, withHarCapture, withProviderCall } from "./har-capture.js";
 import { providerUsageFetch } from "./provider-usage.js";
 import { withFalStorageErrors } from "./jobs/_fal-shared.js";
@@ -64,6 +66,14 @@ export function createWaveSpeed(options: NonNullable<Parameters<typeof wavespeed
 
 export function createNunchux(options: NonNullable<Parameters<typeof nunchux>[0]>): ReturnType<typeof nunchux> {
   return capturedProvider("nunchux", (fetch) => nunchux({ ...options, fetch }), providerUsageFetch("nunchux", options.fetch));
+}
+
+export function createGoogle(options: Parameters<typeof google>[0]): ReturnType<typeof google> {
+  return capturedProvider("google", (fetch) => google({ ...options, fetch }), providerUsageFetch("google", options.fetch));
+}
+
+export function createGoogleFlow(options: Parameters<typeof googleflow>[0]): ReturnType<typeof googleflow> {
+  return capturedProvider("googleflow", (fetch) => googleflow({ ...options, fetch }), providerUsageFetch("googleflow", options.fetch));
 }
 
 export function createB2(options: Parameters<typeof b2>[0]): ReturnType<typeof b2> {

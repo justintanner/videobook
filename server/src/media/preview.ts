@@ -3,6 +3,10 @@ import { resolveModel, UnknownModelError } from "./descriptor.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
 import { buildWireRequest } from "./request.js";
 import { normalizeFieldRefs, normalizeRefParams, normalizeRefs } from "./refs.js";
+import { isAlibabaVideoModel } from "./alibaba.js";
+import { googleDotPath } from "./google.js";
+import { googleFlowDotPath } from "./googleflow.js";
+import { hasOpenAiImageSources, openaiImageDotPath } from "./openai.js";
 import { wavespeedDotPath } from "./wavespeed.js";
 import { nunchuxDotPath } from "./nunchux.js";
 import { hasXaiImageSources, isKieSunoModel, isKieVeoModel, isXaiImageModel } from "./wire.js";
@@ -41,7 +45,9 @@ function providerPath(model: ResolvedModel, request: Record<string, unknown>): s
       if (hasXaiImageSources(request)) return "xai.post.v1.images.edits(request, { otp })";
       return "xai.post.v1.images.generations(request, { otp })";
     case "alibaba":
-      return "alibaba.post.api.v1.services.aigc.multimodalGeneration.generation(request)";
+      return isAlibabaVideoModel(model.apiId)
+        ? "alibaba.post.api.v1.services.aigc.videoGeneration.videoSynthesis(request)"
+        : "alibaba.post.api.v1.services.aigc.multimodalGeneration.generation(request)";
     case "elevenlabs":
       return ELEVENLABS_PATHS[model.apiId] ?? "elevenlabs";
     case "machgen":
@@ -50,6 +56,12 @@ function providerPath(model: ResolvedModel, request: Record<string, unknown>): s
       return `wavespeed.${wavespeedDotPath(model.apiId)}(request)`;
     case "nunchux":
       return `nunchux.${nunchuxDotPath(model.apiId, Array.isArray(request.images))}(request)`;
+    case "openai":
+      return `openai.${openaiImageDotPath(hasOpenAiImageSources(request))}(request)`;
+    case "google":
+      return `google.${googleDotPath(model.apiId)}(request)`;
+    case "googleflow":
+      return `googleflow.post.${googleFlowDotPath(model.apiId)}(request)`;
   }
 }
 

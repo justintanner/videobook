@@ -4,9 +4,11 @@ import { providerStatusUrl, type ProviderTaskStatus } from '../../../server/src/
 import './ProviderTaskLink.css'
 
 const TASK_ONLY_LABELS: Partial<Record<ProviderTaskStatus['provider'], string>> = {
+  alibaba: 'Alibaba task',
   machgen: 'MachGen task',
   wavespeed: 'WaveSpeed prediction',
   nunchux: 'Nunchux task',
+  googleflow: 'Google Flow job',
 }
 
 export function ProviderTaskLink({ task }: { task: ProviderTaskStatus }) {

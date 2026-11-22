@@ -1,5 +1,5 @@
 export interface ProviderTaskStatus {
-  provider: "kie" | "fal" | "machgen" | "wavespeed" | "nunchux";
+  provider: "kie" | "fal" | "alibaba" | "machgen" | "wavespeed" | "nunchux" | "googleflow";
   model: string | null;
   taskId: string | null;
 }
@@ -14,7 +14,15 @@ export function providerStatusUrl(provider: string | null, model: string | null)
 export function parseProviderTaskStatus(value: unknown): ProviderTaskStatus | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  if (record.provider !== "kie" && record.provider !== "fal" && record.provider !== "machgen" && record.provider !== "wavespeed" && record.provider !== "nunchux") return null;
+  if (
+    record.provider !== "kie"
+    && record.provider !== "fal"
+    && record.provider !== "alibaba"
+    && record.provider !== "machgen"
+    && record.provider !== "wavespeed"
+    && record.provider !== "nunchux"
+    && record.provider !== "googleflow"
+  ) return null;
   return {
     provider: record.provider,
     model: typeof record.model === "string" ? record.model : null,

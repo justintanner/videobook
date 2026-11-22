@@ -33,18 +33,31 @@ export async function readProviderTaskStatus(
   const catalogModel = hintedModel ?? payloadModel;
   const model = firstString(endpoint, payloadModel?.apiId, payload.model, catalogModel?.apiId, saved?.meta.apiModel, saved?.meta.model, hints.model);
   const taskId = firstString(saved?.taskId, storedId.taskId, hints.taskId);
+  const alibabaTask = saved?.taskType === MEDIA_TASK_TYPES.alibaba;
   const machgenTask = saved?.taskType === MEDIA_TASK_TYPES.machgen;
   const wavespeedTask = saved?.taskType === MEDIA_TASK_TYPES.wavespeed;
   const nunchuxTask = saved?.taskType === MEDIA_TASK_TYPES.nunchux;
-  if (saved && /^(?:xai|alibaba)_/u.test(saved.taskType)) return null;
-  if (saved && !machgenTask && !wavespeedTask && !nunchuxTask && saved.taskType !== "media_kie" && saved.taskType !== "isolate_vocals"
+  const googleFlowTask = saved?.taskType === MEDIA_TASK_TYPES.googleflow;
+  if (saved && !alibabaTask && /^(?:xai|alibaba)_/u.test(saved.taskType)) return null;
+  if (saved && !alibabaTask && !machgenTask && !wavespeedTask && !nunchuxTask && !googleFlowTask
+    && saved.taskType !== "media_kie" && saved.taskType !== "isolate_vocals"
     && !saved.taskType.startsWith("fal_") && legacyMediaForTaskType(saved.taskType) === null) return null;
   const provider = endpoint || saved?.taskType.startsWith("fal_") ? "fal"
-    : machgenTask ? "machgen"
-      : wavespeedTask ? "wavespeed"
-        : nunchuxTask ? "nunchux"
-          : catalogModel?.provider ?? hints.provider ?? (storedId.taskId || saved ? "kie" : null);
-  if (provider !== "kie" && provider !== "fal" && provider !== "machgen" && provider !== "wavespeed" && provider !== "nunchux") return null;
+    : alibabaTask ? "alibaba"
+      : machgenTask ? "machgen"
+        : wavespeedTask ? "wavespeed"
+          : nunchuxTask ? "nunchux"
+            : googleFlowTask ? "googleflow"
+              : catalogModel?.provider ?? hints.provider ?? (storedId.taskId || saved ? "kie" : null);
+  if (
+    provider !== "kie"
+    && provider !== "fal"
+    && provider !== "alibaba"
+    && provider !== "machgen"
+    && provider !== "wavespeed"
+    && provider !== "nunchux"
+    && provider !== "googleflow"
+  ) return null;
   return { provider, model, taskId: taskId === "queued" ? null : taskId };
 }
 

@@ -16,7 +16,7 @@ interface FamilySource {
   title: string;
 }
 
-const PROVIDER_SUFFIX = /\s*\((?:Kie|Fal|xAI|Alibaba|MachGen|WaveSpeed|Nunchux)\)$/;
+const PROVIDER_SUFFIX = /\s*\((?:Kie|Fal|xAI|Alibaba|MachGen|WaveSpeed|Nunchux|OpenAI|Google|Google Flow)\)$/;
 
 const OPERATION_SUFFIX = new RegExp(
   `\\s+(?:${[

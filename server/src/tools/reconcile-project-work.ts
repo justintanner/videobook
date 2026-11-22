@@ -1,6 +1,6 @@
 import { seedanceEditFailure } from "../media/seedance-edit.js";
 import { reframeVideoFailure } from "../media/reframe-video.js";
-import { createKie, createXai, createAlibaba, createFal } from "../usage-providers.js";
+import { createKie, createXai, createFal } from "../usage-providers.js";
 import { describeFalError, recordFalRefusal } from "../jobs/_fal-shared.js";
 import { currentBookContext, withBookContext } from "../book-context.js";
 import { settleFinishedUsage } from "../provider-usage.js";
@@ -20,6 +20,7 @@ import type { MachGenTaskStatusResponse } from "@apicity/machgen";
 import { WaveSpeedError } from "@apicity/wavespeed";
 import type { WaveSpeedPrediction } from "@apicity/wavespeed";
 import { NunchuxError } from "@apicity/nunchux";
+import { GoogleFlowError } from "@apicity/googleflow";
 import {
   EMPTY_TAG_SUMMARY,
   readAssetTagSummaries,
@@ -54,6 +55,8 @@ import type { PendingTask } from "videobook-engine";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { planVideoTranscriptJobs } from "../jobs/process-video.js";
 import { providerEndpoints } from "../media/endpoints.js";
+import { ALIBABA_INTERNATIONAL_BASE_URL, alibabaProvider } from "../media/adapters/alibaba.js";
+import { extractGoogleFlowVideoUrls, googleFlowProvider } from "../media/adapters/googleflow.js";
 import { machgenProvider } from "../media/adapters/machgen.js";
 import { WAVESPEED_FAILED_STATUSES, wavespeedProvider } from "../media/adapters/wavespeed.js";
 import { nunchuxProvider } from "../media/adapters/nunchux.js";
@@ -812,6 +815,8 @@ type PollPendingProviderTasksOptions = {
   machgenBaseURL?: string;
   wavespeedBaseURL?: string;
   nunchuxBaseURL?: string;
+  alibabaBaseURL?: string;
+  googleFlowBaseURL?: string;
 };
 
 const MACHGEN_RETRYABLE_STATUSES = new Set([408, 429, 499]);
@@ -1044,6 +1049,67 @@ async function pollNunchuxTasks(
       const failMsg = error instanceof Error ? error.message : "Poll failed";
       result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
       if (nunchuxPollFailureIsFinal(error)) await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+    }
+  })));
+}
+
+const GOOGLEFLOW_RETRYABLE_STATUSES = new Set([408, 429, 499]);
+
+function googleFlowPollFailureIsFinal(error: unknown): boolean {
+  if (!(error instanceof GoogleFlowError)) return false;
+  const status = (error as GoogleFlowError).status;
+  return status >= 400 && status < 500 && !GOOGLEFLOW_RETRYABLE_STATUSES.has(status);
+}
+
+function googleFlowErrorText(job: Record<string, unknown>): string {
+  if (typeof job.error === "string" && job.error) return job.error;
+  if (job.error && typeof job.error === "object" && !Array.isArray(job.error)) {
+    const message = (job.error as Record<string, unknown>).message;
+    if (typeof message === "string" && message) return message;
+  }
+  return "Google Flow task failed";
+}
+
+async function pollGoogleFlowTasks(
+  engine: Engine,
+  tasks: readonly PendingTask[],
+  result: ProviderPollResult,
+  bookId: string,
+  baseURL: string | undefined,
+): Promise<void> {
+  const googleFlowTasks = tasks.filter((task) => task.taskType === MEDIA_TASK_TYPES.googleflow);
+  if (!getApiKey("GOOGLE_FLOW_API_KEY") || googleFlowTasks.length === 0) return;
+  const provider = googleFlowProvider(30_000, baseURL);
+  await Promise.all(googleFlowTasks.map(async (task) => withProviderTaskContext(engine, bookId, task, async () => {
+    const prompt = metaPrompt(task.meta);
+    try {
+      const job = await provider.get.v1.jobs.retrieve({ jobId: task.taskId });
+      const status = typeof job.status === "string" ? job.status.toLowerCase() : "";
+      if (status === "failed") {
+        const failMsg = googleFlowErrorText(job);
+        result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+        await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+        return;
+      }
+      if (status !== "completed") {
+        result.pending.push({ assetId: task.artifactId, taskType: task.taskType, progress: 0, state: status || "started", prompt, startedAt: task.createdAt });
+        return;
+      }
+      const response = job.response && typeof job.response === "object" && !Array.isArray(job.response)
+        ? job.response as Record<string, unknown>
+        : job;
+      const urls = extractGoogleFlowVideoUrls(response);
+      if (urls.length === 0) {
+        const failMsg = "Google Flow job completed without a video URL";
+        result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+        await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+        return;
+      }
+      await enqueueTaskCompletion(engine, task, result, bookId, "googleflow", urls);
+    } catch (error) {
+      const failMsg = error instanceof Error ? error.message : "Poll failed";
+      result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+      if (googleFlowPollFailureIsFinal(error)) await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
     }
   })));
 }
@@ -1330,27 +1396,20 @@ export async function pollPendingProviderTasks(
     })));
   }
 
-  // Poll Alibaba tasks (only if API key is set)
   const alibabaTasks = pollableTasks.filter((t) => t.taskType.startsWith("alibaba_"));
-  if (process.env.DASHSCOPE_API_KEY && alibabaTasks.length > 0) {
-    const provider = createAlibaba({ apiKey: process.env.DASHSCOPE_API_KEY, timeout: 30_000 });
-
+  const configuredAlibabaBaseURL = options.alibabaBaseURL ?? providerEndpoints().alibabaBaseURL;
+  if (getApiKey("DASHSCOPE_API_KEY") && alibabaTasks.length > 0) {
     await Promise.all(alibabaTasks.map(async (task) => withProviderTaskContext(engine, book_id, task, async () => {
       const prompt = metaPrompt(task.meta);
+      const taskBaseURL = typeof task.meta.alibabaBaseURL === "string"
+        ? task.meta.alibabaBaseURL
+        : configuredAlibabaBaseURL ?? (task.taskType === MEDIA_TASK_TYPES.alibaba ? ALIBABA_INTERNATIONAL_BASE_URL : undefined);
+      const provider = alibabaProvider(30_000, taskBaseURL);
       try {
         const taskStatus = await provider.get.api.v1.tasks(task.taskId);
         const status = taskStatus.output.task_status;
 
         if (status === "SUCCEEDED") {
-          const assetDirResult = await engine.workspaces.resolveArtifact(task.artifactId);
-          if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
-            return;
-          }
-          await engine.jobs.pending.markCompleting(task.artifactId);
-          const jobId = `complete-alibaba-${task.artifactId}-${Date.now()}`;
-
-          // Video result has video_url, image result has choices with image URLs
           const resultUrls: string[] = [];
           if (taskStatus.output.video_url) {
             resultUrls.push(taskStatus.output.video_url);
@@ -1364,18 +1423,13 @@ export async function pollPendingProviderTasks(
               }
             }
           }
-
-          await queue.enqueue(jobId, {
-            type: "complete_kie_task",
-            taskId: task.taskId,
-            taskType: task.taskType,
-            assetId: task.artifactId,
-            assetDir: assetDirResult.value,
-            bookId: book_id,
-            meta: task.meta,
-            resultUrls,
-          } as unknown as Record<string, unknown>);
-          result.completed.push({ assetId: task.artifactId, taskType: task.taskType, jobId });
+          if (resultUrls.length === 0) {
+            const failMsg = "Alibaba task succeeded without an output URL";
+            result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+            await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+            return;
+          }
+          await enqueueTaskCompletion(engine, task, result, book_id, "alibaba", resultUrls);
         } else if (status === "FAILED" || status === "CANCELED") {
           const failMsg = taskStatus.output.message ?? `Alibaba task ${status}`;
           const code = taskStatus.output.code;
@@ -1400,7 +1454,7 @@ export async function pollPendingProviderTasks(
         result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
         if (e instanceof AlibabaError) {
           const alibabaErr = e as AlibabaError;
-          if (alibabaErr.status >= 400 && alibabaErr.status < 500) {
+          if (alibabaErr.status >= 400 && alibabaErr.status < 500 && alibabaErr.status !== 408 && alibabaErr.status !== 429 && alibabaErr.status !== 499) {
             await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
           }
         }
@@ -1486,6 +1540,7 @@ export async function pollPendingProviderTasks(
   await pollMachGenTasks(engine, pollableTasks, result, book_id, options.machgenBaseURL ?? providerEndpoints().machgenBaseURL);
   await pollWaveSpeedTasks(engine, pollableTasks, result, book_id, options.wavespeedBaseURL ?? providerEndpoints().wavespeedBaseURL);
   await pollNunchuxTasks(engine, pollableTasks, result, book_id, options.nunchuxBaseURL ?? providerEndpoints().nunchuxBaseURL);
+  await pollGoogleFlowTasks(engine, pollableTasks, result, book_id, options.googleFlowBaseURL ?? providerEndpoints().googleFlowBaseURL);
 
   for (const task of expiredTasks) {
     if (options.signal?.aborted) break;

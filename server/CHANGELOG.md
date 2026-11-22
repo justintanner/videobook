@@ -8,6 +8,28 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Adopted `@apicity/*@0.30.0`, adding three new direct media providers and new
+  endpoints across existing providers:
+  - **OpenAI** (`OPENAI_API_KEY`): GPT Image 2.6 Sunburst and Flare, GPT Image
+    2.5 Sunburst and Flare, and GPT Image 2 for synchronous text-to-image and
+    multipart edits of up to 16 book images plus Mask and Markup slots.
+  - **Google Vertex** (`GOOGLE_API_KEY` for Nano Banana 2.1;
+    `GOOGLE_SERVICE_ACCOUNT_JSON` with `GOOGLE_CLOUD_PROJECT` or service-account
+    `project_id` for Gemini Omni): Nano Banana 2.1 images plus Gemini Omni 1.2
+    Flash and 1.1 Flash Preview videos with inline book media.
+  - **Google Flow** (`GOOGLE_FLOW_API_KEY`): Nano Banana 2.1 images plus async
+    Gemini Omni 1.2 Flash and 1.1 Flash videos with asset upload and job polling.
+  - **Alibaba** (`DASHSCOPE_API_KEY`): Wan 3.0, Wan 3.0 Prime, and HappyHorse
+    1.0 Video Edit via DashScope International async video synthesis.
+  - **fal & WaveSpeed**: Kling 4.0 Image text-to-image and edits on both fal
+    and WaveSpeed, fal Seedream 5.5 Edit, and WaveSpeed GPT Image 2.5 Sunburst
+    and Flare edits.
+  - **KIE**: Kling 4.0 reference-to-video and keyframe-to-video now expose `4k`,
+    `dynamic_range` (`sdr`/`hdr`), and `4:3`/`3:4` aspect ratios while keeping
+    the default resolution pinned to `1080p`.
+  - **Fullscreen image editor**: Added OpenAI GPT Image 2.6/2.5/2, WaveSpeed GPT
+    Image 2.5 Sunburst and Flare, Google Nano Banana 2.1, and Google Flow Nano
+    Banana 2.1 edit providers.
 - Subject analysis now finds exact edit masks for uploaded photos and images
   from any model. Select a matched subject to edit it using its mask.
   Analyzing again refreshes a previously cached subject map.
@@ -58,6 +80,10 @@ and the package uses [Semantic Versioning](https://semver.org/).
   in its footer, where the model was usually cut off. While it generates or
   after it fails, the line under its status names them the same way. The
   model no longer repeats the provider, as in `kie · kie:minimax-h3/refer…`.
+
+### Removed
+
+- Removed `machgen:MiniMax-H3-Omni`, retired upstream in `@apicity/machgen@0.30.0`.
 
 ### Fixed
 

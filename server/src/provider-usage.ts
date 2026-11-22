@@ -19,7 +19,7 @@ import { httpDotPath, usageQuote, type UsageQuote } from "./usage-quote.js";
 
 const COST_PACKAGE_VERSION = installedPackageVersion("@apicity/cost");
 
-type Provider = "openai" | "xai" | "kie" | "fal" | "alibaba" | "elevenlabs" | "machgen" | "wavespeed" | "nunchux";
+type Provider = "openai" | "xai" | "kie" | "fal" | "alibaba" | "elevenlabs" | "machgen" | "wavespeed" | "nunchux" | "google" | "googleflow";
 type RecordValue = Record<string, unknown>;
 type Price = Pick<UsageEntry, "costUsd" | "basis" | "rateSource" | "pricingVersion" | "warnings" | "units" | "unit">;
 const incomplete = new WeakSet<Engine>();
@@ -143,6 +143,10 @@ function catalogMedia(provider: Provider, model: string, path: string): Media | 
 function endpointModel(provider: Provider, endpoint: string): string {
   if (provider === "fal") return endpoint;
   if (provider === "wavespeed") return endpoint.replace(/^api\/v3\//u, "");
+  if (provider === "google") {
+    const match = /\/models\/([^/:]+):generateContent$/u.exec(endpoint);
+    if (match?.[1]) return match[1];
+  }
   return endpoint.split("/").slice(-2).join("/");
 }
 
@@ -168,6 +172,8 @@ function isBillable(provider: Provider, path: string, method: string): boolean {
   if (provider === "machgen") return path === "/api/v0/generate";
   if (provider === "wavespeed") return path.startsWith("/api/v3/") && !path.startsWith("/api/v3/predictions/");
   if (provider === "nunchux") return NUNCHUX_SUBMIT_PATH.test(path);
+  if (provider === "google") return /(?::generateContent|\/interactions)$/u.test(path);
+  if (provider === "googleflow") return /\/(videos|images)$/u.test(path);
   return /\/(videos|images)(\/|$)/u.test(path);
 }
 
@@ -196,7 +202,7 @@ function remoteId(body: RecordValue, url: URL, method: string): string | null {
     ?? (/\/(requests|tasks|jobs|videos|predictions|video_generation)\/([^/]+)(?:\/status|\/result)?$/u.exec(url.pathname)?.[2] ?? null);
   if (method === "GET" && pathId) return decodeURIComponent(pathId);
   return text(data.taskId) ?? text(data.task_id) ?? text(body.task_id) ?? text(output.task_id) ?? text(body.request_id)
-    ?? text(body.job_id) ?? text(body.id) ?? text(data.id);
+    ?? text(body.job_id) ?? text(body.jobid) ?? text(body.jobId) ?? text(body.responseId) ?? text(body.id) ?? text(data.id);
 }
 
 function responseStatus(body: RecordValue, accepted: boolean): UsageEntry["status"] {
@@ -379,11 +385,15 @@ async function costHints(engine: Engine, artifactId?: string): Promise<CostHints
   const inputWidth = number(hints.inputWidth);
   const inputHeight = number(hints.inputHeight);
   const aspectRatio = text(hints.aspectRatio);
+  const alibabaDeploymentScope = hints.alibabaDeploymentScope === "International" || hints.alibabaDeploymentScope === "Chinese mainland"
+    ? hints.alibabaDeploymentScope
+    : undefined;
   return {
     ...(durationSeconds !== null ? { durationSeconds } : {}),
     ...(inputDurationSeconds !== null ? { inputDurationSeconds } : {}),
     ...(inputWidth !== null && inputHeight !== null ? { inputWidth, inputHeight } : {}),
     ...(aspectRatio ? { aspectRatio } : {}),
+    ...(alibabaDeploymentScope ? { alibabaDeploymentScope } : {}),
   };
 }
 
@@ -431,7 +441,11 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       try { hints = await costHints(engine, context.artifactId); } catch { void 0; }
       hints = mergeCostHints(hints, usageCostHints.getStore());
       const activity = provider === "machgen" ? machgenActivity(payload) : activityFor(provider, model, url.pathname, context.operation);
-      const quoteEndpoint = provider === "fal" ? endpoint : provider === "wavespeed" ? model : kieSunoApiId(provider, url.pathname);
+      const quoteEndpoint = provider === "fal"
+        ? endpoint
+        : provider === "wavespeed" || provider === "google"
+          ? model
+          : kieSunoApiId(provider, url.pathname);
       const quoted = quotedEstimates.getStore() ?? usageQuote({
         provider, method, dotPath: httpDotPath(url.pathname), payload,
         ...(quoteEndpoint ? { endpoint: quoteEndpoint } : {}),
@@ -467,7 +481,8 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
         responseHeaders: Object.fromEntries(response.headers.entries()),
       };
       if (entry) {
-        const accepted = !!externalId && (provider === "kie" || provider === "fal" || provider === "machgen" || provider === "wavespeed" || provider === "nunchux" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
+        const accepted = !!externalId && !(provider === "googleflow" && Array.isArray(body.media))
+          && (provider === "kie" || provider === "fal" || provider === "machgen" || provider === "wavespeed" || provider === "nunchux" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
         const status = response.ok ? responseStatus(body, accepted) : "failed";
         safeRecord(engine, { ...entry, ...(externalId ? { externalId } : {}), ...await observedPatch(engine, entry, exchange, status) });
       } else if (method === "GET" && (response.ok || falResultFailed(provider, url, response))) {

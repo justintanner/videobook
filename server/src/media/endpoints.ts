@@ -8,6 +8,10 @@ export interface ProviderEndpoints {
   nunchuxBaseURL?: string;
   xaiBaseURL?: string;
   openaiBaseURL?: string;
+  alibabaBaseURL?: string;
+  googleBaseURL?: string;
+  googleTokenURL?: string;
+  googleFlowBaseURL?: string;
   pollIntervalMs?: number;
   timeoutMs?: number;
 }

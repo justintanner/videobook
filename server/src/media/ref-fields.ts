@@ -234,6 +234,7 @@ const FIELD_SLOT_FIELDS: Readonly<Record<string, { kind: SlotKind; label: string
   mask_url: { kind: "image", label: "Mask" },
   mask_image_url: { kind: "image", label: "Mask" },
   mask_image: { kind: "image", label: "Mask" },
+  mask: { kind: "image", label: "Mask" },
   markup_image_url: { kind: "image", label: "Markup" },
   markup_image: { kind: "image", label: "Markup" },
   markup: { kind: "image", label: "Markup" },

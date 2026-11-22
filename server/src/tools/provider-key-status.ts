@@ -28,6 +28,8 @@ type ProviderGroup =
   | "machgen"
   | "wavespeed"
   | "nunchux"
+  | "google"
+  | "googleflow"
   | "b2";
 type LiveLookup = "kie-credits" | "elevenlabs-credits" | "openai-tokens" | "xai-tokens";
 
@@ -91,6 +93,10 @@ const KEY_REGISTRY: Record<ManagedEnvKey, KeyRegistryEntry> = {
   MACHGEN_API_KEY: { provider: "machgen", label: "MachGen" },
   WAVESPEED_API_KEY: { provider: "wavespeed", label: "WaveSpeed" },
   NUNCHUX_API_KEY: { provider: "nunchux", label: "Nunchux" },
+  GOOGLE_API_KEY: { provider: "google", label: "Google" },
+  GOOGLE_SERVICE_ACCOUNT_JSON: { provider: "google", label: "Google Vertex" },
+  GOOGLE_CLOUD_PROJECT: { provider: "google", label: "Google Vertex" },
+  GOOGLE_FLOW_API_KEY: { provider: "googleflow", label: "Google Flow" },
   B2_ACCESS_KEY_ID: { provider: "b2", label: "Backblaze B2" },
   B2_SECRET_ACCESS_KEY: { provider: "b2", label: "Backblaze B2" },
   B2_REGION: { provider: "b2", label: "Backblaze B2" },
@@ -113,6 +119,10 @@ const ROW_ORDER: readonly ManagedEnvKey[] = [
   "MACHGEN_API_KEY",
   "WAVESPEED_API_KEY",
   "NUNCHUX_API_KEY",
+  "GOOGLE_API_KEY",
+  "GOOGLE_SERVICE_ACCOUNT_JSON",
+  "GOOGLE_CLOUD_PROJECT",
+  "GOOGLE_FLOW_API_KEY",
   "B2_ACCESS_KEY_ID",
   "B2_SECRET_ACCESS_KEY",
   "B2_REGION",

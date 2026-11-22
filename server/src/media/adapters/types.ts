@@ -34,7 +34,9 @@ export const MEDIA_TASK_TYPES = {
   kie: "media_kie",
   fal: "fal_media",
   xai: "xai_media",
+  alibaba: "alibaba_media",
   machgen: "machgen_media",
   wavespeed: "wavespeed_media",
   nunchux: "nunchux_media",
+  googleflow: "googleflow_media",
 } as const;

@@ -6,7 +6,7 @@ import { providerDisplayLabel } from './workspace-action-resources'
 import type { GenerationFamily } from './notebook-generation-actions'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
-const IMAGE_EDIT_PROVIDERS = ['kie', 'fal', 'machgen', 'wavespeed', 'nunchux'] as const
+const IMAGE_EDIT_PROVIDERS = ['kie', 'fal', 'machgen', 'wavespeed', 'nunchux', 'openai', 'google', 'googleflow'] as const
 
 type ImageEditProvider = typeof IMAGE_EDIT_PROVIDERS[number]
 

@@ -71,12 +71,12 @@ function catalogSchemaParse(adapter: ImageEditAdapter, stored: unknown): boolean
 }
 
 function imageUrlsOf(request: ImageEditProviderRequest): unknown {
-  return request.input.image_input ?? request.input.image_urls ?? request.input.input_urls ?? request.input.images;
+  return request.input.image_input ?? request.input.image_urls ?? request.input.input_urls ?? request.input.images ?? request.input.referenceImages;
 }
 
 describe("image edit adapters", () => {
   it("exposes one adapter per catalog model with matching ids", () => {
-    expect(IMAGE_EDIT_ADAPTERS.length).toBe(31);
+    expect(IMAGE_EDIT_ADAPTERS.length).toBe(40);
     for (const adapter of IMAGE_EDIT_ADAPTERS) {
       expect(findImageEditModel(adapter.id)?.envKey, adapter.id).toBe(adapter.envKey);
     }

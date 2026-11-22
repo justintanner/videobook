@@ -13,7 +13,10 @@ import { requireApiKey } from "../api-key.js";
 import { IMAGE_EDIT_MODELS, type ImageEditModelInfo } from "../image-edit-models.js";
 import { adapterFor } from "../media/adapters/index.js";
 import { downloadMachGenOutput, machgenProvider } from "../media/adapters/machgen.js";
+import { runGoogleImage } from "../media/adapters/google.js";
+import { runGoogleFlowImage } from "../media/adapters/googleflow.js";
 import { runNunchuxImage } from "../media/adapters/nunchux.js";
+import { runOpenAiImage } from "../media/adapters/openai.js";
 import { WAVESPEED_FAILED_STATUSES, wavespeedProvider } from "../media/adapters/wavespeed.js";
 import { resolveModel } from "../media/descriptor.js";
 import { providerEndpoints } from "../media/endpoints.js";
@@ -159,9 +162,12 @@ function falResultImageUrls(resultObject: Record<string, unknown>): string[] {
 
 function optionsFor(model: ResolvedModel, input: ImageEditRequestInput): Record<string, unknown> {
   const options: Record<string, unknown> = {};
-  const aspect = model.options.find((option) => option.name === "aspect_ratio");
+  const aspect = model.options.find((option) => option.name === "aspect_ratio" || option.name === "aspectRatio");
   const closest = closestAspectRatio(input.width, input.height);
-  if (aspect?.enumValues.includes(closest)) options.aspect_ratio = closest;
+  if (aspect?.enumValues.includes(closest)) options[aspect.name] = closest;
+  const size = model.options.find((option) => option.name === "size");
+  const openAiSize = input.width > input.height ? "1536x1024" : input.width < input.height ? "1024x1536" : "1024x1024";
+  if (size?.enumValues.includes(openAiSize)) options.size = openAiSize;
   const format = model.options.find((option) => option.name === "output_format");
   if (format?.enumValues.includes("png")) options.output_format = "png";
   return options;
@@ -418,6 +424,42 @@ function nunchuxRunner(model: ResolvedModel): CatalogEditRunner {
   };
 }
 
+function openAiRunner(model: ResolvedModel): CatalogEditRunner {
+  return {
+    submit: async (engine, request, signal) => {
+      const result = await runOpenAiImage(engine, model.apiId, request, signal);
+      return { kind: "done", taskId: result.taskId, images: await pngImages(result.outputs.map((output) => output.bytes)) };
+    },
+    awaitResult: async (taskId) => {
+      throw new Error(`OpenAI edit ${taskId} has no task to resume; run the edit again`);
+    },
+  };
+}
+
+function googleRunner(model: ResolvedModel): CatalogEditRunner {
+  return {
+    submit: async (engine, request, signal) => {
+      const result = await runGoogleImage(engine, model.apiId, request, signal);
+      return { kind: "done", taskId: result.taskId, images: await pngImages(result.outputs.map((output) => output.bytes)) };
+    },
+    awaitResult: async (taskId) => {
+      throw new Error(`Google edit ${taskId} has no task to resume; run the edit again`);
+    },
+  };
+}
+
+function googleFlowRunner(model: ResolvedModel): CatalogEditRunner {
+  return {
+    submit: async (_engine, request, signal) => {
+      const result = await runGoogleFlowImage(model.apiId, request, signal);
+      return { kind: "done", taskId: result.taskId, images: await downloadResultImages(result.urls, signal, `${model.id} edit`) };
+    },
+    awaitResult: async (taskId) => {
+      throw new Error(`Google Flow edit ${taskId} has no task to resume; run the edit again`);
+    },
+  };
+}
+
 function catalogImageEditAdapter(
   model: ResolvedModel,
   info: ImageEditModelInfo,
@@ -482,6 +524,12 @@ function adapterForEditModel(info: ImageEditModelInfo): ImageEditAdapter {
       return catalogImageEditAdapter(model, info, machgenRunner(model));
     case "nunchux":
       return catalogImageEditAdapter(model, info, nunchuxRunner(model));
+    case "openai":
+      return catalogImageEditAdapter(model, info, openAiRunner(model));
+    case "google":
+      return catalogImageEditAdapter(model, info, googleRunner(model));
+    case "googleflow":
+      return catalogImageEditAdapter(model, info, googleFlowRunner(model));
   }
 }
 

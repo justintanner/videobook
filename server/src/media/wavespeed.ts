@@ -31,11 +31,15 @@ import {
   WaveSpeedHeygenVideo1p0ImageToVideoRequestSchema,
   WaveSpeedHeygenVideo1p0ReferenceToVideoRequestSchema,
   WaveSpeedHeygenVideo1p0TextToVideoRequestSchema,
+  WaveSpeedKwaivgiKlingImageV4p0EditRequestSchema,
+  WaveSpeedKwaivgiKlingImageV4p0TextToImageRequestSchema,
   WaveSpeedKwaivgiKlingVideoO3ProVideoEditRequestSchema,
   WaveSpeedMinimaxH3ImageToVideoRequestSchema,
   WaveSpeedMinimaxH3ReferenceToVideoRequestSchema,
   WaveSpeedMinimaxH3TextToVideoRequestSchema,
+  WaveSpeedOpenaiGptImage2p5FlareEditRequestSchema,
   WaveSpeedOpenaiGptImage2p5FlareTextToImageRequestSchema,
+  WaveSpeedOpenaiGptImage2p5SunburstEditRequestSchema,
   WaveSpeedOpenaiGptImage2p5SunburstTextToImageRequestSchema,
   WaveSpeedOpenaiGptImage2p6FlareEditRequestSchema,
   WaveSpeedOpenaiGptImage2p6FlareTextToImageRequestSchema,
@@ -178,8 +182,12 @@ const WAVESPEED_ENDPOINTS: Readonly<Record<string, WaveSpeedEndpoint>> = {
   "openai/gpt-image-2.6-flare/text-to-image": endpoint("GPT Image 2.6 Flare", "openai.gptImage2p6Flare.textToImage", WaveSpeedOpenaiGptImage2p6FlareTextToImageRequestSchema, GPT_IMAGE_26_FLARE),
   "openai/gpt-image-2.6-flare/edit": endpoint("GPT Image 2.6 Flare", "openai.gptImage2p6Flare.edit", WaveSpeedOpenaiGptImage2p6FlareEditRequestSchema, GPT_IMAGE_26_FLARE_EDIT),
   "openai/gpt-image-2.5-sunburst/text-to-image": endpoint("GPT Image 2.5 Sunburst", "openai.gptImage2p5Sunburst.textToImage", WaveSpeedOpenaiGptImage2p5SunburstTextToImageRequestSchema),
+  "openai/gpt-image-2.5-sunburst/edit": endpoint("GPT Image 2.5 Sunburst", "openai.gptImage2p5Sunburst.edit", WaveSpeedOpenaiGptImage2p5SunburstEditRequestSchema),
   "openai/gpt-image-2.5-flare/text-to-image": endpoint("GPT Image 2.5 Flare", "openai.gptImage2p5Flare.textToImage", WaveSpeedOpenaiGptImage2p5FlareTextToImageRequestSchema),
+  "openai/gpt-image-2.5-flare/edit": endpoint("GPT Image 2.5 Flare", "openai.gptImage2p5Flare.edit", WaveSpeedOpenaiGptImage2p5FlareEditRequestSchema),
   "openai/gpt-image-2/text-to-image": endpoint("GPT Image 2", "openai.gptImage2.textToImage", WaveSpeedOpenaiGptImage2TextToImageRequestSchema),
+  "kwaivgi/kling-image-v4.0/text-to-image": endpoint("Kling 4.0 Image", "kwaivgi.klingImageV4p0.textToImage", WaveSpeedKwaivgiKlingImageV4p0TextToImageRequestSchema),
+  "kwaivgi/kling-image-v4.0/edit": endpoint("Kling 4.0 Image", "kwaivgi.klingImageV4p0.edit", WaveSpeedKwaivgiKlingImageV4p0EditRequestSchema),
   "google/nano-banana-2.1/text-to-image": endpoint("Nano Banana 2.1", "google.nanoBanana2p1.textToImage", WaveSpeedGoogleNanoBanana2p1TextToImageRequestSchema),
   "google/nano-banana-2.1/edit": endpoint("Nano Banana 2.1", "google.nanoBanana2p1.edit", WaveSpeedGoogleNanoBanana2p1EditRequestSchema),
   "x-ai/grok-imagine-image-v2.0/text-to-image": endpoint("Grok Imagine Image 2.0", "xAi.grokImagineImageV2p0.textToImage", WaveSpeedXAiGrokImagineImageV2p0TextToImageRequestSchema),
@@ -321,6 +329,7 @@ function guideFor(apiId: string): PromptGuide | undefined {
 }
 
 function dialectFor(apiId: string, media: Media, refs: Partial<Record<RefRole, string | null>>): PromptDialect {
+  if (apiId === "kwaivgi/kling-image-v4.0/edit") return "kling_omni";
   if (media === "image") return "natural";
   if (apiId.startsWith("bytedance/")) return "seedance";
   if (apiId.startsWith("kwaivgi/kling-video-o3")) return "kling_omni";

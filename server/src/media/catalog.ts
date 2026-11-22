@@ -1,6 +1,10 @@
 import { MiniMaxH3ReferenceClipDurationMs } from "@apicity/kie/zod";
 import { LIGHTNING_SCENE_OPTIONS, LIGHTNING_VIDEO_OPTIONS } from "../lightning-defaults.js";
+import { ALIBABA_VIDEO_MODEL_ENTRIES } from "./alibaba.js";
+import { GOOGLE_MODEL_ENTRIES } from "./google.js";
+import { GOOGLEFLOW_MODEL_ENTRIES } from "./googleflow.js";
 import { MACHGEN_TOPAZ_MODELS } from "./machgen.js";
+import { OPENAI_IMAGE_MODEL_ENTRIES } from "./openai.js";
 import { WAVESPEED_MODEL_ENTRIES } from "./wavespeed.js";
 import { NUNCHUX_MODEL_ENTRIES } from "./nunchux.js";
 import { H3_REFRAME_DESCRIPTION } from "./reframe-video.js";
@@ -300,6 +304,9 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:bytedance/seedream/v5/flash/text-to-image", family: "Seedream 5 Flash", media: "image", operations: ["text_to_image"] },
   { id: "fal:bytedance/seedream/v5/flash/edit", family: "Seedream 5 Flash", media: "image", operations: ["edit_image"] },
   { id: "fal:bytedance/seedream/v5/flash/layerize", family: "Seedream 5 Flash Layers", media: "image", operations: ["layer_image"] },
+  { id: "fal:bytedance/seedream/v5.5/edit", family: "Seedream 5.5", media: "image", operations: ["edit_image"], dialect: "natural" },
+  { id: "fal:kling/v4/text-to-image", family: "Kling 4.0 Image", media: "image", operations: ["text_to_image"] },
+  { id: "fal:kling/v4/image-to-image", family: "Kling 4.0 Image", media: "image", operations: ["edit_image"], dialect: "seedance" },
   { id: "fal:ideogram/v4.5", media: "image", operations: ["text_to_image"] },
   { id: "fal:ideogram/v4.5/edit", media: "image", operations: ["edit_image"], refs: { image: ["image_url", "reference_image_urls"] } },
   { id: "fal:blackforestlabs/flux-3/text-to-image", media: "image", operations: ["text_to_image"] },
@@ -362,8 +369,8 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
     ],
   },
   { id: "kie:kling-3.0/motion-control", media: "video", operations: ["motion_control"], guide: "kling30", dialect: "natural", defaults: { mode: "720p" }, outputLength: "video" },
-  { id: "kie:kling-4.0/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "kling4" },
-  { id: "kie:kling-4.0/keyframe-to-video", media: "video", operations: ["image_to_video"], dialect: "kling4_keyframes", refs: { image: "keyframe_urls" }, inputLimits: [{ kind: "max", roles: [{ role: "first_frame" }, { role: "image" }, { role: "last_frame" }], max: { option: "duration", offset: 1, cap: 10 }, message: "Frames and keyframes together can't exceed the duration plus one, 10 at most" }] },
+  { id: "kie:kling-4.0/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "kling4", defaults: { resolution: "1080p" }, pinnedDefaults: ["resolution"] },
+  { id: "kie:kling-4.0/keyframe-to-video", media: "video", operations: ["image_to_video"], dialect: "kling4_keyframes", refs: { image: "keyframe_urls" }, defaults: { resolution: "1080p" }, pinnedDefaults: ["resolution"], inputLimits: [{ kind: "max", roles: [{ role: "first_frame" }, { role: "image" }, { role: "last_frame" }], max: { option: "duration", offset: 1, cap: 10 }, message: "Frames and keyframes together can't exceed the duration plus one, 10 at most" }] },
   { id: "kie:kling-4.0/flash-reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "kling4", rules: KLING_40_FLASH_REFERENCE_CLIPS },
   { id: "kie:kling-4.0/flash-keyframe-to-video", media: "video", operations: ["image_to_video"], dialect: "kling4_keyframes" },
   { id: "kie:gemini-omni-video", media: "video", operations: ["image_to_video", "edit_video"], dialect: "natural_source_video", defaults: { duration: "8" }, modes: [{ id: "i2v", label: "Image to video", roles: ["image"] }, { id: "v2v", label: "Edit video", roles: ["video", "image"], requireAny: ["video"] }], refItem: { video: { start: 0, ends: 8 } }, inputLimits: [GEMINI_OMNI_QUOTA], aliases: { clip_start: "video_list.0.start", clip_end: "video_list.0.ends" } },
@@ -602,7 +609,6 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   machgenModel("HappyHorse-1.0", "HappyHorse 1.0", MACHGEN_IMAGE_REFERENCES),
   machgenModel("Grok-Imagine-Video", "Grok Imagine Video", {}, { guide: "grok_imagine" }),
   machgenModel("Gemini-Omni-1.2-Flash", "Gemini Omni 1.2 Flash", { frames: { ...MACHGEN_FRAMES, defaults: { duration: 10 } }, references: ["image", "video"] }, { rules: machgenClips(15) }),
-  machgenModel("MiniMax-H3-Omni", "MiniMax H3 Omni", { text: false, references: MACHGEN_MEDIA, requireAny: ["image", "video"] }, { hidden: true, rules: machgenClips(15) }),
   machgenModel("Wan2.2-A14B", "Wan 2.2 A14B", { frames: MACHGEN_FIRST_FRAME }, { hidden: true }),
   machgenModel("Vidu-Q3-Turbo", "Vidu Q3 Turbo", MACHGEN_VIDU_Q3, { hidden: true }),
   machgenModel("Vidu-Q3-Pro", "Vidu Q3 Pro", { ...MACHGEN_VIDU_Q3, referenceDefaults: { resolution: "720p" } }, { hidden: true }),
@@ -634,6 +640,10 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   })),
   ...WAVESPEED_MODEL_ENTRIES,
   ...NUNCHUX_MODEL_ENTRIES,
+  ...ALIBABA_VIDEO_MODEL_ENTRIES,
+  ...OPENAI_IMAGE_MODEL_ENTRIES,
+  ...GOOGLE_MODEL_ENTRIES,
+  ...GOOGLEFLOW_MODEL_ENTRIES,
 
   { id: "elevenlabs:text-to-speech", media: "audio", operations: ["speech"], title: "ElevenLabs Text to Speech", defaults: { model_id: "eleven_multilingual_v2" } },
   { id: "elevenlabs:sound-generation", media: "audio", operations: ["sfx"], title: "ElevenLabs Sound Effects" },

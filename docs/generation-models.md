@@ -20,6 +20,8 @@ WaveSpeed serves images as well as video. Its GPT Image 2.6 Sunburst and Flare e
 
 Nunchux (`NUNCHUX_API_KEY`) serves Nano Banana 2.1 text-to-image and edits of up to 14 images, Wan 3.0 text, frames and references, Wan 2.7 and HappyHorse 1.0 video edits, Seedance 2.5 and 2.0 text, frames and references, and MiniMax H3 text, frames and references. A Nano Banana edit sends its images inline, so it takes images from this book and refuses a URL. Frames and reference media never mix in one request. An edit follows its source video's length unless a duration is set, and is priced on that length. MiniMax H3 takes an aspect ratio for text-to-video only; frames and references keep their source shape.
 
+Alibaba (`DASHSCOPE_API_KEY`) serves Wan 3.0, Wan 3.0 Prime and HappyHorse 1.0 Video Edit through DashScope International async video synthesis alongside Qwen Image 2.0 Pro and Qwen Image Edit Plus. OpenAI (`OPENAI_API_KEY`) serves GPT Image 2.6 Sunburst and Flare, GPT Image 2.5 Sunburst and Flare and GPT Image 2 directly for text-to-image and multipart edits of up to 16 book images plus an optional Mask or Markup image. Google (`GOOGLE_API_KEY` for Nano Banana 2.1; `GOOGLE_SERVICE_ACCOUNT_JSON` for Gemini Omni 1.2 Flash and 1.1 Flash Preview, with `GOOGLE_CLOUD_PROJECT` or the service account's `project_id`) serves synchronous Vertex AI image and video generation with inline book media. Google Flow (`GOOGLE_FLOW_API_KEY`) serves Nano Banana 2.1 images plus Gemini Omni 1.2 Flash and 1.1 Flash async videos, uploading book media to Google Flow assets first.
+
 Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: MAI-Image-2.6, Utopai X. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
 
 | Known endpoint gap | Reason |
@@ -33,15 +35,10 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | fal:openai.gptImage2p5.flare.edit | This exact endpoint is not in the Videobook catalog. |
 | kie:bytedance/seedance-2 | This exact endpoint is not in the Videobook catalog. |
 | kie:google/gemini-omni-flash-1-1 | Kie serves the newer Gemini Omni 1.2 Flash as kie:google/gemini-omni-flash-1-2; Gemini Omni 1.1 edits are catalogued on fal and WaveSpeed. |
-| googleflow:nano-banana-2 | Google Flow is not a catalog provider. |
-| googleflow:omni-flash | Google Flow is not a catalog provider. |
 | kie:wan/2-7-videoedit | This exact endpoint is not in the Videobook catalog. |
 | alibaba:wan2.7-videoedit | This exact endpoint is not in the Videobook catalog. |
-| openai:gpt-image-2 | OpenAI is not a catalog provider. |
-| openai:gpt-image-2.5-flare | OpenAI is not a catalog provider. |
-| openai:gpt-image-2.5-sunburst | OpenAI is not a catalog provider. |
 
-- Models: 420
+- Models: 440
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -120,6 +117,9 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `fal:bytedance/seedream/v5/flash/text-to-image` | Bytedance Seedream V5 Flash Text To Image | image | text_to_image | none |  | visible |
 | `fal:bytedance/seedream/v5/flash/edit` | Bytedance Seedream V5 Flash Edit | image | edit_image | image 1-n |  | visible |
 | `fal:bytedance/seedream/v5/flash/layerize` | Bytedance Seedream V5 Flash Layerize | image | layer_image | image 1-1 |  | visible |
+| `fal:bytedance/seedream/v5.5/edit` | Seedream 5.5 Edit | image | edit_image | image 1-n |  | visible |
+| `fal:kling/v4/text-to-image` | Kling 4.0 Image | image | text_to_image | none |  | visible |
+| `fal:kling/v4/image-to-image` | Kling 4.0 Image | image | edit_image | image 1-10 |  | visible |
 | `fal:ideogram/v4.5` | Ideogram 4.5 | image | text_to_image | none |  | visible |
 | `fal:ideogram/v4.5/edit` | Ideogram 4.5 Edit | image | edit_image | image 1-5 |  | visible |
 | `fal:blackforestlabs/flux-3/text-to-image` | FLUX 3 Image | image | text_to_image | none |  | visible |
@@ -370,7 +370,6 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `machgen:HappyHorse-1.0` | HappyHorse 1.0 (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, image 0-9 | t2v, i2v, r2v | visible |
 | `machgen:Grok-Imagine-Video` | Grok Imagine Video (MachGen) | video | text_to_video | none |  | visible |
 | `machgen:Gemini-Omni-1.2-Flash` | Gemini Omni 1.2 Flash (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-6, video 0-3 | t2v, i2v, r2v | visible |
-| `machgen:MiniMax-H3-Omni` | MiniMax H3 Omni (MachGen) | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | hidden |
 | `machgen:Wan2.2-A14B` | Wan 2.2 A14B (MachGen) | video | text_to_video, image_to_video | first_frame 0-1 | t2v, i2v | hidden |
 | `machgen:Vidu-Q3-Turbo` | Vidu Q3 Turbo (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-7 | t2v, i2v, r2v | hidden |
 | `machgen:Vidu-Q3-Pro` | Vidu Q3 Pro (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-7 | t2v, i2v, r2v | hidden |
@@ -388,8 +387,12 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `wavespeed:openai/gpt-image-2.6-flare/text-to-image` | GPT Image 2.6 Flare (WaveSpeed) | image | text_to_image | none |  | visible |
 | `wavespeed:openai/gpt-image-2.6-flare/edit` | GPT Image 2.6 Flare Edit (WaveSpeed) | image | edit_image | image 1-16 |  | visible |
 | `wavespeed:openai/gpt-image-2.5-sunburst/text-to-image` | GPT Image 2.5 Sunburst (WaveSpeed) | image | text_to_image | none |  | visible |
+| `wavespeed:openai/gpt-image-2.5-sunburst/edit` | GPT Image 2.5 Sunburst Edit (WaveSpeed) | image | edit_image | image 1-16 |  | visible |
 | `wavespeed:openai/gpt-image-2.5-flare/text-to-image` | GPT Image 2.5 Flare (WaveSpeed) | image | text_to_image | none |  | visible |
+| `wavespeed:openai/gpt-image-2.5-flare/edit` | GPT Image 2.5 Flare Edit (WaveSpeed) | image | edit_image | image 1-16 |  | visible |
 | `wavespeed:openai/gpt-image-2/text-to-image` | GPT Image 2 (WaveSpeed) | image | text_to_image | none |  | visible |
+| `wavespeed:kwaivgi/kling-image-v4.0/text-to-image` | Kling 4.0 Image (WaveSpeed) | image | text_to_image | none |  | visible |
+| `wavespeed:kwaivgi/kling-image-v4.0/edit` | Kling 4.0 Image Edit (WaveSpeed) | image | edit_image | image 1-10 |  | visible |
 | `wavespeed:google/nano-banana-2.1/text-to-image` | Nano Banana 2.1 (WaveSpeed) | image | text_to_image | none |  | visible |
 | `wavespeed:google/nano-banana-2.1/edit` | Nano Banana 2.1 Edit (WaveSpeed) | image | edit_image | image 1-14 |  | visible |
 | `wavespeed:x-ai/grok-imagine-image-v2.0/text-to-image` | Grok Imagine Image 2.0 (WaveSpeed) | image | text_to_image | none |  | visible |
@@ -442,6 +445,20 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `nunchux:dreamina-seedance-2-5-260628` | Seedance 2.5 (Nunchux) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-30, video 0-10, audio 0-10 | t2v, i2v, r2v | visible |
 | `nunchux:dreamina-seedance-2-0-260128` | Seedance 2.0 (Nunchux) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-3 | t2v, i2v, r2v | visible |
 | `nunchux:MiniMax-H3` | MiniMax H3 (Nunchux) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-1 | t2v, i2v, r2v | visible |
+| `alibaba:wan3.0-video` | Wan 3.0 (Alibaba) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, last_frame 0-1, image 0-10, video 0-5, audio 0-5 | t2v, i2v, r2v, v2v | visible |
+| `alibaba:wan3.0-video-prime` | Wan 3.0 Prime (Alibaba) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, last_frame 0-1, image 0-10, video 0-5, audio 0-5 | t2v, i2v, r2v, v2v | visible |
+| `alibaba:happyhorse-1.0-video-edit` | HappyHorse 1.0 Video Edit (Alibaba) | video | edit_video | image 0-5, video 1-1 |  | visible |
+| `openai:gpt-image-2.6-sunburst` | GPT Image 2.6 Sunburst (OpenAI) | image | text_to_image, edit_image | image 0-16 |  | visible |
+| `openai:gpt-image-2.6-flare` | GPT Image 2.6 Flare (OpenAI) | image | text_to_image, edit_image | image 0-16 |  | visible |
+| `openai:gpt-image-2.5-sunburst` | GPT Image 2.5 Sunburst (OpenAI) | image | text_to_image, edit_image | image 0-16 |  | visible |
+| `openai:gpt-image-2.5-flare` | GPT Image 2.5 Flare (OpenAI) | image | text_to_image, edit_image | image 0-16 |  | visible |
+| `openai:gpt-image-2` | GPT Image 2 (OpenAI) | image | text_to_image, edit_image | image 0-16 |  | visible |
+| `google:gemini-nano-banana-2.1` | Nano Banana 2.1 (Google) | image | text_to_image, edit_image | image 0-14 |  | visible |
+| `google:gemini-omni-1.2-flash` | Gemini Omni 1.2 Flash (Google) | video | text_to_video, image_to_video, reference_to_video, edit_video | image 0-10, video 0-3 | t2v, r2v, v2v | visible |
+| `google:gemini-omni-1.1-flash-preview` | Gemini Omni 1.1 Flash (Google) | video | text_to_video, image_to_video, reference_to_video, edit_video | image 0-10, video 0-3 | t2v, r2v, v2v | visible |
+| `googleflow:omni-flash-1.2` | Gemini Omni 1.2 Flash (Google Flow) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, last_frame 0-1, image 0-10, video 0-1, audio 0-5 | t2v, i2v, r2v, v2v | visible |
+| `googleflow:omni-flash` | Gemini Omni 1.1 Flash (Google Flow) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, last_frame 0-1, image 0-7, video 0-1, audio 0-5 | t2v, i2v, r2v, v2v | visible |
+| `googleflow:nano-banana-2` | Nano Banana 2.1 (Google Flow) | image | text_to_image, edit_image | image 0-10 |  | visible |
 | `elevenlabs:text-to-speech` | ElevenLabs Text to Speech | audio | speech | none |  | visible |
 | `elevenlabs:sound-generation` | ElevenLabs Sound Effects | audio | sfx | none |  | visible |
 | `elevenlabs:music` | ElevenLabs Music | audio | music | none |  | visible |

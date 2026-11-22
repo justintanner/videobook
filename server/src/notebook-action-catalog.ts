@@ -8,7 +8,7 @@ import type {
 import { notebookCellTableRows } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { modelFrontierRankings, type ModelFrontierRanking } from "./media/frontier.js";
-import { PROVIDER_ENV_KEYS } from "./media/adapters/index.js";
+import { providerEnvKey } from "./media/adapters/index.js";
 import { listModels } from "./media/listing.js";
 import { resolveModel, tryResolveModel } from "./media/descriptor.js";
 import { modelFamily, type ModelFamily, type ModelFamilyFields } from "./media/model-family.js";
@@ -343,6 +343,9 @@ const providerLabels: Record<ResolvedModel["provider"], string> = {
   machgen: "MachGen",
   wavespeed: "WaveSpeed",
   nunchux: "Nunchux",
+  openai: "OpenAI",
+  google: "Google",
+  googleflow: "Google Flow",
 };
 
 function hasDualFrame(model: ResolvedModel): boolean {
@@ -379,7 +382,7 @@ function generationAction(model: ResolvedModel): NotebookAction {
     inputContract: notebookGenerationInputContract(model),
     controls: controlsForModel(model),
     prompt: model.promptField ? { field: model.promptField, required: model.promptRequired } : null,
-    available: Boolean(process.env[PROVIDER_ENV_KEYS[model.provider]]?.trim()),
+    available: Boolean(process.env[providerEnvKey(model)]?.trim()),
     frontier: modelFrontierRankings(model.id),
   };
 }

@@ -1,5 +1,5 @@
 import { modelFrontierRankings, type ModelFrontierRanking } from "./frontier.js";
-import { PROVIDER_ENV_KEYS } from "./adapters/index.js";
+import { providerEnvKey } from "./adapters/index.js";
 import { MODEL_ENTRIES } from "./catalog.js";
 import { resolveEntry } from "./descriptor.js";
 import { modelFamily, type ModelFamily } from "./model-family.js";
@@ -64,7 +64,7 @@ export function modelListing(model: ResolvedModel): ModelListing {
     modes: model.modes,
     options: model.options,
     hidden: modelIsHidden(model.entry),
-    available: Boolean(process.env[PROVIDER_ENV_KEYS[model.provider]]?.trim()),
+    available: Boolean(process.env[providerEnvKey(model)]?.trim()),
     frontier: modelFrontierRankings(model.id),
   };
 }

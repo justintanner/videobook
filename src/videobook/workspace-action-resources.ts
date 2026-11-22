@@ -27,6 +27,9 @@ const PROVIDER_LABELS: Readonly<Record<string, string>> = {
   machgen: 'MachGen',
   wavespeed: 'WaveSpeed',
   nunchux: 'Nunchux',
+  openai: 'OpenAI',
+  google: 'Google',
+  googleflow: 'Google Flow',
   local: 'Local',
 }
 

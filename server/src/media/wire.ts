@@ -25,9 +25,13 @@ import {
   ElevenLabsTextToSpeechRequestSchema,
   ElevenLabsVideoToMusicRequestSchema,
 } from "@apicity/elevenlabs/zod";
+import { alibabaVideoWire } from "./alibaba.js";
+import { googleWire } from "./google.js";
+import { googleFlowWire } from "./googleflow.js";
 import { machgenWire } from "./machgen.js";
 import { wavespeedWire } from "./wavespeed.js";
 import { nunchuxWire } from "./nunchux.js";
+import { openaiImageWire } from "./openai.js";
 import { storedImageFormats } from "./stored-image-formats.js";
 import type { ParsedModelId, WireSpec } from "./types.js";
 import { evenKeyframeSeconds } from "./item-param-defaults.js";
@@ -251,6 +255,7 @@ function markupWithoutMask(request: AnyObject): AnyObject {
 }
 
 const MAI_IMAGE_27 = "microsoft/mai-image-2.7/";
+const SEEDREAM_55_EDIT = "bytedance/seedream/v5.5/edit";
 
 function transparentNeedsAlpha(request: AnyObject): AnyObject {
   return request.superRefine((value, ctx) => {
@@ -263,7 +268,7 @@ function transparentNeedsAlpha(request: AnyObject): AnyObject {
 
 function falInput(apiId: string, request: AnyObject): AnyObject {
   if (LUMA_RAY_32.has(apiId)) return lumaRayInput(request);
-  if (apiId.startsWith(MAI_IMAGE_27)) return transparentNeedsAlpha(request);
+  if (apiId.startsWith(MAI_IMAGE_27) || apiId === SEEDREAM_55_EDIT) return transparentNeedsAlpha(request);
   if (apiId === GEMINI_OMNI_12_FRAMES) return geminiOmniFramesInput(request);
   return apiId.startsWith(GPT_IMAGE_26) ? markupWithoutMask(request) : request;
 }
@@ -390,7 +395,7 @@ export function wireSpec(parsed: ParsedModelId): WireSpec | null {
     case "xai":
       return xaiWire(parsed.apiId);
     case "alibaba":
-      return alibabaWire(parsed.apiId);
+      return alibabaVideoWire(parsed.apiId) ?? alibabaWire(parsed.apiId);
     case "elevenlabs":
       return elevenLabsWire(parsed.apiId);
     case "machgen":
@@ -399,5 +404,11 @@ export function wireSpec(parsed: ParsedModelId): WireSpec | null {
       return wavespeedWire(parsed.apiId);
     case "nunchux":
       return nunchuxWire(parsed.apiId);
+    case "openai":
+      return openaiImageWire(parsed.apiId);
+    case "google":
+      return googleWire(parsed.apiId);
+    case "googleflow":
+      return googleFlowWire(parsed.apiId);
   }
 }

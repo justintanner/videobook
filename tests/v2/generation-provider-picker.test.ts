@@ -50,7 +50,7 @@ describe('generation provider picker', () => {
     expect(groups.map(group => group.label)).toEqual(['Frontier models', 'Other models'])
     const [frontier] = groups
     expect(frontier!.rows[0]).toMatchObject({ family: { id: sunburst, title: 'GPT Image 2.6 Sunburst' }, ranking: { type: 't2i', rank: 1 }, available: true })
-    expect(frontier!.rows[0]!.actions.map(action => action.provider).sort()).toEqual(['fal', 'fal', 'kie', 'kie', 'machgen', 'nunchux', 'wavespeed', 'wavespeed'])
+    expect(frontier!.rows[0]!.actions.map(action => action.provider).sort()).toEqual(['fal', 'fal', 'kie', 'kie', 'machgen', 'nunchux', 'openai', 'wavespeed', 'wavespeed'])
     expect(frontier!.rows.map(row => row.ranking!.rank)).toEqual(frontier!.rows.map(row => row.ranking!.rank).sort((left, right) => left - right))
     const ids = groups.flatMap(group => group.rows.map(row => row.family.id))
     expect(ids).toEqual([...new Set(ids)])
@@ -76,6 +76,7 @@ describe('generation provider picker', () => {
       ['Kie', 'kie:gpt-image-2-6/sunburst-text-to-image'],
       ['MachGen', 'machgen:GPT-Image-2.6-Sunburst'],
       ['Nunchux', 'nunchux:gpt-image-2.6-sunburst'],
+      ['OpenAI', 'openai:gpt-image-2.6-sunburst'],
       ['WaveSpeed', 'wavespeed:openai/gpt-image-2.6-sunburst/text-to-image'],
     ])
     for (const option of text) {
@@ -89,6 +90,7 @@ describe('generation provider picker', () => {
       ['Kie', 'kie:gpt-image-2-6/sunburst-image-to-image'],
       ['MachGen', 'machgen:GPT-Image-2.6-Sunburst'],
       ['Nunchux', 'nunchux:gpt-image-2.6-sunburst'],
+      ['OpenAI', 'openai:gpt-image-2.6-sunburst'],
       ['WaveSpeed', 'wavespeed:openai/gpt-image-2.6-sunburst/edit'],
     ])
     expect(edit.every(option => option.compatible && option.ranking?.type === 'i2i')).toBe(true)
@@ -118,7 +120,7 @@ describe('generation provider picker', () => {
       .toBe('fal:google/nano-banana-2.1')
     const falGone = unavailable(imageActions, action => action.provider === 'fal')
     expect(actionForFamily(falGone, 'image:nano-banana-2-1', { ...options, currentProvider: 'fal' })?.model)
-      .toBe('kie:nano-banana-2-1')
+      .toBe('google:gemini-nano-banana-2.1')
     const ranksOnlyOnFal = imageActions.map(action => action.family.id === 'image:nano-banana-2-1' && action.provider !== 'fal' ? { ...action, frontier: [] } : action)
     expect(actionForFamily(ranksOnlyOnFal, 'image:nano-banana-2-1', { ...options, currentProvider: 'xai' })?.model)
       .toBe('fal:google/nano-banana-2.1')

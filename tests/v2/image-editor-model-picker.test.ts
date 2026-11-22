@@ -187,7 +187,7 @@ describe('image editor model picker', () => {
       const response = await client.callTool({ name: 'list_image_edit_models', arguments: { book_id: bookId } })
       expect(response.isError).not.toBe(true)
       const catalog = parseImageEditModelCatalog(JSON.parse((response.content as Array<{ text: string }>)[0]!.text))
-      expect(catalog.models).toHaveLength(31)
+      expect(catalog.models).toHaveLength(40)
       const html = renderEditor({ imageEditModels: catalog.models, defaultImageEditModelId: 'machgen:GPT-Image-2.6-Sunburst' })
       expect(selectMarkup(html, 'Generation model')).toMatch(/value="image:gpt-image-2-6-sunburst"[^>]*selected/)
       const provider = selectMarkup(html, 'Generation provider')
@@ -198,7 +198,8 @@ describe('image editor model picker', () => {
         'wavespeed:openai/gpt-image-2.6-sunburst/edit',
         'machgen:GPT-Image-2.6-Sunburst',
         'nunchux:gpt-image-2.6-sunburst',
-      ].map((id) => optionText(provider, id).split(' · ')[0])).toEqual(['Kie', 'Fal', 'WaveSpeed', 'MachGen', 'Nunchux'])
+        'openai:gpt-image-2.6-sunburst',
+      ].map((id) => optionText(provider, id).split(' · ')[0])).toEqual(['Kie', 'Fal', 'WaveSpeed', 'MachGen', 'Nunchux', 'OpenAI'])
     } finally {
       await client.close()
       await rm(root, { recursive: true, force: true, maxRetries: 3 })

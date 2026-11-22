@@ -162,11 +162,23 @@ async function resolveNunchuxSource(engine: Engine, model: ResolvedModel, refs: 
   return { ok: true, refs, sourceVideoIds: [], costHints, options: {} };
 }
 
+function externalRefUrl(refs: MediaRefs): string | undefined {
+  for (const list of Object.values(refs)) {
+    const found = list?.find((raw) => /^https?:\/\//u.test(raw));
+    if (found) return found;
+  }
+  return undefined;
+}
+
 export async function resolveGenerationSource(engine: Engine, model: ResolvedModel, refs: MediaRefs, options: Record<string, unknown> = {}): Promise<GenerationSource> {
   if (model.provider === "machgen" && machgenTopaz(model.apiId)) return resolveMachGenTopaz(engine, model, refs, options);
   const upscale = model.provider === "machgen" ? machgenUpscale(model.apiId) : null;
   if (upscale) return resolveMachGenUpscale(engine, model, upscale, refs);
   if (model.provider === "nunchux") return resolveNunchuxSource(engine, model, refs);
+  if (model.provider === "openai" || model.provider === "google" || model.provider === "googleflow") {
+    const url = externalRefUrl(refs);
+    if (url) return refused(`${model.title} takes media from this book, not a URL (${url})`);
+  }
   const taskSourceError = await kieTaskSourceError(engine, model.id, options);
   if (taskSourceError) return refused(taskSourceError);
   const costHints = model.id === KIE_IMAGE_UPSCALE ? await sourceImageSize(engine, refs) : {};

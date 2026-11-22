@@ -4,7 +4,7 @@ import { MODEL_ENTRIES } from "./catalog.js";
 import { frontierCatalogId, modelFrontierRankings } from "./frontier.js";
 import { FRONTIER_CATALOG_GAPS } from "./frontier-gaps.js";
 import { listModels, modelListing } from "./listing.js";
-import { PROVIDER_ENV_KEYS } from "./adapters/index.js";
+import { providerEnvKey } from "./adapters/index.js";
 
 const rows = FRONTIER_TYPES.flatMap(({ type }) => frontier(type));
 
@@ -67,7 +67,7 @@ describe("frontier catalog coverage", () => {
   it("publishes rankings and current credential availability without hiding catalog entries", () => {
     for (const model of listModels()) {
       const listing = modelListing(model);
-      expect(listing.available).toBe(Boolean(process.env[PROVIDER_ENV_KEYS[model.provider]]?.trim()));
+      expect(listing.available).toBe(Boolean(process.env[providerEnvKey(model)]?.trim()));
       expect(listing.frontier).toEqual(modelFrontierRankings(model.id));
     }
   });

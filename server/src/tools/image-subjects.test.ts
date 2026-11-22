@@ -181,7 +181,15 @@ function stubSubjectProvider(original: Buffer, segmentMapFails = false) {
   };
 }
 
-const CATALOG_EDIT_KEYS = ["MACHGEN_API_KEY", "WAVESPEED_API_KEY", "NUNCHUX_API_KEY"] as const;
+const CATALOG_EDIT_KEYS = [
+  "MACHGEN_API_KEY",
+  "WAVESPEED_API_KEY",
+  "NUNCHUX_API_KEY",
+  "OPENAI_API_KEY",
+  "GOOGLE_API_KEY",
+  "GOOGLE_CLOUD_PROJECT",
+  "GOOGLE_FLOW_API_KEY",
+] as const;
 
 function setProviderKeys(keys: readonly string[], value: string): () => void {
   const saved = new Map(keys.map((key) => [key, process.env[key]]));
@@ -210,6 +218,16 @@ function stubCatalogEditProviders(edited: Buffer) {
       if (url.hostname === "litterbox.catbox.moe") return new Response(uploaded);
       return Response.json(url.hostname === "uguu.se" ? { success: true, files: [{ url: uploaded }] } : { downloadLink: uploaded });
     }
+    if (url.hostname === "api.useapi.net" && method === "POST" && url.pathname === "/v1/google-flow/assets") {
+      uploads += 1;
+      return Response.json({ mediaGenerationId: `gf-asset-${uploads}` });
+    }
+    if (url.href === "https://api.openai.com/v1/images/edits" && method === "POST" && init?.body instanceof FormData) {
+      const form = init.body;
+      const images = [...form.getAll("image[]"), ...form.getAll("image")];
+      submits.push({ url: url.href, body: { model: form.get("model"), prompt: form.get("prompt"), images } });
+      return Response.json({ created: 1795170000, data: [{ b64_json: edited.toString("base64") }] });
+    }
     if (method === "POST" && typeof init?.body === "string") {
       const body = JSON.parse(init.body) as Record<string, unknown>;
       submits.push({ url: url.href, body });
@@ -224,6 +242,18 @@ function stubCatalogEditProviders(edited: Buffer) {
       }
       if (url.href === "https://api.nunchux.com/v2/openai/images/edits") {
         return Response.json({ created: 1795170000, output_format: "png", data: [{ b64_json: edited.toString("base64"), generation_id: id }] });
+      }
+      if (url.hostname === "aiplatform.googleapis.com" && url.pathname.endsWith(":generateContent")) {
+        return Response.json({
+          responseId: id,
+          candidates: [{ content: { parts: [{ inlineData: { mimeType: "image/png", data: edited.toString("base64") } }] } }],
+        });
+      }
+      if (url.href === "https://api.useapi.net/v1/google-flow/images") {
+        return Response.json({
+          jobId: id,
+          media: [{ image: { generatedImage: { fifeUrl: `https://cdn.edit.test/${id}.png` } } }],
+        });
       }
     }
     const prediction = /^\/api\/v3\/predictions\/([^/]+)\/result$/u.exec(url.pathname);
@@ -1883,12 +1913,19 @@ describe("image subject tools", () => {
         if (!notebook.ok) throw new Error(notebook.error.message);
         for (const [index, { origin, images, run }] of runs.entries()) {
           const submitted = stub.submits[index]!.body;
+          const googleParts = Array.isArray(submitted.contents)
+            ? ((submitted.contents as Array<{ parts?: Array<{ inlineData?: unknown }> }>)[0]?.parts ?? []).filter((part) => part.inlineData)
+            : undefined;
+          const googleFlowRefs = Object.keys(submitted).filter((key) => /^reference_\d+$/u.test(key));
           const sent = submitted.images ?? submitted.src_image_urls ?? (Array.isArray(submitted.input)
             ? submitted.input.filter((part: { type: string }) => part.type === "image")
-            : undefined);
+            : googleParts ?? (googleFlowRefs.length > 0 ? googleFlowRefs : undefined));
           expect(sent, `${entry.id} ${origin}`).toHaveLength(images);
           const original = await engine.metadata.artifacts.read<Record<string, unknown>>(run.output_artifact_id, "original");
-          expect(original.ok && original.value).toMatchObject({ origin, model: entry.id, kie_task_id: `edit-${index + 1}` });
+          const expectedTaskId = entry.provider === "openai"
+            ? `${entry.catalogModel.slice("openai:".length)}-1795170000`
+            : `edit-${index + 1}`;
+          expect(original.ok && original.value).toMatchObject({ origin, model: entry.id, kie_task_id: expectedTaskId });
           const payload = await engine.metadata.artifacts.read<Record<string, unknown>>(run.output_artifact_id, "generation-payload");
           expect(payload.ok && payload.value).toMatchObject({ model: entry.id, input: expect.any(Object) });
           expect((await engine.files.read(run.output_artifact_id, "original.png")).ok).toBe(true);
@@ -1898,7 +1935,8 @@ describe("image subject tools", () => {
             inputs: expect.objectContaining({ state: "completed" }),
           });
         }
-        expect(stub.uploadCount()).toBe(entry.provider === "nunchux" ? 0 : 4);
+        const inlineProvider = entry.provider === "nunchux" || entry.provider === "openai" || entry.provider === "google";
+        expect(stub.uploadCount()).toBe(inlineProvider ? 0 : 4);
       } finally {
         stub.restore();
         restoreKeys();
@@ -2123,7 +2161,7 @@ describe("image subject tools", () => {
         default_model: string;
         last_used_model: string | null;
       };
-      expect(catalog.models).toHaveLength(31);
+      expect(catalog.models).toHaveLength(40);
       expect(catalog.models.find((model) => model.id === "flux-3/klein-edit-image")).toMatchObject({
         label: "FLUX 3 Klein Edit", provider: "kie", available: true, max_input_images: 10,
       });
@@ -2144,17 +2182,19 @@ describe("image subject tools", () => {
         expect.objectContaining({ id: "wavespeed:google/nano-banana-2.1/edit", provider: "wavespeed", available: true, max_input_images: 14 }),
         expect.objectContaining({ id: "machgen:Nano-Banana-2.1", provider: "machgen", available: false, max_input_images: 14 }),
         expect.objectContaining({ id: "nunchux:gemini-nano-banana-2.1", provider: "nunchux", available: true, max_input_images: 14 }),
+        expect.objectContaining({ id: "google:gemini-nano-banana-2.1", provider: "google", available: true, max_input_images: 14 }),
+        expect.objectContaining({ id: "googleflow:nano-banana-2", provider: "googleflow", available: true, max_input_images: 10 }),
       ]);
       expect(catalog.models[0]).toMatchObject({
         family: { id: "image:nano-banana-2-1", title: "Nano Banana 2.1" },
         frontier: expect.arrayContaining([expect.objectContaining({ type: "i2i", rank: expect.any(Number), elo: expect.any(Number) })]),
       });
       for (const [family, providers] of [
-        ["image:gpt-image-2-6-sunburst", ["kie", "fal", "wavespeed", "machgen", "nunchux"]],
-        ["image:gpt-image-2-6-flare", ["kie", "fal", "wavespeed", "machgen", "nunchux"]],
-        ["image:gpt-image-2-5-flare", ["kie", "machgen"]],
-        ["image:gpt-image-2-5-sunburst", ["kie", "machgen"]],
-        ["image:gpt-image-2", ["kie", "fal", "machgen"]],
+        ["image:gpt-image-2-6-sunburst", ["kie", "fal", "wavespeed", "machgen", "nunchux", "openai"]],
+        ["image:gpt-image-2-6-flare", ["kie", "fal", "wavespeed", "machgen", "nunchux", "openai"]],
+        ["image:gpt-image-2-5-flare", ["kie", "wavespeed", "machgen", "openai"]],
+        ["image:gpt-image-2-5-sunburst", ["kie", "wavespeed", "machgen", "openai"]],
+        ["image:gpt-image-2", ["kie", "fal", "machgen", "openai"]],
         ["image:nano-banana-pro", ["kie", "fal"]],
         ["image:nano-banana-2", ["fal", "machgen"]],
       ] as const) {

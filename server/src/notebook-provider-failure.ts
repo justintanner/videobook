@@ -11,8 +11,13 @@ const PROVIDER_LABELS: Record<string, string> = {
   alibaba: "Alibaba",
   elevenlabs: "ElevenLabs",
   fal: "Fal",
+  google: "Google",
+  googleflow: "Google Flow",
   kie: "Kie",
+  machgen: "MachGen",
+  nunchux: "Nunchux",
   openai: "OpenAI",
+  wavespeed: "WaveSpeed",
   workflow: "Workflow",
   xai: "xAI",
 };

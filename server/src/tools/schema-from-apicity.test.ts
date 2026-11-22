@@ -17,7 +17,7 @@ describe("schema-from-apicity", () => {
     expect(field.safeParse("0").success).toBe(true);
     expect(field.safeParse("2").success).toBe(true);
     expect(field.safeParse("1").success).toBe(false);
-    expect(field.safeParse("11").success).toBe(false);
+    expect(field.safeParse("31").success).toBe(false);
   });
 
   it("converts finite numeric domains to string enums", () => {

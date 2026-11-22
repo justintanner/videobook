@@ -28,9 +28,12 @@ import {
 } from "@apicity/nunchux/zod";
 import {
   WaveSpeedGoogleNanoBanana2p1EditRequestSchema,
+  WaveSpeedOpenaiGptImage2p5FlareEditRequestSchema,
+  WaveSpeedOpenaiGptImage2p5SunburstEditRequestSchema,
   WaveSpeedOpenaiGptImage2p6FlareEditRequestSchema,
   WaveSpeedOpenaiGptImage2p6SunburstEditRequestSchema,
 } from "@apicity/wavespeed/zod";
+import { GoogleFlowImagesRequestSchema } from "@apicity/googleflow/zod";
 import { resolveModel } from "./media/descriptor.js";
 import { listModels } from "./media/listing.js";
 import { buildWireRequest } from "./media/request.js";
@@ -64,6 +67,24 @@ const nunchuxNanoBananaField: ImageField = {
 const nunchuxGptImageField: ImageField = {
   safeParse: (urls) => NunchuxOpenAiImagesEditsRequestSchema.shape.images
     .safeParse((urls as string[]).map((url) => ({ image_url: url }))),
+};
+
+const googleFlowReferenceSlotCount = Object.keys(GoogleFlowImagesRequestSchema.shape)
+  .filter((key) => /^reference_\d+$/u.test(key)).length;
+
+function boundedImageField(catalogModel: string): ImageField {
+  const model = resolveModel(catalogModel);
+  const slot = model.slots.find((candidate) => candidate.role === "image")!;
+  return {
+    safeParse: (urls) => model.wire.input.safeParse({
+      prompt: "x",
+      [slot.field]: urls,
+    }),
+  };
+}
+
+const googleFlowNanoBananaField: ImageField = {
+  safeParse: (urls) => ({ success: Array.isArray(urls) && urls.length <= googleFlowReferenceSlotCount }),
 };
 
 function imageFieldFor(entryId: string): ImageField | null {
@@ -111,11 +132,24 @@ function imageFieldFor(entryId: string): ImageField | null {
       return WaveSpeedOpenaiGptImage2p6SunburstEditRequestSchema.shape.images;
     case "wavespeed:openai/gpt-image-2.6-flare/edit":
       return WaveSpeedOpenaiGptImage2p6FlareEditRequestSchema.shape.images;
+    case "wavespeed:openai/gpt-image-2.5-flare/edit":
+      return WaveSpeedOpenaiGptImage2p5FlareEditRequestSchema.shape.images;
+    case "wavespeed:openai/gpt-image-2.5-sunburst/edit":
+      return WaveSpeedOpenaiGptImage2p5SunburstEditRequestSchema.shape.images;
     case "nunchux:gemini-nano-banana-2.1":
       return nunchuxNanoBananaField;
     case "nunchux:gpt-image-2.6-sunburst":
     case "nunchux:gpt-image-2.6-flare":
       return nunchuxGptImageField;
+    case "google:gemini-nano-banana-2.1":
+    case "openai:gpt-image-2.6-sunburst":
+    case "openai:gpt-image-2.6-flare":
+    case "openai:gpt-image-2.5-flare":
+    case "openai:gpt-image-2.5-sunburst":
+    case "openai:gpt-image-2":
+      return boundedImageField(entryId);
+    case "googleflow:nano-banana-2":
+      return googleFlowNanoBananaField;
     default:
       return null;
   }
@@ -182,12 +216,12 @@ describe("image edit model catalog", () => {
     }
     for (const [family, list] of providers) expect(new Set(list).size, family).toBe(list.length);
     expect(Object.fromEntries([...providers].filter(([, list]) => list.length > 1))).toEqual({
-      "image:nano-banana-2-1": ["kie", "fal", "wavespeed", "machgen", "nunchux"],
-      "image:gpt-image-2-6-sunburst": ["kie", "fal", "wavespeed", "machgen", "nunchux"],
-      "image:gpt-image-2-6-flare": ["kie", "fal", "wavespeed", "machgen", "nunchux"],
-      "image:gpt-image-2-5-flare": ["kie", "machgen"],
-      "image:gpt-image-2-5-sunburst": ["kie", "machgen"],
-      "image:gpt-image-2": ["kie", "fal", "machgen"],
+      "image:nano-banana-2-1": ["kie", "fal", "wavespeed", "machgen", "nunchux", "google", "googleflow"],
+      "image:gpt-image-2-6-sunburst": ["kie", "fal", "wavespeed", "machgen", "nunchux", "openai"],
+      "image:gpt-image-2-6-flare": ["kie", "fal", "wavespeed", "machgen", "nunchux", "openai"],
+      "image:gpt-image-2-5-flare": ["kie", "wavespeed", "machgen", "openai"],
+      "image:gpt-image-2-5-sunburst": ["kie", "wavespeed", "machgen", "openai"],
+      "image:gpt-image-2": ["kie", "fal", "machgen", "openai"],
       "image:nano-banana-pro": ["kie", "fal"],
       "image:nano-banana-2": ["fal", "machgen"],
     });
@@ -212,6 +246,9 @@ describe("image edit model catalog", () => {
       machgen: "MACHGEN_API_KEY",
       wavespeed: "WAVESPEED_API_KEY",
       nunchux: "NUNCHUX_API_KEY",
+      openai: "OPENAI_API_KEY",
+      google: "GOOGLE_API_KEY",
+      googleflow: "GOOGLE_FLOW_API_KEY",
     };
     for (const entry of IMAGE_EDIT_MODELS) {
       expect(entry.envKey).toBe(envKeys[entry.provider]);

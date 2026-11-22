@@ -52,6 +52,9 @@ function clientManualChunk(id: string): string | undefined {
   if (id.includes('/src/components/videobook/auto-edit/')) {
     return 'auto-edit'
   }
+  if (id.includes('/src/components/videobook/ImageEditorWorkspace')) {
+    return 'image-editor'
+  }
   if (id.includes('/src/components/')) {
     return 'ui'
   }
@@ -85,6 +88,9 @@ function clientManualChunk(id: string): string | undefined {
   }
   if (id.includes('/lucide-react/')) {
     return 'vendor-icons'
+  }
+  if (id.includes('/@apicity/')) {
+    return 'vendor-apicity'
   }
   return 'vendor'
 }

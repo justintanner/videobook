@@ -1,3 +1,7 @@
+import { isAlibabaVideoModel } from "./alibaba.js";
+import { googleDotPath } from "./google.js";
+import { googleFlowDotPath } from "./googleflow.js";
+import { openaiImageDotPath } from "./openai.js";
 import { wavespeedDotPath } from "./wavespeed.js";
 import { nunchuxDotPath } from "./nunchux.js";
 import { isKieVeoModel, isXaiImageModel } from "./wire.js";
@@ -14,10 +18,16 @@ export function generationHarEndpoint(model: ParsedModelId, refs: MediaRefs): st
     case "xai":
       if (!isXaiImageModel(model.apiId)) return "v1.videos.generations";
       return refs.image?.length ? "v1.images.edits" : "v1.images.generations";
-    case "alibaba": return "api.v1.services.aigc.multimodalGeneration.generation";
+    case "alibaba":
+      return isAlibabaVideoModel(model.apiId)
+        ? "api.v1.services.aigc.videoGeneration.videoSynthesis"
+        : "api.v1.services.aigc.multimodalGeneration.generation";
     case "machgen": return "api.v0.generate";
     case "wavespeed": return wavespeedDotPath(model.apiId);
     case "nunchux": return nunchuxDotPath(model.apiId, (refs.image?.length ?? 0) > 0);
+    case "openai": return openaiImageDotPath((refs.image?.length ?? 0) > 0);
+    case "google": return googleDotPath(model.apiId);
+    case "googleflow": return googleFlowDotPath(model.apiId);
     case "elevenlabs":
       switch (model.apiId) {
         case "sound-generation": return "v1.soundGeneration";

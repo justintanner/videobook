@@ -41,6 +41,10 @@ export const MANAGED_ENV_KEYS = [
   "MACHGEN_API_KEY",
   "WAVESPEED_API_KEY",
   "NUNCHUX_API_KEY",
+  "GOOGLE_API_KEY",
+  "GOOGLE_SERVICE_ACCOUNT_JSON",
+  "GOOGLE_CLOUD_PROJECT",
+  "GOOGLE_FLOW_API_KEY",
   "B2_ACCESS_KEY_ID",
   "B2_SECRET_ACCESS_KEY",
   "B2_REGION",
@@ -55,6 +59,7 @@ export type SecretSource = "1password" | "env" | "missing";
 
 const NON_SECRET_ENV_KEYS: ReadonlySet<string> = new Set<string>([
   "VIDEOBOOK_HAR_CAPTURE",
+  "GOOGLE_CLOUD_PROJECT",
   "B2_REGION",
   "B2_BUCKET",
   "B2_ENDPOINT",

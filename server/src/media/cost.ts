@@ -12,6 +12,7 @@ import {
   type FalEstimateCache,
   type FalEstimator,
 } from "@apicity/cost";
+import { isAlibabaVideoModel } from "./alibaba.js";
 import { buildWireRequest, type WireRequestInput } from "./request.js";
 import type { ResolvedModel } from "./types.js";
 
@@ -146,7 +147,10 @@ async function estimateWireRequest(
   hints: CostHints = {},
 ): Promise<CostEstimate> {
   const payload = costPayload(model, request, input);
-  const costHints = generationCostHints(input, hints);
+  const baseHints = generationCostHints(input, hints);
+  const costHints = model.provider === "alibaba" && isAlibabaVideoModel(model.apiId)
+    ? { alibabaDeploymentScope: "International" as const, ...baseHints }
+    : baseHints;
   if (model.provider === "fal") return estimateFalRequest(model.apiId, payload, costHints);
   if (quotableMachGenUpscale(model, payload)) return quoteMachGenUpscale(payload, costHints);
   return computeEstimate({

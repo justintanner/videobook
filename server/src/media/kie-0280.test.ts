@@ -206,7 +206,7 @@ describe("kie 0.28.0 catalog", () => {
     const id = "kie:kling-4.0/flash-keyframe-to-video";
     const model = resolveModel(id);
     expect(model.slots.map((slot) => slot.role)).toEqual(["first_frame"]);
-    expect(optionsOf(id)).toMatchObject({ duration: { defaultValue: 12 }, resolution: { enumValues: ["720p"] }, aspect_ratio: { enumValues: ["16:9", "9:16", "1:1", "21:9"] } });
+    expect(optionsOf(id)).toMatchObject({ duration: { defaultValue: 12 }, resolution: { enumValues: ["720p"] }, aspect_ratio: { enumValues: ["16:9", "9:16", "1:1", "21:9", "4:3", "3:4"] } });
     expect(build(id, { prompt: "a fox runs" }).input).toEqual({ prompt: "a fox runs", duration: 12, resolution: "720p", aspect_ratio: "9:16" });
     expect(build(id, { prompt: "@firstframe runs", refUrls: { first_frame: [IMAGE] }, options: { duration: 3 } }).input)
       .toMatchObject({ first_frame_url: IMAGE, duration: 3 });

@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.29.0 (2026-11-20). Image, video and audio
+Videobook now uses Apicity 0.30.0 (2026-11-22). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -1649,3 +1649,56 @@ stub, priced from reported tokens), `kie-task-source.test.ts`,
 segment-edit body at index 0, and resume under the new and old ids), the
 regenerated generation-input goldens and `docs/generation-models.md`. No
 provider was called.
+
+## 59. Apicity 0.30.0 adoption — RESOLVED (2026-11-22)
+
+Updated all `@apicity/*` packages to `^0.30.0` and added `@apicity/google` and
+`@apicity/googleflow` to `server/package.json`:
+
+- **Breaking removal:** `machgen:MiniMax-H3-Omni` was retired upstream in
+  `@apicity/machgen@0.30.0` and removed from `server/src/media/machgen.ts`,
+  `server/src/media/catalog.ts`, and `server/src/media/machgen.test.ts`.
+- **Existing provider additions & upgrades:**
+  - fal: `fal:kling/v4/text-to-image`, `fal:kling/v4/image-to-image` (1-10
+    images with `@ImageN` mentions via the `seedance` dialect), and
+    `fal:bytedance/seedream/v5.5/edit` (with local transparent+JPEG guard).
+  - WaveSpeed: `wavespeed:kwaivgi/kling-image-v4.0/text-to-image`,
+    `wavespeed:kwaivgi/kling-image-v4.0/edit` (1-10 images with `<<<image_N>>>`
+    mentions via the `kling_omni` dialect),
+    `wavespeed:openai/gpt-image-2.5-sunburst/edit`, and
+    `wavespeed:openai/gpt-image-2.5-flare/edit` (1-16 images plus `Mask`).
+  - KIE: Kling 4.0 reference-to-video and keyframe-to-video gain `4k`,
+    `dynamic_range` (`sdr`/`hdr`), and `4:3`/`3:4` aspect ratios while pinning
+    default `resolution: "1080p"` so preferred-defaults does not jump to `4k`.
+  - Alibaba (`DASHSCOPE_API_KEY`): added `alibaba:wan3.0-video`,
+    `alibaba:wan3.0-video-prime`, and `alibaba:happyhorse-1.0-video-edit` on
+    DashScope International (`dashscope-intl.aliyuncs.com`), with async
+    `alibaba_media` task polling in `reconcile-project-work.ts` and
+    `alibabaDeploymentScope: "International"` passed to `@apicity/cost`.
+- **New catalog providers:**
+  - OpenAI (`OPENAI_API_KEY`): `openai:gpt-image-2.6-sunburst`,
+    `openai:gpt-image-2.6-flare`, `openai:gpt-image-2.5-sunburst`,
+    `openai:gpt-image-2.5-flare`, and hidden `openai:gpt-image-2` (revealed by
+    t2i #6), synchronous `v1.images.generations` and multipart `v1.images.edits`
+    with inline book images and Mask/Markup field slots.
+  - Google Vertex (`@apicity/google`): `google:gemini-nano-banana-2.1`
+    (`GOOGLE_API_KEY` + project) via `generateContent`, and
+    `google:gemini-omni-1.2-flash` / `google:gemini-omni-1.1-flash-preview`
+    (`GOOGLE_SERVICE_ACCOUNT_JSON` RS256 OAuth2 Bearer token + project) via
+    Vertex global `interactions`. Per-model credential availability uses
+    `providerEnvKey(model)`.
+  - Google Flow (`@apicity/googleflow`, `GOOGLE_FLOW_API_KEY`):
+    `googleflow:nano-banana-2` (sync `POST /images`),
+    `googleflow:omni-flash-1.2` and `googleflow:omni-flash` (async
+    `POST /videos` + `GET /jobs/{jobId}` polling via `googleflow_media` tasks),
+    uploading book media through `POST /assets`.
+- **Fullscreen image editor & frontier:** Wired `openai`, `google`, and
+  `googleflow` edit runners into `image-edit-models.ts`,
+  `_image-edit-adapter.ts`, and `use-image-edit-models.ts` alongside WaveSpeed
+  GPT Image 2.5 edits (40 edit models total), clearing 5 gaps in
+  `frontier-gaps.ts`.
+
+Evidence is offline in `server/src/media/apicity-0300.test.ts`,
+`machgen.test.ts`, `frontier.test.ts`, `model-family.test.ts`,
+`image-edit-models.test.ts`, and `server/src/tools/image-subjects.test.ts` with
+local HTTP stubs; no paid provider was called.
