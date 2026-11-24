@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
 import { registerMediaProbe } from '../../server/src/notebook-media-ops.js'
+import { testBudget } from '../../server/src/test-budget.js'
 import { availablePort, resultValue, startProcess, stopProcess, toolCalls, waitForHttp } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
 
@@ -38,13 +39,13 @@ describe('Post delivery review in the chat composer', () => {
   const review = () => page.getByRole('dialog', { name: 'Post delivery', exact: true })
   const command = async (text: string) => {
     const input = page.getByLabel('Videobook command input', { exact: true })
-    await expect.poll(() => input.isEnabled(), { timeout: 30_000 }).toBe(true)
+    await expect.poll(() => input.isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
     await input.fill(text)
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
   }
   const count = (name: string, to?: string) => calls.filter(item => item.name === name && (to === undefined || item.to === to)).length
   const syncChecks = () => calls.filter(item => item.name === 'service_status' && item.postCellId === post.id).length
-  const idle = () => expect.poll(() => page.locator('.command-send .busy-indicator').count(), { timeout: 20_000 }).toBe(0)
+  const idle = () => expect.poll(() => page.locator('.command-send .busy-indicator').count(), { timeout: testBudget(20_000) }).toBe(0)
 
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), 'videobook-post-delivery-ui-'))
@@ -108,8 +109,8 @@ describe('Post delivery review in the chat composer', () => {
       })))
     })
     await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
-    await page.goto(appUrl)
-  }, 60_000)
+    await page.goto(appUrl, { timeout: testBudget(30_000) })
+  }, testBudget(60_000))
 
   afterAll(async () => {
     await browser?.close()
@@ -117,7 +118,7 @@ describe('Post delivery review in the chat composer', () => {
     await stopProcess(vite)
     await stopProcess(server)
     if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 })
-  }, 30_000)
+  }, testBudget(30_000))
 
   it('posts in one step to iPhone or a download from /post, switches to X and back, and reuses the clip Post', async () => {
     await command(`/post ${post.address}`)
@@ -136,18 +137,18 @@ describe('Post delivery review in the chat composer', () => {
     const folder = await review().getByLabel('Folder', { exact: true }).inputValue()
     expect(folder).toMatch(/^delivery-ui\/post-/u)
     const apply = () => review().locator('.confirm-sheet-apply')
-    await expect.poll(() => apply().isEnabled(), { timeout: 15_000 }).toBe(true)
+    await expect.poll(() => apply().isEnabled(), { timeout: testBudget(15_000) }).toBe(true)
     expect(await apply().textContent()).toContain('Save to iPhone')
     expect(count('service_status')).toBeGreaterThan(0)
     expect(count('post', 'icloud')).toBe(0)
     expect(await review().textContent()).not.toContain('Uploading to iCloud')
 
     await apply().click()
-    await expect.poll(() => review().getByText(/Saved .+ to iCloud/).count(), { timeout: 20_000 }).toBeGreaterThan(0)
+    await expect.poll(() => review().getByText(/Saved .+ to iCloud/).count(), { timeout: testBudget(20_000) }).toBeGreaterThan(0)
     await idle()
     expect(count('post', 'icloud')).toBe(1)
     expect(count('update_post')).toBe(0)
-    await expect.poll(syncChecks, { timeout: 15_000 }).toBeGreaterThan(0)
+    await expect.poll(syncChecks, { timeout: testBudget(15_000) }).toBeGreaterThan(0)
     const clipPath = join(icloudRoot, folder, 'clip.mp4')
     const captionPath = join(icloudRoot, folder, 'caption.txt')
     expect(await readFile(clipPath)).toEqual(await readFile(fixture))
@@ -157,7 +158,7 @@ describe('Post delivery review in the chat composer', () => {
 
     await expect.poll(() => apply().isEnabled()).toBe(true)
     await apply().click()
-    await expect.poll(() => count('post', 'icloud'), { timeout: 20_000 }).toBe(2)
+    await expect.poll(() => count('post', 'icloud'), { timeout: testBudget(20_000) }).toBe(2)
     await idle()
     await expect.poll(() => apply().isEnabled()).toBe(true)
     expect((await stat(clipPath)).mtimeMs).toBe(writtenAt)
@@ -166,10 +167,10 @@ describe('Post delivery review in the chat composer', () => {
     await expect.poll(() => review().getByRole('heading', { name: 'Download for manual upload', exact: true }).count()).toBe(1)
     expect(await review().getByRole('button', { name: 'Download', exact: true }).getAttribute('aria-pressed')).toBe('true')
     expect(await review().getByLabel('Folder', { exact: true }).count()).toBe(0)
-    await expect.poll(() => apply().isEnabled(), { timeout: 15_000 }).toBe(true)
-    const [download] = await Promise.all([page.waitForEvent('download', { timeout: 20_000 }), apply().click()])
+    await expect.poll(() => apply().isEnabled(), { timeout: testBudget(15_000) }).toBe(true)
+    const [download] = await Promise.all([page.waitForEvent('download', { timeout: testBudget(20_000) }), apply().click()])
     expect(count('post', 'download')).toBe(1)
-    await expect.poll(() => review().getByText(/Downloaded .+ as /u).count(), { timeout: 20_000 }).toBeGreaterThan(0)
+    await expect.poll(() => review().getByText(/Downloaded .+ as /u).count(), { timeout: testBudget(20_000) }).toBeGreaterThan(0)
     await idle()
     const clipLink = review().locator('.post-delivery-downloads a').first()
     const filename = (await clipLink.textContent())?.trim() ?? ''
@@ -187,7 +188,7 @@ describe('Post delivery review in the chat composer', () => {
 
     await review().getByRole('button', { name: 'X', exact: true }).last().click()
     const xReview = page.getByRole('dialog', { name: 'Chat action review', exact: true })
-    await xReview.waitFor({ state: 'visible', timeout: 15_000 })
+    await xReview.waitFor({ state: 'visible', timeout: testBudget(15_000) })
     expect(await review().count()).toBe(0)
     expect(await xReview.getByRole('button', { name: 'X', exact: true }).getAttribute('aria-pressed')).toBe('true')
     expect(await xReview.getByLabel('Title', { exact: true }).inputValue()).toBe(CAPTION)
@@ -204,10 +205,10 @@ describe('Post delivery review in the chat composer', () => {
     await review().waitFor({ state: 'hidden' })
 
     const postNode = () => page.locator(`.react-flow__node[data-id="${post.id}"]`)
-    await expect.poll(() => postNode().getByText('iPhone', { exact: true }).count(), { timeout: 15_000 }).toBe(1)
-    await expect.poll(() => postNode().getByText('Downloaded', { exact: true }).count(), { timeout: 15_000 }).toBe(1)
+    await expect.poll(() => postNode().getByText('iPhone', { exact: true }).count(), { timeout: testBudget(15_000) }).toBe(1)
+    await expect.poll(() => postNode().getByText('Downloaded', { exact: true }).count(), { timeout: testBudget(15_000) }).toBe(1)
     await page.reload()
-    await expect.poll(() => postNode().getByText('iPhone', { exact: true }).count(), { timeout: 30_000 }).toBe(1)
+    await expect.poll(() => postNode().getByText('iPhone', { exact: true }).count(), { timeout: testBudget(30_000) }).toBe(1)
 
     const collapse = page.getByLabel('Collapse chat', { exact: true })
     if (await collapse.isVisible()) await collapse.click()
@@ -215,7 +216,7 @@ describe('Post delivery review in the chat composer', () => {
     await expect.poll(() => page.getByRole('region', { name: 'Post details' }).count()).toBe(0)
     const cell = postNode().locator('.cell-node')
     const beforeSelect = syncChecks()
-    await cell.click({ button: 'right', timeout: 15_000 })
+    await cell.click({ button: 'right', timeout: testBudget(15_000) })
     const menuNames = await page.getByRole('menuitem').allTextContents()
     const iphoneIndex = menuNames.findIndex(name => name.includes('Save to iPhone'))
     const downloadIndex = menuNames.findIndex(name => name.trim() === 'Download')
@@ -231,7 +232,7 @@ describe('Post delivery review in the chat composer', () => {
     expect(await inspector.getByText('On iPhone · iCloud Drive › Videobook ›', { exact: false }).count()).toBe(1)
     expect(await inspector.getByText('Downloaded for manual upload', { exact: true }).count()).toBe(1)
     expect(await inspector.getByRole('link', { name: filename, exact: true }).getAttribute('href')).toBe(clipHref)
-    await expect.poll(syncChecks, { timeout: 15_000 }).toBeGreaterThan(beforeSelect)
+    await expect.poll(syncChecks, { timeout: testBudget(15_000) }).toBeGreaterThan(beforeSelect)
     const beforeInspector = count('post')
     await inspector.getByRole('button', { name: 'Download', exact: true }).click()
     await review().waitFor({ state: 'visible' })
@@ -241,7 +242,7 @@ describe('Post delivery review in the chat composer', () => {
     await review().waitFor({ state: 'hidden' })
 
     if (await collapse.isVisible()) await collapse.click()
-    await cell.click({ button: 'right', timeout: 15_000 })
+    await cell.click({ button: 'right', timeout: testBudget(15_000) })
     await page.getByRole('menuitem', { name: 'Save to iPhone', exact: true }).click()
     await review().waitFor({ state: 'visible' })
     expect(await review().getByRole('button', { name: 'iCloud · iPhone', exact: true }).getAttribute('aria-pressed')).toBe('true')
@@ -259,9 +260,9 @@ describe('Post delivery review in the chat composer', () => {
 
     expect(count('draft_post_copy')).toBe(0)
     await command('/post @d2')
-    await review().waitFor({ state: 'visible', timeout: 15_000 })
-    await expect.poll(() => count('draft_post_copy'), { timeout: 15_000 }).toBe(1)
-    await expect.poll(() => review().getByText('OPENAI_API_KEY is not set', { exact: false }).count(), { timeout: 15_000 }).toBeGreaterThan(0)
+    await review().waitFor({ state: 'visible', timeout: testBudget(15_000) })
+    await expect.poll(() => count('draft_post_copy'), { timeout: testBudget(15_000) }).toBe(1)
+    await expect.poll(() => review().getByText('OPENAI_API_KEY is not set', { exact: false }).count(), { timeout: testBudget(15_000) }).toBeGreaterThan(0)
     expect(await review().getByRole('button', { name: 'TikTok', exact: true }).getAttribute('aria-pressed')).toBe('true')
     expect(await review().getByRole('button', { name: 'TH · ไทย', exact: true }).getAttribute('aria-pressed')).toBe('true')
     expect(await review().getByRole('button', { name: 'EN', exact: true }).getAttribute('aria-pressed')).toBe('false')
@@ -269,7 +270,7 @@ describe('Post delivery review in the chat composer', () => {
     expect(await review().getByRole('button', { name: 'Remove tag bkk', exact: true }).count()).toBe(1)
     expect(await review().getByLabel('Regen with Astra', { exact: true }).isVisible()).toBe(true)
     await review().getByRole('button', { name: 'TH · ไทย', exact: true }).click()
-    await expect.poll(() => count('draft_post_copy'), { timeout: 15_000 }).toBe(2)
+    await expect.poll(() => count('draft_post_copy'), { timeout: testBudget(15_000) }).toBe(2)
     await review().getByLabel('Tags', { exact: true }).fill('rain day')
     await review().getByLabel('Tags', { exact: true }).press('Enter')
     expect(await review().getByRole('button', { name: 'Remove tag rain', exact: true }).count()).toBe(1)
@@ -282,20 +283,20 @@ describe('Post delivery review in the chat composer', () => {
     await review().waitFor({ state: 'hidden' })
 
     await command('/post @h8')
-    await expect.poll(() => page.getByText('@h8 is not a Post or a clip', { exact: false }).count(), { timeout: 10_000 }).toBeGreaterThan(0)
+    await expect.poll(() => page.getByText('@h8 is not a Post or a clip', { exact: false }).count(), { timeout: testBudget(10_000) }).toBeGreaterThan(0)
     expect(await review().count()).toBe(0)
 
     const catalog = await call<{ actions: Array<{ command: string; handler: { kind: string; action?: string } }> }>('list_workspace_actions', { detail: 'full' })
     expect(catalog.actions.find(action => action.command === '/post')?.handler).toEqual({ kind: 'ui', action: 'open_post_composer' })
     expect(catalog.actions.some(action => ['/save-post-to-icloud', '/upload-post-to-dropbox'].includes(action.command))).toBe(false)
     expect(errors).toEqual([])
-  }, 180_000)
+  }, testBudget(180_000))
 
   it('takes a clip dropped by its address on a post with no clip yet', async () => {
     const empty = (await call<{ post: PostWire }>('post', { to: 'draft', notebook_id: notebookId, platform: 'x', text: 'Needs a clip' })).post
     const tile = page.locator(`.react-flow__node[data-id="${empty.id}"]`)
     const slot = tile.locator('.post-tile-slot')
-    await slot.waitFor({ state: 'visible', timeout: 30_000 })
+    await slot.waitFor({ state: 'visible', timeout: testBudget(30_000) })
     await tile.scrollIntoViewIfNeeded()
     const address = page.locator(`.react-flow__node[data-id="${sourceCellId}"] .cell-ref-address`)
     await address.hover()
@@ -306,8 +307,8 @@ describe('Post delivery review in the chat composer', () => {
     expect(await slot.textContent()).toContain('Drop')
     const updates = count('update_post')
     await page.mouse.up()
-    await expect.poll(() => count('update_post'), { timeout: 20_000 }).toBe(updates + 1)
-    await slot.waitFor({ state: 'detached', timeout: 20_000 })
+    await expect.poll(() => count('update_post'), { timeout: testBudget(20_000) }).toBe(updates + 1)
+    await slot.waitFor({ state: 'detached', timeout: testBudget(20_000) })
     expect(await tile.locator('.post-tile-media').count()).toBe(1)
-  }, 60_000)
+  }, testBudget(60_000))
 })
