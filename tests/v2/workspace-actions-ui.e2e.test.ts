@@ -313,7 +313,7 @@ describe('workspace action launcher with real endpoints', () => {
     await page.screenshot({ path: '/tmp/videobook-actions-desktop.png' })
     await search.fill('/unassign')
     expect(await options.count()).toBe(1)
-    expect(await options.first().getAttribute('data-command')).toBe('/remove-slot')
+    expect(await options.first().getAttribute('data-command')).toBe('/delete')
     await search.fill('/status')
     expect(await page.locator('[data-command="/activity"]').count()).toBe(1)
   })
@@ -398,7 +398,7 @@ describe('workspace action launcher with real endpoints', () => {
       return rect.top >= parent.top && rect.bottom <= parent.bottom
     })).toBe(true)
     await input.fill('/unassign')
-    expect(await page.locator('.command-suggestions strong').allTextContents()).toContain('/remove-slot')
+    expect(await page.locator('.command-suggestions strong').allTextContents()).toContain('/delete')
     await input.fill('/status')
     expect(await page.locator('.command-suggestions strong').allTextContents()).toContain('/activity')
     await input.press('Enter')
