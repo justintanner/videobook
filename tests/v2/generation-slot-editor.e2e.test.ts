@@ -64,6 +64,20 @@ function resultValue(value: unknown): unknown {
   return text ? JSON.parse(text) as unknown : null
 }
 
+const OPEN_HAND = 'M8 13V5.5a1.5 1.5 0 0 1 3 0V12V4.5a1.5 1.5 0 0 1 3 0V12V5.5a1.5 1.5 0 0 1 3 0V12V8.5a1.5 1.5 0 0 1 3 0V15a7 7 0 0 1-7 7h-1.5a7 7 0 0 1-5.6-2.8l-3.2-4.3a1.6 1.6 0 0 1 2.5-2z'
+const CLOSED_HAND = 'M7 11V9.5a1.5 1.5 0 0 1 3 0V11V8.5a1.5 1.5 0 0 1 3 0V11V9a1.5 1.5 0 0 1 3 0v2v-.5a1.5 1.5 0 0 1 3 0V15a7 7 0 0 1-7 7h-1a7 7 0 0 1-7-7v-2.5a1.5 1.5 0 0 1 3 0z'
+
+type HandCursor = { path: string | undefined; hotspot: string | undefined; fallback: string | undefined }
+
+function handCursor(cursor: string): HandCursor {
+  const parts = /^url\("data:image\/svg\+xml,(?<svg>.+)"\) (?<hotspot>\d+ \d+), (?<fallback>[a-z-]+)$/u.exec(cursor)?.groups
+  return {
+    path: / d='(?<d>[^']+)'/u.exec(decodeURIComponent(parts?.svg ?? ''))?.groups?.d,
+    hotspot: parts?.hotspot,
+    fallback: parts?.fallback,
+  }
+}
+
 describe('generation slot editor in the browser', () => {
   let rootDir: string
   let server: StartedProcess | undefined
@@ -225,12 +239,13 @@ describe('generation slot editor in the browser', () => {
     expect(await resolution.locator('option:checked').textContent()).toBe('720p')
   }, testBudget(90_000))
 
-  it('lifts a token off a dragged address under an open hand and trails a dashed line to it', async () => {
+  it('shows an open hand over an address, then lifts a token under a closed hand and trails a dashed line to it', async () => {
     const address = page.locator(`.notebook-flow .react-flow__node[data-id="${images[0]}"] .cell-ref-address`)
     const trail = page.locator('.cell-ref-trail path')
     const ghost = page.locator('.cell-ref-ghost-live')
     const before = await keyframes()
     await address.hover()
+    expect(handCursor(await address.evaluate((element: HTMLElement) => getComputedStyle(element).cursor))).toEqual({ path: OPEN_HAND, hotspot: '8 4', fallback: 'grab' })
     const from = (await address.boundingBox())!
     const pointer = { x: Math.round(from.x + 180), y: Math.round(from.y + 120) }
     await page.mouse.down()
@@ -252,7 +267,8 @@ describe('generation slot editor in the browser', () => {
     expect(pointer.x - token.left).toBe(token.width - 12)
     expect(pointer.y - token.top).toBe(Math.round(token.height * 20 / 26))
     expect(endX).toBe(Math.round(token.left))
-    expect(await page.evaluate(() => getComputedStyle(document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2)!).cursor)).toBe('grab')
+    expect(handCursor(await page.evaluate(() => getComputedStyle(document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2)!).cursor)))
+      .toEqual({ path: CLOSED_HAND, hotspot: '8 4', fallback: 'grabbing' })
     expect(await page.locator('.notebook-flow .cell-ref-address-lifted').count()).toBe(1)
     await page.mouse.move(from.x + 4, from.y + 4, { steps: 4 })
     await page.mouse.up()
