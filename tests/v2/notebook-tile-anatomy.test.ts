@@ -169,7 +169,7 @@ describe('the tile footer', () => {
 
     expect(html).not.toContain('cell-ref-grip')
     expect(footerOf(html)).toContain(
-      '<strong class="cell-ref-address cell-ref-address-draggable nodrag nopan" draggable="true" title="Drag into an input slot">@d3</strong>',
+      '<strong class="cell-ref-address cell-ref-address-draggable nodrag nopan" draggable="true" data-hint="Drag into an input slot">@d3</strong>',
     )
   })
 

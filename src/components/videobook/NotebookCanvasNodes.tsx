@@ -390,7 +390,7 @@ function CellRefAddress({
     <strong
       className={`cell-ref-address cell-ref-address-draggable nodrag nopan${lifted ? ' cell-ref-address-lifted' : ''}`}
       draggable
-      title="Drag into an input slot"
+      data-hint="Drag into an input slot"
       onDragStart={(event) => {
         event.stopPropagation()
         startCellRefDrag(event, { sourceCellId: cellId, from: null })

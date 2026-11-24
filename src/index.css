@@ -2516,14 +2516,14 @@ textarea:focus-visible {
   align-items: center;
   overflow: hidden;
   color: #c8d4cc;
-  font-size: calc(11px * var(--route-scale));
+  font-size: calc(10.5px * var(--route-scale));
   font-weight: 500;
   pointer-events: auto;
 }
 
 .cell-route-segment + .cell-route-detail,
 .cell-route-more + .cell-route-detail {
-  padding-left: calc(6px * var(--route-scale));
+  padding-left: calc(5px * var(--route-scale));
   border-left: 1px solid rgba(169, 214, 191, 0.22);
 }
 
@@ -2531,12 +2531,13 @@ textarea:focus-visible {
   display: inline-flex;
   min-width: 0;
   align-items: center;
-  gap: calc(6px * var(--route-scale));
+  gap: calc(4px * var(--route-scale));
   overflow: hidden;
 }
 
 .cell-route-generator .cell-generator-provider {
   font-size: calc(10.5px * var(--route-scale));
+  letter-spacing: 0.02em;
 }
 
 .cell-route-time {
@@ -2936,6 +2937,7 @@ textarea:focus-visible {
 }
 
 .cell-ref-address-draggable {
+  position: relative;
   cursor: grab;
   text-decoration: underline dashed transparent;
   text-decoration-thickness: 1px;
@@ -2951,6 +2953,37 @@ textarea:focus-visible {
 
 .cell-ref-address-draggable:active {
   cursor: grabbing;
+}
+
+.cell-ref-address-draggable::after {
+  position: absolute;
+  bottom: calc(100% + 10px * var(--notebook-detail-scale, 1));
+  left: calc(-6px * var(--notebook-detail-scale, 1));
+  z-index: 30;
+  padding: calc(5px * var(--notebook-detail-scale, 1)) calc(8px * var(--notebook-detail-scale, 1));
+  border: 1px solid rgba(114, 231, 170, 0.38);
+  border-radius: 5px;
+  color: #d9f6e6;
+  background: #03100a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  content: attr(data-hint);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: var(--cell-label-font-size);
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease 0ms;
+}
+
+.cell-ref-address-draggable:hover::after {
+  opacity: 1;
+  transition-delay: 400ms;
+}
+
+.cell-ref-address-lifted::after {
+  display: none;
 }
 
 .cell-ref-address-lifted {
