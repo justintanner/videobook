@@ -225,6 +225,46 @@ describe('generation slot editor in the browser', () => {
     expect(await resolution.locator('option:checked').textContent()).toBe('720p')
   }, testBudget(90_000))
 
+  it('trails a dashed line from a dragged address to the lifted token', async () => {
+    const address = page.locator(`.notebook-flow .react-flow__node[data-id="${images[0]}"] .cell-ref-address`)
+    const trail = page.locator('.cell-ref-trail path')
+    await address.scrollIntoViewIfNeeded()
+    const from = (await address.boundingBox())!
+    const pointer = { x: Math.round(from.x + 180), y: Math.round(from.y + 120) }
+    await address.evaluate((element) => {
+      const data = new DataTransfer()
+      const box = element.getBoundingClientRect()
+      Object.assign(window, { trailDrag: data })
+      element.dispatchEvent(new DragEvent('dragstart', {
+        bubbles: true, cancelable: true, dataTransfer: data, clientX: box.left + 4, clientY: box.top + 4,
+      }))
+    })
+    await expect.poll(async () => await trail.count()).toBe(1)
+    await page.evaluate((at) => {
+      const data = (window as unknown as { trailDrag: DataTransfer }).trailDrag
+      document.elementFromPoint(at.x, at.y)?.dispatchEvent(new DragEvent('dragover', {
+        bubbles: true, cancelable: true, dataTransfer: data, clientX: at.x, clientY: at.y,
+      }))
+    }, pointer)
+    const trailPoints = async () => (await trail.getAttribute('d'))
+      ?.match(/^M(-?\d+) (-?\d+) C .*, (-?\d+) (-?\d+)$/u)?.slice(1).map(Number) ?? []
+    await expect.poll(async () => (await trailPoints())[3]).toBe(pointer.y - 2)
+    const [startX, startY, endX] = await trailPoints() as [number, number, number, number]
+    expect(Math.abs(startX - (from.x + from.width * 0.63))).toBeLessThanOrEqual(1)
+    expect(Math.abs(startY - (from.y - from.height * 0.07))).toBeLessThanOrEqual(1)
+    expect(pointer.x - endX).toBeGreaterThan(30)
+    expect(pointer.x - endX).toBeLessThan(80)
+    expect(await trail.evaluate((path) => getComputedStyle(path).strokeDasharray)).toBe('3px, 3px')
+    expect(await page.locator('.notebook-flow .cell-ref-address-lifted').count()).toBe(1)
+    await address.evaluate((element) => {
+      element.dispatchEvent(new DragEvent('dragend', {
+        bubbles: true, dataTransfer: (window as unknown as { trailDrag: DataTransfer }).trailDrag,
+      }))
+    })
+    await expect.poll(async () => await trail.count()).toBe(0)
+    expect(await page.locator('.notebook-flow .cell-ref-address-lifted').count()).toBe(0)
+  }, testBudget(90_000))
+
   it('takes a board cell dragged by its address into a slot', async () => {
     const nodes = await page.locator('.notebook-flow .react-flow__node').count()
     const address = page.locator(`.notebook-flow .react-flow__node[data-id="${images[0]}"] .cell-ref-address`)

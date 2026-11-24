@@ -3061,6 +3061,27 @@ textarea:focus-visible {
   outline-offset: 3px;
 }
 
+.cell-ref-trail {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.cell-ref-trail path {
+  fill: none;
+  stroke: rgba(114, 231, 170, 0.6);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 3;
+}
+
+.cell-ref-trail[data-family='image'] path {
+  stroke: rgba(99, 199, 216, 0.6);
+}
+
 .cell-ref-ghost {
   position: fixed;
   top: -1000px;
@@ -3676,7 +3697,7 @@ textarea:focus-visible {
   position: absolute;
   inset: -24px;
   background-position: center;
-  background-size: cover;
+  background-size: 100% 100%;
   filter: blur(14px) saturate(1.2) brightness(0.42);
   pointer-events: none;
 }

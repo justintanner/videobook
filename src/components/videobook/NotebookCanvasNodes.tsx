@@ -42,7 +42,15 @@ import {
   type NotebookCellFamily,
 } from '@/videobook/notebook-cell-types'
 import { notebookGridTag, notebookGridAddress } from '@/videobook/notebook-grid'
-import { endCellRefDrag, setCellRefDragImage, startCellRefDrag } from '@/videobook/cell-ref-drag'
+import {
+  cellRefTrailStart,
+  endCellRefDrag,
+  setCellRefDragImage,
+  startCellRefDrag,
+  type CellRefDragImage,
+  type CellRefDragPoint,
+} from '@/videobook/cell-ref-drag'
+import { CellRefDragTrail } from '@/components/videobook/CellRefDragTrail'
 import { notebookGenerationInputKind } from '../../../server/src/notebook-generation-contract'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
@@ -372,6 +380,12 @@ function CellFlag({ flag }: { flag: CellStateFlag | null }) {
   )
 }
 
+type CellRefLift = {
+  start: CellRefDragPoint
+  pointer: CellRefDragPoint
+  image: CellRefDragImage
+}
+
 function CellRefAddress({
   cellId,
   address,
@@ -384,29 +398,32 @@ function CellRefAddress({
   draggable: boolean
 }) {
   const draggingRef = useRef(false)
-  const [lifted, setLifted] = useState(false)
+  const [lift, setLift] = useState<CellRefLift | null>(null)
   if (!draggable) return <strong className="cell-ref-address">{address}</strong>
   return (
     <strong
-      className={`cell-ref-address cell-ref-address-draggable nodrag nopan${lifted ? ' cell-ref-address-lifted' : ''}`}
+      className={`cell-ref-address cell-ref-address-draggable nodrag nopan${lift ? ' cell-ref-address-lifted' : ''}`}
       draggable
       data-hint="Drag into an input"
       onDragStart={(event) => {
         event.stopPropagation()
         startCellRefDrag(event, { sourceCellId: cellId, from: null })
-        setCellRefDragImage(event, address, family)
+        const image = setCellRefDragImage(event, address, family)
+        const start = cellRefTrailStart(event.currentTarget.getBoundingClientRect())
+        const pointer = { x: event.clientX, y: event.clientY }
         draggingRef.current = true
         requestAnimationFrame(() => {
-          if (draggingRef.current) setLifted(true)
+          if (draggingRef.current) setLift({ start, pointer, image })
         })
       }}
       onDragEnd={() => {
         draggingRef.current = false
         endCellRefDrag()
-        setLifted(false)
+        setLift(null)
       }}
     >
       {address}
+      {lift && <CellRefDragTrail start={lift.start} pointer={lift.pointer} image={lift.image} family={family} />}
     </strong>
   )
 }
