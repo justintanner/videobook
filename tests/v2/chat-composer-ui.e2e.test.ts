@@ -3283,7 +3283,7 @@ describe('chat composer browser flow', () => {
       expect(await editor.getByRole('button', { name: 'Save as default watermark', exact: true }).count()).toBe(1)
       await platforms.getByRole('button', { name: 'TikTok', exact: true }).click()
       await expect.poll(async () => (await layers.textContent()) ?? '', { timeout: MCP_ROUNDTRIP_MS }).not.toContain('Profile link')
-      expect(await layers.textContent()).toContain('Empty headline, second line')
+      expect(await layers.textContent()).toContain('jtbkk')
       await editor.getByRole('button', { name: /^Close/ }).click()
       await editor.waitFor({ state: 'detached' })
 
@@ -3293,7 +3293,7 @@ describe('chat composer browser flow', () => {
       await expect.poll(() => platforms.getByRole('button', { name: 'TikTok', exact: true }).getAttribute('aria-pressed'), {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe('true')
-      await expect.poll(async () => (await layers.textContent()) ?? '', { timeout: MCP_ROUNDTRIP_MS }).toContain('Empty headline, second line')
+      await expect.poll(async () => (await layers.textContent()) ?? '', { timeout: MCP_ROUNDTRIP_MS }).toContain('jtbkk')
       await editor.getByRole('button', { name: /^Close/ }).click()
       await editor.waitFor({ state: 'detached' })
       expect(toolCallCount('apply_watermark')).toBe(initialApplyCalls)

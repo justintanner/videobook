@@ -402,9 +402,14 @@ describe('workspace action launcher with real endpoints', () => {
     await input.fill('/status')
     expect(await page.locator('.command-suggestions strong').allTextContents()).toContain('/activity')
     await input.press('Enter')
-    await page.getByRole('heading', { level: 2, name: 'List book actions' }).waitFor()
-    await page.keyboard.press('Escape')
+    const activity = page.getByRole('heading', { level: 2, name: 'List book actions' })
+    await activity.waitFor()
+    await expect.poll(async () => {
+      await input.press('Escape')
+      return await activity.isVisible()
+    }, { timeout: MCP_ROUNDTRIP_MS }).toBe(false)
     await input.fill('/insert')
+    await expect.poll(() => page.locator('.command-suggestions [role="option"][aria-selected="true"] strong').textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe('/insert')
     await input.press('Enter')
     await page.getByRole('heading', { level: 2, name: 'Insert', exact: true }).waitFor()
     expect(await page.getByLabel('Start frame', { exact: false }).getAttribute('type')).toBe('number')
@@ -448,7 +453,7 @@ describe('workspace action launcher with real endpoints', () => {
   })
 
   it('exports an asset to isolated Downloads without entering the sequence export flow', async () => {
-    await sendCommand('/export @a2')
+    await sendCommand('/download @a2')
     await expect.poll(async () => (await readdir(join(rootDir, 'downloads'))).length, { timeout: MCP_ROUNDTRIP_MS }).toBe(1)
     const [filename] = await readdir(join(rootDir, 'downloads'))
     const exported = await readFile(join(rootDir, 'downloads', filename!))
@@ -892,7 +897,6 @@ describe('workspace action launcher with real endpoints', () => {
     expect(duplicate.assetId).not.toBe(imageId)
     await page.reload()
     await sendCommand(`/delete ${String(duplicate.assetId)}`)
-    await applySheet('Run action')
     await expect.poll(async () => JSON.stringify(await call('list_assets')), { timeout: MCP_ROUNDTRIP_MS }).not.toContain(String(duplicate.assetId))
     expect(JSON.stringify(await call('list_assets'))).toContain(imageId)
   }, 120_000)
