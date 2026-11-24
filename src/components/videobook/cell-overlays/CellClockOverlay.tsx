@@ -3,9 +3,7 @@ import {
   notebookCellGenerationPhaseCount,
   type NotebookCellGenerationPhase,
 } from '@/videobook/notebook-cell-presentation'
-import type { GenerationIdentity } from '@/videobook/output-generation'
 import { CellAnimatedBackground } from './CellAnimatedBackground'
-import { CellGeneratorIdentity } from './CellGeneratorIdentity'
 
 const TICK_MS = 1000
 
@@ -32,18 +30,36 @@ function phaseStepStatus(
   return step === active ? 'active' : 'pending'
 }
 
+function useElapsedLabel(startedAt: number | null): string {
+  const [fallbackStart] = useState(() => Date.now())
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), TICK_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  return formatElapsed(Math.max(0, now - (startedAt ?? fallbackStart)))
+}
+
+function CellPhaseSteps({ phase }: { phase: NotebookCellGenerationPhase }) {
+  return (
+    <div className="cell-state-phase-rail" aria-hidden="true">
+      {phaseSteps.map((step) => (
+        <span
+          key={step}
+          className="cell-state-phase-step"
+          data-status={phaseStepStatus(step, phase.step)}
+        />
+      ))}
+    </div>
+  )
+}
+
 function CellPhaseRail({ phase }: { phase: NotebookCellGenerationPhase }) {
   return (
     <div className="cell-state-phase">
-      <div className="cell-state-phase-rail" aria-hidden="true">
-        {phaseSteps.map((step) => (
-          <span
-            key={step}
-            className="cell-state-phase-step"
-            data-status={phaseStepStatus(step, phase.step)}
-          />
-        ))}
-      </div>
+      <CellPhaseSteps phase={phase} />
       <div className="cell-state-phase-label">
         <span>{phase.label}</span>
         <span>{phase.step}/{notebookCellGenerationPhaseCount}</span>
@@ -58,31 +74,22 @@ export function CellClockOverlay({
   address,
   startedAt,
   variant,
-  meta = null,
   phase = null,
+  overPicture = false,
 }: {
   icon: ReactNode
   label: string
   address: string
   startedAt: number | null
   variant?: 'rise' | 'stream'
-  meta?: GenerationIdentity | null
   phase?: NotebookCellGenerationPhase | null
+  overPicture?: boolean
 }) {
-  const [fallbackStart] = useState(() => Date.now())
-  const effectiveStart = startedAt ?? fallbackStart
-  const [now, setNow] = useState(() => Date.now())
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), TICK_MS)
-    return () => clearInterval(id)
-  }, [])
-
-  const elapsedLabel = formatElapsed(Math.max(0, now - effectiveStart))
+  const elapsedLabel = useElapsedLabel(startedAt)
 
   return (
     <div
-      className="cell-state-overlay cell-state-overlay-clock"
+      className={`cell-state-overlay cell-state-overlay-clock${overPicture ? ' cell-state-overlay-over-picture' : ''}`}
       role="status"
       aria-label={`@${address} ${label.toLowerCase()}`}
       aria-live="polite"
@@ -93,16 +100,49 @@ export function CellClockOverlay({
           <span className="cell-state-overlay-icon" aria-hidden="true">
             {icon}
           </span>
-          <div className="cell-state-overlay-copy">
-            <strong>{label}</strong>
-            <span className="cell-state-timer" aria-hidden="true">
-              {elapsedLabel}
-            </span>
-          </div>
+          <span className="cell-state-timer" aria-hidden="true">
+            {elapsedLabel}
+          </span>
         </div>
-        {meta && <CellGeneratorIdentity identity={meta} className="cell-state-meta" />}
         {phase && <CellPhaseRail phase={phase} />}
       </div>
+    </div>
+  )
+}
+
+export function CellClockDock({
+  label,
+  detail,
+  address,
+  startedAt,
+  phase = null,
+  waiting = false,
+}: {
+  label: string
+  detail: string
+  address: string
+  startedAt: number | null
+  phase?: NotebookCellGenerationPhase | null
+  waiting?: boolean
+}) {
+  const elapsedLabel = useElapsedLabel(startedAt)
+
+  return (
+    <div
+      className={`cell-state-dock cell-state-dock-clock${waiting ? ' cell-state-dock-waiting' : ''}`}
+      role="status"
+      aria-label={`@${address} ${label.toLowerCase()}`}
+      aria-live="polite"
+    >
+      {phase
+        ? <CellPhaseSteps phase={phase} />
+        : <span className="cell-state-dock-bar" aria-hidden="true"><span /></span>}
+      <span className="cell-state-dock-row">
+        <span className="cell-state-dock-label">{detail}</span>
+        <span className="cell-state-timer" aria-hidden="true">
+          {elapsedLabel}
+        </span>
+      </span>
     </div>
   )
 }

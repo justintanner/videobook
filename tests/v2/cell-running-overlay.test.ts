@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CellStateOverlay } from '../../src/components/videobook/cell-overlays/CellStateOverlay'
 import { isGenerationCreditError } from '../../server/src/generation-credit-error'
-import { generationIdentity } from '../../src/videobook/output-generation'
 
 describe('CellStateOverlay', () => {
   it.each([
@@ -82,27 +81,25 @@ describe('CellStateOverlay', () => {
     expect(html).toContain('class="cell-state-overlay cell-state-overlay-clock"')
     expect(html).toContain('role="status"')
     expect(html).toContain('aria-live="polite"')
-    expect(html).toContain(`>${label}</strong>`)
+    expect(html).toContain(`aria-label="@a1 ${label.toLowerCase()}"`)
+    expect(html).not.toContain('<strong>')
     expect(html).toContain('class="cell-state-timer"')
     expect(html).toContain('class="cell-state-shimmer"')
     expect(html).not.toContain('cell-state-shimmer"><span')
     expect(html).not.toContain('cell-state-phase')
-    expect(html).not.toContain('cell-state-meta')
   })
 
-  it('names the generator and the phase while a generation runs', () => {
+  it('names the phase while a generation runs and leaves the generator to the source chip', () => {
     const html = renderToStaticMarkup(createElement(CellStateOverlay, {
       kind: 'video',
       address: 'c5',
       status: 'generating',
       icon: createElement('span', { 'data-icon': 'video' }),
-      generator: generationIdentity('fal', 'fal:bytedance/seedance-2-5'),
       generation: true,
     }))
 
-    expect(html).toContain('>GENERATING</strong>')
-    expect(html).toContain('class="cell-state-meta" title="Fal · bytedance/seedance-2-5"')
-    expect(html).toContain('<span class="cell-generator-provider">Fal</span><span class="cell-generator-model">bytedance/seedance-2-5</span>')
+    expect(html).toContain('aria-label="@c5 generating"')
+    expect(html).not.toContain('cell-generator-provider')
     expect(html).toContain('class="cell-state-phase-step" data-status="done"')
     expect(html).toContain('class="cell-state-phase-step" data-status="active"')
     expect(html).toContain('class="cell-state-phase-step" data-status="pending"')
@@ -119,7 +116,7 @@ describe('CellStateOverlay', () => {
       generation: true,
     }))
 
-    expect(html).toContain('>DOWNLOADING</strong>')
+    expect(html).toContain('aria-label="@c5 downloading"')
     expect(html).toContain('class="cell-state-streaks"')
     expect(html).toContain('<span>DOWNLOAD &amp; COMMIT</span>')
     expect(html).toContain('<span>3/3</span>')
@@ -134,7 +131,7 @@ describe('CellStateOverlay', () => {
       icon: createElement('span', { 'data-icon': 'video' }),
     }))
 
-    expect(html).toContain('>DOWNLOADING</strong>')
+    expect(html).toContain('aria-label="@a1 downloading"')
     expect(html).toContain('class="cell-state-streak"')
     expect(html).not.toContain('cell-state-phase')
   })
@@ -146,7 +143,6 @@ describe('CellStateOverlay', () => {
       status: 'error',
       statusError: 'Job lease expired',
       icon: createElement('span', { 'data-icon': 'img' }),
-      generator: generationIdentity('fal', 'fal:bytedance/seedream-4'),
       onRepair: () => undefined,
       onDelete: () => undefined,
     }))
@@ -155,7 +151,6 @@ describe('CellStateOverlay', () => {
     expect(html).toContain('role="alert"')
     expect(html).toContain('GENERATION FAILED')
     expect(html).toContain('Job lease expired')
-    expect(html).toContain('<span class="cell-generator-model">bytedance/seedream-4</span>')
     expect(html).toContain('class="cell-state-action cell-state-repair nodrag"')
     expect(html).toContain('aria-label="Repair @a1 in chat"')
     expect(html).toContain('REPAIR')
@@ -163,6 +158,21 @@ describe('CellStateOverlay', () => {
     expect(html).toContain('aria-label="Delete @a1"')
     expect(html).toContain('DELETE')
     expect(html).not.toContain('RETRY')
+  })
+
+  it('names a failed take a generation failure, not a media one', () => {
+    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
+      kind: 'video',
+      address: 'f3',
+      status: 'error',
+      statusError: 'Provider output failed',
+      icon: null,
+      generation: true,
+      onRepair: () => undefined,
+    }))
+
+    expect(html).toContain('<strong>GENERATION FAILED</strong>')
+    expect(html).not.toContain('MEDIA FAILED')
   })
 
   it('renders a media failure with delete alone when nothing can be repaired', () => {
@@ -179,6 +189,72 @@ describe('CellStateOverlay', () => {
     expect(html).toContain('Remote host returned 403')
     expect(html).not.toContain('REPAIR')
     expect(html).toContain('class="cell-state-action cell-state-delete nodrag"')
+  })
+
+  it('docks a generation clock under the prompt instead of covering it', () => {
+    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
+      kind: 'generate_audio',
+      address: 'b8',
+      status: 'generating',
+      icon: null,
+      generation: true,
+      docked: true,
+    }))
+
+    expect(html).toContain('class="cell-state-dock cell-state-dock-clock"')
+    expect(html).toContain('aria-label="@b8 generating"')
+    expect(html).toContain('class="cell-state-phase-step" data-status="active"')
+    expect(html).toContain('<span class="cell-state-dock-label">PROVIDER GENERATING</span>')
+    expect(html).not.toContain('cell-state-overlay')
+  })
+
+  it('holds the docked bar still while a generation waits for a slot', () => {
+    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
+      kind: 'generate_audio',
+      address: 'b8',
+      status: 'queued',
+      icon: null,
+      generation: true,
+      docked: true,
+    }))
+
+    expect(html).toContain('class="cell-state-dock cell-state-dock-clock cell-state-dock-waiting"')
+    expect(html).toContain('<span class="cell-state-dock-label">QUEUED</span>')
+  })
+
+  it('docks a failed generation with its repair and delete controls', () => {
+    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
+      kind: 'generate_video',
+      address: 'b6',
+      status: 'error',
+      statusError: 'Kie only offers 5s or 10s here.',
+      icon: null,
+      generation: true,
+      docked: true,
+      onRepair: () => undefined,
+      onDelete: () => undefined,
+    }))
+
+    expect(html).toContain('class="cell-state-dock cell-state-dock-failed"')
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('<strong>GENERATION FAILED</strong>')
+    expect(html).toContain('Kie only offers 5s or 10s here.')
+    expect(html).toContain('REPAIR')
+    expect(html).toContain('DELETE')
+    expect(html).not.toContain('cell-state-scanlines')
+  })
+
+  it('lightens the clock over a picture that is being edited', () => {
+    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
+      kind: 'video',
+      address: 'd3',
+      status: 'trimming',
+      icon: null,
+      overPicture: true,
+    }))
+
+    expect(html).toContain('class="cell-state-overlay cell-state-overlay-clock cell-state-overlay-over-picture"')
+    expect(html).toContain('aria-label="@d3 trimming"')
   })
 
   it('renders nothing for an inactive cell', () => {

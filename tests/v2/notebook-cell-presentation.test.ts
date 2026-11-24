@@ -11,7 +11,6 @@ import {
   notebookCellMediaCaption,
   notebookCellPresentsMedia,
   notebookCellRunObservation,
-  notebookCellStatusLabel,
   notebookCellSupportsExecution,
   isImageVideoGenerationResultCell,
   notebookOutputVersionArtifactIds,
@@ -174,14 +173,6 @@ describe('notebook cell presentation', () => {
     expect(notebookCellInspectorActionLabel('extract_audio', 'Re-run')).toBe('Extract again')
     expect(notebookCellInspectorActionLabel('split_video', 'Run')).toBe('Split')
     expect(notebookCellInspectorActionLabel('generate_video', 'Gen')).toBe('Generate')
-  })
-
-  it('hides execution status for passive media but not generators', () => {
-    expect(notebookCellStatusLabel('video', 'completed')).toBeNull()
-    expect(notebookCellStatusLabel('image', 'completed')).toBeNull()
-    expect(notebookCellStatusLabel('audio', 'completed')).toBeNull()
-    expect(notebookCellStatusLabel('generate_video', 'completed')).toBe('completed')
-    expect(notebookCellStatusLabel('split_video', 'completed')).toBe('completed')
   })
 
   it('projects canonical split frame references and range values', () => {

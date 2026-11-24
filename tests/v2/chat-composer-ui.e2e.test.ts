@@ -1712,10 +1712,10 @@ describe('chat composer browser flow', () => {
       const squares = [...element.querySelectorAll('.notebook-grid-square')].slice(0, 8)
       const squareBounds = squares.map(square => square.getBoundingClientRect())
       const addresses = [...element.querySelectorAll('.cell-node-footer strong')]
-      const details = [...element.querySelectorAll('.cell-node-type-label, .cell-media-badge, .cell-media-meter, .cell-aspect-ratio, .cell-model-line, .cell-status, .cell-media-slot-library strong, .cell-media-slot-library span, .cell-media-slot-upload')]
+      const details = [...element.querySelectorAll('.cell-node-type-label, .cell-media-badge, .cell-media-meter, .cell-aspect-ratio, .cell-model-line, .cell-state-flag, .cell-media-slot-library strong, .cell-media-slot-library span, .cell-media-slot-upload')]
         .filter((detail) => {
           const rect = detail.getBoundingClientRect()
-          const rail = detail.closest('.cell-node-footer-meta, .cell-status-slot')?.getBoundingClientRect()
+          const rail = detail.closest('.cell-node-footer-meta')?.getBoundingClientRect()
           if (rail && (rect.top < rail.top || rect.bottom > rail.bottom + 1)) return false
           return rect.width > 0 && rect.height > 0
         })
@@ -4474,7 +4474,7 @@ describe('chat composer browser flow', () => {
     notebookDirty = true
   }, 60_000)
 
-  it('keeps dense generation card headers compact and readable when their chips wrap', async () => {
+  it('keeps generation card headers to their kind and lets the footer flag a running cell', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
     const input = page.getByLabel('Videobook command input')
@@ -4484,53 +4484,41 @@ describe('chat composer browser flow', () => {
     }).toBe(true)
 
     await collapseComposerDock(page)
-    const header = notebookCellNode(page, generationCellId)
-      .locator('.cell-node-header')
+    const node = notebookCellNode(page, generationCellId)
+    const header = node.locator('.cell-node-header')
     await header.waitFor({ state: 'visible' })
     const layout = await header.evaluate((element) => {
       const headerRect = element.getBoundingClientRect()
       const type = element.querySelector('.cell-node-type')
-      const chips = element.querySelector('.cell-generation-chips')
-      if (!(type instanceof HTMLElement) || !(chips instanceof HTMLElement)) {
+      const label = type?.querySelector('.cell-node-type-label')
+      if (!(type instanceof HTMLElement) || !(label instanceof HTMLElement)) {
         throw new Error('Generation header content is missing')
       }
       const typeRect = type.getBoundingClientRect()
-      const chipsRect = chips.getBoundingClientRect()
-      const label = type.querySelector('.cell-node-type-label')
-      if (!(label instanceof HTMLElement)) {
-        throw new Error('Generation header label is missing')
-      }
-      const headerCenter = headerRect.top + headerRect.height / 2
       return {
         accessibleLabel: type.getAttribute('aria-label'),
-        chipLabels: [...chips.querySelectorAll('.cell-aspect-ratio')]
-          .map((chip) => chip.textContent?.trim()),
-        contentGap: chipsRect.left - typeRect.right,
-        stacked: chipsRect.top >= typeRect.bottom,
-        contained: [typeRect, chipsRect].every(rect => rect.left >= headerRect.left && rect.right <= headerRect.right && rect.top >= headerRect.top && rect.bottom <= headerRect.bottom),
-        headerHeight: headerRect.height,
-        labelClipped: label.scrollWidth > label.clientWidth,
         renderedLabel: type.textContent?.trim(),
-        typeCenterOffset: Math.abs(typeRect.top + typeRect.height / 2 - headerCenter),
-        chipsCenterOffset: Math.abs(chipsRect.top + chipsRect.height / 2 - headerCenter),
+        labelClipped: label.scrollWidth > label.clientWidth,
+        settingsInHeader: element.querySelectorAll('.cell-aspect-ratio:not(.cell-goal-mark)').length,
+        contained: typeRect.left >= headerRect.left && typeRect.right <= headerRect.right
+          && typeRect.top >= headerRect.top && typeRect.bottom <= headerRect.bottom,
+        headerHeight: headerRect.height,
         whiteSpace: getComputedStyle(label).whiteSpace,
       }
     })
 
     expect(layout).toMatchObject({
       accessibleLabel: 'GEN VIDEO',
-      chipLabels: ['10s', '9:16'],
+      renderedLabel: 'GEN VIDEO',
       labelClipped: false,
-      renderedLabel: 'GEN VID',
+      settingsInHeader: 0,
+      contained: true,
       whiteSpace: 'nowrap',
     })
     expect(layout.headerHeight).toBeLessThanOrEqual(42)
-    expect(layout.contained).toBe(true)
-    expect(layout.stacked || layout.contentGap >= 0).toBe(true)
-    if (!layout.stacked) {
-      expect(layout.typeCenterOffset).toBeLessThan(1)
-      expect(layout.chipsCenterOffset).toBeLessThan(1)
-    }
+    const footer = node.locator('.cell-node-footer')
+    expect((await footer.locator('.cell-state-flag').textContent())?.trim()).toBe('Generating')
+    expect(await footer.locator('.cell-node-footer-meta').count()).toBe(0)
 
     await notebookCellNode(page, outputVideoCellId).waitFor({ state: 'visible' })
 

@@ -11,30 +11,37 @@ import {
   CircleDot,
   Film,
   Upload,
+  Download,
+  Hourglass,
+  Scissors,
+  Crop,
+  Rewind,
+  Gauge,
   Images,
-  Check,
   Layers2,
   Sparkles,
   Ellipsis,
   Flag,
-  GripVertical,
 } from 'lucide-react'
 import {
   cellTypeLabel,
   formatMediaTime,
   notebookSplitRange,
   notebookCellActionPresentation,
-  notebookCellStatusLabel,
   notebookCellIsActiveStatus,
   notebookOutputVersionArtifactIds,
   isImageVideoGenerationResultCell,
 } from '@/videobook/notebook-cell-presentation'
-import { postPlatformName, postTileStatus } from '@/videobook/post-delivery-review'
+import { postPlatformName } from '@/videobook/post-delivery-review'
 import { PostTile } from '@/components/videobook/PostTile'
-import type { CanvasCellData, CanvasNode } from '@/videobook/notebook-canvas'
-import { isNotebookGenerationCellType, notebookCellFamily } from '@/videobook/notebook-cell-types'
+import type { CanvasCellData, CanvasNode, RunningTakes } from '@/videobook/notebook-canvas'
+import {
+  isNotebookGenerationCellType,
+  notebookCellFamily,
+  type NotebookCellFamily,
+} from '@/videobook/notebook-cell-types'
 import { notebookGridTag, notebookGridAddress } from '@/videobook/notebook-grid'
-import { endCellRefDrag, startCellRefDrag } from '@/videobook/cell-ref-drag'
+import { endCellRefDrag, setCellRefDragImage, startCellRefDrag } from '@/videobook/cell-ref-drag'
 import { notebookGenerationInputKind } from '../../../server/src/notebook-generation-contract'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
@@ -50,7 +57,7 @@ import {
   CellRunContext,
   CellActionsContext,
   PrimaryCellContext,
-  GenerationTitlesContext,
+  GenerationCatalogContext,
   CellContextMenuContext,
   cellContextMenuId,
   GoalMarksContext,
@@ -61,6 +68,7 @@ import {
   useState,
   useContext,
   useEffect,
+  type ReactNode,
 } from 'react'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import {
@@ -88,6 +96,7 @@ import {
   previewMeter,
   previewMetadataLabel,
   type CellPreviewBadge,
+  type CellPreviewMeter,
 } from '@/videobook/cell-preview'
 import { notebookTypeLane } from '../../../server/src/notebook-lanes'
 import {
@@ -99,9 +108,15 @@ import { AnalysisCellSummary } from '@/components/videobook/AnalysisCellSummary'
 import { CellMediaFrame } from '@/components/videobook/CellMediaFrame'
 import { PublishedPostTileChrome } from '@/components/videobook/PublishedPostChrome'
 import { CellStateOverlay } from '@/components/videobook/cell-overlays/CellStateOverlay'
+import { CellClockDock } from '@/components/videobook/cell-overlays/CellClockOverlay'
 import { CellGeneratorIdentity } from '@/components/videobook/cell-overlays/CellGeneratorIdentity'
-import { generationIdentity } from '@/videobook/output-generation'
-import { publishedPostPresentation } from '@/videobook/notebook-published-post'
+import {
+  generationIdentity,
+  generationPromptSegments,
+  type GenerationIdentity,
+  type PromptSegment,
+} from '@/videobook/output-generation'
+import { cellStateFlag, type CellStateFlag } from '@/videobook/cell-state-flag'
 import { NotebookTimeline } from '@/components/videobook/NotebookTimeline'
 
 export function CellIcon({ kind }: { kind: NotebookCellType }) {
@@ -123,11 +138,15 @@ export function CellIcon({ kind }: { kind: NotebookCellType }) {
   return <Film size={14} />
 }
 
-function compactCellTypeLabel(kind: NotebookCellType): string {
-  if (kind === 'generate_video') return 'GEN VID'
-  if (kind === 'generate_image') return 'GEN IMG'
-  if (kind === 'generate_audio') return 'GEN AUD'
-  return cellTypeLabel(kind)
+function CellStateIcon({ kind, status }: { kind: NotebookCellType; status: string }) {
+  if (status === 'queued' || status.startsWith('render-queued')) return <Hourglass size={14} />
+  if (status === 'downloading') return <Download size={14} />
+  if (status === 'uploading') return <Upload size={14} />
+  if (status === 'trimming') return <Scissors size={14} />
+  if (status === 'cropping') return <Crop size={14} />
+  if (status === 'reversing') return <Rewind size={14} />
+  if (status === 'changing-speed') return <Gauge size={14} />
+  return <CellIcon kind={kind} />
 }
 
 function emptyCellLabel(data: CanvasCellData): string {
@@ -144,11 +163,6 @@ function emptyCellLabel(data: CanvasCellData): string {
   if (data.kind === 'concat') return 'Connect clip:0 and clip:1'
   if (data.kind === 'splice') return 'Connect first and second'
   return data.prompt || notebookGridTag(data.slot)
-}
-
-function aspectFirst(badges: readonly CellPreviewBadge[]): CellPreviewBadge[] {
-  return [...badges].sort((left, right) =>
-    Number(right.key === 'aspect') - Number(left.key === 'aspect'))
 }
 
 function assetPreviewUrl(asset: AssetRecord | undefined): string | null {
@@ -200,8 +214,15 @@ function SplitVideoPreview({ data }: { data: CanvasCellData }) {
   )
 }
 
+function slotDetail(state: MediaSlotState | undefined): string {
+  if (state?.operation === 'upload') return state.fileName ?? 'Uploading your file'
+  if (state?.operation === 'attach') return 'From recent media'
+  return 'Recent media or drop a file'
+}
+
 function MediaSlotTile({
   cellId,
+  address,
   kind,
   ready,
   state,
@@ -210,6 +231,7 @@ function MediaSlotTile({
   onOpenLibrary,
 }: {
   cellId: string
+  address: string
   kind: PassiveMediaKind
   ready: boolean
   state: MediaSlotState | undefined
@@ -272,7 +294,7 @@ function MediaSlotTile({
       >
         {busy ? <BusyIndicator size={22} /> : <Images size={22} />}
         <strong>{busy ? 'Attaching media…' : `Add ${kind}`}</strong>
-        <span>Recent media or drop a file</span>
+        <span className={busy ? 'cell-media-slot-file' : undefined}>{slotDetail(state)}</span>
       </button>
       <button
         type="button"
@@ -296,6 +318,13 @@ function MediaSlotTile({
           event.target.value = ''
         }}
       />
+      {dragging && (
+        <span className="cell-media-slot-release" aria-hidden="true">
+          <Upload size={22} />
+          <strong>Release to add</strong>
+          <span>Drops into {address}</span>
+        </span>
+      )}
       {state?.error && <span className="cell-media-slot-error" role="alert">{state.error}</span>}
     </section>
   )
@@ -320,23 +349,270 @@ const cellSourceRoutePorts = cellSourcePortSides.flatMap((side) =>
       : { top: `${offset * 100}%` },
   })))
 
-function CellStatusBadge({ status }: { status: string | null }) {
-  if (!status) return null
-  const label = status.replaceAll('-', ' ').replaceAll('_', ' ')
+type CellFact = {
+  key: string
+  label: string
+  title: string
+}
 
+type CellSourceDetail = {
+  node: ReactNode
+  label: string
+}
+
+function CellFlag({ flag }: { flag: CellStateFlag | null }) {
+  if (!flag) return null
   return (
-    <span className="cell-status-slot">
-      <span
-        className={`cell-status cell-status-${status}`}
-        aria-label={`Status: ${label}`}
-        title={label}
-      >
-        {status === 'completed'
-          ? <Check size={11} strokeWidth={2.4} aria-hidden="true" />
-          : <span>{label}</span>}
+    <span className="cell-state-flag" data-tone={flag.tone} title={flag.label}>
+      <span>{flag.label}</span>
+    </span>
+  )
+}
+
+function CellRefAddress({
+  cellId,
+  address,
+  family,
+  draggable,
+}: {
+  cellId: string
+  address: string
+  family: NotebookCellFamily
+  draggable: boolean
+}) {
+  const draggingRef = useRef(false)
+  const [lifted, setLifted] = useState(false)
+  if (!draggable) return <strong className="cell-ref-address">{address}</strong>
+  return (
+    <strong
+      className={`cell-ref-address cell-ref-address-draggable nodrag nopan${lifted ? ' cell-ref-address-lifted' : ''}`}
+      draggable
+      title="Drag into an input slot"
+      onDragStart={(event) => {
+        event.stopPropagation()
+        startCellRefDrag(event, { sourceCellId: cellId, from: null })
+        setCellRefDragImage(event, address, family)
+        draggingRef.current = true
+        requestAnimationFrame(() => {
+          if (draggingRef.current) setLifted(true)
+        })
+      }}
+      onDragEnd={() => {
+        draggingRef.current = false
+        endCellRefDrag()
+        setLifted(false)
+      }}
+    >
+      {address}
+    </strong>
+  )
+}
+
+function CellFooterFacts({
+  label,
+  meter,
+  facts,
+}: {
+  label: string
+  meter: CellPreviewMeter | null
+  facts: readonly CellFact[]
+}) {
+  if (!meter && facts.length === 0) return null
+  return (
+    <span className="cell-node-footer-meta" role="group" aria-label={label}>
+      {meter && (
+        <time
+          className="cell-node-footer-meter"
+          dateTime={`PT${meter.seconds}S`}
+          title="Duration"
+        >
+          {meter.label}
+        </time>
+      )}
+      {facts.map((fact) => (
+        <span key={fact.key} className="cell-media-badge" title={fact.title}>
+          {fact.label}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+function VersionCount({ active, total }: { active: number; total: number }) {
+  return (
+    <span
+      className="cell-version-count"
+      aria-label={`Current output version ${active} of ${total}`}
+      title={`Current output · version ${active} of ${total}`}
+    >
+      <Layers2 size={12} aria-hidden="true" />
+      v{active}/{total}
+    </span>
+  )
+}
+
+function GoalMark({ mark }: { mark: string }) {
+  return (
+    <span className="cell-generation-chips">
+      <span className="cell-aspect-ratio cell-goal-mark" title={`Goal ${mark}`}>
+        <Flag size={9} aria-hidden="true" />
+        {mark.split(' · ')[0]}
       </span>
     </span>
   )
+}
+
+function promptTokenFamily(token: string): 'image' | 'video' | 'audio' {
+  if (token.startsWith('video')) return 'video'
+  if (token.startsWith('audio')) return 'audio'
+  return 'image'
+}
+
+function placedPromptSegments(prompt: string): Array<PromptSegment & { start: number }> {
+  return generationPromptSegments(prompt).reduce<Array<PromptSegment & { start: number }>>(
+    (placed, segment) => {
+      const previous = placed.at(-1)
+      const start = previous ? previous.start + previous.text.length : 0
+      return [...placed, { ...segment, start }]
+    },
+    [],
+  )
+}
+
+function GenerationPromptText({ prompt }: { prompt: string }) {
+  return placedPromptSegments(prompt).map((segment) => segment.token
+    ? (
+      <span key={segment.start} className="cell-prompt-token" data-family={promptTokenFamily(segment.token)}>
+        {segment.text}
+      </span>
+    )
+    : <span key={segment.start}>{segment.text}</span>)
+}
+
+function GenerationRecipe({
+  provider,
+  modelLine,
+  prompt,
+  promptRequired,
+}: {
+  provider: string | null
+  modelLine: string | null
+  prompt: string | null
+  promptRequired: boolean
+}) {
+  if (!modelLine) {
+    return (
+      <div className="cell-copy cell-generation-choose">
+        <Sparkles size={26} aria-hidden="true" />
+        <strong>Choose a generation action</strong>
+        <span>Open the cell to pick a model</span>
+      </div>
+    )
+  }
+  return (
+    <div className="cell-copy cell-copy-text">
+      <span className="cell-generation-model">
+        {provider && <span className="cell-generator-provider">{provider}</span>}
+        <span className="cell-model-line" title={modelLine}>{modelLine}</span>
+      </span>
+      {prompt
+        ? <p title={prompt}><GenerationPromptText prompt={prompt} /></p>
+        : (
+          <span className="cell-generation-prompt-empty">
+            {promptRequired ? 'Add a prompt. Name inputs like @image1.' : 'Prompt optional'}
+          </span>
+        )}
+    </div>
+  )
+}
+
+function displayedIdentity(identity: GenerationIdentity, title: string | null): GenerationIdentity {
+  const name = title ?? identity.model
+  return {
+    ...identity,
+    model: name ? abbreviateGenerationPhrases(name) : null,
+  }
+}
+
+function generatorDetail(identity: GenerationIdentity, title: string | null): CellSourceDetail {
+  return {
+    node: <CellGeneratorIdentity identity={displayedIdentity(identity, title)} className="cell-route-generator" />,
+    label: `Made with ${identity.label}`,
+  }
+}
+
+function frameDetail(
+  provenance: CanvasCellData['frameProvenance'],
+  hasIncoming: boolean,
+): CellSourceDetail | null {
+  if (!provenance || provenance.atSeconds === null) return null
+  const time = formatMediaTime(provenance.atSeconds)
+  const from = hasIncoming ? null : provenance.sourceAddress?.replace(/^@/u, '') ?? null
+  return {
+    node: <span className="cell-route-time">{from ? `${from} · ${time}` : time}</span>,
+    label: `Frame at ${time}`,
+  }
+}
+
+function cellSourceDetail({
+  generator,
+  generatorTitle,
+  toolName,
+  frameProvenance,
+  hasIncoming,
+}: {
+  generator: GenerationIdentity | null
+  generatorTitle: string | null
+  toolName: string | null
+  frameProvenance: CanvasCellData['frameProvenance']
+  hasIncoming: boolean
+}): CellSourceDetail | null {
+  if (generator) return generatorDetail(generator, generatorTitle)
+  const frame = frameDetail(frameProvenance, hasIncoming)
+  if (frame) return frame
+  return toolName
+    ? generatorDetail({ provider: null, model: toolName, label: toolName }, null)
+    : null
+}
+
+function mediaFacts(badges: readonly CellPreviewBadge[]): CellFact[] {
+  return [...badges]
+    .sort((left, right) => Number(right.key === 'aspect') - Number(left.key === 'aspect'))
+    .map((badge) => ({ key: badge.key, label: badge.label, title: badge.title }))
+}
+
+function generationFacts(duration: string | null, aspectRatio: string | null): CellFact[] {
+  return [
+    duration
+      ? { key: 'duration', label: /^\d+(\.\d+)?$/.test(duration) ? `${duration}s` : duration, title: 'Duration' }
+      : null,
+    aspectRatio ? { key: 'aspect', label: aspectRatio, title: 'Aspect ratio' } : null,
+  ].filter((fact): fact is CellFact => fact !== null)
+}
+
+function runningTakesDetail(runningTakes: RunningTakes): string {
+  return `${runningTakes.count} ${runningTakes.count === 1 ? 'take' : 'takes'} running`
+}
+
+function timestampValue(value: string | undefined): number | null {
+  const parsed = value ? Date.parse(value) : Number.NaN
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function generationDurationSetting(settings: Record<string, unknown> | null): string | null {
+  if (!settings) return null
+  return asString(settings.duration)
+    ?? asString(settings.duration_seconds)
+    ?? (typeof settings.duration === 'number' ? String(settings.duration) : null)
+}
+
+function generationModelLine(title: string | null, mode: string | null): string | null {
+  if (!title) return null
+  const abbreviated = abbreviateGenerationPhrases(title)
+  const modeAbbreviation = mode && /^[a-z]2[a-z]$/i.test(mode) ? mode.toUpperCase() : null
+  return modeAbbreviation && !abbreviated.toUpperCase().includes(modeAbbreviation)
+    ? `${abbreviated} · ${modeAbbreviation}`
+    : abbreviated
 }
 
 export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
@@ -346,7 +622,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const failedDownload = data.asset?.failedDownload
   const downloadRetry = failedDownload && (failedDownload.signInRequired && failedDownload.chromeRetryAvailable ? 'chrome' : 'standard')
   const primaryCellId = useContext(PrimaryCellContext)
-  const generationTitles = useContext(GenerationTitlesContext)
+  const generationCatalog = useContext(GenerationCatalogContext)
   const contextMenu = useContext(CellContextMenuContext)
   const goalMark = useContext(GoalMarksContext).get(id) ?? null
   const updateNodeInternals = useUpdateNodeInternals()
@@ -387,7 +663,6 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     outputArtifactId: data.outputArtifactId,
     tool: data.tool,
   }, data.status)
-  const statusLabel = data.post ? postTileStatus(data.post) : notebookCellStatusLabel(data.kind, data.status)
   const inputKind = data.outputArtifactId ? notebookGenerationInputKind({ type: data.kind }) : null
   const generationCell = isNotebookGenerationCellType(data.kind)
   const generationResult = isImageVideoGenerationResultCell({
@@ -401,26 +676,12 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
       data.model ?? data.producerModel,
     )
     : null
-  const toolTitle = generationCell && data.model
-    ? generationTitles.get(data.model) ?? null
-    : null
-  const generationModelTitle = generationCell
-    ? toolTitle ?? data.model ?? data.tool ?? null
-    : null
-  const generationMode = generationCell
-    ? asString(data.inputs?.generationMode)
-    : null
-  const modeAbbreviation = generationMode && /^[a-z]2[a-z]$/i.test(generationMode)
-    ? generationMode.toUpperCase()
-    : null
-  const modelLine = generationModelTitle
-    ? (() => {
-      const abbreviated = abbreviateGenerationPhrases(generationModelTitle)
-      return modeAbbreviation
-        && !abbreviated.toUpperCase().includes(modeAbbreviation)
-        ? `${abbreviated} · ${modeAbbreviation}`
-        : abbreviated
-    })()
+  const catalogEntry = data.model ? generationCatalog.get(data.model) : undefined
+  const modelLine = generationCell
+    ? generationModelLine(
+      catalogEntry?.title ?? generator?.model ?? data.model ?? data.tool ?? null,
+      asString(data.inputs?.generationMode),
+    )
     : null
   const generationSettings = generationCell
     ? recordValue(data.inputs?.generationSettings)
@@ -428,34 +689,15 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const aspectRatio = frameAspectRatio(data.model ?? '', data.inputs ?? {}) ?? (generationSettings
     ? asString(generationSettings.aspect_ratio)
     : null)
-  const generationDuration = generationSettings
-    ? asString(generationSettings.duration)
-      ?? asString(generationSettings.duration_seconds)
-      ?? (typeof generationSettings.duration === 'number'
-        ? String(generationSettings.duration)
-        : null)
-    : null
+  const generationDuration = generationDurationSetting(generationSettings)
   const typeLabel = cellTypeLabel(data.kind)
-  const denseGenerationHeader = generationCell
-    && generationDuration !== null
-    && aspectRatio !== null
-  const visibleTypeLabel = denseGenerationHeader
-    ? compactCellTypeLabel(data.kind)
-    : typeLabel
   const resolvedPrompt = asString(data.prompt) || asString(data.inputs?.resolvedPrompt)
   const imagePrompt = imageMediaCell
     ? resolvedPrompt ?? data.asset?.prompt ?? null
     : null
-  const promptCell = textCell || (generationCell && Boolean(data.prompt))
+  const generationPrompt = generationCell ? data.prompt?.trim() || null : null
+  const promptCell = textCell
   const address = notebookGridTag(data.slot)
-  const frameProvenance = data.frameProvenance
-    ? [
-        data.frameProvenance.sourceAddress,
-        data.frameProvenance.atSeconds === null
-          ? null
-          : formatMediaTime(data.frameProvenance.atSeconds),
-      ].filter(Boolean).join(' · ') || null
-    : null
   const audioPreviewInput = {
     audioInfo: data.asset?.audioInfo ?? null,
     durationSeconds: data.asset?.duration ?? null,
@@ -466,18 +708,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const visualPreviewCell = visualMediaCell && Boolean(mediaUrl || thumbnailUrl)
   const mediaTile = visualPreviewCell && !emptyMediaSlot && data.kind !== 'post'
   const running = notebookCellIsActiveStatus(data.status)
-  const failed = data.status === 'error'
-  const generatorChip = mediaTile
-    && generationResult
-    && !running
-    && !failed
-    && !publishedPostPresentation(data.inputs)
-    ? generator
-    : null
-  const footerGeneratorTool = !generatorChip && data.model
-    ? generationTitles.get(data.model) ?? null
-    : null
-  const footerGeneratorModel = generatorChip ? null : data.model ?? data.tool ?? null
+  const failed = data.status === 'error' || data.post?.runtime.status === 'failed'
   const audioBadges = audioPreviewCell ? audioPreviewBadges(audioPreviewInput) : []
   const audioMeter = audioPreviewCell ? audioPreviewMeter(audioPreviewInput) : null
   const visualBadges = !visualPreviewCell
@@ -486,17 +717,17 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
       ? imagePreviewBadges({
         width: data.asset?.width ?? null,
         height: data.asset?.height ?? null,
-        tool: footerGeneratorTool,
-        model: footerGeneratorModel,
-        provenance: frameProvenance,
+        tool: null,
+        model: null,
+        provenance: null,
       })
       : videoPreviewBadges({
         aspectRatio: data.videoAspectRatio ?? null,
         width: data.asset?.width ?? null,
         height: data.asset?.height ?? null,
-        tool: footerGeneratorTool,
-        model: footerGeneratorModel,
-        provenance: frameProvenance,
+        tool: null,
+        model: null,
+        provenance: null,
       })
   const visualMeter = visualPreviewCell && playableVideo
     ? previewMeter(data.videoDurationSeconds ?? data.asset?.duration ?? null)
@@ -504,6 +735,19 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const visualMetadataLabel = previewMetadataLabel(typeLabel, visualBadges, visualMeter, imagePrompt)
   const incomingBadge = notebookIncomingRouteBadge(data.incomingRoutes ?? [])
   const outgoingBadge = notebookOutgoingRouteBadge(data.outgoingRoutes ?? [])
+  const sourceDetail = visualMediaCell && !emptyMediaSlot
+    ? cellSourceDetail({
+      generator: generationResult ? generator : null,
+      generatorTitle: generationResult
+        ? generationCatalog.get(data.model ?? data.producerModel ?? '')?.title ?? null
+        : null,
+      toolName: mediaTile && data.model
+        ? catalogEntry?.title ?? data.model
+        : mediaTile ? data.tool ?? null : null,
+      frameProvenance: data.frameProvenance,
+      hasIncoming: Boolean(incomingBadge),
+    })
+    : null
   const outputVersions = notebookOutputVersionArtifactIds(
     data.inputs,
     data.outputArtifactId,
@@ -524,6 +768,30 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     1,
     outputVersions.indexOf(data.outputArtifactId ?? '') + 1,
   )
+  const flag = cellStateFlag({
+    kind: data.kind,
+    status: failedDownload ? 'error' : data.status,
+    post: data.post,
+    slotOperation: emptyMediaSlot ? slotContext.states[id]?.operation ?? null : null,
+    runningTakes: data.runningTakes?.count ?? 0,
+    promptMissing: generationCell && Boolean(modelLine) && !generationPrompt
+      && catalogEntry?.promptRequired === true,
+  })
+  const facts: CellFact[] = mediaTile
+    ? mediaFacts(visualBadges)
+    : generationCell
+      ? generationFacts(generationDuration, aspectRatio)
+      : data.post
+        ? [{ key: 'platform', label: postPlatformName(data.post), title: 'Platform' }]
+        : []
+  const factsLabel = mediaTile
+    ? visualMetadataLabel
+    : [typeLabel, ...facts.map((fact) => fact.label)].join(' · ')
+  const showFacts = !flag || data.kind === 'post'
+  const bareHeader = visualMediaCell || data.kind === 'post'
+  const takesRunning = generationCell && !running && !failed && data.runningTakes
+    ? data.runningTakes
+    : null
   const contextMenuId = cellContextMenuId(id)
   const openContextMenu = (
     x: number,
@@ -549,7 +817,9 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         data.revealing ? 'cell-node-created' : '',
         data.highlighted ? 'cell-node-highlight' : '',
         mediaTile ? 'cell-node-media-tile' : '',
-        incomingBadge ? 'cell-node-has-inputs' : '',
+        bareHeader ? 'cell-node-bare' : '',
+        incomingBadge || sourceDetail ? 'cell-node-has-inputs' : '',
+        flag?.tone === 'attention' ? 'cell-node-attention' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
       data-lane-family={data.lane ?? notebookTypeLane(data.kind)}
@@ -619,75 +889,60 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           style={port.style}
         />
       ))}
-      <CellRouteBadge direction="incoming" badge={incomingBadge} />
+      <CellRouteBadge
+        direction="incoming"
+        badge={incomingBadge}
+        detail={sourceDetail?.node ?? null}
+        detailLabel={sourceDetail?.label ?? null}
+      />
       <section className="cell-node-shell">
-        <header className="cell-node-header">
-          <span
-            className="cell-node-type"
-            aria-label={typeLabel}
-            title={denseGenerationHeader ? typeLabel : undefined}
-          >
-            <CellIcon kind={data.kind} />
-            <span className="cell-node-type-label" aria-hidden="true">
-              {visibleTypeLabel}
+        {bareHeader ? (goalMark ? (
+          <header className="cell-node-header cell-node-header-overlay">
+            <GoalMark mark={goalMark} />
+          </header>
+        ) : null) : (
+          <header className="cell-node-header">
+            <span className="cell-node-type" aria-label={typeLabel}>
+              <CellIcon kind={data.kind} />
+              <span className="cell-node-type-label" aria-hidden="true">
+                {typeLabel}
+              </span>
             </span>
-          </span>
-          {data.post && (
-            <span className="cell-generation-chips">
-              <span className="cell-aspect-ratio" title="Platform">{postPlatformName(data.post)}</span>
-            </span>
-          )}
-          {(generationCell || goalMark) && (
-            <span className="cell-generation-chips">
-              {generationDuration && (
-                <span className="cell-aspect-ratio" title="Duration">
-                  {generationDuration}
-                  {/^\d+(\.\d+)?$/.test(generationDuration) ? 's' : ''}
-                </span>
-              )}
-              {aspectRatio && (
-                <span className="cell-aspect-ratio" title="Aspect ratio">
-                  {aspectRatio}
-                </span>
-              )}
-              {goalMark && (
-                <span className="cell-aspect-ratio cell-goal-mark" title={`Goal ${goalMark}`}>
-                  <Flag size={9} aria-hidden="true" />
-                  {goalMark.split(' · ')[0]}
-                </span>
-              )}
-            </span>
-          )}
-          {action && !generationCell && (
-            <button
-              type="button"
-              className="cell-run-button nodrag"
-              disabled={action.disabled}
-              onClick={(event) => {
-                event.stopPropagation()
-                void runCell(id)
-              }}
-            >
-              {action.label}
-            </button>
-          )}
-          {!action && versionedOutput && (
-            <span
-              className="cell-version-count"
-              aria-label={`Current output version ${activeOutputVersion} of ${outputVersions.length}`}
-              title={`Current output · version ${activeOutputVersion} of ${outputVersions.length}`}
-            >
-              <Layers2 size={12} aria-hidden="true" />
-              v{activeOutputVersion}/{outputVersions.length}
-            </span>
-          )}
-        </header>
+            {goalMark && <GoalMark mark={goalMark} />}
+            {action && !generationCell && (
+              <button
+                type="button"
+                className="cell-run-button nodrag"
+                disabled={action.disabled}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void runCell(id)
+                }}
+              >
+                {action.label}
+              </button>
+            )}
+            {!action && versionedOutput && (
+              <VersionCount active={activeOutputVersion} total={outputVersions.length} />
+            )}
+          </header>
+        )}
         <div className="cell-node-body">
         {failedDownload ? null : data.kind === 'post' ? (
-          <PostTile post={data.post} source={data.postSource} />
+          <PostTile
+            post={data.post}
+            source={data.postSource}
+            onSourceDrop={data.post && !data.post.definition.source && cellActions.ready
+              ? (sourceCellId) => void cellActions.setPostSource(id, sourceCellId)
+              : undefined}
+            onRetry={data.post?.runtime.status === 'failed' && data.post.definition.platform === 'x' && cellActions.ready
+              ? () => void cellActions.retryPost(id)
+              : undefined}
+          />
         ) : emptyMediaSlot && slotKind ? (
           <MediaSlotTile
             cellId={id}
+            address={address}
             kind={slotKind}
             ready={slotContext.ready}
             state={slotContext.states[id]}
@@ -727,17 +982,18 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             pendingIcon={<Film size={26} aria-hidden="true" />}
           >
             <PublishedPostTileChrome inputs={data.inputs} />
-            {generatorChip && (
-              <CellGeneratorIdentity identity={generatorChip} className="cell-generator-chip" />
-            )}
           </CellMediaFrame>
+        ) : generationCell ? (
+          <GenerationRecipe
+            provider={generator?.provider ?? null}
+            modelLine={modelLine}
+            prompt={generationPrompt}
+            promptRequired={catalogEntry?.promptRequired !== false}
+          />
         ) : (
           <div className={`cell-copy ${promptCell ? 'cell-copy-text' : ''}`}>
-            {modelLine && <span className="cell-model-line" title={modelLine}>{modelLine}</span>}
             {promptCell ? <p title={data.prompt || undefined}>{data.prompt || emptyCellLabel(data)}</p> : <Sparkles size={28} />}
-            {!promptCell && (
-              <span>{modelLine ? 'Add a prompt' : emptyCellLabel(data)}</span>
-            )}
+            {!promptCell && <span>{emptyCellLabel(data)}</span>}
           </div>
         )}
         <CellStateOverlay
@@ -746,9 +1002,10 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           status={data.status}
           statusStartedAt={data.statusStartedAt}
           statusError={data.statusError}
-          icon={<CellIcon kind={data.kind} />}
-          generator={generator}
+          icon={<CellStateIcon kind={data.kind} status={data.status} />}
           generation={generationRun}
+          docked={generationCell}
+          overPicture={mediaTile}
           onRepair={generationRun ? () => {
             void cellActions.repairCell(id)
           } : undefined}
@@ -761,53 +1018,38 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             void cellActions.deleteCell(id)
           }}
         />
+        {takesRunning && (
+          <CellClockDock
+            label="Takes running"
+            detail={runningTakesDetail(takesRunning)}
+            address={notebookGridAddress(data.slot)}
+            startedAt={timestampValue(takesRunning.startedAt)}
+          />
+        )}
         </div>
         <footer className="cell-node-footer">
-          <strong>{notebookGridTag(data.slot)}</strong>
-          {mediaTile && (visualBadges.length > 0 || visualMeter) && (
-            <span className="cell-node-footer-meta" role="group" aria-label={visualMetadataLabel}>
-              {visualMeter && (
-                <time
-                  className="cell-node-footer-meter"
-                  dateTime={`PT${visualMeter.seconds}S`}
-                  title="Duration"
-                >
-                  {visualMeter.label}
-                </time>
-              )}
-              {aspectFirst(visualBadges).map((badge) => (
-                <span
-                  key={badge.key}
-                  className={`cell-media-badge${badge.emphasis === 'generator' ? ' cell-media-badge-wide' : ''}`}
-                  title={badge.title}
-                >
-                  {badge.label}
-                </span>
-              ))}
-            </span>
+          <CellRefAddress
+            cellId={id}
+            address={address}
+            family={notebookCellFamily(data.kind)}
+            draggable={Boolean(inputKind)}
+          />
+          {showFacts && (
+            <CellFooterFacts
+              label={factsLabel}
+              meter={mediaTile ? visualMeter : null}
+              facts={facts}
+            />
           )}
           <span className="cell-node-footer-actions">
-            {inputKind && (
-              <button
-                type="button"
-                className="cell-ref-grip nodrag nopan"
-                draggable
-                aria-label={`Drag ${notebookGridTag(data.slot)} into a generation input`}
-                title="Drag into a generation input slot"
-                onDragStart={(event) => {
-                  event.stopPropagation()
-                  startCellRefDrag(event, { sourceCellId: id, from: null })
-                }}
-                onDragEnd={endCellRefDrag}
-              >
-                <GripVertical size={13} aria-hidden="true" />
-              </button>
+            {mediaTile && versionedOutput && (
+              <VersionCount active={activeOutputVersion} total={outputVersions.length} />
             )}
-            <CellStatusBadge status={statusLabel} />
+            <CellFlag flag={flag} />
             <button
               type="button"
               className="cell-context-menu-trigger nodrag"
-              aria-label={`Open ${notebookGridTag(data.slot)} cell menu`}
+              aria-label={`Open ${address} cell menu`}
               aria-haspopup="menu"
               aria-expanded={contextMenu.openCellId === id}
               aria-controls={contextMenuId}

@@ -394,13 +394,6 @@ export function notebookCellInspectorActionLabel(
   return label === 'Re-run' ? `${verb} again` : verb
 }
 
-export function notebookCellStatusLabel(
-  type: NotebookCellType,
-  status: string,
-): string | null {
-  return isNotebookMediaPresentationCellType(type) ? null : status
-}
-
 export function formatMediaTime(seconds: number): string {
   const hundredths = Math.round(Math.max(0, seconds) * 100)
   const minutes = Math.floor(hundredths / 6000)

@@ -6,9 +6,17 @@ import {
   notebookCellGenerationPhase,
   notebookCellStateFromStatus,
 } from '@/videobook/notebook-cell-presentation'
-import type { GenerationIdentity } from '@/videobook/output-generation'
-import { CellClockOverlay } from './CellClockOverlay'
+import { CellClockDock, CellClockOverlay } from './CellClockOverlay'
 import { CellFailedOverlay, type DownloadRetry } from './CellFailedOverlay'
+
+function failureLabel(
+  kind: NotebookCellType,
+  downloadRetry: DownloadRetry | undefined,
+  generation: boolean,
+): string {
+  if (downloadRetry) return 'DOWNLOAD FAILED'
+  return isNotebookMediaPresentationCellType(kind) && !generation ? 'MEDIA FAILED' : 'GENERATION FAILED'
+}
 
 export function CellStateOverlay({
   kind,
@@ -17,13 +25,14 @@ export function CellStateOverlay({
   statusStartedAt,
   statusError,
   icon,
-  generator = null,
   generation = false,
   onRepair,
   onRetry,
   downloadRetry,
   onDelete,
   disabled,
+  docked = false,
+  overPicture = false,
 }: {
   kind: NotebookCellType
   address: string
@@ -31,13 +40,14 @@ export function CellStateOverlay({
   statusStartedAt?: string
   statusError?: string
   icon: ReactNode
-  generator?: GenerationIdentity | null
   generation?: boolean
   onRepair?: () => void
   onRetry?: () => void
   downloadRetry?: DownloadRetry
   onDelete?: () => void
   disabled?: boolean
+  docked?: boolean
+  overPicture?: boolean
 }) {
   const presentation = notebookCellStateFromStatus(kind, status, {
     error: statusError ?? null,
@@ -45,6 +55,19 @@ export function CellStateOverlay({
   })
 
   if (presentation.overlay === 'clock' && presentation.label) {
+    const phase = generation ? notebookCellGenerationPhase(status) : null
+    if (docked) {
+      return (
+        <CellClockDock
+          label={presentation.label}
+          detail={phase?.label ?? presentation.label}
+          address={address}
+          startedAt={presentation.startedAt}
+          phase={phase}
+          waiting={presentation.tone === 'queued'}
+        />
+      )
+    }
     return (
       <CellClockOverlay
         icon={icon}
@@ -52,8 +75,8 @@ export function CellStateOverlay({
         address={address}
         startedAt={presentation.startedAt}
         variant={status === 'downloading' ? 'stream' : 'rise'}
-        meta={generator}
-        phase={generation ? notebookCellGenerationPhase(status) : null}
+        phase={phase}
+        overPicture={overPicture}
       />
     )
   }
@@ -63,16 +86,14 @@ export function CellStateOverlay({
     return (
       <CellFailedOverlay
         error={presentation.error}
-        label={downloadRetry ? 'DOWNLOAD FAILED' : isNotebookMediaPresentationCellType(kind)
-          ? 'MEDIA FAILED'
-          : 'GENERATION FAILED'}
+        label={failureLabel(kind, downloadRetry, generation)}
         address={address}
-        meta={generator}
         onRepair={creditFailure ? undefined : onRepair}
         onRetry={downloadRetry || creditFailure ? onRetry : undefined}
         downloadRetry={downloadRetry}
         onDelete={onDelete}
         disabled={disabled}
+        docked={docked}
       />
     )
   }

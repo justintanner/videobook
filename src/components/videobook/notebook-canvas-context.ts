@@ -9,6 +9,7 @@ export type MediaSlotOperation = 'attach' | 'upload'
 export type MediaSlotState = {
   operation: MediaSlotOperation | null
   error: string | null
+  fileName?: string
 }
 
 export type MediaSlotContextValue = {
@@ -48,6 +49,8 @@ export type CellActionsContextValue = {
   repairCell: (cellId: string) => Promise<void>
   retryCell: (cellId: string) => Promise<void>
   retryDownload: (jobId: number, useChromeProfile?: boolean) => Promise<void>
+  setPostSource: (postCellId: string, sourceCellId: string) => Promise<void>
+  retryPost: (postCellId: string) => Promise<void>
 }
 
 export const CellActionsContext = createContext<CellActionsContextValue>({
@@ -56,11 +59,18 @@ export const CellActionsContext = createContext<CellActionsContextValue>({
   repairCell: async () => undefined,
   retryCell: async () => undefined,
   retryDownload: async () => undefined,
+  setPostSource: async () => undefined,
+  retryPost: async () => undefined,
 })
 
 export const PrimaryCellContext = createContext<string | null>(null)
 
-export const GenerationTitlesContext = createContext<ReadonlyMap<string, string>>(
+export type GenerationCatalogEntry = {
+  title: string
+  promptRequired: boolean
+}
+
+export const GenerationCatalogContext = createContext<ReadonlyMap<string, GenerationCatalogEntry>>(
   new Map(),
 )
 

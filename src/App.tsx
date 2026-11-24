@@ -636,7 +636,7 @@ import {
   CellRunContext,
   CellActionsContext,
   type CellActionsContextValue,
-  GenerationTitlesContext,
+  GenerationCatalogContext,
   GoalMarksContext,
   GoalTileContext,
   GoalMediaContext,
@@ -1055,8 +1055,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [generationActions, setGenerationActions] = useState<
     NotebookGenerationAction[]
   >(() => initialWorkspace?.generationActions ?? [])
-  const generationTitleByTool = useMemo(
-    () => new Map(generationActions.map((action) => [action.model, action.title])),
+  const generationCatalogByModel = useMemo(
+    () => new Map(generationActions.map((action) => [action.model, {
+      title: action.title,
+      promptRequired: generationRequiresPrompt(action),
+    }])),
     [generationActions],
   )
   const [providers, setProviders] = useState<SettingsProvider[]>([])
@@ -1689,10 +1692,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     cellId: string,
     operation: MediaSlotOperation | null,
     error: string | null = null,
+    fileName?: string,
   ) => {
     setMediaSlotStates((current) => ({
       ...current,
-      [cellId]: { operation, error },
+      [cellId]: { operation, error, ...(fileName ? { fileName } : {}) },
     }))
   }, [])
 
@@ -5013,7 +5017,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
 
-    setMediaSlotOperation(cellId, 'upload')
+    setMediaSlotOperation(cellId, 'upload', null, file.name)
     try {
       const { artifactRef, reusedExisting } = await resolveMediaFileArtifact(file, kind)
       await call('set_notebook_media_slot', {
@@ -9769,6 +9773,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     await runCell(producer.id, undefined, undefined, cellId)
   }
+  const setPostSource = async (postCellId: string, sourceCellId: string) => {
+    if (!bookId || !notebook || mcp.state !== 'ready' || postCellId === sourceCellId) return
+    if (!notebook.cells.some((candidate) => candidate.id === sourceCellId)) return
+    try {
+      await call('update_post', { book_id: bookId, post_cell_id: postCellId, source_cell_id: sourceCellId })
+      await refreshBookData(bookId, notebook.id)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
+    }
+  }
+  const retryPost = async (postCellId: string) => {
+    const post = notebookPosts.find((candidate) => candidate.id === postCellId)
+    if (!post || post.definition.platform !== 'x') return
+    await reviewPublicationOnX(post)
+  }
   const cellActionsContextValue: CellActionsContextValue = {
     ready: !busy && mcp.state === 'ready',
     deleteCell: async (cellId) => {
@@ -9778,6 +9797,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     repairCell,
     retryCell: retryCreditFailedCell,
     retryDownload: retryJob,
+    setPostSource,
+    retryPost,
   }
   const fullscreenImageEditor = mediaFullscreen?.asset.type === 'image'
     ? mediaFullscreen
@@ -11006,7 +11027,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         <CellRunContext.Provider value={runCell}>
                         <CellActionsContext.Provider value={cellActionsContextValue}>
                           <PrimaryCellContext.Provider value={selectedCellId}>
-                            <GenerationTitlesContext.Provider value={generationTitleByTool}>
+                            <GenerationCatalogContext.Provider value={generationCatalogByModel}>
                               <CellContextMenuContext.Provider value={cellContextMenuContextValue}>
                                 <GoalTileContext.Provider value={goalTiles}>
                                 <GoalMediaContext.Provider value={assetById}>
@@ -11186,7 +11207,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                                 </GoalMediaContext.Provider>
                                 </GoalTileContext.Provider>
                               </CellContextMenuContext.Provider>
-                            </GenerationTitlesContext.Provider>
+                            </GenerationCatalogContext.Provider>
                           </PrimaryCellContext.Provider>
                         </CellActionsContext.Provider>
                         </CellRunContext.Provider>

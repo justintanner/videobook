@@ -62,6 +62,27 @@ describe('cell route badges', () => {
     expect(single).toContain('<span class="sr-only">Feeds @b4 as image2</span>')
   })
 
+  it('follows the addresses with a detail, or carries a detail alone', () => {
+    const joined = renderToStaticMarkup(createElement(CellRouteBadge, {
+      direction: 'incoming',
+      badge: notebookIncomingRouteBadge([{ address: '@b2', tokens: [], type: 'generate_video' }]),
+      detail: createElement('span', null, 'Kie'),
+      detailLabel: 'Made with Kie',
+    }))
+    const alone = renderToStaticMarkup(createElement(CellRouteBadge, {
+      direction: 'incoming',
+      badge: null,
+      detail: createElement('span', null, '0:07'),
+      detailLabel: 'Frame at 0:07',
+    }))
+
+    expect(joined).toContain('<span class="sr-only">Fed by @b2 · Made with Kie</span>')
+    expect(joined).toContain('<span class="cell-route-address">b2</span></span><span class="cell-route-detail"><span>Kie</span></span>')
+    expect(alone).toContain('<span class="sr-only">Frame at 0:07</span>')
+    expect(alone).toContain('<span class="cell-route-badge-fill"><span class="cell-route-detail"><span>0:07</span></span></span>')
+    expect(alone).not.toContain('data-tone')
+  })
+
   it('collapses long lists into a count and renders nothing without links', () => {
     const tags: NotebookRouteTag[] = ['@d1', '@d2', '@d3', '@d4'].map((address) => ({
       address,

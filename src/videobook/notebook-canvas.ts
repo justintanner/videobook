@@ -11,7 +11,12 @@ import type { Node } from '@xyflow/react'
 import type { NotebookDocument } from 'videobook-engine'
 import { recordValue, asString } from '@/videobook/value-decoders'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
-import { formatMediaAspectRatio, notebookSplitFrameIds } from '@/videobook/notebook-cell-presentation'
+import {
+  formatMediaAspectRatio,
+  notebookCellIsActiveStatus,
+  notebookSplitFrameIds,
+} from '@/videobook/notebook-cell-presentation'
+import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import { frameAspectRatio } from '../../server/src/media/frame-options'
 
@@ -25,6 +30,7 @@ export interface CanvasCellData extends NotebookCellData {
   highlighted?: boolean
   videoAspectRatio?: string
   videoDurationSeconds?: number
+  runningTakes?: RunningTakes
   splitFrames?: {
     first: { artifactId: string | null; asset?: AssetRecord }
     last: { artifactId: string | null; asset?: AssetRecord }
@@ -36,7 +42,47 @@ export type PostSourcePreview = {
   asset?: AssetRecord
 }
 
+export type RunningTakes = {
+  count: number
+  startedAt?: string
+}
+
 export type CanvasNode = Node<CanvasCellData>
+
+function earliestStartedAt(takes: readonly CanvasNode[]): string | undefined {
+  return takes
+    .map((take) => take.data.statusStartedAt)
+    .filter((startedAt): startedAt is string => Boolean(startedAt))
+    .sort((left, right) => Date.parse(left) - Date.parse(right))[0]
+}
+
+function runningTakesFor(
+  document: NotebookDocument,
+  nodesById: ReadonlyMap<string, CanvasNode>,
+  producerId: string,
+): RunningTakes | null {
+  const takes = document.edges
+    .filter((edge) => edge.source === producerId && edge.targetInput === 'media')
+    .flatMap((edge) => {
+      const take = nodesById.get(edge.target)
+      return take && notebookCellIsActiveStatus(take.data.status) ? [take] : []
+    })
+  if (takes.length === 0) return null
+  const startedAt = earliestStartedAt(takes)
+  return { count: takes.length, ...(startedAt ? { startedAt } : {}) }
+}
+
+function withRunningTakes(
+  document: NotebookDocument,
+  nodes: CanvasNode[],
+): CanvasNode[] {
+  const nodesById = new Map(nodes.map((node) => [node.id, node]))
+  return nodes.map((node) => {
+    if (!isNotebookGenerationCellType(node.data.kind)) return node
+    const runningTakes = runningTakesFor(document, nodesById, node.id)
+    return runningTakes ? { ...node, data: { ...node.data, runningTakes } } : node
+  })
+}
 
 function postSourcePreview(
   post: PostView,
@@ -153,7 +199,7 @@ export function canvasNodes(
   jobs: JobRecord[],
 ): CanvasNode[] {
   const byArtifactId = new Map(assets.map((asset) => [asset.artifactId, asset]))
-  return notebookNodes(document).map((node) => {
+  return withRunningTakes(document, notebookNodes(document).map((node) => {
     const post = (document as NotebookSnapshot).posts?.find(item => item.id === node.id)
     const postSource = post ? postSourcePreview(post, document.cells, byArtifactId) : null
     const producer = mediaProducer(document, node.id)
@@ -211,7 +257,7 @@ export function canvasNodes(
           : {}),
       },
     }
-  })
+  }))
 }
 
 export function jsonEqual(left: unknown, right: unknown): boolean {

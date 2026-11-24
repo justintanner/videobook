@@ -3,7 +3,6 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react'
 import { describe, expect, it } from 'vitest'
-import { CellStateOverlay } from '../../src/components/videobook/cell-overlays/CellStateOverlay'
 import { CellNode } from '../../src/components/videobook/NotebookCanvasNodes'
 import type { CanvasCellData, CanvasNode } from '../../src/videobook/notebook-canvas'
 import { generationIdentity } from '../../src/videobook/output-generation'
@@ -112,31 +111,27 @@ describe('generationIdentity', () => {
 })
 
 describe('a generated output tile', () => {
-  it('shows the provider and model under the clock while it generates', () => {
-    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
-      kind: 'video',
-      address: 'd2',
-      status: 'generating',
-      icon: null,
-      generator: generationIdentity('kie', 'kie:minimax-h3/reference-to-video'),
-      generation: true,
-    }))
-
-    expect(html).toContain('class="cell-state-meta" title="Kie · minimax-h3/reference-to-video"')
-    expect(html).toContain('<span class="cell-generator-provider">Kie</span>')
-    expect(html).toContain('<span class="cell-generator-model">minimax-h3/reference-to-video</span>')
-    expect(html).not.toContain('kie:')
-  })
-
-  it('wears a provider and model chip on the finished preview instead of a footer badge', () => {
+  it('names the provider and model in the source chip on the top edge, not on the picture', () => {
     const html = renderTile(generatedVideo())
 
-    expect(html).toContain('class="cell-generator-chip" title="Kie · bytedance/seedance-2-5"')
+    expect(html).toContain('class="cell-route-badge cell-route-badge-incoming"')
+    expect(html).toContain('class="cell-route-generator" title="Kie · bytedance/seedance-2-5"')
     expect(html).toContain('<span class="cell-generator-provider">Kie</span>')
     expect(html).toContain('<span class="cell-generator-model">bytedance/seedance-2-5</span>')
+    expect(html).toContain('<span class="sr-only">Made with Kie · bytedance/seedance-2-5</span>')
     expect(html).not.toContain('kie:bytedance')
+    expect(html).not.toContain('cell-generator-chip')
     expect(html).not.toContain('cell-media-badge-wide')
     expect(html).toContain('>9:16</span>')
+  })
+
+  it('follows the gen cell link with the generator in one chip', () => {
+    const html = renderTile(generatedVideo({
+      incomingRoutes: [{ address: '@b4', tokens: [], type: 'generate_video' }],
+    }))
+
+    expect(html).toContain('<span class="sr-only">Fed by @b4 · Made with Kie · bytedance/seedance-2-5</span>')
+    expect(html).toMatch(/<span class="cell-route-address">b4<\/span><\/span><span class="cell-route-detail"><span class="cell-route-generator"/u)
   })
 
   it('falls back to the producer when the output cell names no generator', () => {
@@ -147,45 +142,58 @@ describe('a generated output tile', () => {
       producerModel: 'machgen:gemini-omni-1-2-flash',
     }))
 
-    expect(html).toContain('class="cell-generator-chip" title="MachGen · gemini-omni-1-2-flash"')
+    expect(html).toContain('class="cell-route-generator" title="MachGen · gemini-omni-1-2-flash"')
   })
 
-  it('leaves the chip off while the output generates or after it fails', () => {
+  it('keeps the generator in the chip while the output generates or after it fails', () => {
     for (const status of ['generating', 'error']) {
       const html = renderTile(generatedVideo({ status, statusError: 'Provider output failed' }))
-      expect(html).not.toContain('cell-generator-chip')
       expect(html).toContain('<span class="cell-generator-model">bytedance/seedance-2-5</span>')
+      expect(html).not.toContain('cell-state-meta')
     }
   })
 
-  it('keeps an imported video free of the chip and keeps its footer generator badge', () => {
+  it('shortens the mode phrase in the chip and keeps the full name in its title', () => {
+    const html = renderTile(generatedVideo({ model: 'kie:minimax-h3/reference-to-video' }))
+
+    expect(html).toContain('class="cell-route-generator" title="Kie · minimax-h3/reference-to-video"')
+    expect(html).toContain('<span class="cell-generator-model">minimax-h3/R2V</span>')
+  })
+
+  it('moves an imported video\'s model into the chip and keeps the footer to shape and length', () => {
     const html = renderTile(generatedVideo({
       inputs: {},
       model: 'veo-3-fast',
       provider: undefined,
     }))
 
-    expect(html).not.toContain('cell-generator-chip')
-    expect(html).toContain('cell-media-badge cell-media-badge-wide')
+    expect(html).toContain('class="cell-route-generator" title="veo-3-fast"')
+    expect(html).not.toContain('cell-media-badge-wide')
+    expect(html).toContain('<time class="cell-node-footer-meter" dateTime="PT13S" title="Duration">0:13</time>')
   })
 
-  it('starts the chip on the cell gutter and clips a long model instead of the provider', () => {
-    const chip = rule('.cell-generator-chip')
-    expect(declaration(chip, 'position')).toBe('absolute')
-    expect(declaration(chip, 'left')).toBe('var(--cell-gutter)')
-    expect(declaration(chip, 'bottom')).toBe('8px')
-    expect(declaration(chip, 'max-width')).toBe('calc(100% - var(--cell-gutter) - 8px)')
-    expect(declaration(chip, 'font-size')).toBe('var(--cell-label-font-size)')
+  it('names the source clip and the moment for a frame pulled from a video', () => {
+    const html = renderTile(generatedVideo({
+      kind: 'image',
+      inputs: { mediaRole: 'extract-frame-output' },
+      provider: undefined,
+      model: undefined,
+      asset: { ...videoAsset(), type: 'image', duration: null },
+      frameProvenance: { sourceAddress: '@d3', atSeconds: 7 },
+    }))
+
+    expect(html).toContain('<span class="cell-route-time">d3 · 0:07</span>')
+    expect(html).toContain('<span class="sr-only">Frame at 0:07</span>')
+  })
+
+  it('lets the generator shrink inside the chip while the provider stays whole', () => {
+    const detail = rule('.cell-route-detail')
+    expect(declaration(detail, 'min-width')).toBe('0')
+    expect(declaration(detail, 'pointer-events')).toBe('auto')
+    expect(declaration(rule('.cell-route-generator'), 'overflow')).toBe('hidden')
     expect(declaration(rule('.cell-generator-provider'), 'flex')).toBe('none')
     expect(declaration(rule('.cell-generator-model'), 'text-overflow')).toBe('ellipsis')
-    expect(declaration(rule('.cell-state-meta'), 'text-overflow')).toBeNull()
-  })
-
-  it('keeps the provider line whole while the generating stack tightens its gaps', () => {
-    const meta = rule('.cell-state-clock-body > .cell-state-meta')
-    expect(declaration(meta, 'flex')).toBe('none')
-    expect(Number(declaration(meta, 'line-height'))).toBeGreaterThan(1)
-    expect(declaration(rule('.cell-state-clock-body'), 'gap'))
-      .toBe('min(calc(11px * var(--notebook-detail-scale, 1)), 11%)')
+    expect(css).not.toContain('.cell-generator-chip')
+    expect(css).not.toContain('.cell-state-meta')
   })
 })

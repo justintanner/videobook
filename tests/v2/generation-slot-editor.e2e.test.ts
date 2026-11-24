@@ -225,10 +225,10 @@ describe('generation slot editor in the browser', () => {
     expect(await resolution.locator('option:checked').textContent()).toBe('720p')
   }, testBudget(90_000))
 
-  it('takes a board cell dragged by its canvas grip into a slot', async () => {
+  it('takes a board cell dragged by its address into a slot', async () => {
     const nodes = await page.locator('.notebook-flow .react-flow__node').count()
-    const grip = page.locator(`.notebook-flow .react-flow__node[data-id="${images[0]}"] .cell-ref-grip`)
-    await grip.dragTo(chip('Keyframes', 1), { targetPosition: { x: 40, y: 50 } })
+    const address = page.locator(`.notebook-flow .react-flow__node[data-id="${images[0]}"] .cell-ref-address`)
+    await address.dragTo(chip('Keyframes', 1), { targetPosition: { x: 40, y: 50 } })
     await expect.poll(keyframes, { timeout: testBudget(15_000) })
       .toEqual([[0, 'image'], [1, 'keyframe'], [2, 'keyframe_2'], [0, 'keyframe_3']])
     expect(await page.locator('.notebook-flow .react-flow__node').count()).toBe(nodes)

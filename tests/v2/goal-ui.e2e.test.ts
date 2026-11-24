@@ -379,8 +379,8 @@ describe('goal mode in the browser', () => {
       const cast = panel().getByRole('region', { name: 'Character references' })
       const second = before.value.cells.find(cell => cell.type === 'image' && labelOf(cell.outputArtifactId) === 'character-1')
       if (!second) throw new Error('Missing character image')
-      const grip = page.locator(`.react-flow__node[data-id="${second.id}"] .cell-ref-grip`)
-      await grip.dragTo(cast.locator('.goal-character-drop'))
+      const address = page.locator(`.react-flow__node[data-id="${second.id}"] .cell-ref-address`)
+      await address.dragTo(cast.locator('.goal-character-drop'))
       await expect.poll(() => cast.locator('.goal-character-ref').count()).toBe(2)
       const uploads = await Promise.all(['green', 'yellow'].map(async background => ({
         name: `${background}.png`,

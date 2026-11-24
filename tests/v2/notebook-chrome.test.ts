@@ -159,10 +159,22 @@ describe('notebook chrome tokens', () => {
     expect(declaration(rule(css, '.cell-media-meter'), 'flex')).toBe('none')
     expect(declaration(rule(css, '.cell-node-footer-meter'), 'flex')).toBe('none')
     expect(declaration(rule(css, '.cell-media-badges::before,\n.cell-node-footer-meta::before'), 'width')).toBe('0')
-    const status = rule(css, '.cell-status-slot')
-    expect(declaration(status, 'flex-wrap')).toBe('wrap')
-    expect(declaration(status, 'overflow')).toBe('hidden')
-    expect(declaration(rule(css, '.cell-status-slot::before'), 'width')).toBe('0')
+    const flag = rule(css, '\n.cell-state-flag')
+    expect(declaration(flag, 'flex')).toBe('0 1 auto')
+    expect(declaration(flag, 'min-width')).toBe('0')
+    expect(declaration(flag, 'white-space')).toBe('nowrap')
+    expect(declaration(flag, 'font-size')).toBe('var(--cell-label-font-size)')
+    expect(declaration(rule(css, '.cell-state-flag > span'), 'text-overflow')).toBe('ellipsis')
+    expect(css).not.toContain('.cell-status-slot')
+    expect(css).not.toContain('.cell-ref-grip')
+  })
+
+  it('rings the primary selection twice as wide as the rest of a multi-selection', () => {
+    expect(declaration(rule(css, '\n.cell-node-selected'), 'box-shadow').replace(/\s+/gu, ' '))
+      .toBe('0 0 0 2px var(--selection-accent), 0 0 22px rgba(79, 183, 125, 0.22)')
+    expect(declaration(rule(css, '.cell-node-selected:not(.cell-node-primary)'), 'box-shadow'))
+      .toBe('0 0 0 1px rgba(79, 183, 125, 0.3)')
+    expect(declaration(rule(css, '.cell-node-primary .cell-context-menu-trigger'), 'opacity')).toBe('1')
   })
 
   it('prints generation settings as plain text so a dense header keeps one line', () => {

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import {
   ArrowRight,
   AudioLines,
@@ -43,24 +44,28 @@ function RouteSegment({ direction, segment }: {
   )
 }
 
-export function CellRouteBadge({ direction, badge }: {
+export function CellRouteBadge({ direction, badge, detail = null, detailLabel = null }: {
   direction: CellRouteDirection
   badge: NotebookRouteBadge | null
+  detail?: ReactNode
+  detailLabel?: string | null
 }) {
-  if (!badge) return null
+  if (!badge && !detail) return null
+  const label = [badge?.label, detailLabel].filter(Boolean).join(' · ')
   return (
     <span
       className={`cell-route-badge cell-route-badge-${direction}`}
-      data-tone={direction === 'incoming' ? badge.tone : undefined}
+      data-tone={direction === 'incoming' ? badge?.tone : undefined}
     >
-      <span className="sr-only">{badge.label}</span>
+      <span className="sr-only">{label}</span>
       <span className="cell-route-badge-frame" aria-hidden="true">
         <span className="cell-route-badge-fill">
           {direction === 'outgoing' && <ArrowRight className="cell-route-arrow" strokeWidth={3} />}
-          {badge.segments.map((segment) => (
+          {badge?.segments.map((segment) => (
             <RouteSegment key={segment.address} direction={direction} segment={segment} />
           ))}
-          {badge.hidden > 0 && <span className="cell-route-more">+{badge.hidden}</span>}
+          {badge && badge.hidden > 0 && <span className="cell-route-more">+{badge.hidden}</span>}
+          {detail && <span className="cell-route-detail">{detail}</span>}
         </span>
       </span>
     </span>
