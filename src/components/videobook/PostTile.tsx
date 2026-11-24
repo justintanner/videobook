@@ -165,7 +165,7 @@ function PostTileStatusLine({ post, onRetry }: { post: PostView; onRetry?: () =>
   return (
     <span className="post-tile-results">
       <span className="post-tile-hint">{posted}</span>
-      <span className="post-tile-hint post-tile-hint-action">Add results</span>
+      <span className="post-tile-hint post-tile-hint-action"><Plus size={11} aria-hidden="true" />Add results</span>
     </span>
   )
 }

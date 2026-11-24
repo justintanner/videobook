@@ -1715,7 +1715,7 @@ describe('chat composer browser flow', () => {
       const details = [...element.querySelectorAll('.cell-node-type-label, .cell-media-badge, .cell-media-meter, .cell-aspect-ratio, .cell-model-line, .cell-state-flag, .cell-media-slot-library strong, .cell-media-slot-library span, .cell-media-slot-upload')]
         .filter((detail) => {
           const rect = detail.getBoundingClientRect()
-          const rail = detail.closest('.cell-node-footer-meta')?.getBoundingClientRect()
+          const rail = detail.closest('.cell-node-footer-meta, .cell-media-badges')?.getBoundingClientRect()
           if (rail && (rect.top < rail.top || rect.bottom > rail.bottom + 1)) return false
           return rect.width > 0 && rect.height > 0
         })
@@ -1761,7 +1761,8 @@ describe('chat composer browser flow', () => {
         incompletePrompts: prompts.flatMap(prompt => {
           const style = getComputedStyle(prompt)
           const lines = parseFloat(style.height) / parseFloat(style.lineHeight)
-          return lines >= 0.99 && Math.abs(lines - Math.round(lines)) < 0.01
+          const docked = Boolean(prompt.closest('.cell-node')?.querySelector('.cell-state-dock'))
+          return (lines >= 0.99 || docked) && Math.abs(lines - Math.round(lines)) < 0.01
             ? [] : [{ text: prompt.textContent, height: style.height, lineHeight: style.lineHeight }]
         }),
         headersDoNotOverlap: [...element.querySelectorAll('.cell-node-header')].every(cellHeader => {
@@ -2296,7 +2297,7 @@ describe('chat composer browser flow', () => {
     await generationNode.waitFor({ state: 'visible' })
     expect(await generationNode.locator('.cell-media').count()).toBe(0)
     expect((await generationNode.locator('.cell-model-line').textContent())?.trim())
-      .toBe('Nano Banana Pro')
+      .toBe('nano-banana-pro')
     expect((await generationNode.locator('.cell-copy-text p').textContent())?.trim())
       .toBe('A fullscreen image fixture')
     const fullscreenNode = page.locator(

@@ -2388,7 +2388,7 @@ textarea:focus-visible {
   flex: none;
   flex-direction: column;
   gap: calc(6px * var(--notebook-detail-scale, 1));
-  padding: calc(8px * var(--notebook-detail-scale, 1)) var(--cell-gutter) calc(9px * var(--notebook-detail-scale, 1));
+  padding: calc(7px * var(--notebook-detail-scale, 1)) var(--cell-gutter) calc(7px * var(--notebook-detail-scale, 1));
   border-top: 1px solid rgba(101, 190, 145, 0.22);
   color: var(--cell-state-color);
   background: #05150d;
@@ -2410,9 +2410,8 @@ textarea:focus-visible {
 .cell-state-dock-label {
   min-width: 0;
   overflow: hidden;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-overflow: ellipsis;
-  text-transform: uppercase;
 }
 
 .cell-state-dock .cell-state-timer {
@@ -2426,6 +2425,15 @@ textarea:focus-visible {
   overflow: hidden;
   border-radius: 2px;
   background: color-mix(in srgb, var(--cell-state-color) 22%, transparent);
+}
+
+.cell-state-dock-clock > .cell-state-dock-bar,
+.cell-state-dock-clock > .cell-state-phase-rail {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  left: 0;
+  border-radius: 0;
 }
 
 .cell-state-dock-bar > span {
@@ -2467,8 +2475,13 @@ textarea:focus-visible {
 }
 
 .cell-state-dock-failed .cell-state-failed-message {
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.cell-state-dock-failed .cell-state-action {
+  height: calc(24px * var(--notebook-detail-scale, 1));
+  padding: 0 calc(8px * var(--notebook-detail-scale, 1));
 }
 
 .cell-state-dock-failed .cell-state-actions {

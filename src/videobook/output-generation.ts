@@ -1,4 +1,5 @@
 import { generationInputTokenPattern } from '../../server/src/generation-input-targets'
+import { abbreviateGenerationPhrases } from './notebook-generation-actions'
 import { providerDisplayLabel } from './workspace-action-resources'
 
 export type GenerationRunInput = {
@@ -142,6 +143,37 @@ export function generationModelLabel(model: string | null, provider: string | nu
 
 export function generationProviderLabel(provider: string | null): string | null {
   return provider ? providerDisplayLabel(provider) : null
+}
+
+export type CompactGenerationModel = {
+  name: string
+  mode: string | null
+}
+
+const modeSegment = /^(image|text|reference|video|audio|frame)-to-(video|image|audio|text)$/u
+const editSegment = /^edit(?:-(?:image|video))?$/u
+const providerPrefix = /^([a-z][a-z0-9-]*):(.+)$/u
+
+function segmentMode(segment: string): string | null {
+  const phrase = modeSegment.exec(segment)
+  if (phrase) return `${phrase[1]![0]}2${phrase[2]![0]}`.toUpperCase()
+  return editSegment.test(segment) ? 'EDIT' : null
+}
+
+export function compactGenerationModel(model: string, provider: string | null): CompactGenerationModel {
+  const prefixed = providerPrefix.exec(model)
+  const owner = provider ?? prefixed?.[1] ?? null
+  const label = prefixed && (!provider || prefixed[1] === provider) ? prefixed[2]! : model
+  const segments = label.split('/')
+  const owned = owner === 'fal' && segments.length >= 3 ? segments.slice(1) : segments
+  const mode = owned.length > 1 ? segmentMode(owned.at(-1)!) : null
+  const name = (mode ? owned.slice(0, -1) : owned).join('/')
+  return { name: abbreviateGenerationPhrases(name), mode }
+}
+
+export function compactGenerationModelLabel(model: string, provider: string | null): string {
+  const compact = compactGenerationModel(model, provider)
+  return compact.mode ? `${compact.name} · ${compact.mode}` : compact.name
 }
 
 export type GenerationIdentity = {

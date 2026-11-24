@@ -5,7 +5,11 @@ import { ReactFlowProvider, type NodeProps } from '@xyflow/react'
 import { describe, expect, it } from 'vitest'
 import { CellNode } from '../../src/components/videobook/NotebookCanvasNodes'
 import type { CanvasCellData, CanvasNode } from '../../src/videobook/notebook-canvas'
-import { generationIdentity } from '../../src/videobook/output-generation'
+import {
+  compactGenerationModel,
+  compactGenerationModelLabel,
+  generationIdentity,
+} from '../../src/videobook/output-generation'
 import type { AssetRecord } from '../../src/videobook/workspace-responses'
 
 const css = readFileSync(new URL('../../src/index.css', import.meta.url), 'utf8')
@@ -110,6 +114,36 @@ describe('generationIdentity', () => {
   })
 })
 
+describe('compactGenerationModel', () => {
+  it('drops fal\'s owner folder and lifts the mode out of the endpoint', () => {
+    expect(compactGenerationModel('fal:blackforestlabs/flux-3/text-to-image', 'fal'))
+      .toEqual({ name: 'flux-3', mode: 'T2I' })
+    expect(compactGenerationModel('fal:bytedance/seedance-2.0/fast/reference-to-video', 'fal'))
+      .toEqual({ name: 'seedance-2.0/fast', mode: 'R2V' })
+    expect(compactGenerationModel('fal:blackforestlabs/flux-3/edit-image', 'fal'))
+      .toEqual({ name: 'flux-3', mode: 'EDIT' })
+  })
+
+  it('keeps other providers\' paths, since their first folder can be the model', () => {
+    expect(compactGenerationModel('kie:wan/3-0-video-prime', 'kie')).toEqual({ name: 'wan/3-0-video-prime', mode: null })
+    expect(compactGenerationModel('kie:bytedance/seedance-2-5', 'kie')).toEqual({ name: 'bytedance/seedance-2-5', mode: null })
+    expect(compactGenerationModel('wavespeed:skyreels/v4/image-to-video', 'wavespeed'))
+      .toEqual({ name: 'skyreels/v4', mode: 'I2V' })
+    expect(compactGenerationModel('kie:gpt-image-2-text-to-image', 'kie')).toEqual({ name: 'gpt-image-2-T2I', mode: null })
+  })
+
+  it('reads the provider from the id when the cell names none', () => {
+    expect(compactGenerationModel('fal:alibaba/wan-3.0-prime/image-to-video', null))
+      .toEqual({ name: 'wan-3.0-prime', mode: 'I2V' })
+    expect(compactGenerationModel('veo-3-fast', null)).toEqual({ name: 'veo-3-fast', mode: null })
+  })
+
+  it('writes the mode after the name for a chip', () => {
+    expect(compactGenerationModelLabel('fal:blackforestlabs/flux-3/text-to-image', 'fal')).toBe('flux-3 · T2I')
+    expect(compactGenerationModelLabel('kie:wan/3-0-video-prime', 'kie')).toBe('wan/3-0-video-prime')
+  })
+})
+
 describe('a generated output tile', () => {
   it('names the provider and model in the source chip on the top edge, not on the picture', () => {
     const html = renderTile(generatedVideo())
@@ -157,7 +191,7 @@ describe('a generated output tile', () => {
     const html = renderTile(generatedVideo({ model: 'kie:minimax-h3/reference-to-video' }))
 
     expect(html).toContain('class="cell-route-generator" title="Kie · minimax-h3/reference-to-video"')
-    expect(html).toContain('<span class="cell-generator-model">minimax-h3/R2V</span>')
+    expect(html).toContain('<span class="cell-generator-model">minimax-h3 · R2V</span>')
   })
 
   it('moves an imported video\'s model into the chip and keeps the footer to shape and length', () => {

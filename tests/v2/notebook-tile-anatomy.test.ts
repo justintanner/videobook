@@ -225,7 +225,7 @@ describe('the tile footer', () => {
     expect(footer).toContain('aria-label="Current output version 2 of 2"')
   })
 
-  it('names a take\'s model by its catalog title in the source chip and keeps the id in the tooltip', () => {
+  it('names a take\'s model by its compact id in the source chip and keeps the full id in the tooltip', () => {
     const html = renderTile(video({
       inputs: { mediaRole: 'generate-video-output' },
       provider: 'fal',
@@ -236,7 +236,7 @@ describe('the tile footer', () => {
     ]))
 
     expect(html).toContain('class="cell-route-generator" title="Fal · blackforestlabs/flux-3/text-to-video"')
-    expect(html).toContain('<span class="cell-generator-model">FLUX.3 T2V</span>')
+    expect(html).toContain('<span class="cell-generator-model">flux-3 · T2V</span>')
   })
 
   it('gives image and video tiles no header row', () => {
@@ -251,28 +251,57 @@ describe('the gen tile', () => {
   it('names the kind in its header and moves length and shape into the footer', () => {
     const html = renderTile(generation())
 
-    expect(html).toContain('<span class="cell-node-type-label" aria-hidden="true">GEN VIDEO</span>')
+    expect(html).toContain('<span class="cell-node-type" aria-label="GEN VIDEO · I2V">')
+    expect(html).toContain('<span class="cell-node-type-label" aria-hidden="true">GEN VIDEO · I2V</span>')
     expect(html).not.toContain('class="cell-aspect-ratio"')
     expect(footerOf(html)).toContain(
       '<span class="cell-media-badge" title="Duration">10s</span><span class="cell-media-badge" title="Aspect ratio">9:16</span>',
     )
   })
 
+  it('reads shape and size on an image gen tile and never more than two facts', () => {
+    const image = renderTile(generation({
+      kind: 'generate_image',
+      provider: 'fal',
+      model: 'fal:blackforestlabs/flux-3/edit-image',
+      inputs: { generationSettings: { aspect_ratio: '1:1', resolution: '2K' } },
+    }))
+    const video = renderTile(generation({
+      inputs: { generationMode: 'i2v', generationSettings: { duration: '10', aspect_ratio: '9:16', resolution: '720p' } },
+    }))
+
+    expect(footerOf(image)).toContain('<span class="cell-media-badge" title="Aspect ratio">1:1</span><span class="cell-media-badge" title="Resolution">2K</span>')
+    expect(image).toContain('<span class="cell-node-type-label" aria-hidden="true">GEN IMAGE · EDIT</span>')
+    expect(footerOf(video)).not.toContain('720p')
+  })
+
   it('puts the provider before the model and marks the input slots in the prompt', () => {
     const html = renderTile(generation())
 
     expect(html).toContain(
-      '<span class="cell-generation-model"><span class="cell-generator-provider">Kie</span><span class="cell-model-line" title="wan/3-0-video-prime · I2V">wan/3-0-video-prime · I2V</span></span>',
+      '<span class="cell-generation-model"><span class="cell-generator-provider">Kie</span><span class="cell-model-line" title="kie:wan/3-0-video-prime">wan/3-0-video-prime</span></span>',
     )
     expect(html).toContain('<span class="cell-prompt-token" data-family="image">@image1</span>')
   })
 
-  it('prefers the catalog title for the model line', () => {
+  it('keeps the compact id on the tile and moves the catalog title to the tooltip', () => {
     const html = renderTile(generation(), new Map([
       ['kie:wan/3-0-video-prime', { title: 'Wan 3.0 Prime Image to Video', promptRequired: true }],
     ]))
 
-    expect(html).toContain('<span class="cell-model-line" title="Wan 3.0 Prime I2V">Wan 3.0 Prime I2V</span>')
+    expect(html).toContain('<span class="cell-model-line" title="Wan 3.0 Prime Image to Video">wan/3-0-video-prime</span>')
+  })
+
+  it('takes the header mode from the endpoint when the cell names none', () => {
+    const html = renderTile(generation({
+      provider: 'fal',
+      model: 'fal:bytedance/seedance-2.0/fast/reference-to-video',
+      inputs: { generationSettings: { duration: '10', aspect_ratio: '9:16' } },
+    }))
+
+    expect(html).toContain('<span class="cell-node-type-label" aria-hidden="true">GEN VIDEO · R2V</span>')
+    expect(html).toContain('<span class="cell-model-line" title="fal:bytedance/seedance-2.0/fast/reference-to-video">seedance-2.0/fast</span>')
+    expect(html).toContain('lucide-sparkle')
   })
 
   it('keeps its prompt readable and docks a band while its takes run', () => {

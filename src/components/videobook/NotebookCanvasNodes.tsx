@@ -19,6 +19,7 @@ import {
   Gauge,
   Images,
   Layers2,
+  Sparkle,
   Sparkles,
   Ellipsis,
   Flag,
@@ -111,6 +112,8 @@ import { CellStateOverlay } from '@/components/videobook/cell-overlays/CellState
 import { CellClockDock } from '@/components/videobook/cell-overlays/CellClockOverlay'
 import { CellGeneratorIdentity } from '@/components/videobook/cell-overlays/CellGeneratorIdentity'
 import {
+  compactGenerationModel,
+  compactGenerationModelLabel,
   generationIdentity,
   generationPromptSegments,
   type GenerationIdentity,
@@ -492,11 +495,13 @@ function GenerationPromptText({ prompt }: { prompt: string }) {
 function GenerationRecipe({
   provider,
   modelLine,
+  modelTitle,
   prompt,
   promptRequired,
 }: {
   provider: string | null
   modelLine: string | null
+  modelTitle: string | null
   prompt: string | null
   promptRequired: boolean
 }) {
@@ -513,7 +518,7 @@ function GenerationRecipe({
     <div className="cell-copy cell-copy-text">
       <span className="cell-generation-model">
         {provider && <span className="cell-generator-provider">{provider}</span>}
-        <span className="cell-model-line" title={modelLine}>{modelLine}</span>
+        <span className="cell-model-line" title={modelTitle ?? modelLine}>{modelLine}</span>
       </span>
       {prompt
         ? <p title={prompt}><GenerationPromptText prompt={prompt} /></p>
@@ -526,17 +531,9 @@ function GenerationRecipe({
   )
 }
 
-function displayedIdentity(identity: GenerationIdentity, title: string | null): GenerationIdentity {
-  const name = title ?? identity.model
+function generatorDetail(identity: GenerationIdentity, shownModel: string | null): CellSourceDetail {
   return {
-    ...identity,
-    model: name ? abbreviateGenerationPhrases(name) : null,
-  }
-}
-
-function generatorDetail(identity: GenerationIdentity, title: string | null): CellSourceDetail {
-  return {
-    node: <CellGeneratorIdentity identity={displayedIdentity(identity, title)} className="cell-route-generator" />,
+    node: <CellGeneratorIdentity identity={{ ...identity, model: shownModel }} className="cell-route-generator" />,
     label: `Made with ${identity.label}`,
   }
 }
@@ -556,22 +553,22 @@ function frameDetail(
 
 function cellSourceDetail({
   generator,
-  generatorTitle,
+  generatorModel,
   toolName,
   frameProvenance,
   hasIncoming,
 }: {
   generator: GenerationIdentity | null
-  generatorTitle: string | null
+  generatorModel: string | null
   toolName: string | null
   frameProvenance: CanvasCellData['frameProvenance']
   hasIncoming: boolean
 }): CellSourceDetail | null {
-  if (generator) return generatorDetail(generator, generatorTitle)
+  if (generator) return generatorDetail(generator, generatorModel)
   const frame = frameDetail(frameProvenance, hasIncoming)
   if (frame) return frame
   return toolName
-    ? generatorDetail({ provider: null, model: toolName, label: toolName }, null)
+    ? generatorDetail({ provider: null, model: toolName, label: toolName }, abbreviateGenerationPhrases(toolName))
     : null
 }
 
@@ -581,13 +578,18 @@ function mediaFacts(badges: readonly CellPreviewBadge[]): CellFact[] {
     .map((badge) => ({ key: badge.key, label: badge.label, title: badge.title }))
 }
 
-function generationFacts(duration: string | null, aspectRatio: string | null): CellFact[] {
+function generationFacts(
+  duration: string | null,
+  aspectRatio: string | null,
+  resolution: string | null,
+): CellFact[] {
   return [
     duration
       ? { key: 'duration', label: /^\d+(\.\d+)?$/.test(duration) ? `${duration}s` : duration, title: 'Duration' }
       : null,
     aspectRatio ? { key: 'aspect', label: aspectRatio, title: 'Aspect ratio' } : null,
-  ].filter((fact): fact is CellFact => fact !== null)
+    resolution ? { key: 'resolution', label: resolution, title: 'Resolution' } : null,
+  ].filter((fact): fact is CellFact => fact !== null).slice(0, 2)
 }
 
 function runningTakesDetail(runningTakes: RunningTakes): string {
@@ -606,13 +608,8 @@ function generationDurationSetting(settings: Record<string, unknown> | null): st
     ?? (typeof settings.duration === 'number' ? String(settings.duration) : null)
 }
 
-function generationModelLine(title: string | null, mode: string | null): string | null {
-  if (!title) return null
-  const abbreviated = abbreviateGenerationPhrases(title)
-  const modeAbbreviation = mode && /^[a-z]2[a-z]$/i.test(mode) ? mode.toUpperCase() : null
-  return modeAbbreviation && !abbreviated.toUpperCase().includes(modeAbbreviation)
-    ? `${abbreviated} · ${modeAbbreviation}`
-    : abbreviated
+function generationModeLabel(mode: string | null): string | null {
+  return mode && /^[a-z]2[a-z]$/i.test(mode) ? mode.toUpperCase() : null
 }
 
 export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
@@ -677,11 +674,12 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     )
     : null
   const catalogEntry = data.model ? generationCatalog.get(data.model) : undefined
-  const modelLine = generationCell
-    ? generationModelLine(
-      catalogEntry?.title ?? generator?.model ?? data.model ?? data.tool ?? null,
-      asString(data.inputs?.generationMode),
-    )
+  const compactModel = generationCell && data.model
+    ? compactGenerationModel(data.model, data.provider ?? null)
+    : null
+  const modelLine = generationCell ? compactModel?.name ?? data.tool ?? null : null
+  const headerMode = generationCell
+    ? generationModeLabel(asString(data.inputs?.generationMode)) ?? compactModel?.mode ?? null
     : null
   const generationSettings = generationCell
     ? recordValue(data.inputs?.generationSettings)
@@ -691,6 +689,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     : null)
   const generationDuration = generationDurationSetting(generationSettings)
   const typeLabel = cellTypeLabel(data.kind)
+  const headerLabel = headerMode ? `${typeLabel} · ${headerMode}` : typeLabel
   const resolvedPrompt = asString(data.prompt) || asString(data.inputs?.resolvedPrompt)
   const imagePrompt = imageMediaCell
     ? resolvedPrompt ?? data.asset?.prompt ?? null
@@ -738,8 +737,8 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const sourceDetail = visualMediaCell && !emptyMediaSlot
     ? cellSourceDetail({
       generator: generationResult ? generator : null,
-      generatorTitle: generationResult
-        ? generationCatalog.get(data.model ?? data.producerModel ?? '')?.title ?? null
+      generatorModel: generationResult && (data.model ?? data.producerModel)
+        ? compactGenerationModelLabel(data.model ?? data.producerModel ?? '', data.provider ?? data.producerProvider ?? null)
         : null,
       toolName: mediaTile && data.model
         ? catalogEntry?.title ?? data.model
@@ -780,7 +779,11 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const facts: CellFact[] = mediaTile
     ? mediaFacts(visualBadges)
     : generationCell
-      ? generationFacts(generationDuration, aspectRatio)
+      ? generationFacts(
+        generationDuration,
+        aspectRatio,
+        generationSettings ? asString(generationSettings.resolution) : null,
+      )
       : data.post
         ? [{ key: 'platform', label: postPlatformName(data.post), title: 'Platform' }]
         : []
@@ -902,10 +905,10 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           </header>
         ) : null) : (
           <header className="cell-node-header">
-            <span className="cell-node-type" aria-label={typeLabel}>
-              <CellIcon kind={data.kind} />
+            <span className="cell-node-type" aria-label={headerLabel}>
+              {generationCell ? <Sparkle fill="currentColor" strokeWidth={0} /> : <CellIcon kind={data.kind} />}
               <span className="cell-node-type-label" aria-hidden="true">
-                {typeLabel}
+                {headerLabel}
               </span>
             </span>
             {goalMark && <GoalMark mark={goalMark} />}
@@ -987,6 +990,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <GenerationRecipe
             provider={generator?.provider ?? null}
             modelLine={modelLine}
+            modelTitle={catalogEntry?.title ?? data.model ?? null}
             prompt={generationPrompt}
             promptRequired={catalogEntry?.promptRequired !== false}
           />

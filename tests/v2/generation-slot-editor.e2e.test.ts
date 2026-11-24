@@ -124,7 +124,7 @@ describe('generation slot editor in the browser', () => {
       cell: { type: 'generate_video', slot: { row: 1, column: 0 }, prompt: 'Hold @image1, pass @keyframe1, land on @keyframe2', provider: 'kie', model: GROK, operation: 'image_to_video', tool: 'generate_video', inputs: { generationMode: 'i2v', generationSettings: { duration: 10 } } },
     })).id
     editId = (await call<{ id: string }>('create_notebook_cell', {
-      cell: { type: 'generate_image', slot: { row: 2, column: 0 }, prompt: 'Swap the sky', provider: 'fal', model: 'fal:openai/gpt-image-2/edit', operation: 'edit_image', tool: 'generate_image' },
+      cell: { type: 'generate_image', slot: { row: 2, column: 0 }, prompt: 'Swap the sky', provider: 'kie', model: 'kie:qwen2-1/image-to-image', operation: 'edit_image', tool: 'generate_image' },
     })).id
     vite = startProcess([join(process.cwd(), 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(vitePort)], {
       ...process.env,
@@ -364,7 +364,7 @@ describe('generation slot editor in the browser', () => {
     } finally {
       await call('update_notebook_cell', {
         cell_id: editId,
-        cell: { provider: 'fal', model: 'fal:openai/gpt-image-2/edit', operation: 'edit_image', tool: 'generate_image', prompt: 'Swap the sky' },
+        cell: { provider: 'kie', model: 'kie:qwen2-1/image-to-image', operation: 'edit_image', tool: 'generate_image', prompt: 'Swap the sky' },
       })
       await call('set_notebook_cell_inputs', { cell_id: editId, inputs: [] })
     }
