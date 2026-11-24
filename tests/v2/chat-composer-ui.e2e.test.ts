@@ -5662,7 +5662,8 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await page!.locator('.notebook-horizontal-scroll')
       .evaluate((element) => element.scrollLeft)).toBe(0)
     expect(await scale()).toBe(scaleBefore)
-    expect(await selected.getAttribute('data-selection')).toBe('primary')
+    expect(await selected.getAttribute('data-selection')).toBeNull()
+    expect(await page.locator('.react-flow__node.selected').count()).toBe(0)
 
     const lanes = await page.locator('.notebook-lane').evaluateAll((elements) =>
       elements.map((element) => ({
