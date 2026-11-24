@@ -5,6 +5,7 @@ import { GenerationBody } from '../../src/components/videobook/confirm/bodies/Ge
 import { listNotebookActions } from '../../server/src/notebook-action-catalog'
 import {
   asNotebookGenerationActions,
+  compatibleGenerationModes,
   generationActionIsCompatible,
   type GenerationConnectedInput,
   type NotebookGenerationAction,
@@ -13,6 +14,7 @@ import {
   actionForFamily,
   generationFamilyGroups,
   generationProviderOptions,
+  generationTypeOptions,
 } from '../../src/videobook/generation-provider-picker'
 
 const catalog = asNotebookGenerationActions({ actions: listNotebookActions() })
@@ -69,7 +71,7 @@ describe('generation provider picker', () => {
     expect(unavailableGroup.rows[0]).toMatchObject({ available: false, ranking: { rank: 1 } })
   })
 
-  it('offers one endpoint per provider that fits the request, with its price, availability and compatibility', () => {
+  it('offers one endpoint per provider that fits the request, with its availability and compatibility', () => {
     const text = generationProviderOptions(imageActions, sunburst, { frontierType: 't2i', compatible: compatibleWith([]) })
     expect(text.map(option => [option.label, option.action.model])).toEqual([
       ['Fal', 'fal:openai/gpt-image-2.6/sunburst/text-to-image'],
@@ -81,9 +83,7 @@ describe('generation provider picker', () => {
     ])
     for (const option of text) {
       expect(option).toMatchObject({ ranking: { type: 't2i', rank: 1 }, available: true, compatible: true })
-      expect(option.priceLabel).toBe(option.ranking!.priceLabel === '-' ? null : option.ranking!.priceLabel)
     }
-    expect(text.some(option => option.priceLabel !== null)).toBe(true)
     const edit = generationProviderOptions(imageActions, sunburst, { frontierType: 'i2i', compatible: compatibleWith([{ kind: 'image', target: 'image' }]) })
     expect(edit.map(option => [option.label, option.action.model])).toEqual([
       ['Fal', 'fal:openai/gpt-image-2.6/sunburst/edit'],
@@ -108,7 +108,7 @@ describe('generation provider picker', () => {
     expect(flux.map(option => option.label)).toEqual(['Fal', 'Fal · First/Last Frame', 'Fal · Keyframes', 'WaveSpeed'])
     expect(flux.find(option => option.label === 'Fal')?.action.model).toBe('fal:blackforestlabs/flux-3/text-to-video')
     const keyframes = flux.find(option => option.label === 'Fal · Keyframes')!
-    expect(keyframes).toMatchObject({ compatible: false, priceLabel: null })
+    expect(keyframes).toMatchObject({ compatible: false })
     expect(keyframes).not.toHaveProperty('ranking')
     const draft = generationProviderOptions(videoActions, 'video:flux-3-draft', { frontierType: 't2v', compatible: compatibleWith([]) })
     expect(draft.find(option => option.label === 'Fal')?.action.model).toBe('fal:blackforestlabs/flux-3/text-to-video/draft')
@@ -120,10 +120,9 @@ describe('generation provider picker', () => {
       frontierType: 'r2v',
       compatible: references,
       selectedId: 'generation.kie:wan/3-0-video',
-      alternatives: true,
     })
     expect(wan.filter(option => /prime/i.test(`${option.label} ${option.action.model}`))).toEqual([])
-    expect([...new Set(wan.map(option => option.action.provider))].sort()).toEqual(['alibaba', 'fal', 'kie', 'machgen', 'nunchux', 'wavespeed'])
+    expect(wan.map(option => option.label).sort()).toEqual(['Alibaba', 'Fal', 'Kie', 'MachGen', 'Nunchux', 'WaveSpeed'])
     const prime = generationProviderOptions(videoActions, 'video:wan-3-0-prime', { frontierType: 'r2v', compatible: references })
     expect(prime.map(option => [option.label, option.action.model])).toEqual([
       ['Alibaba', 'alibaba:wan3.0-video-prime'],
@@ -186,30 +185,53 @@ describe('generation provider picker', () => {
       .toBe('kie:seedream/5-flash-text-to-image')
   })
 
-  it('keeps the selected endpoint in its provider row and lists other usable endpoints only when asked', () => {
+  it('lists each provider once, keeping the selected endpoint as its row even when the inputs do not fit it', () => {
     const fal = (id: string) => `generation.fal:openai/gpt-image-2.6/sunburst/${id}`
     const edit = { frontierType: 'i2i' as const, compatible: compatibleWith([{ kind: 'image', target: 'image' }]) }
     const stale = generationProviderOptions(imageActions, sunburst, { ...edit, selectedId: fal('text-to-image') })
+    expect(stale.map(option => option.action.provider)).toEqual([...new Set(stale.map(option => option.action.provider))])
     expect(stale.filter(option => option.action.provider === 'fal').map(option => [option.label, option.action.id, option.compatible])).toEqual([
-      ['Fal · Text to image', fal('text-to-image'), false],
-      ['Fal · Edit image', fal('edit'), true],
+      ['Fal', fal('text-to-image'), false],
     ])
     expect(stale.find(option => option.action.provider === 'kie')?.label).toBe('Kie')
     const vidu = generationProviderOptions(videoActions, 'video:vidu-q4', { frontierType: 'r2v', compatible: compatibleWith([{ kind: 'image', target: 'image' }]) })
     expect(vidu.map(option => [option.label, option.action.model])).toEqual([['Kie', 'kie:vidu-q4/reference-to-video']])
-    const both = generationProviderOptions(videoActions, 'video:vidu-q4', {
+    const selected = generationProviderOptions(videoActions, 'video:vidu-q4', {
       frontierType: 'r2v',
       compatible: compatibleWith([{ kind: 'image', target: 'image' }]),
       selectedId: 'generation.kie:vidu-q4/image-to-video',
-      alternatives: true,
     })
-    expect(both.map(option => [option.label, option.action.model])).toEqual([
-      ['Kie · Image to video', 'kie:vidu-q4/image-to-video'],
-      ['Kie · Reference to video', 'kie:vidu-q4/reference-to-video'],
+    expect(selected.map(option => [option.label, option.action.model])).toEqual([['Kie', 'kie:vidu-q4/image-to-video']])
+  })
+
+  it('offers the provider\'s other endpoints as generation types, each reaching its own endpoint and mode', () => {
+    const current = imageActions.find(action => action.model === 'fal:openai/gpt-image-2.6/sunburst/text-to-image')!
+    const allModes = (action: NotebookGenerationAction) => action.inputContract.modes
+    expect(generationTypeOptions(imageActions, current, allModes).map(option => [option.value, option.action.model, option.modeId])).toEqual([
+      ['t2i', 'fal:openai/gpt-image-2.6/sunburst/text-to-image', 'default'],
+      ['i2i', 'fal:openai/gpt-image-2.6/sunburst/edit', 'default'],
+    ])
+    const vidu = videoActions.find(action => action.model === 'kie:vidu-q4/image-to-video')!
+    expect(generationTypeOptions(videoActions, vidu, allModes).map(option => [option.value, option.action.model])).toEqual([
+      ['i2v', 'kie:vidu-q4/image-to-video'],
+      ['r2v', 'kie:vidu-q4/reference-to-video'],
+    ])
+    const kie = videoActions.find(action => action.model === 'kie:wan/3-0-video')!
+    expect(generationTypeOptions(videoActions, kie, allModes).map(option => [option.value, option.action.model, option.modeId])).toEqual([
+      ['t2v', 'kie:wan/3-0-video', 't2v'],
+      ['i2v', 'kie:wan/3-0-video', 'i2v'],
+      ['r2v', 'kie:wan/3-0-video', 'r2v'],
+    ])
+    const inputs: GenerationConnectedInput[] = [{ kind: 'image', target: 'image' }, { kind: 'video', target: 'video' }]
+    const wavespeed = videoActions.find(action => action.model === 'wavespeed:alibaba/wan-3.0/reference-to-video')!
+    expect(generationTypeOptions(videoActions, wavespeed, action => compatibleGenerationModes(action, inputs))
+      .map(option => [option.value, option.action.model])).toEqual([
+      ['r2v', 'wavespeed:alibaba/wan-3.0/reference-to-video'],
+      ['v2v', 'wavespeed:alibaba/wan-3.0/video-edit'],
     ])
   })
 
-  it('renders a family Model select and the family providers with prices, configuration and compatibility', () => {
+  it('renders a family Model select, one row per provider with its configuration and compatibility, and the provider\'s types', () => {
     const current = imageActions.find(action => action.model === 'fal:openai/gpt-image-2.6/sunburst/edit')!
     const pickerActions = unavailable(imageActions, action => action.provider === 'machgen')
     const html = renderToStaticMarkup(createElement(GenerationBody, {
@@ -230,14 +252,15 @@ describe('generation provider picker', () => {
       onRefreshPreview: () => undefined, onRemoveSource: () => undefined,
       onSelectSource: () => undefined, onSettingChange: () => undefined,
     }))
-    const price = (model: string) => pickerActions.find(action => action.model === model)!.frontier!.find(ranking => ranking.type === 'i2i')!.priceLabel
     expect(html).toContain(`<option value="${sunburst}" selected="">#2 · GPT Image 2.6 Sunburst · Elo `)
     expect(html).not.toMatch(/<select aria-label="Generation model"[^]*?Sunburst · Fal/u)
     expect(html).toContain('<select aria-label="Generation provider">')
-    expect(html).toContain(`<option value="${current.id}" selected="">Fal · ${price(current.model)}</option>`)
-    expect(price('kie:gpt-image-2-6/sunburst-image-to-image')).toBe('-')
+    expect(html).toContain(`<option value="${current.id}" selected="">Fal</option>`)
     expect(html).toContain('<option value="generation.kie:gpt-image-2-6/sunburst-image-to-image">Kie</option>')
-    expect(html).toContain(`<option value="generation.machgen:GPT-Image-2.6-Sunburst" disabled="">MachGen · ${price('machgen:GPT-Image-2.6-Sunburst')} · not configured</option>`)
-    expect(html).toMatch(/<option value="generation\.wavespeed:openai\/gpt-image-2\.6-sunburst\/edit">WaveSpeed · [^<]* · incompatible<\/option>/u)
+    expect(html).toContain('<option value="generation.machgen:GPT-Image-2.6-Sunburst" disabled="">MachGen · not configured</option>')
+    expect(html).toContain('<option value="generation.wavespeed:openai/gpt-image-2.6-sunburst/edit">WaveSpeed · incompatible</option>')
+    expect(html).not.toMatch(/USD|dynamic/u)
+    expect(html).toContain('<option value="t2i" data-action="generation.fal:openai/gpt-image-2.6/sunburst/text-to-image">T2I · Text to image</option>')
+    expect(html).toContain(`<option value="i2i" data-action="${current.id}" selected="">I2I · Image to image</option>`)
   })
 })

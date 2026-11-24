@@ -346,16 +346,18 @@ describe('workspace action sheet', () => {
 
     const edit = renderActionSheet(image, { draft: { ...draft, refs: { image: ['image-1'] } }, context: withModels })
     const editProvider = selectMarkup(edit, 'Generation provider')
-    expect(editProvider).toContain(`value="${wavespeedText}"`)
-    expect(editProvider).toContain('incompatible')
-    expect(editProvider).toContain(`value="${wavespeedEdit}"`)
+    expect(editProvider).not.toContain(`value="${wavespeedText}"`)
+    expect(editProvider).toContain(`<option value="${wavespeedEdit}">WaveSpeed</option>`)
+    expect(editProvider.match(/>WaveSpeed</g)).toHaveLength(1)
+    expect(editProvider).toContain('<option value="" selected="">Choose provider</option>')
+    expect(editProvider).not.toMatch(/<select[^>]*disabled/)
 
     const unavailable = choices.map(choice => choice.value === wavespeedText ? { ...choice, available: false } : choice)
     const unavailableHtml = renderActionSheet(image, {
       draft,
       context: { ...context, choices: { ...context.choices, model: unavailable } },
     })
-    expect(selectMarkup(unavailableHtml, 'Generation provider')).toMatch(new RegExp(`value="${wavespeedText}" disabled=""[^>]*>WaveSpeed · .+ · not configured`))
+    expect(selectMarkup(unavailableHtml, 'Generation provider')).toContain(`value="${wavespeedText}" disabled="" selected="">WaveSpeed · not configured<`)
 
     const single = choices.map(choice => choice.family?.id).find((familyId, _index, familyIds) => {
       if (!familyId || familyIds.indexOf(familyId) !== _index) return false

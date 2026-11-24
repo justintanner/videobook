@@ -156,15 +156,16 @@ export function generationProviderChoices(
   values: Record<string, unknown>,
 ): ActionChoice[] {
   const type = choiceFrontierType(media, values)
+  const actions = pickerActions(choices)
   const currentId = typeof values.model === 'string' ? values.model : ''
-  return generationProviderOptions(pickerActions(choices), familyId, {
+  const currentFits = actions.some(action => action.id === currentId && endpointFits(action, type))
+  return generationProviderOptions(actions, familyId, {
     frontierType: type,
     compatible: (action) => endpointFits(action, type),
-    ...(currentId ? { selectedId: currentId } : {}),
-    alternatives: true,
+    ...(currentFits ? { selectedId: currentId } : {}),
   }).map(option => ({
     value: option.action.id,
-    label: [option.label, option.priceLabel ?? '', option.available ? '' : 'not configured', option.compatible ? '' : 'incompatible'].filter(Boolean).join(' · '),
+    label: [option.label, option.available ? '' : 'not configured', option.compatible ? '' : 'incompatible'].filter(Boolean).join(' · '),
     available: option.available,
     provider: option.action.provider,
   }))

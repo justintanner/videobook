@@ -50,11 +50,9 @@ export function WorkspaceGenerationModelField({
   const models = generationModelChoices(choices, media, draft)
   const familyId = choices.find(choice => choice.value === value)?.family?.id ?? ''
   const providers = familyId ? generationProviderChoices(choices, familyId, media, draft) : []
-  const resolved = familyId ? generationModelIdForChange(choices, media, draft, { familyId }, providerMemory) ?? '' : ''
-  const providerValue = providers.some(option => option.value === value) ? value : resolved
-  const shownProvider = providers.some(option => option.value === providerValue) ? providerValue : ''
+  const listed = providers.some(option => option.value === value)
   const emptyModel = required ? 'Choose model' : 'Use default'
-  const emptyProvider = shownProvider === '' ? (required ? 'Choose provider' : 'Use default') : ''
+  const emptyProvider = listed ? '' : familyId || required ? 'Choose provider' : 'Use default'
 
   return (
     <div className="workspace-action-field workspace-action-wide workspace-generation-models">
@@ -76,8 +74,8 @@ export function WorkspaceGenerationModelField({
         <span>Provider</span>
         <select
           aria-label="Generation provider"
-          disabled={disabled || !familyId || providers.length < 2}
-          value={shownProvider}
+          disabled={disabled || !familyId || (listed && providers.length < 2)}
+          value={listed ? value : ''}
           onChange={(event) => {
             const provider = providers.find(option => option.value === event.target.value)?.provider
             if (familyId && provider) onRememberProvider?.(familyId, provider)

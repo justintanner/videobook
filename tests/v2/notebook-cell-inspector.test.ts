@@ -760,7 +760,7 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('<option value="i2v" selected="">')
+    expect(html).toMatch(/<option value="i2v" data-action="[^"]+" selected="">/)
     expect(html).not.toContain('This generation type does not match')
   })
 
@@ -879,7 +879,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('<strong>@keyframe2</strong><span class="generation-slot-chip-meta"><small>@a3</small>')
     expect(html).toMatch(/aria-label="Time for @a2"[^>]*value="2.5"|value="2.5"[^>]*aria-label="Time for @a2"/)
     expect(html).toMatch(/aria-label="Time for @a3"[^>]*value="7"|value="7"[^>]*aria-label="Time for @a3"/)
-    expect(html).toMatch(/<option value="loop" selected="">Loop<\/option>/)
+    expect(html).toMatch(/<option value="loop" data-action="[^"]+" selected="">Loop<\/option>/)
     expect(html).toContain('I2V · Image to video')
     expect(html).not.toContain('Keyframe 1 seconds')
     expect(html).toContain('aria-label="Board cells"')

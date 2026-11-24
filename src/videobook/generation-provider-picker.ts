@@ -25,19 +25,23 @@ export type GenerationProviderOption<T extends FamilyPickerAction> = {
   action: T
   label: string
   ranking?: ModelFrontierRanking
-  priceLabel: string | null
   available: boolean
   compatible: boolean
+}
+
+export type GenerationTypeOption<T extends FamilyPickerAction> = {
+  value: string
+  action: T
+  modeId: string
 }
 
 type ProviderPickerOptions<T extends FamilyPickerAction> = {
   frontierType: FrontierType | null
   compatible?: (action: T) => boolean
   selectedId?: string
-  alternatives?: boolean
 }
 
-const unknownFrontierPrice = '-'
+const typeOrder: readonly string[] = ['t2i', 'i2i', 't2v', 'i2v', 'r2v', 'v2v']
 
 const operationFrontierTypes: Readonly<Record<string, FrontierType>> = {
   text_to_image: 't2i',
@@ -98,27 +102,21 @@ function isCompatible<T extends FamilyPickerAction>(action: T, options: Provider
   return options.compatible?.(action) ?? true
 }
 
-function slotEndpoints<T extends FamilyPickerAction>(candidates: readonly T[], options: ProviderPickerOptions<T>): T[] {
-  const chosen = requestEndpoint(candidates, options)
-  const primary = candidates.find(action => action.id === options.selectedId) ?? chosen
-  const others = candidates.filter(action => action !== primary && isCompatible(action, options)
-    && (options.alternatives || (action === chosen && !isCompatible(primary, options))))
-  return [primary, ...others]
+function providerRow(action: FamilyPickerAction): string {
+  return `${action.family.id}\u0000${action.provider}\u0000${action.variant ?? ''}`
 }
 
-function operationLabel(operation: string): string {
-  const words = operation.replaceAll('_', ' ')
-  return words.charAt(0).toUpperCase() + words.slice(1)
+function rowEndpoint<T extends FamilyPickerAction>(candidates: readonly T[], options: ProviderPickerOptions<T>): T {
+  const selected = candidates.filter(action => action.id === options.selectedId)
+  return selected.find(action => isCompatible(action, options)) ?? selected[0] ?? requestEndpoint(candidates, options)
 }
 
-function providerOption<T extends FamilyPickerAction>(action: T, options: ProviderPickerOptions<T>, shared: boolean): GenerationProviderOption<T> {
+function providerOption<T extends FamilyPickerAction>(action: T, options: ProviderPickerOptions<T>): GenerationProviderOption<T> {
   const ranking = frontierRanking(action, options.frontierType)
-  const label = [action.providerLabel, action.variant, shared ? operationLabel(action.operation) : undefined]
   return {
     action,
-    label: label.filter(Boolean).join(' · '),
+    label: [action.providerLabel, action.variant].filter(Boolean).join(' · '),
     ...(ranking ? { ranking } : {}),
-    priceLabel: ranking && ranking.priceLabel !== unknownFrontierPrice ? ranking.priceLabel : null,
     available: action.available !== false,
     compatible: isCompatible(action, options),
   }
@@ -129,16 +127,34 @@ export function generationProviderOptions<T extends FamilyPickerAction>(
   familyId: string,
   options: ProviderPickerOptions<T>,
 ): GenerationProviderOption<T>[] {
-  const endpoints = new Map<string, T[]>()
+  const rows = new Map<string, T[]>()
   for (const action of actions) {
     if (action.family.id !== familyId) continue
-    const key = `${action.provider}\u0000${action.variant ?? ''}`
-    endpoints.set(key, [...endpoints.get(key) ?? [], action])
+    rows.set(providerRow(action), [...rows.get(providerRow(action)) ?? [], action])
   }
-  return [...endpoints.values()].flatMap((candidates) => {
-    const shown = slotEndpoints(candidates, options)
-    return shown.map(action => providerOption(action, options, shown.length > 1))
-  })
+  return [...rows.values()].map(candidates => providerOption(rowEndpoint(candidates, options), options))
+}
+
+function generationTypeValue(action: FamilyPickerAction, modeId: string): string {
+  if (modeId !== 'default') return modeId
+  return operationFrontierTypes[action.operation] ?? action.operation.replaceAll('_', '-')
+}
+
+function typeRank(value: string): number {
+  const rank = typeOrder.indexOf(value)
+  return rank === -1 ? typeOrder.length : rank
+}
+
+export function generationTypeOptions<T extends FamilyPickerAction>(
+  actions: readonly T[],
+  current: T,
+  modesOf: (action: T) => readonly { id: string }[],
+): GenerationTypeOption<T>[] {
+  const siblings = actions.filter(action => action.id !== current.id && providerRow(action) === providerRow(current))
+  const options = [current, ...siblings].flatMap(action => modesOf(action)
+    .map(mode => ({ value: generationTypeValue(action, mode.id), action, modeId: mode.id })))
+  return options.filter((option, index) => options.findIndex(other => other.value === option.value) === index)
+    .sort((left, right) => typeRank(left.value) - typeRank(right.value))
 }
 
 export function actionForFamily<T extends FamilyPickerAction>(

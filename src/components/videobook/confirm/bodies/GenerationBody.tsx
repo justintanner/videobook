@@ -1,5 +1,5 @@
 import { generationFrontierType } from '@/videobook/generation-frontier'
-import { actionForFamily, generationFamilyGroups, generationProviderOptions } from '@/videobook/generation-provider-picker'
+import { actionForFamily, generationFamilyGroups, generationProviderOptions, generationTypeOptions } from '@/videobook/generation-provider-picker'
 import { isSeedanceEdit, SEEDANCE_EDIT_DESCRIPTION } from '../../../../../server/src/media/seedance-edit'
 import { useRef, useState, type ReactNode } from 'react'
 import { frameAspectRatio as modelFrameAspectRatio, FRAME_ASPECT_DESCRIPTION } from '../../../../../server/src/media/frame-options'
@@ -78,12 +78,13 @@ type GenerationBodyProps = {
   inputFooter?: ReactNode
   compatibleModeIds?: ReadonlySet<string>
   isActionCompatible?: (action: NotebookGenerationAction) => boolean
+  siblingModes?: (action: NotebookGenerationAction) => readonly GenerationInputMode[]
   sourceVisible?: boolean
   notebookId?: string
   doltArtifactAssets?: DoltArtifactAssets
   slotEditor?: GenerationSlotEditor
   providerMemory?: Readonly<Record<string, string>>
-  onActionChange: (actionId: string) => void
+  onActionChange: (actionId: string, modeId?: string) => void
   onRememberProvider?: (familyId: string, provider: string) => void
   onAddSource: (cellId: string, targetInput?: string) => void
   onModeChange: (modeId: string) => void
@@ -95,6 +96,10 @@ type GenerationBodyProps = {
     name: string,
     value: GenerationControlValue | undefined,
   ) => void
+}
+
+function allGenerationModes(action: NotebookGenerationAction): readonly GenerationInputMode[] {
+  return action.inputContract.modes
 }
 
 function generationMode(draft: NotebookChatGenerationDraft): string {
@@ -267,6 +272,7 @@ export function GenerationBody({
   inputFooter,
   compatibleModeIds,
   isActionCompatible,
+  siblingModes = allGenerationModes,
   sourceVisible = false,
   notebookId = '',
   doltArtifactAssets,
@@ -291,8 +297,11 @@ export function GenerationBody({
     frontierType,
     compatible: isActionCompatible,
     selectedId: draft.action.id,
-    alternatives: true,
   })
+  const typeOptions = generationTypeOptions(pickerActions, draft.action, (action) =>
+    action.id === draft.action.id ? modes : siblingModes(action))
+  const currentType = typeOptions.find((option) => option.action.id === draft.action.id && option.modeId === generationMode(draft))
+    ?? typeOptions.find((option) => option.action.id === draft.action.id)
   const changeFamily = (familyId: string) => {
     const remembered = providerMemory?.[familyId]
     const next = actionForFamily(pickerActions, familyId, {
@@ -307,6 +316,12 @@ export function GenerationBody({
     const provider = providerOptions.find((option) => option.action.id === actionId)?.action.provider
     onActionChange(actionId)
     if (provider) onRememberProvider?.(draft.action.family.id, provider)
+  }
+  const changeType = (value: string) => {
+    const option = typeOptions.find((candidate) => candidate.value === value)
+    if (!option) return
+    if (option.action.id === draft.action.id) onModeChange(option.modeId)
+    else onActionChange(option.action.id, option.modeId)
   }
   const settings = notebookChatGenerationSettings(draft)
   const frameAspectRatio = modelFrameAspectRatio(draft.action.model, draft.cell.inputs ?? {})
@@ -422,26 +437,26 @@ export function GenerationBody({
               disabled={busy || providerOptions.length <= 1}
               onChange={(event) => changeProvider(event.target.value)}
             >
-              {providerOptions.map(({ action, label, priceLabel, available, compatible }) => (
+              {providerOptions.map(({ action, label, available, compatible }) => (
                 <option key={action.id} value={action.id} disabled={!available}>
-                  {[label, priceLabel, available ? null : 'not configured', compatible ? null : 'incompatible'].filter(Boolean).join(' · ')}
+                  {[label, available ? null : 'not configured', compatible ? null : 'incompatible'].filter(Boolean).join(' · ')}
                 </option>
               ))}
             </select>
           </label>
-          {modes.length > 1 && (
+          {typeOptions.length > 1 && (
             <label>
               <span className="confirm-section-label">Type</span>
               <select
                 aria-label="Generation type"
-                value={generationMode(draft)}
+                value={currentType?.value ?? ''}
                 disabled={busy}
-                onChange={(event) => onModeChange(event.target.value)}
+                onChange={(event) => changeType(event.target.value)}
               >
-                {modes.map((mode) => (
-                  <option key={mode.id} value={mode.id}>
-                    {generationModeLabel(mode.id)}
-                    {compatibleModeIds && !compatibleModeIds.has(mode.id) ? ' · check inputs' : ''}
+                {typeOptions.map((option) => (
+                  <option key={option.value} value={option.value} data-action={option.action.id}>
+                    {generationModeLabel(option.value)}
+                    {compatibleModeIds && option.action.id === draft.action.id && !compatibleModeIds.has(option.modeId) ? ' · check inputs' : ''}
                   </option>
                 ))}
               </select>

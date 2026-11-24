@@ -147,8 +147,8 @@ describe('image editor model picker', () => {
     const provider = selectMarkup(html, 'Generation provider')
     expect(provider).not.toMatch(/<select[^>]*disabled/)
     expect(provider).toMatch(/value="nano-banana-2-1"[^>]*selected/)
-    expect(optionText(provider, 'nano-banana-2-1')).toBe('Kie · 0.02-0.045 USD/image')
-    expect(optionText(provider, 'google/nano-banana-2.1/edit')).toBe('Fal · dynamic · not configured')
+    expect(optionText(provider, 'nano-banana-2-1')).toBe('Kie')
+    expect(optionText(provider, 'google/nano-banana-2.1/edit')).toBe('Fal · not configured')
   })
 
   it('keeps a saved Fal endpoint selected in its family', () => {

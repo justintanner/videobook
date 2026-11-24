@@ -651,7 +651,6 @@ export function ImageEditorWorkspace({
       frontierType: editFrontierType,
       compatible: modelSupportsTarget,
       selectedId: currentModel.id,
-      alternatives: true,
     })
     : []
   const refreshCostEstimate = (modelId: string) => {
@@ -1022,9 +1021,9 @@ export function ImageEditorWorkspace({
                 disabled={imageEditModelsLoading || providerOptions.length <= 1}
                 onChange={(event) => changeProvider(event.target.value)}
               >
-                {providerOptions.map(({ action, label, priceLabel, available, compatible }) => (
+                {providerOptions.map(({ action, label, available, compatible }) => (
                   <option key={action.id} value={action.id} disabled={!compatible}>
-                    {[label, priceLabel, available ? null : 'not configured', compatible ? null : 'incompatible'].filter(Boolean).join(' · ')}
+                    {[label, available ? null : 'not configured', compatible ? null : 'incompatible'].filter(Boolean).join(' · ')}
                   </option>
                 ))}
               </select>

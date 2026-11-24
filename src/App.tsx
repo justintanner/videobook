@@ -3059,16 +3059,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice(error instanceof Error ? error.message : 'Could not remember the provider', 'error')
     })
   }, [call, mcp.state, notebook, setNotice])
-  const updatePendingGenerationAction = useCallback((actionId: string) => {
+  const updatePendingGenerationAction = useCallback((actionId: string, modeId?: string) => {
     if (!pendingGenerationDraft) return
     const action = pendingGenerationActionOptions.find((candidate) =>
       candidate.id === actionId)
     if (!action) return
-    setPendingGenerationDraft(reviseNotebookChatGenerationAction(
+    const revised = reviseNotebookChatGenerationAction(
       pendingGenerationDraft,
       action,
       pendingGenerationConnectedInputs,
-    ), true)
+    )
+    setPendingGenerationDraft(modeId
+      ? reviseNotebookChatGenerationMode(revised, modeId, pendingGenerationConnectedInputs)
+      : revised, true)
   }, [
     pendingGenerationActionOptions,
     pendingGenerationConnectedInputs,
@@ -10083,6 +10086,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             draft={action.draft}
             modes={pendingGenerationModeOptions}
             isActionCompatible={(candidate) => generationActionIsCompatible(candidate, pendingGenerationConnectedInputs)}
+            siblingModes={(candidate) => compatibleGenerationModes(candidate, pendingGenerationConnectedInputs)}
             preview={action.preview}
             previewError={action.previewError}
             previewLoading={action.previewLoading}

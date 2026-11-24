@@ -3089,7 +3089,7 @@ function ExecutableCellInspector({
   ) => {
     setDraft((current) => ({ ...current, [field]: value }))
   }
-  const updateGenerationAction = (actionId: string) => {
+  const updateGenerationAction = (actionId: string, modeId?: string) => {
     const selected = generationPickerActions.find((candidate) =>
       candidate.id === actionId)
     if (!selected) return
@@ -3097,7 +3097,7 @@ function ExecutableCellInspector({
       && selected.controls.some((control) => control.name === 'voice_id')) {
       ensureVoiceCatalog()
     }
-    const generationMode = initialGenerationMode(selected, connectedGenerationInputs, imageEdit ? draft.generationMode : '')
+    const generationMode = modeId ?? initialGenerationMode(selected, connectedGenerationInputs, imageEdit ? draft.generationMode : '')
     const next = {
       ...draft,
       ...generationSelectionForAction(selected),
@@ -3247,6 +3247,8 @@ function ExecutableCellInspector({
     : [editorAction, ...generationPickerActions]
   const generationEditorCompatible = (candidate: NotebookGenerationAction) =>
     generationActionIsCompatible(candidate, connectedGenerationInputs)
+  const generationEditorSiblingModes = (candidate: NotebookGenerationAction) =>
+    compatibleGenerationModes(candidate, connectedGenerationInputs)
   const generationEditorDraft = {
     action: editorAction,
     cell: { ...cell, ...generationPreviewDraft(draft) },
@@ -3554,6 +3556,7 @@ function ExecutableCellInspector({
             modes={generationModeOptions}
             compatibleModeIds={compatibleModeIds}
             isActionCompatible={generationEditorCompatible}
+            siblingModes={generationEditorSiblingModes}
             sourceVisible={sourceVisible}
             notebookId={notebookId}
             doltArtifactAssets={artifactAssets}
