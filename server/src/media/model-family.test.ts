@@ -98,18 +98,27 @@ const FAMILY_MEMBERS: Readonly<Record<string, readonly string[]>> = {
   "video:veo-3-1": ["fal:fal-ai/veo3.1", "machgen:Veo-3.1"],
   "video:heygen-video": ["fal:heygen/heygen-video/text-to-video", "wavespeed:heygen/video-1.0/image-to-video"],
   "video:flux-3": ["fal:blackforestlabs/flux-3/text-to-video", "wavespeed:black-forest-labs/flux-3/image-to-video"],
+  "video:wan-3-0-prime": ["kie:wan/3-0-video-prime", "fal:alibaba/wan-3.0-prime/text-to-video", "alibaba:wan3.0-video-prime"],
+  "video:h3-max-turbo": ["fal:minimax/h3-max-turbo/text-to-video", "fal:minimax/h3-max-turbo/extend-video"],
+  "video:ltx-2-5-fast": ["kie:ltx/2-5-fast-text-to-video", "kie:ltx/2-5-fast-audio-to-video", "fal:lightricks/ltx-2.5/text-to-video/fast"],
+  "video:ltx-2-5-pro": ["kie:ltx/2-5-pro-image-to-video", "fal:lightricks/ltx-2.5/image-to-video/pro"],
+  "video:flux-3-draft": ["fal:blackforestlabs/flux-3/text-to-video/draft", "fal:blackforestlabs/flux-3/extend-video/draft"],
+  "video:minimax-h3-lora": ["fal:minimax/h3/text-to-video/lora"],
 };
 
 const VARIANTS: Readonly<Record<string, readonly [string, string]>> = {
   "fal:bytedance/seedance-2.5/us/reference-to-video": ["video:seedance-2-5", "US"],
   "fal:bytedance/seedance-2.0/us/image-to-video": ["video:seedance-2-0", "US"],
-  "kie:wan/3-0-video-prime": ["video:wan-3-0", "Prime"],
-  "fal:alibaba/wan-3.0-prime/text-to-video": ["video:wan-3-0", "Prime"],
-  "alibaba:wan3.0-video-prime": ["video:wan-3-0", "Prime"],
-  "fal:blackforestlabs/flux-3/text-to-video/draft": ["video:flux-3", "Draft"],
   "fal:blackforestlabs/flux-3/first-last-frame-to-video": ["video:flux-3", "First/Last Frame"],
-  "fal:minimax/h3/text-to-video/lora": ["video:minimax-h3", "LoRA"],
-  "fal:minimax/h3-max-turbo/text-to-video": ["video:h3-max", "Turbo"],
+  "fal:blackforestlabs/flux-3/keyframes-to-video/draft": ["video:flux-3-draft", "Keyframes"],
+  "fal:fal-ai/kling-video/o3/pro/video-to-video/reference": ["video:kling-o3-pro", "Video Reference"],
+};
+
+const ENDPOINT_VARIANTS: ReadonlySet<string> = new Set(["US", "First/Last Frame", "Keyframes", "Video Reference"]);
+
+const LEADERBOARD_TIERS: Readonly<Record<string, string>> = {
+  "video:wan-3-0-prime": "video:wan-3-0",
+  "video:h3-max-turbo": "video:h3-max",
 };
 
 function familyOf(id: string): ModelFamilyFields {
@@ -159,6 +168,13 @@ describe("model family", () => {
     }
   });
 
+  it("keeps model tiers out of variants so the provider select lists only who serves the model", () => {
+    const tiers = listModels({ includeHidden: true })
+      .map((model) => ({ id: model.id, variant: modelFamily(model).variant }))
+      .filter(({ variant }) => variant !== undefined && !ENDPOINT_VARIANTS.has(variant));
+    expect(tiers).toEqual([]);
+  });
+
   it("gives every family one title and tells a provider's endpoints for one operation apart", () => {
     const titles = new Map<string, Set<string>>();
     const endpoints = new Map<string, string[]>();
@@ -174,7 +190,7 @@ describe("model family", () => {
     expect([...endpoints].filter(([, ids]) => ids.length > 1)).toEqual([]);
   });
 
-  it("keeps every endpoint of one frontier leaderboard entry in one family", () => {
+  it("keeps every endpoint of one frontier leaderboard entry in one family apart from the tiers it ranks with the model", () => {
     const models = new Map(listModels({ includeHidden: true }).map((model) => [model.id, model]));
     const split: string[] = [];
     for (const { type } of FRONTIER_TYPES) {
@@ -184,7 +200,8 @@ describe("model family", () => {
         const model = id ? models.get(id) : undefined;
         if (!model) continue;
         const key = `${type} #${row.rank} ${row.model}`;
-        families.set(key, (families.get(key) ?? new Set<string>()).add(modelFamily(model).family.id));
+        const familyId = modelFamily(model).family.id;
+        families.set(key, (families.get(key) ?? new Set<string>()).add(LEADERBOARD_TIERS[familyId] ?? familyId));
       }
       for (const [key, ids] of families) if (ids.size > 1) split.push(`${key}: ${[...ids].join(", ")}`);
     }

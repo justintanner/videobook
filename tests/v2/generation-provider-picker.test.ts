@@ -105,11 +105,35 @@ describe('generation provider picker', () => {
     expect(framed.find(option => option.label === 'Fal')?.action.model).toBe('fal:bytedance/seedance-2.5/image-to-video')
     expect(framed.every(option => option.compatible)).toBe(true)
     const flux = generationProviderOptions(videoActions, 'video:flux-3', { frontierType: 't2v', compatible: compatibleWith([]) })
+    expect(flux.map(option => option.label)).toEqual(['Fal', 'Fal · First/Last Frame', 'Fal · Keyframes', 'WaveSpeed'])
     expect(flux.find(option => option.label === 'Fal')?.action.model).toBe('fal:blackforestlabs/flux-3/text-to-video')
-    expect(flux.find(option => option.label === 'Fal · Draft')?.action.model).toBe('fal:blackforestlabs/flux-3/text-to-video/draft')
     const keyframes = flux.find(option => option.label === 'Fal · Keyframes')!
     expect(keyframes).toMatchObject({ compatible: false, priceLabel: null })
     expect(keyframes).not.toHaveProperty('ranking')
+    const draft = generationProviderOptions(videoActions, 'video:flux-3-draft', { frontierType: 't2v', compatible: compatibleWith([]) })
+    expect(draft.find(option => option.label === 'Fal')?.action.model).toBe('fal:blackforestlabs/flux-3/text-to-video/draft')
+  })
+
+  it('lists who serves the model and leaves its tiers, such as Wan 3.0 Prime, to the Model select', () => {
+    const references = compatibleWith([{ kind: 'image', target: 'image' }, { kind: 'video', target: 'video' }])
+    const wan = generationProviderOptions(videoActions, 'video:wan-3-0', {
+      frontierType: 'r2v',
+      compatible: references,
+      selectedId: 'generation.kie:wan/3-0-video',
+      alternatives: true,
+    })
+    expect(wan.filter(option => /prime/i.test(`${option.label} ${option.action.model}`))).toEqual([])
+    expect([...new Set(wan.map(option => option.action.provider))].sort()).toEqual(['alibaba', 'fal', 'kie', 'machgen', 'nunchux', 'wavespeed'])
+    const prime = generationProviderOptions(videoActions, 'video:wan-3-0-prime', { frontierType: 'r2v', compatible: references })
+    expect(prime.map(option => [option.label, option.action.model])).toEqual([
+      ['Alibaba', 'alibaba:wan3.0-video-prime'],
+      ['Fal', 'fal:alibaba/wan-3.0-prime/reference-to-video'],
+      ['Kie', 'kie:wan/3-0-video-prime'],
+    ])
+    const models = generationFamilyGroups(videoActions, 'r2v').flatMap(group => group.rows.map(row => row.family.title))
+    expect(models).toEqual(expect.arrayContaining(['Wan 3.0', 'Wan 3.0 Prime', 'H3 Max', 'H3 Max Turbo']))
+    expect(actionForFamily(videoActions, 'video:wan-3-0-prime', { frontierType: 'r2v', compatible: references, currentProvider: 'fal' })?.model)
+      .toBe('fal:alibaba/wan-3.0-prime/reference-to-video')
   })
 
   it('keeps the current provider when it serves the new family, else takes the best ranked usable endpoint', () => {
