@@ -16,7 +16,7 @@ export const GRAPHICS_LOGO_CORNERS = ["top-left", "top-right", "bottom-left", "b
 export type GraphicsLogoCorner = typeof GRAPHICS_LOGO_CORNERS[number];
 
 export const GRAPHICS_LOGO_NAME = "Logo";
-export const DEFAULT_GRAPHICS_LOGO_CORNER: GraphicsLogoCorner = "bottom-right";
+const DEFAULT_GRAPHICS_LOGO_CORNER: GraphicsLogoCorner = "bottom-right";
 export const DEFAULT_GRAPHICS_LOGO_SIZE = 0.15;
 export const DEFAULT_GRAPHICS_LOGO_OPACITY = 0.8;
 
