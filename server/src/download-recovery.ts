@@ -35,6 +35,10 @@ export function downloadFailureMessage(url: unknown, reason: string, signInRequi
 export async function clearDownloadFailure(engine: Engine, assetId: string): Promise<void> {
   const recorded = await engine.metadata.artifacts.read(assetId, DOWNLOAD_FAILURE_METADATA_KEY);
   if (recorded.ok) await engine.metadata.artifacts.delete(assetId, DOWNLOAD_FAILURE_METADATA_KEY);
+  const failure = engine.jobs.failures.read(assetId);
+  if (!failure.ok || !failure.value) return;
+  const cleared = await engine.jobs.failures.clear(assetId);
+  if (!cleared.ok) throw new Error(cleared.error.message);
 }
 
 export function failedDownloadForArtifact(engine: Engine, artifactId: string): FailedDownload | null {
