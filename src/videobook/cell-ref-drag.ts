@@ -45,11 +45,15 @@ export function cellRefDragHotspot(width: number, height: number): CellRefDragPo
   }
 }
 
-export function setCellRefDragImage(
-  event: DragEvent<HTMLElement>,
-  label: string,
-  family: string,
-): CellRefDragImage {
+export function beginCellRefDrag(drag: CellRefDrag): DataTransfer {
+  activeDrag = drag
+  const data = new DataTransfer()
+  data.setData(CELL_REF_MIME, JSON.stringify(drag))
+  data.effectAllowed = 'copyMove'
+  return data
+}
+
+export function measureCellRefGhost(label: string, family: string): CellRefDragImage {
   const ghost = document.createElement('span')
   ghost.className = 'cell-ref-ghost'
   ghost.dataset.family = family
@@ -57,10 +61,8 @@ export function setCellRefDragImage(
   document.body.append(ghost)
   const width = ghost.offsetWidth
   const height = ghost.offsetHeight
-  const hotspot = cellRefDragHotspot(width, height)
-  event.dataTransfer.setDragImage(ghost, hotspot.x, hotspot.y)
-  window.setTimeout(() => ghost.remove(), 0)
-  return { hotspot, width, height }
+  ghost.remove()
+  return { hotspot: cellRefDragHotspot(width, height), width, height }
 }
 
 export function cellRefTrailStart(address: CellRefDragBox): CellRefDragPoint {

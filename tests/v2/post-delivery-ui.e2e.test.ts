@@ -290,4 +290,24 @@ describe('Post delivery review in the chat composer', () => {
     expect(catalog.actions.some(action => ['/save-post-to-icloud', '/upload-post-to-dropbox'].includes(action.command))).toBe(false)
     expect(errors).toEqual([])
   }, 180_000)
+
+  it('takes a clip dropped by its address on a post with no clip yet', async () => {
+    const empty = (await call<{ post: PostWire }>('post', { to: 'draft', notebook_id: notebookId, platform: 'x', text: 'Needs a clip' })).post
+    const tile = page.locator(`.react-flow__node[data-id="${empty.id}"]`)
+    const slot = tile.locator('.post-tile-slot')
+    await slot.waitFor({ state: 'visible', timeout: 30_000 })
+    await tile.scrollIntoViewIfNeeded()
+    const address = page.locator(`.react-flow__node[data-id="${sourceCellId}"] .cell-ref-address`)
+    await address.hover()
+    const target = (await slot.boundingBox())!
+    await page.mouse.down()
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 })
+    await expect.poll(async () => await slot.getAttribute('class')).toContain('post-tile-slot-over')
+    expect(await slot.textContent()).toContain('Drop')
+    const updates = count('update_post')
+    await page.mouse.up()
+    await expect.poll(() => count('update_post'), { timeout: 20_000 }).toBe(updates + 1)
+    await slot.waitFor({ state: 'detached', timeout: 20_000 })
+    expect(await tile.locator('.post-tile-media').count()).toBe(1)
+  }, 60_000)
 })

@@ -2101,6 +2101,7 @@ textarea:focus-visible {
   height: min(17px, calc(17px * var(--notebook-detail-scale, 1)));
   border-top: 2px solid var(--green);
   border-left: 2px solid var(--green);
+  border-top-left-radius: 3px;
   content: '';
   pointer-events: none;
   z-index: 12;
@@ -3008,6 +3009,8 @@ textarea:focus-visible {
 .cell-ref-address-draggable {
   position: relative;
   cursor: grab;
+  touch-action: none;
+  user-select: none;
   text-decoration: underline dashed transparent;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.3em;
@@ -3082,6 +3085,12 @@ textarea:focus-visible {
   stroke: rgba(99, 199, 216, 0.6);
 }
 
+.cell-ref-dragging,
+.cell-ref-dragging * {
+  cursor: grab !important;
+  user-select: none !important;
+}
+
 .cell-ref-ghost {
   position: fixed;
   top: -1000px;
@@ -3090,7 +3099,7 @@ textarea:focus-visible {
   height: 26px;
   align-items: center;
   gap: 6px;
-  padding: 0 10px 0 9px;
+  padding: 0 9px;
   border: 1px solid var(--green);
   border-radius: 4px;
   color: var(--green);
@@ -3105,11 +3114,24 @@ textarea:focus-visible {
 }
 
 .cell-ref-ghost::before {
-  width: 7px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   background: currentColor;
-  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  clip-path: polygon(25% 12.5%, 83.33% 50%, 25% 87.5%);
   content: '';
+}
+
+.cell-ref-ghost-live {
+  z-index: 1001;
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.55),
+    0 0 0 3px rgba(114, 231, 170, 0.15);
+}
+
+.cell-ref-ghost-live[data-family='image'] {
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.55),
+    0 0 0 3px rgba(99, 199, 216, 0.15);
 }
 
 .cell-ref-ghost[data-family='gen']::before {
