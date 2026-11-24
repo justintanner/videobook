@@ -1749,7 +1749,10 @@ describe('chat composer browser flow', () => {
           return parseFloat(getComputedStyle(label).fontSize) * zoom
         })),
         addressTextSize: Math.min(...addresses.map(address => parseFloat(getComputedStyle(address).fontSize) * zoom)),
-        detailTextSize: Math.min(...details.map(detail => parseFloat(getComputedStyle(detail).fontSize) * zoom)),
+        detailTextSize: Math.min(...details.filter(detail => !detail.matches('.cell-state-flag, .cell-media-slot-upload, .cell-goal-mark')).map(detail => parseFloat(getComputedStyle(detail).fontSize) * zoom)),
+        flagTextSizes: [...new Set(details.filter(detail => detail.matches('.cell-state-flag')).map(detail => Math.round(parseFloat(getComputedStyle(detail).fontSize) * zoom * 100) / 100))],
+        uploadTextSizes: [...new Set(details.filter(detail => detail.matches('.cell-media-slot-upload')).map(detail => Math.round(parseFloat(getComputedStyle(detail).fontSize) * zoom * 100) / 100))],
+        goalTextSizes: [...new Set(details.filter(detail => detail.matches('.cell-goal-mark')).map(detail => Math.round(parseFloat(getComputedStyle(detail).fontSize) * zoom * 100) / 100))],
         promptTextSize: Math.min(...prompts.map(prompt => parseFloat(getComputedStyle(prompt).fontSize) * zoom)),
         detailsOutsideCards: details.flatMap(detail => {
           const card = detail.closest('.cell-node')?.getBoundingClientRect()
@@ -1780,7 +1783,10 @@ describe('chat composer browser flow', () => {
     })
     const expectReadableDetails = (layout: Awaited<ReturnType<typeof readLayout>>, textScale = 1) => {
       expect(layout.detailTextSize).toBeCloseTo(11 * textScale, 2)
-      expect(layout.promptTextSize).toBeCloseTo(13 * textScale, 2)
+      for (const size of layout.flagTextSizes) expect(size).toBeCloseTo(10 * textScale, 1)
+      for (const size of layout.uploadTextSizes) expect(size).toBeCloseTo(10.5 * textScale, 1)
+      for (const size of layout.goalTextSizes) expect(size).toBeCloseTo(10 * textScale, 1)
+      expect(layout.promptTextSize).toBeCloseTo(12 * textScale, 2)
       expect(layout).toMatchObject({
         detailsOutsideCards: [],
         incompletePrompts: [],

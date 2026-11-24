@@ -36,18 +36,6 @@ const listedAddressLimit = 3
 
 const outgoingAddressLimit = 2
 
-const fixedSlotLabels: Readonly<Record<string, string>> = {
-  firstframe: 'FF',
-  lastframe: 'LF',
-}
-
-const numberedSlotPrefixes: Readonly<Record<string, string>> = {
-  audio: 'A',
-  image: 'I',
-  keyframe: 'K',
-  video: 'V',
-}
-
 function inputTokensByTarget(
   document: NotebookDocument,
 ): Map<string, Map<string, string[]>> {
@@ -118,19 +106,10 @@ export function notebookCellRouteTags(
   return tags
 }
 
-export function notebookRouteSlotLabel(token: string): string {
-  const fixed = fixedSlotLabels[token]
-  if (fixed) return fixed
-  const numbered = /^([a-z]+)(\d+)$/u.exec(token)
-  const prefix = numbered ? numberedSlotPrefixes[numbered[1] ?? ''] : undefined
-  if (numbered && prefix) return `${prefix}${numbered[2]}`
-  return token.slice(0, 3).toUpperCase()
-}
-
 function routeSegment(tag: NotebookRouteTag, showSlots: boolean): NotebookRouteSegment {
   return {
     address: tag.address.replace(/^@/u, ''),
-    slots: showSlots ? tag.tokens.map(notebookRouteSlotLabel) : [],
+    slots: showSlots ? [...tag.tokens] : [],
     family: notebookCellFamily(tag.type),
   }
 }
@@ -184,7 +163,7 @@ export function notebookIncomingRouteBadge(
 }
 
 function outgoingListedCount(count: number): number {
-  return count > outgoingAddressLimit ? 1 : count
+  return Math.min(count, outgoingAddressLimit)
 }
 
 export function notebookOutgoingRouteBadge(

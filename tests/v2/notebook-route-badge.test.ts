@@ -15,7 +15,7 @@ const generationInputs: NotebookRouteTag[] = [
 ]
 
 describe('cell route badges', () => {
-  it('labels each generation input with its slot keycap and source address', () => {
+  it('labels each generation input with its slot name and source address', () => {
     const html = renderToStaticMarkup(createElement(CellRouteBadge, {
       direction: 'incoming',
       badge: notebookIncomingRouteBadge(generationInputs),
@@ -24,8 +24,8 @@ describe('cell route badges', () => {
     expect(html).toContain('class="cell-route-badge cell-route-badge-incoming"')
     expect(html).toContain('data-tone="mixed"')
     expect(html).toContain('<span class="sr-only">Fed by @d1 into video1, @c1 into image1, @c2 into image2</span>')
-    expect(html).toContain('<span class="cell-route-segment" data-family="video"><span class="cell-route-slot">V1</span><span class="cell-route-address">d1</span></span>')
-    expect(html).toContain('<span class="cell-route-slot">I2</span><span class="cell-route-address">c2</span>')
+    expect(html).toContain('<span class="cell-route-segment" data-family="video"><span class="cell-route-slot">video1</span><span class="cell-route-address">d1</span></span>')
+    expect(html).toContain('<span class="cell-route-slot">image2</span><span class="cell-route-address">c2</span>')
     expect(html).not.toContain('cell-route-arrow')
   })
 
@@ -99,8 +99,8 @@ describe('cell route badges', () => {
       badge: notebookIncomingRouteBadge(tags),
     }))
 
-    expect(outputs).toContain('<span class="cell-route-address">d1</span></span><span class="cell-route-more">+3</span>')
-    expect(outputs).not.toContain('<span class="cell-route-address">d2</span>')
+    expect(outputs).toContain('<span class="cell-route-address">d2</span></span><span class="cell-route-more">+2</span>')
+    expect(outputs).not.toContain('<span class="cell-route-address">d3</span>')
     expect(inputs).toContain('<span class="cell-route-address">d3</span></span><span class="cell-route-more">+1</span>')
     expect(renderToStaticMarkup(createElement(CellRouteBadge, {
       direction: 'incoming',

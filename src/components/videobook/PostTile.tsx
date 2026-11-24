@@ -1,9 +1,10 @@
 import { useState, type DragEvent } from 'react'
-import { Check, Link2, Plus, RotateCcw } from 'lucide-react'
+import { Check, Link, Plus, RotateCcw } from 'lucide-react'
 import type { PostView } from '../../../server/src/posts/post-contract'
 import type { PostSourcePreview } from '@/videobook/notebook-canvas'
 import { formatMediaTime } from '@/videobook/notebook-cell-presentation'
 import { activeCellRefDrag, isCellRefDragEvent } from '@/videobook/cell-ref-drag'
+import { useElapsedLabel } from '@/components/videobook/cell-overlays/useElapsedLabel'
 import {
   postDeliveryBadges,
   postPlatformName,
@@ -119,7 +120,9 @@ function PostTileSourceHint() {
   return (
     <>
       <span className="post-tile-caption">Choose a clip to post</span>
-      <span className="post-tile-hint">Or drop a cell's address on the clip slot.</span>
+      <span className="post-tile-hint post-tile-source-hint">
+        <span>Or drop an address like <span className="post-tile-token">@d3</span> on the slot.</span>
+      </span>
     </>
   )
 }
@@ -137,7 +140,12 @@ function platformPhrase(post: PostView): string {
 function PostTileStatusLine({ post, onRetry }: { post: PostView; onRetry?: () => void }) {
   const status = post.runtime.status
   if (status === 'posting' || status === 'uploading') {
-    return <PostTileProgress label={`${status === 'posting' ? 'Posting' : 'Uploading'} to ${platformPhrase(post)}`} />
+    return (
+      <PostTileProgress
+        label={`Uploading to ${platformPhrase(post)}`}
+        startedAt={timestampValue(post.runtime.outbound?.frozenAt)}
+      />
+    )
   }
   if (status === 'failed') {
     return (
@@ -193,11 +201,23 @@ function PostTileFailure({ message, onRetry }: { message: string; onRetry?: () =
   )
 }
 
-function PostTileProgress({ label }: { label: string }) {
+function timestampValue(value: string | undefined): number | null {
+  const parsed = value ? Date.parse(value) : Number.NaN
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function PostTileElapsed({ startedAt }: { startedAt: number }) {
+  return <b aria-hidden="true">{useElapsedLabel(startedAt)}</b>
+}
+
+function PostTileProgress({ label, startedAt }: { label: string; startedAt: number | null }) {
   return (
     <span className="post-tile-progress" role="status">
       <span className="post-tile-progress-bar" aria-hidden="true"><span /></span>
-      <span>{label}</span>
+      <span className="post-tile-progress-row">
+        <span>{label}</span>
+        {startedAt !== null && <PostTileElapsed startedAt={startedAt} />}
+      </span>
     </span>
   )
 }
@@ -206,7 +226,7 @@ function PostTileNextStep({ post, text }: { post: PostView; text: string }) {
   const needsLink = postDeliveryBadges(post).length > 0
   return (
     <span className={`post-tile-hint post-tile-next${needsLink ? ' post-tile-hint-attention' : ''}`}>
-      <Link2 size={11} aria-hidden="true" />
+      <Link size={11} aria-hidden="true" />
       {text}
     </span>
   )

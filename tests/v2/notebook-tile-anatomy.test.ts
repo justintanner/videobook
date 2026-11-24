@@ -169,7 +169,7 @@ describe('the tile footer', () => {
 
     expect(html).not.toContain('cell-ref-grip')
     expect(footerOf(html)).toContain(
-      '<strong class="cell-ref-address cell-ref-address-draggable nodrag nopan" draggable="true" data-hint="Drag into an input slot">@d3</strong>',
+      '<strong class="cell-ref-address cell-ref-address-draggable nodrag nopan" draggable="true" data-hint="Drag into an input">@d3</strong>',
     )
   })
 
@@ -247,12 +247,43 @@ describe('the tile footer', () => {
   })
 })
 
+describe('the tile frame', () => {
+  it('lights the working frame while takes run, a post uploads or a file attaches', () => {
+    const takes = renderTile(generation({ runningTakes: { count: 2, startedAt: '2026-11-24T10:00:00.000Z' } }))
+    const posting = renderTile(post(postView({ status: 'posting' })))
+    const attaching = renderTile(
+      video({ outputArtifactId: undefined, asset: undefined, status: 'ready' }),
+      new Map(),
+      { slotStates: { 'cell-video': { operation: 'upload', error: null, fileName: 'IMG_4412.HEIC' } } },
+    )
+
+    expect(takes).toContain('cell-node-running')
+    expect(posting).toContain('cell-node-running')
+    expect(attaching).toContain('cell-node-running')
+    expect(renderTile(video())).not.toContain('cell-node-running')
+    expect(renderTile(generation())).not.toContain('cell-node-running')
+  })
+
+  it('asks for a generation action under the filled sparkle', () => {
+    const html = renderTile(generation({ provider: undefined, model: undefined, prompt: '', inputs: {} }))
+    const choose = html.slice(html.indexOf('cell-generation-choose'))
+
+    expect(choose).toContain('class="lucide lucide-sparkle"')
+    expect(choose).toContain('<strong>Choose a generation action</strong>')
+    expect(html).not.toContain('lucide-sparkles')
+  })
+
+  it('points the post next step with the chain-link icon', () => {
+    expect(renderTile(post(postView()))).toContain('class="lucide lucide-link"')
+  })
+})
+
 describe('the gen tile', () => {
   it('names the kind in its header and moves length and shape into the footer', () => {
     const html = renderTile(generation())
 
     expect(html).toContain('<span class="cell-node-type" aria-label="GEN VIDEO · I2V">')
-    expect(html).toContain('<span class="cell-node-type-label" aria-hidden="true">GEN VIDEO · I2V</span>')
+    expect(html).toContain('<span class="cell-node-type-label" aria-hidden="true">GEN VIDEO<span class="cell-node-type-mode">I2V</span></span>')
     expect(html).not.toContain('class="cell-aspect-ratio"')
     expect(footerOf(html)).toContain(
       '<span class="cell-media-badge" title="Duration">10s</span><span class="cell-media-badge" title="Aspect ratio">9:16</span>',
@@ -271,7 +302,7 @@ describe('the gen tile', () => {
     }))
 
     expect(footerOf(image)).toContain('<span class="cell-media-badge" title="Aspect ratio">1:1</span><span class="cell-media-badge" title="Resolution">2K</span>')
-    expect(image).toContain('<span class="cell-node-type-label" aria-hidden="true">GEN IMAGE · EDIT</span>')
+    expect(image).toContain('<span class="cell-node-type-label" aria-hidden="true">GEN IMAGE<span class="cell-node-type-mode">EDIT</span></span>')
     expect(footerOf(video)).not.toContain('720p')
   })
 
@@ -292,6 +323,28 @@ describe('the gen tile', () => {
     expect(html).toContain('<span class="cell-model-line" title="Wan 3.0 Prime Image to Video">wan/3-0-video-prime</span>')
   })
 
+  it('names the sound-effect mode on an audio gen tile', () => {
+    const html = renderTile(generation({
+      kind: 'generate_audio',
+      provider: 'kie',
+      model: 'kie:elevenlabs/sound-effect-v2',
+      operation: 'sfx',
+      inputs: {},
+    }))
+
+    expect(html).toContain('<span class="cell-node-type-label" aria-hidden="true">GEN AUDIO<span class="cell-node-type-mode">SFX</span></span>')
+  })
+
+  it('writes fal in lower case on a tile, as the design does', () => {
+    const html = renderTile(generation({
+      provider: 'fal',
+      model: 'fal:bytedance/seedance-2.0/fast/reference-to-video',
+      inputs: {},
+    }))
+
+    expect(html).toContain('<span class="cell-generator-provider">fal</span>')
+  })
+
   it('takes the header mode from the endpoint when the cell names none', () => {
     const html = renderTile(generation({
       provider: 'fal',
@@ -299,7 +352,7 @@ describe('the gen tile', () => {
       inputs: { generationSettings: { duration: '10', aspect_ratio: '9:16' } },
     }))
 
-    expect(html).toContain('<span class="cell-node-type-label" aria-hidden="true">GEN VIDEO · R2V</span>')
+    expect(html).toContain('<span class="cell-node-type-label" aria-hidden="true">GEN VIDEO<span class="cell-node-type-mode">R2V</span></span>')
     expect(html).toContain('<span class="cell-model-line" title="fal:bytedance/seedance-2.0/fast/reference-to-video">seedance-2.0/fast</span>')
     expect(html).toContain('lucide-sparkle')
   })
@@ -327,7 +380,7 @@ describe('the gen tile', () => {
     expect(footerOf(needs)).toContain('<span class="cell-state-flag" data-tone="attention" title="No prompt"><span>No prompt</span></span>')
     expect(needs).toContain('cell-node-attention')
     expect(optional).not.toContain('cell-node-attention')
-    expect(needs).toContain('Add a prompt. Name inputs like @image1.')
+    expect(needs).toContain('Describe the shot. Name inputs like <span class="cell-prompt-token" data-family="image">@image1</span>.')
     expect(footerOf(optional)).not.toContain('cell-state-flag')
     expect(optional).toContain('Prompt optional')
   })
@@ -355,11 +408,11 @@ describe('the post tile', () => {
     expect(footerOf(html)).not.toContain('cell-state-flag')
   })
 
-  it('turns the next step amber and flags the tile once the clip is on the phone', () => {
+  it('turns the next step amber and flags the tile once the clip is on the phone, keeping the grey frame', () => {
     const html = renderTile(post(postView({ icloud: { folder: 'pool', completedAt: '2026-11-21T08:00:00.000Z' } })))
 
     expect(html).toContain('post-tile-hint post-tile-next post-tile-hint-attention')
-    expect(html).toContain('cell-node-attention')
+    expect(html).not.toContain('cell-node-attention')
     expect(html).toContain('<span class="post-badge">')
     expect(footerOf(html)).toContain('title="Needs link"')
   })

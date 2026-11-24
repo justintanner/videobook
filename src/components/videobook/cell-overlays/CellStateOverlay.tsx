@@ -57,14 +57,15 @@ export function CellStateOverlay({
   if (presentation.overlay === 'clock' && presentation.label) {
     const phase = generation ? notebookCellGenerationPhase(status) : null
     if (docked) {
+      const waiting = presentation.tone === 'queued'
       return (
         <CellClockDock
           label={presentation.label}
-          detail={phase?.label ?? presentation.label}
+          detail={waiting ? 'Waiting for a slot' : phase?.label ?? presentation.label}
           address={address}
           startedAt={presentation.startedAt}
-          phase={phase}
-          waiting={presentation.tone === 'queued'}
+          phase={waiting ? null : phase}
+          waiting={waiting}
         />
       )
     }

@@ -219,7 +219,9 @@ describe('CellStateOverlay', () => {
     }))
 
     expect(html).toContain('class="cell-state-dock cell-state-dock-clock cell-state-dock-waiting"')
-    expect(html).toContain('<span class="cell-state-dock-label">QUEUED</span>')
+    expect(html).toContain('<span class="cell-state-dock-label">Waiting for a slot</span>')
+    expect(html).toContain('class="cell-state-dock-bar"')
+    expect(html).not.toContain('cell-state-phase-step')
   })
 
   it('docks a failed generation with its repair and delete controls', () => {

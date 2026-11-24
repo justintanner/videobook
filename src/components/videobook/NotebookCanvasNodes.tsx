@@ -71,7 +71,6 @@ import {
   useEffect,
   type ReactNode,
 } from 'react'
-import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import {
   type NotebookSourceSide,
   notebookSourcePortOffsets,
@@ -115,6 +114,7 @@ import {
   compactGenerationModel,
   compactGenerationModelLabel,
   generationIdentity,
+  generationProviderLabel,
   generationPromptSegments,
   type GenerationIdentity,
   type PromptSegment,
@@ -295,7 +295,7 @@ function MediaSlotTile({
           onOpenLibrary(cellId)
         }}
       >
-        {busy ? <BusyIndicator size={22} /> : <Images size={22} />}
+        {busy ? <span className="cell-media-slot-spinner" aria-hidden="true" /> : <Images size={22} />}
         <strong>{busy ? 'Attaching media…' : `Add ${kind}`}</strong>
         <span className={busy ? 'cell-media-slot-file' : undefined}>{slotDetail(state)}</span>
       </button>
@@ -323,7 +323,7 @@ function MediaSlotTile({
       />
       {dragging && (
         <span className="cell-media-slot-release" aria-hidden="true">
-          <Upload size={22} />
+          <Upload size={26} strokeWidth={1.6} />
           <strong>Release to add</strong>
           <span>Drops into {address}</span>
         </span>
@@ -390,7 +390,7 @@ function CellRefAddress({
     <strong
       className={`cell-ref-address cell-ref-address-draggable nodrag nopan${lifted ? ' cell-ref-address-lifted' : ''}`}
       draggable
-      data-hint="Drag into an input slot"
+      data-hint="Drag into an input"
       onDragStart={(event) => {
         event.stopPropagation()
         startCellRefDrag(event, { sourceCellId: cellId, from: null })
@@ -458,7 +458,7 @@ function GoalMark({ mark }: { mark: string }) {
   return (
     <span className="cell-generation-chips">
       <span className="cell-aspect-ratio cell-goal-mark" title={`Goal ${mark}`}>
-        <Flag size={9} aria-hidden="true" />
+        <Flag size={9} strokeWidth={2.4} aria-hidden="true" />
         {mark.split(' · ')[0]}
       </span>
     </span>
@@ -492,13 +492,21 @@ function GenerationPromptText({ prompt }: { prompt: string }) {
     : <span key={segment.start}>{segment.text}</span>)
 }
 
+function promptInvitation(kind: NotebookCellType): string {
+  if (kind === 'generate_image') return 'Describe the image.'
+  if (kind === 'generate_audio') return 'Describe the sound.'
+  return 'Describe the shot.'
+}
+
 function GenerationRecipe({
+  kind,
   provider,
   modelLine,
   modelTitle,
   prompt,
   promptRequired,
 }: {
+  kind: NotebookCellType
   provider: string | null
   modelLine: string | null
   modelTitle: string | null
@@ -508,7 +516,7 @@ function GenerationRecipe({
   if (!modelLine) {
     return (
       <div className="cell-copy cell-generation-choose">
-        <Sparkles size={26} aria-hidden="true" />
+        <Sparkle size={26} fill="currentColor" strokeWidth={0} aria-hidden="true" />
         <strong>Choose a generation action</strong>
         <span>Open the cell to pick a model</span>
       </div>
@@ -524,16 +532,32 @@ function GenerationRecipe({
         ? <p title={prompt}><GenerationPromptText prompt={prompt} /></p>
         : (
           <span className="cell-generation-prompt-empty">
-            {promptRequired ? 'Add a prompt. Name inputs like @image1.' : 'Prompt optional'}
+            {promptRequired
+              ? (
+                <>
+                  {promptInvitation(kind)} Name inputs like{' '}
+                  <span className="cell-prompt-token" data-family="image">@image1</span>.
+                </>
+              )
+              : 'Prompt optional'}
           </span>
         )}
     </div>
   )
 }
 
-function generatorDetail(identity: GenerationIdentity, shownModel: string | null): CellSourceDetail {
+function generatorDetail(
+  identity: GenerationIdentity,
+  shownProvider: string | null,
+  shownModel: string | null,
+): CellSourceDetail {
   return {
-    node: <CellGeneratorIdentity identity={{ ...identity, model: shownModel }} className="cell-route-generator" />,
+    node: (
+      <CellGeneratorIdentity
+        identity={{ ...identity, provider: shownProvider ?? identity.provider, model: shownModel }}
+        className="cell-route-generator"
+      />
+    ),
     label: `Made with ${identity.label}`,
   }
 }
@@ -553,22 +577,24 @@ function frameDetail(
 
 function cellSourceDetail({
   generator,
+  generatorProvider,
   generatorModel,
   toolName,
   frameProvenance,
   hasIncoming,
 }: {
   generator: GenerationIdentity | null
+  generatorProvider: string | null
   generatorModel: string | null
   toolName: string | null
   frameProvenance: CanvasCellData['frameProvenance']
   hasIncoming: boolean
 }): CellSourceDetail | null {
-  if (generator) return generatorDetail(generator, generatorModel)
+  if (generator) return generatorDetail(generator, generatorProvider, generatorModel)
   const frame = frameDetail(frameProvenance, hasIncoming)
   if (frame) return frame
   return toolName
-    ? generatorDetail({ provider: null, model: toolName, label: toolName }, abbreviateGenerationPhrases(toolName))
+    ? generatorDetail({ provider: null, model: toolName, label: toolName }, null, abbreviateGenerationPhrases(toolName))
     : null
 }
 
@@ -610,6 +636,18 @@ function generationDurationSetting(settings: Record<string, unknown> | null): st
 
 function generationModeLabel(mode: string | null): string | null {
   return mode && /^[a-z]2[a-z]$/i.test(mode) ? mode.toUpperCase() : null
+}
+
+const audioOperationModes: Readonly<Record<string, string>> = {
+  sfx: 'SFX',
+  speech: 'SPEECH',
+  music: 'MUSIC',
+  video_to_music: 'V2M',
+}
+
+function tileProviderLabel(provider: string | null | undefined): string | null {
+  if (!provider) return null
+  return provider === 'fal' ? 'fal' : generationProviderLabel(provider)
 }
 
 export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
@@ -679,7 +717,9 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     : null
   const modelLine = generationCell ? compactModel?.name ?? data.tool ?? null : null
   const headerMode = generationCell
-    ? generationModeLabel(asString(data.inputs?.generationMode)) ?? compactModel?.mode ?? null
+    ? generationModeLabel(asString(data.inputs?.generationMode))
+      ?? compactModel?.mode
+      ?? (data.kind === 'generate_audio' && data.operation ? audioOperationModes[data.operation] ?? null : null)
     : null
   const generationSettings = generationCell
     ? recordValue(data.inputs?.generationSettings)
@@ -737,6 +777,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const sourceDetail = visualMediaCell && !emptyMediaSlot
     ? cellSourceDetail({
       generator: generationResult ? generator : null,
+      generatorProvider: tileProviderLabel(data.provider ?? data.producerProvider),
       generatorModel: generationResult && (data.model ?? data.producerModel)
         ? compactGenerationModelLabel(data.model ?? data.producerModel ?? '', data.provider ?? data.producerProvider ?? null)
         : null,
@@ -795,6 +836,8 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const takesRunning = generationCell && !running && !failed && data.runningTakes
     ? data.runningTakes
     : null
+  const postInFlight = data.post?.runtime.status === 'posting' || data.post?.runtime.status === 'uploading'
+  const slotBusy = emptyMediaSlot && Boolean(slotContext.states[id]?.operation)
   const contextMenuId = cellContextMenuId(id)
   const openContextMenu = (
     x: number,
@@ -812,7 +855,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         `cell-family-${notebookCellFamily(data.kind)}`,
         selected ? 'cell-node-selected' : '',
         primarySelected ? 'cell-node-primary' : '',
-        running ? 'cell-node-running' : '',
+        running || takesRunning || postInFlight || slotBusy ? 'cell-node-running' : '',
         data.status === 'queued' ? 'cell-node-queued' : '',
         failed ? 'cell-node-error' : '',
         versionedOutput ? 'cell-node-version-stack' : '',
@@ -820,9 +863,10 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         data.revealing ? 'cell-node-created' : '',
         data.highlighted ? 'cell-node-highlight' : '',
         mediaTile ? 'cell-node-media-tile' : '',
+        generationCell ? 'cell-node-generation' : '',
         bareHeader ? 'cell-node-bare' : '',
         incomingBadge || sourceDetail ? 'cell-node-has-inputs' : '',
-        flag?.tone === 'attention' ? 'cell-node-attention' : '',
+        flag?.tone === 'attention' && generationCell ? 'cell-node-attention' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
       data-lane-family={data.lane ?? notebookTypeLane(data.kind)}
@@ -908,7 +952,8 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             <span className="cell-node-type" aria-label={headerLabel}>
               {generationCell ? <Sparkle fill="currentColor" strokeWidth={0} /> : <CellIcon kind={data.kind} />}
               <span className="cell-node-type-label" aria-hidden="true">
-                {headerLabel}
+                {typeLabel}
+                {headerMode && <span className="cell-node-type-mode">{headerMode}</span>}
               </span>
             </span>
             {goalMark && <GoalMark mark={goalMark} />}
@@ -988,7 +1033,8 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           </CellMediaFrame>
         ) : generationCell ? (
           <GenerationRecipe
-            provider={generator?.provider ?? null}
+            kind={data.kind}
+            provider={tileProviderLabel(data.provider) ?? generator?.provider ?? null}
             modelLine={modelLine}
             modelTitle={catalogEntry?.title ?? data.model ?? null}
             prompt={generationPrompt}

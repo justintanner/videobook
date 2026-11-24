@@ -4,7 +4,6 @@ import {
   notebookCellRouteTags,
   notebookIncomingRouteBadge,
   notebookOutgoingRouteBadge,
-  notebookRouteSlotLabel,
   type NotebookRouteTag,
 } from './notebook-route-tags'
 import { notebookNodes } from './notebook-draft'
@@ -62,8 +61,8 @@ describe('notebook route tags', () => {
     const badge = notebookIncomingRouteBadge(tags.get(generation.id)?.incoming ?? [])
 
     expect(badge?.segments).toEqual([
-      { address: 'a1', slots: ['I1'], family: 'image' },
-      { address: 'c1', slots: ['V1'], family: 'video' },
+      { address: 'a1', slots: ['image1'], family: 'image' },
+      { address: 'c1', slots: ['video1'], family: 'video' },
     ])
     expect(badge?.tone).toBe('mixed')
     expect(badge?.label).toBe('Fed by @a1 into image1, @c1 into video1')
@@ -93,27 +92,17 @@ describe('notebook route tags', () => {
     const outputs = notebookOutgoingRouteBadge(many)
     const inputs = notebookIncomingRouteBadge(many)
 
-    expect(outputs?.segments.map((segment) => segment.address)).toEqual(['d1'])
-    expect(outputs?.hidden).toBe(4)
+    expect(outputs?.segments.map((segment) => segment.address)).toEqual(['d1', 'd2'])
+    expect(outputs?.hidden).toBe(3)
     expect(outputs?.label).toBe('Feeds @d1, @d2, @d3 and 2 more')
     expect(notebookOutgoingRouteBadge(many.slice(0, 2))?.segments.map((segment) => segment.address))
       .toEqual(['d1', 'd2'])
-    expect(notebookOutgoingRouteBadge(many.slice(0, 3))?.hidden).toBe(2)
+    expect(notebookOutgoingRouteBadge(many.slice(0, 3))?.hidden).toBe(1)
     expect(inputs?.segments.map((segment) => segment.address)).toEqual(['d1', 'd2', 'd3'])
     expect(inputs?.hidden).toBe(2)
     expect(inputs?.label).toBe('Fed by @d1, @d2, @d3 and 2 more')
     expect(notebookOutgoingRouteBadge([])).toBeNull()
     expect(notebookIncomingRouteBadge([])).toBeNull()
-  })
-
-  it('shortens mention tokens into keycap labels', () => {
-    expect(notebookRouteSlotLabel('image2')).toBe('I2')
-    expect(notebookRouteSlotLabel('video1')).toBe('V1')
-    expect(notebookRouteSlotLabel('audio1')).toBe('A1')
-    expect(notebookRouteSlotLabel('keyframe3')).toBe('K3')
-    expect(notebookRouteSlotLabel('firstframe')).toBe('FF')
-    expect(notebookRouteSlotLabel('lastframe')).toBe('LF')
-    expect(notebookRouteSlotLabel('input')).toBe('INP')
   })
 
   it('hands route tags to the canvas nodes and leaves unconnected cells bare', () => {
