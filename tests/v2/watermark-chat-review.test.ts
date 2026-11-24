@@ -100,6 +100,7 @@ function editorFor(target: GraphicsTarget, read: GraphicsRead, output: GraphicsR
     deleteTemplate: done,
     setDefaultTemplate: done,
     copyTemplates: done,
+    setLogoDefault: done,
     saveWatermark: done,
     resetWatermark: done,
     setPlatform: async () => undefined,
