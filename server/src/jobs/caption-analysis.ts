@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Engine } from "videobook-engine";
-import { getApiKey } from "../api-key.js";
+import { getApiKey, requireApiKey } from "../api-key.js";
 import { runAnalysisComponentJob } from "../analysis-components.js";
 import {
   CAPTION_REGIONS,
@@ -27,13 +27,21 @@ import { captionMediaSource } from "../captions/source.js";
 import { analyzeVocalTiming } from "../captions/vocal.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { logger } from "../logger.js";
-import { INTELLIGENCE_MODEL } from "../openai-intelligence.js";
+import type { ResponsesFn } from "../openai-intelligence.js";
+import { buildIntelligenceResponses, INTELLIGENCE_MODEL } from "../openai-intelligence.js";
 import { registerJobHandler } from "../queue.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import { audioObjectHash } from "../transcript-components.js";
 import { requestElevenLabsTranscript, writeElevenLabsTranscript } from "./_transcribe.js";
 import { translatedTranscriptFilename } from "./_translate-transcript.js";
 import { fileObjectHash, readArtifactJson } from "../analysis-sidecars.js";
+import {
+  CAPTION_LINE_TRANSLATION_JOB,
+  captionLineMemoryFor,
+  lineTranslationSpec,
+  lineTranslationValueSchema,
+  translateCaptionLines,
+} from "../captions/line-translation.js";
 import { ensureTranscriptTranslation } from "../transcript-translation.js";
 
 const TRANSCRIBE_OPTIONS = { tagAudioEvents: true, diarize: true } as const;
@@ -52,6 +60,18 @@ interface ComponentPayload extends TranscriptPayload {
 
 interface TranslationPayload extends ComponentPayload {
   language: string;
+}
+
+interface LineTranslationPayload {
+  bookId: string;
+  sourceArtifactId: string;
+  mediaHash: string;
+  componentKey: string;
+  language: string;
+  sourceLanguage: string | null;
+  sources: string[];
+  edited?: Record<string, string>;
+  force?: boolean;
 }
 
 async function continuePreparation(engine: Engine, payload: TranscriptPayload): Promise<void> {
@@ -218,7 +238,35 @@ async function runTranslation(engine: Engine, payload: TranslationPayload, signa
   return { componentKey: stored.key, file: stored.value.file };
 }
 
+const openAiResponses: ResponsesFn = (request, signal) => buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"))(request, signal);
+
+async function runLineTranslation(engine: Engine, payload: LineTranslationPayload, signal: AbortSignal) {
+  const force = payload.force === true;
+  const stored = await runAnalysisComponentJob({
+    engine,
+    spec: lineTranslationSpec(payload.language),
+    key: payload.componentKey,
+    artifactId: payload.sourceArtifactId,
+    force,
+    schema: lineTranslationValueSchema,
+    currentKey: async () => (engine.artifacts.get(payload.sourceArtifactId).ok ? payload.componentKey : null),
+    compute: async () => ({
+      value: await translateCaptionLines({
+        language: payload.language,
+        sourceLanguage: payload.sourceLanguage,
+        sources: payload.sources,
+        edited: payload.edited ?? {},
+        memory: force ? new Map() : captionLineMemoryFor(engine, payload.sourceArtifactId, payload.language),
+      }, openAiResponses, signal),
+      sourceHash: payload.mediaHash,
+      provenance: { analyzer: "caption-line-translation", provider: "openai", model: INTELLIGENCE_MODEL },
+    }),
+  });
+  return { componentKey: stored.key, lines: stored.value.lines.length };
+}
+
 export function registerCaptionAnalysisJobs(engine: Engine): void {
+  registerJobHandler(CAPTION_LINE_TRANSLATION_JOB, (payload, ctx) => runLineTranslation(engine, payload as unknown as LineTranslationPayload, ctx.signal));
   registerJobHandler(CAPTION_TRANSLATION.jobType, (payload, ctx) => runTranslation(engine, payload as unknown as TranslationPayload, ctx.signal));
   registerJobHandler(CAPTION_TRANSCRIPT_JOB, (payload, ctx) => runTranscript(engine, payload as unknown as TranscriptPayload, ctx.signal));
   registerJobHandler(CAPTION_VOCAL.jobType, (payload, ctx) => runVocal(engine, payload as unknown as ComponentPayload, ctx.signal));

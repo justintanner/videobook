@@ -4,7 +4,14 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { CAPTION_COMPONENTS } from "../captions/analysis.js";
 import type { CaptionEdit } from "../captions/edits.js";
-import { CAPTION_ASPECTS, CAPTION_BACKGROUNDS, CAPTION_MOTIONS, CAPTION_PRESETS, ORIGINAL_CAPTION_LANGUAGE } from "../captions/model.js";
+import {
+  CAPTION_ASPECTS,
+  CAPTION_BACKGROUNDS,
+  CAPTION_MOTIONS,
+  CAPTION_PRESETS,
+  MAX_CAPTION_TRANSLATIONS,
+  ORIGINAL_CAPTION_LANGUAGE,
+} from "../captions/model.js";
 import { latestCaptionRender, requestCaptionRender } from "../captions/render.js";
 import type { CaptionReadModel, CaptionResolution } from "../captions/service.js";
 import { CaptionServiceError, prepareCaptions, readCaptions, updateCaptions } from "../captions/service.js";
@@ -47,6 +54,20 @@ const editSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("set_position"), aspect: aspect.optional(), y: position }),
   z.object({ op: z.literal("set_style"), style: styleSchema }),
   z.object({ op: z.literal("set_aspect"), aspect }),
+  z.object({
+    op: z.literal("set_translations"),
+    translations: z.array(z.object({
+      language: z.string().describe("ISO 639-1 code of the translated line, such as en"),
+      color: z.string().optional().describe("#RRGGBB color of the line"),
+      scale: z.number().optional().describe("Size relative to karaoke subtitles at the same size setting, 0.4 to 1 (default 0.6)"),
+    })).max(MAX_CAPTION_TRANSLATIONS),
+  }),
+  z.object({
+    op: z.literal("set_phrase_translation"),
+    phrase_id: z.string(),
+    language: z.string(),
+    text: z.string().nullable().describe("The line to show under this phrase; an empty string shows none, null goes back to the machine translation"),
+  }),
 ]);
 
 const schema = {
@@ -54,12 +75,12 @@ const schema = {
   asset_id: z.string().min(1).describe("Video artifact UUID or notebook address such as @a1"),
   notebook_id: z.string().uuid().optional().describe("Notebook that resolves an @address"),
   op: z.enum(["get", "prepare", "update", "render"]).optional()
-    .describe("get (default) reads the draft and preparation status without starting work; prepare starts missing transcription, vocal timing, face/text placement or translation (transcription, placement and translation are paid); update saves edits against expected_revision; render queues the subtitles of exactly that revision as a background job and returns at once"),
+    .describe("get (default) reads the draft and preparation status without starting work; prepare starts missing transcription, vocal timing, face/text placement, translation or translated lines (transcription, placement and translation are paid); update saves edits against expected_revision; render queues the subtitles of exactly that revision as a background job and returns at once, and refuses while translated lines are missing"),
   language: z.string().regex(/^(original|[a-z]{2})$/u).optional()
     .describe("original (default) for the spoken language with real word timings, or an ISO 639-1 code for translated subtitles with estimated timing"),
   detail: z.enum(["summary", "full"]).optional().describe("summary (default) omits the document, regions and loudness envelope"),
   regions: z.boolean().optional().describe("prepare: also detect faces and on-screen text so subtitles avoid them (default true)"),
-  force: z.array(z.enum(CAPTION_COMPONENTS)).optional().describe("prepare: re-run these components even when cached results exist"),
+  force: z.array(z.enum(CAPTION_COMPONENTS)).optional().describe("prepare: re-run these components even when cached results exist; lines translates every translated line again"),
   expected_revision: z.string().optional().describe("update and render: the draft revision from get that these edits apply to or that was reviewed"),
   source_hash: z.string().optional().describe("render: source.media_hash from the get that was reviewed"),
   request_id: z.string().uuid().optional().describe("render: stable request UUID; reuse it when retrying the same render"),
@@ -68,7 +89,7 @@ const schema = {
   output: z.enum(RENDER_OUTPUTS).optional()
     .describe("render: new (default) writes a subtitled copy into a new video cell below the source, a version of the earlier copy when one exists; replace burns the subtitles into the source video itself, keeping its earlier version in history"),
   edits: z.array(editSchema).max(500).optional()
-    .describe("update: edit operations applied in order (word text/timing, hide/insert/reset words, split/merge phrases, positions 0..1 of the frame height, style, aspect)"),
+    .describe("update: edit operations applied in order (word text/timing, hide/insert/reset words, split/merge phrases, positions 0..1 of the frame height, style, aspect, translated lines under each phrase and their hand-written text)"),
   document: advertisedAs(z.unknown(), {
     type: "object",
     description: "update: a full replacement of the document returned by get with detail full; keep its source, bindings and language",
@@ -162,7 +183,7 @@ export function captionVideoDef(engine: Engine): ToolDef {
   return {
     name: "caption_video",
     description:
-      "Subtitles for a video in the TikTok style: read the editable draft and its preparation status, prepare word-timed transcription with vocal timing and face/text placement, save word, timing, phrase, position and style edits against the draft revision, or render the reviewed revision in the background into a new subtitled video cell (the source is kept) or into the source video in place.",
+      "Subtitles for a video in the TikTok style: read the editable draft and its preparation status, prepare word-timed transcription with vocal timing and face/text placement, save word, timing, phrase, position and style edits against the draft revision, or render the reviewed revision in the background into a new subtitled video cell (the source is kept) or into the source video in place. Up to two translated lines can sit under each phrase without highlighting (set_translations, e.g. Thai karaoke with English below); prepare translates them, translations in get lists missing lines, and set_phrase_translation writes one by hand.",
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     schema,
     handler: async (input) => {

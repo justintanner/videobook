@@ -17,11 +17,15 @@ export const MIN_CAPTION_WORD_SECONDS = 0.04;
 export const MAX_CAPTION_OFFSET_MS = 2_000;
 export const CAPTION_FONT_SCALE_RANGE = { min: 0.6, max: 1.8 } as const;
 export const CAPTION_OUTLINE_RANGE = { min: 0, max: 16 } as const;
+export const MAX_CAPTION_TRANSLATIONS = 2;
+export const MAX_CAPTION_TRANSLATION_LENGTH = 300;
+export const CAPTION_TRANSLATION_SCALE_RANGE = { min: 0.4, max: 1 } as const;
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/u);
 const seconds = z.number().finite().nonnegative();
 const ratio = z.number().finite().min(0).max(1);
 const aspectSchema = z.enum(CAPTION_ASPECTS);
+export const captionLanguageCodeSchema = z.string().regex(/^[a-z]{2}$/u);
 
 export const captionPositionsSchema = z.object({
   "9:16": ratio.optional(),
@@ -54,13 +58,26 @@ export const captionWordSchema = z.object({
 
 export type CaptionWord = z.infer<typeof captionWordSchema>;
 
+export const captionPhraseTranslationsSchema = z.record(captionLanguageCodeSchema, z.string().max(MAX_CAPTION_TRANSLATION_LENGTH));
+
+export type CaptionPhraseTranslations = z.infer<typeof captionPhraseTranslationsSchema>;
+
 export const captionPhraseSchema = z.object({
   id: z.string().regex(/^p\d+$/u),
   wordIds: z.array(z.string()).min(1),
   positions: captionPositionsSchema,
+  translations: captionPhraseTranslationsSchema.optional(),
 }).strict();
 
 export type CaptionPhrase = z.infer<typeof captionPhraseSchema>;
+
+export const captionTranslationLineSchema = z.object({
+  language: captionLanguageCodeSchema,
+  color: hexColor,
+  scale: z.number().finite().min(CAPTION_TRANSLATION_SCALE_RANGE.min).max(CAPTION_TRANSLATION_SCALE_RANGE.max),
+}).strict();
+
+export type CaptionTranslationLine = z.infer<typeof captionTranslationLineSchema>;
 
 export const captionStyleSchema = z.object({
   preset: z.enum(CAPTION_PRESETS),
@@ -111,12 +128,22 @@ export const captionDocumentSchema = z.object({
   aspect: aspectSchema,
   positions: captionPositionsSchema,
   style: captionStyleSchema,
+  translations: z.array(captionTranslationLineSchema).max(MAX_CAPTION_TRANSLATIONS).optional(),
   words: z.array(captionWordSchema).max(MAX_CAPTION_WORDS),
   phrases: z.array(captionPhraseSchema),
   nextId: z.number().int().positive(),
 }).strict();
 
 export type CaptionDocument = z.infer<typeof captionDocumentSchema>;
+
+export const DEFAULT_CAPTION_TRANSLATION_LOOK: Omit<CaptionTranslationLine, "language"> = {
+  color: "#FFFFFF",
+  scale: 0.6,
+};
+
+export function captionDisplayLanguage(document: Pick<CaptionDocument, "language" | "sourceLanguage">): string | null {
+  return document.language === ORIGINAL_CAPTION_LANGUAGE ? document.sourceLanguage : document.language;
+}
 
 export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
   preset: "karaoke",

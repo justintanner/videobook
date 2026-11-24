@@ -1,9 +1,9 @@
 import React from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
 import { captionPresetFont } from "../../captions/fonts.js";
-import type { CaptionBlock, CaptionLayoutLine, CaptionRegionFrame } from "../../captions/layout.js";
+import type { CaptionBlock, CaptionLayoutLine, CaptionRegionFrame, CaptionTranslationBlock } from "../../captions/layout.js";
 import { activeCaptionBlock } from "../../captions/layout.js";
-import type { CaptionDocument } from "../../captions/model.js";
+import type { CaptionDocument, CaptionStyle } from "../../captions/model.js";
 import { captionWordLook, cueVisibility, energyScale, punchWord } from "../../captions/motion.js";
 import { isUnspacedText } from "../../captions/script.js";
 import type { CaptionFontUrls } from "./caption-fonts.js";
@@ -74,6 +74,40 @@ const CaptionLine: React.FC<LineProps> = ({ line, block, document, time, first }
   );
 };
 
+const TranslationLines: React.FC<{ translation: CaptionTranslationBlock; style: CaptionStyle }> = ({ translation, style }) => {
+  const stroke = (style.outlineWidth * translation.fontSize) / 80;
+  return (
+    <div
+      data-caption-translation={translation.language}
+      style={{
+        marginTop: translation.gap,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        direction: translation.direction,
+        color: translation.color,
+        fontSize: translation.fontSize,
+        lineHeight: `${translation.lineHeight}px`,
+      }}
+    >
+      {translation.lines.map((line, index) => (
+        <div
+          key={index}
+          style={{
+            height: translation.lineHeight,
+            whiteSpace: "nowrap",
+            WebkitTextStroke: stroke > 0 ? `${stroke}px ${style.outlineColor}` : undefined,
+            paintOrder: stroke > 0 ? "stroke fill" : undefined,
+            textShadow: textShadow(style.shadow, translation.fontSize),
+          }}
+        >
+          {line.text}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 function visibleLines(block: CaptionBlock, document: CaptionDocument, time: number): CaptionLayoutLine[] {
   if (document.style.preset !== "punch") return block.lines;
   const word = punchWord(block.cue, time);
@@ -108,8 +142,13 @@ const CaptionBlockView: React.FC<{ block: CaptionBlock; document: CaptionDocumen
         userSelect: "none",
       }}
     >
-      {lines.map((line, index) => (
-        <CaptionLine key={line.words[0]?.id ?? index} line={line} block={block} document={document} time={time} first={index === 0} />
+      <div style={{ height: block.textHeight, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        {lines.map((line, index) => (
+          <CaptionLine key={line.words[0]?.id ?? index} line={line} block={block} document={document} time={time} first={index === 0} />
+        ))}
+      </div>
+      {block.translations.map((translation) => (
+        <TranslationLines key={translation.language} translation={translation} style={document.style} />
       ))}
     </div>
   );

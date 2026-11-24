@@ -10,6 +10,7 @@ const JOB_TIMEOUTS_MS = new Map<string, number>([
   ["caption_vocal", 5 * 60_000],
   ["caption_regions", 10 * 60_000],
   ["caption_translation", 10 * 60_000],
+  ["caption_line_translation", 10 * 60_000],
   ["render_captions", 30 * 60_000],
   ["render_graphics", 30 * 60_000],
   ["render_auto_edit", 15 * 60_000],

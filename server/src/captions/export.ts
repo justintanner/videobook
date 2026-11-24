@@ -1,4 +1,7 @@
-import type { CaptionDocument } from "./model.js";
+import { phraseTranslationTexts } from "./lines.js";
+import type { CaptionDocument, CaptionPhrase } from "./model.js";
+import { captionDisplayLanguage } from "./model.js";
+import type { CaptionCue } from "./timing.js";
 import { captionCues } from "./timing.js";
 import { captionCase, joinCaptionWords } from "./script.js";
 
@@ -16,16 +19,19 @@ function timestamp(seconds: number, separator: "," | "."): string {
   return `${pad(hours, 2)}:${pad(minutes, 2)}:${pad(secs, 2)}${separator}${pad(totalMs % 1000, 3)}`;
 }
 
-function captionLanguage(document: CaptionDocument): string | null {
-  return document.language === "original" ? document.sourceLanguage : document.language;
+function cueText(document: CaptionDocument, cue: CaptionCue, phrase: CaptionPhrase | undefined): string {
+  const uppercase = document.style.uppercase;
+  const spoken = captionCase(joinCaptionWords(cue.words.map((word) => word.text)), uppercase, captionDisplayLanguage(document));
+  const translated = phraseTranslationTexts(document, phrase).map(({ language, text }) => captionCase(text, uppercase, language));
+  return [spoken, ...translated].join("\n");
 }
 
 function cueTexts(document: CaptionDocument): Array<{ start: number; end: number; text: string }> {
-  const language = captionLanguage(document);
+  const phrases = new Map(document.phrases.map((phrase) => [phrase.id, phrase]));
   return captionCues(document).map((cue) => ({
     start: cue.words[0].start,
     end: Math.max(cue.words[cue.words.length - 1].end, cue.words[0].start + 0.1),
-    text: captionCase(joinCaptionWords(cue.words.map((word) => word.text)), document.style.uppercase, language),
+    text: cueText(document, cue, phrases.get(cue.phraseId)),
   }));
 }
 

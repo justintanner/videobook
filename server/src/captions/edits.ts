@@ -1,12 +1,32 @@
-import type { CaptionAspect, CaptionDocument, CaptionPhrase, CaptionStyle, CaptionWord } from "./model.js";
+import type {
+  CaptionAspect,
+  CaptionDocument,
+  CaptionPhrase,
+  CaptionPhraseTranslations,
+  CaptionStyle,
+  CaptionTranslationLine,
+  CaptionWord,
+} from "./model.js";
 import {
+  captionDisplayLanguage,
+  captionLanguageCodeSchema,
   captionStyleSchema,
+  captionTranslationLineSchema,
+  DEFAULT_CAPTION_TRANSLATION_LOOK,
+  MAX_CAPTION_TRANSLATION_LENGTH,
+  MAX_CAPTION_TRANSLATIONS,
   MAX_CAPTION_WORD_LENGTH,
   MIN_CAPTION_WORD_SECONDS,
   nextCaptionId,
 } from "./model.js";
 
 export class CaptionEditError extends Error {}
+
+export interface CaptionTranslationLineInput {
+  language: string;
+  color?: string;
+  scale?: number;
+}
 
 export type CaptionEdit =
   | { op: "set_word_text"; word_id: string; text: string }
@@ -19,7 +39,9 @@ export type CaptionEdit =
   | { op: "set_phrase_position"; phrase_id: string; aspect?: CaptionAspect; y: number | null }
   | { op: "set_position"; aspect?: CaptionAspect; y: number | null }
   | { op: "set_style"; style: Partial<CaptionStyle> }
-  | { op: "set_aspect"; aspect: CaptionAspect };
+  | { op: "set_aspect"; aspect: CaptionAspect }
+  | { op: "set_translations"; translations: readonly CaptionTranslationLineInput[] }
+  | { op: "set_phrase_translation"; phrase_id: string; language: string; text: string | null };
 
 const TIME_TOLERANCE_SECONDS = 1;
 
@@ -116,16 +138,31 @@ function insertWord(document: CaptionDocument, afterWordId: string, text: string
   return { ...document, words, phrases, nextId };
 }
 
+function withPhraseTranslations(phrase: CaptionPhrase, translations: CaptionPhraseTranslations | null): CaptionPhrase {
+  const { translations: _previous, ...rest } = phrase;
+  return translations && Object.keys(translations).length > 0 ? { ...rest, translations } : rest;
+}
+
 function splitPhrase(document: CaptionDocument, wordId: string): CaptionDocument {
   const index = phraseIndexOf(document, wordId);
   const phrase = document.phrases[index];
   const at = phrase.wordIds.indexOf(wordId);
   if (at === 0) throw new CaptionEditError("That word already starts a phrase.");
   const { id, nextId } = nextCaptionId(document, "p");
-  const head: CaptionPhrase = { ...phrase, wordIds: phrase.wordIds.slice(0, at) };
+  const head = withPhraseTranslations({ ...phrase, wordIds: phrase.wordIds.slice(0, at) }, null);
   const tail: CaptionPhrase = { id, wordIds: phrase.wordIds.slice(at), positions: { ...phrase.positions } };
   const phrases = [...document.phrases.slice(0, index), head, tail, ...document.phrases.slice(index + 1)];
   return { ...document, phrases, nextId };
+}
+
+function joinedTranslations(head: CaptionPhrase, tail: CaptionPhrase): CaptionPhraseTranslations | null {
+  const entries = Object.entries(head.translations ?? {}).flatMap(([language, text]) => {
+    const following = tail.translations?.[language];
+    if (following === undefined) return [];
+    const joined = [text.trim(), following.trim()].filter((part) => part.length > 0).join(" ");
+    return [[language, joined.slice(0, MAX_CAPTION_TRANSLATION_LENGTH)] as const];
+  });
+  return entries.length > 0 ? Object.fromEntries(entries) : null;
 }
 
 function mergePhrase(document: CaptionDocument, phraseId: string): CaptionDocument {
@@ -134,8 +171,52 @@ function mergePhrase(document: CaptionDocument, phraseId: string): CaptionDocume
   const next = document.phrases[index + 1];
   if (!next) throw new CaptionEditError("The last phrase has nothing after it to merge with.");
   const phrase = document.phrases[index];
-  const merged: CaptionPhrase = { ...phrase, wordIds: [...phrase.wordIds, ...next.wordIds] };
+  const merged = withPhraseTranslations({ ...phrase, wordIds: [...phrase.wordIds, ...next.wordIds] }, joinedTranslations(phrase, next));
   return { ...document, phrases: [...document.phrases.slice(0, index), merged, ...document.phrases.slice(index + 2)] };
+}
+
+function translationLanguage(language: string): string {
+  if (!captionLanguageCodeSchema.safeParse(language).success) {
+    throw new CaptionEditError(`Translation languages are ISO 639-1 codes such as en or th, not "${language}".`);
+  }
+  return language;
+}
+
+function translationLine(document: CaptionDocument, input: CaptionTranslationLineInput): CaptionTranslationLine {
+  const language = translationLanguage(input.language);
+  const current = document.translations?.find((line) => line.language === language) ?? DEFAULT_CAPTION_TRANSLATION_LOOK;
+  const parsed = captionTranslationLineSchema.safeParse({
+    language,
+    color: input.color ?? current.color,
+    scale: input.scale ?? current.scale,
+  });
+  if (!parsed.success) throw new CaptionEditError(`Invalid translation line: ${parsed.error.issues.map((issue) => `${issue.path.join(".")} ${issue.message}`).join("; ")}`);
+  return parsed.data;
+}
+
+function setTranslations(document: CaptionDocument, inputs: readonly CaptionTranslationLineInput[]): CaptionDocument {
+  if (inputs.length > MAX_CAPTION_TRANSLATIONS) throw new CaptionEditError(`Subtitles take at most ${MAX_CAPTION_TRANSLATIONS} translation lines.`);
+  const translations = inputs.map((input) => translationLine(document, input));
+  const { translations: _previous, ...rest } = document;
+  return translations.length > 0 ? { ...rest, translations } : rest;
+}
+
+function cleanTranslation(text: string): string {
+  const cleaned = text.replace(/\s+/gu, " ").trim();
+  if (cleaned.length > MAX_CAPTION_TRANSLATION_LENGTH) throw new CaptionEditError(`A translation line is limited to ${MAX_CAPTION_TRANSLATION_LENGTH} characters.`);
+  return cleaned;
+}
+
+function setPhraseTranslation(document: CaptionDocument, phraseId: string, language: string, text: string | null): CaptionDocument {
+  const phrase = requirePhrase(document, phraseId);
+  translationLanguage(language);
+  if (text !== null && !document.translations?.some((line) => line.language === language)) {
+    throw new CaptionEditError(`Add ${language} as a translation line before writing its text.`);
+  }
+  const { [language]: _previous, ...others } = phrase.translations ?? {};
+  const translations = text === null ? others : { ...others, [language]: cleanTranslation(text) };
+  const updated = withPhraseTranslations(phrase, translations);
+  return { ...document, phrases: document.phrases.map((candidate) => (candidate.id === phraseId ? updated : candidate)) };
 }
 
 function checkPosition(y: number | null): void {
@@ -180,6 +261,8 @@ function applyCaptionEdit(document: CaptionDocument, edit: CaptionEdit): Caption
     case "set_position": return setPosition(document, edit.aspect ?? document.aspect, edit.y);
     case "set_style": return setStyle(document, edit.style);
     case "set_aspect": return { ...document, aspect: edit.aspect };
+    case "set_translations": return setTranslations(document, edit.translations);
+    case "set_phrase_translation": return setPhraseTranslation(document, edit.phrase_id, edit.language, edit.text);
   }
 }
 
@@ -231,6 +314,14 @@ function highestNumber(ids: readonly string[]): number {
   return ids.reduce((max, id) => Math.max(max, Number(id.slice(1)) || 0), 0);
 }
 
+function translationProblem(document: CaptionDocument): string | null {
+  const languages = (document.translations ?? []).map((line) => line.language);
+  const repeated = duplicateIds(languages);
+  if (repeated) return `Translation line ${repeated} appears twice.`;
+  const own = captionDisplayLanguage(document);
+  return own && languages.includes(own) ? `The subtitles are already in ${own}; translate them into another language.` : null;
+}
+
 export function captionDocumentProblems(document: CaptionDocument): string[] {
   const problems: string[] = [];
   const wordDuplicate = duplicateIds(document.words.map((word) => word.id));
@@ -242,6 +333,8 @@ export function captionDocumentProblems(document: CaptionDocument): string[] {
   const timing = timingProblem(document);
   if (timing) problems.push(timing);
   if (document.words.some((word) => !word.hidden && !word.text.trim())) problems.push("Visible words need text.");
+  const translation = translationProblem(document);
+  if (translation) problems.push(translation);
   const ids = [...document.words.map((word) => word.id), ...document.phrases.map((phrase) => phrase.id)];
   if (document.nextId <= highestNumber(ids)) problems.push("The next id must be above every existing id.");
   return problems;

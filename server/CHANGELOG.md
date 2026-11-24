@@ -52,6 +52,21 @@ and the package uses [Semantic Versioning](https://semver.org/).
   and rendering the same video again adds a version to that cell. Over MCP
   this is the `auto_edit` tool (`get`, `analyze`, `render`), which also
   renders an explicit segment plan.
+- **Translated lines** in the subtitle editor (`/subs @a1`) put one or two
+  translations under each phrase, such as Thai karaoke with English below.
+  The lines carry no highlighting or word motion; each has its own language,
+  color and size, appears and disappears with its phrase, and moves with it
+  when the subtitles are dragged or step around a face. **Translate** sends
+  every phrase to OpenAI in one request, so each line is translated with the
+  whole video as context. Lines are kept by the phrase's text, so correcting
+  a word, splitting or joining phrases only translates the lines that changed.
+  A line can be written by hand in the transcript, and ↺ goes back to the
+  machine translation. Render translates missing lines first, and SRT and VTT
+  downloads carry every language of a cue. Over MCP, `caption_video` takes
+  the `set_translations` and `set_phrase_translation` edits, `prepare`
+  translates the lines (`force: ["lines"]` translates them all again), `get`
+  reports each language's missing lines, and `render` refuses while any are
+  missing.
 - Two built-in sounds for `/sfx`, `apply_builtin_sfx`, `/zoom` and auto-edit:
   `shutdown`, the Windows shutdown chime, which ships as a recording
   rather than being synthesized like the others and plays under the

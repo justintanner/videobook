@@ -27,7 +27,7 @@ export const CAPTION_TRANSCRIPT_JOB = "caption_transcript";
 export const CAPTION_VOCAL: AnalysisComponentSpec = { component: "caption-vocal", version: 2, jobType: "caption_vocal" };
 export const CAPTION_REGIONS: AnalysisComponentSpec = { component: "caption-regions", version: 1, jobType: "caption_regions" };
 export const CAPTION_TRANSLATION: AnalysisComponentSpec = { component: "caption-translation", version: 1, jobType: "caption_translation" };
-export const CAPTION_COMPONENTS = ["transcript", "vocal", "regions", "translation"] as const;
+export const CAPTION_COMPONENTS = ["transcript", "vocal", "regions", "translation", "lines"] as const;
 export type CaptionComponentName = typeof CAPTION_COMPONENTS[number];
 
 const MAX_REGION_FRAMES = 90;

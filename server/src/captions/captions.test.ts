@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { captionLineSources, missingCaptionLines, rememberedLine, resolveCaptionTranslations } from "./lines.js";
 import type { CaptionDocument } from "./model.js";
-import { captionDocumentSchema, DEFAULT_CAPTION_STYLE } from "./model.js";
+import { captionDocumentSchema, DEFAULT_CAPTION_STYLE, DEFAULT_CAPTION_TRANSLATION_LOOK } from "./model.js";
 import { applyCaptionEdits, CaptionEditError, captionDocumentProblems, captionDisplayText } from "./edits.js";
 import { captionsToSubtitleFile } from "./export.js";
 import { styleFromLegacyAliveSettings } from "./legacy.js";
@@ -256,5 +257,84 @@ describe("caption export and legacy settings", () => {
       avoidFaces: false,
     });
     expect(styleFromLegacyAliveSettings("broken")).toEqual({});
+  });
+});
+
+describe("translated lines", () => {
+  const MEMORY = { es: { "We were burning": "Estábamos ardiendo", "Then the night came down": "Luego cayó la noche" } };
+
+  function withSpanish(document = seed(SPOKEN)): CaptionDocument {
+    return applyCaptionEdits(document, [{ op: "set_translations", translations: [{ language: "es" }] }]);
+  }
+
+  it("adds up to two lines in other languages, each with its own look", () => {
+    const document = seed(SPOKEN);
+    const lined = applyCaptionEdits(document, [{ op: "set_translations", translations: [{ language: "es" }, { language: "th", color: "#9BE7FF", scale: 0.5 }] }]);
+    expect(lined.translations).toEqual([{ language: "es", ...DEFAULT_CAPTION_TRANSLATION_LOOK }, { language: "th", color: "#9BE7FF", scale: 0.5 }]);
+    expect(captionDocumentSchema.parse(lined)).toEqual(lined);
+    const kept = applyCaptionEdits(lined, [{ op: "set_translations", translations: [{ language: "th" }] }]);
+    expect(kept.translations).toEqual([{ language: "th", color: "#9BE7FF", scale: 0.5 }]);
+    expect(applyCaptionEdits(kept, [{ op: "set_translations", translations: [] }])).not.toHaveProperty("translations");
+    expect(() => applyCaptionEdits(document, [{ op: "set_translations", translations: [{ language: "en" }] }])).toThrow(/already in en/u);
+    expect(() => applyCaptionEdits(document, [{ op: "set_translations", translations: [{ language: "es" }, { language: "es" }] }])).toThrow(/appears twice/u);
+    expect(() => applyCaptionEdits(document, [{ op: "set_translations", translations: [{ language: "es" }, { language: "th" }, { language: "zh" }] }])).toThrow(/at most 2/u);
+    expect(() => applyCaptionEdits(document, [{ op: "set_translations", translations: [{ language: "spanish" }] }])).toThrow(/ISO 639-1/u);
+    expect(() => applyCaptionEdits(document, [{ op: "set_translations", translations: [{ language: "es", scale: 2 }] }])).toThrow(/Invalid translation line/u);
+  });
+
+  it("shows a hand-written line over the remembered translation of each phrase's visible text", () => {
+    const document = withSpanish();
+    const third = document.phrases[2].id;
+    expect(captionLineSources(document).map((line) => line.source)).toEqual(["We were burning", "Then the night came down", "slow and bright"]);
+    expect(missingCaptionLines(document, "es", MEMORY)).toEqual(["slow and bright"]);
+    const own = applyCaptionEdits(document, [{ op: "set_phrase_translation", phrase_id: third, language: "es", text: "  lento   y brillante " }]);
+    expect(own.phrases[2].translations).toEqual({ es: "lento y brillante" });
+    expect(missingCaptionLines(own, "es", MEMORY)).toEqual([]);
+    expect(resolveCaptionTranslations(own, MEMORY).phrases.map((phrase) => phrase.translations)).toEqual([
+      { es: "Estábamos ardiendo" },
+      { es: "Luego cayó la noche" },
+      { es: "lento y brillante" },
+    ]);
+    const hidden = applyCaptionEdits(own, [{ op: "hide_word", word_id: "w1", hidden: true }]);
+    expect(missingCaptionLines(hidden, "es", MEMORY)).toEqual(["were burning"]);
+    expect(applyCaptionEdits(own, [{ op: "set_phrase_translation", phrase_id: third, language: "es", text: null }]).phrases[2]).not.toHaveProperty("translations");
+    const blank = applyCaptionEdits(document, [{ op: "set_phrase_translation", phrase_id: third, language: "es", text: "" }]);
+    expect(missingCaptionLines(blank, "es", MEMORY)).toEqual([]);
+    expect(() => applyCaptionEdits(document, [{ op: "set_phrase_translation", phrase_id: third, language: "th", text: "ช้า" }])).toThrow(/Add th/u);
+    expect(() => applyCaptionEdits(document, [{ op: "set_phrase_translation", phrase_id: third, language: "es", text: "x".repeat(301) }])).toThrow(/300 characters/u);
+    expect(resolveCaptionTranslations(seed(SPOKEN), MEMORY)).toEqual(seed(SPOKEN));
+    expect(rememberedLine({ es: {} }, "es", "constructor")).toBeUndefined();
+  });
+
+  it("drops a phrase's own lines when it is split and joins them on a merge only when both phrases have one", () => {
+    const document = applyCaptionEdits(seed(SPOKEN), [
+      { op: "set_translations", translations: [{ language: "es" }, { language: "th" }] },
+      { op: "set_phrase_translation", phrase_id: "p12", language: "es", text: "Estábamos ardiendo" },
+      { op: "set_phrase_translation", phrase_id: "p12", language: "th", text: "เรากำลังลุกไหม้" },
+      { op: "set_phrase_translation", phrase_id: "p13", language: "th", text: "แล้วความมืดก็มาเยือน" },
+    ]);
+    const merged = applyCaptionEdits(document, [{ op: "merge_phrase", phrase_id: "p12" }]);
+    expect(merged.phrases[0].translations).toEqual({ th: "เรากำลังลุกไหม้ แล้วความมืดก็มาเยือน" });
+    const split = applyCaptionEdits(document, [{ op: "split_phrase", word_id: "w2" }]);
+    expect(split.phrases[0]).not.toHaveProperty("translations");
+    expect(split.phrases[1]).not.toHaveProperty("translations");
+    expect(split.phrases[2].translations).toEqual({ th: "แล้วความมืดก็มาเยือน" });
+    expect(captionDocumentProblems(split)).toEqual([]);
+  });
+
+  it("writes every language of a cue into SRT and keeps lines through a reseed", () => {
+    const document = applyCaptionEdits(withSpanish(), [
+      { op: "set_translations", translations: [{ language: "es", color: "#9BE7FF" }] },
+      { op: "set_phrase_translation", phrase_id: "p14", language: "es", text: "lento y brillante" },
+      { op: "set_style", style: { snapToOnsets: false } },
+    ]);
+    const srt = captionsToSubtitleFile(resolveCaptionTranslations(document, MEMORY), "srt");
+    expect(srt.startsWith("1\n00:00:00,500 --> 00:00:01,700\nWe were burning\nEstábamos ardiendo\n")).toBe(true);
+    expect(srt).toContain("slow and bright\nlento y brillante\n");
+    expect(captionsToSubtitleFile(document, "srt")).toContain("We were burning\n\n2");
+    const result = reseedCaptionDocument(document, seed(SPOKEN.map((item) => ({ ...item, onset: item.start + 0.01 }))), { realign: false });
+    expect(result.document.translations).toEqual([{ language: "es", color: "#9BE7FF", scale: DEFAULT_CAPTION_TRANSLATION_LOOK.scale }]);
+    expect(result.document.phrases.find((phrase) => phrase.id === "p14")?.translations).toEqual({ es: "lento y brillante" });
+    expect(captionDocumentProblems(result.document)).toEqual([]);
   });
 });

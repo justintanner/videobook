@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import type { Engine } from "videobook-engine";
-import type { AnalysisComponentState } from "../analysis-components.js";
+import type { AnalysisComponentState, AnalysisComponentStatus } from "../analysis-components.js";
 import { missingFrameTimes } from "../frame-regions.js";
 import { iso1FromIso3 } from "../jobs/_translate-transcript.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import type { Segment } from "../remotion/subtitles/types.js";
+import { subtitleLanguageName } from "../subtitle-languages.js";
 import type { CaptionAnalysisState, CaptionComponentName, CaptionRegions, CaptionTranslation, CaptionVocal } from "./analysis.js";
 import {
   captionAnalysisStateFor,
@@ -19,8 +20,18 @@ import { deleteCaptionDraft, readCaptionDraft, writeCaptionDraft } from "./draft
 import type { CaptionEdit } from "./edits.js";
 import { applyCaptionEdits, captionDocumentProblems, CaptionEditError } from "./edits.js";
 import { LEGACY_ALIVE_SETTINGS_KEY, styleFromLegacyAliveSettings } from "./legacy.js";
+import type { CaptionLineTranslationState } from "./line-translation.js";
+import { captionLineTranslationState, enqueueCaptionLineTranslation, readCaptionLineMemory } from "./line-translation.js";
+import type { CaptionLineMemory } from "./lines.js";
+import {
+  captionLineSources,
+  captionTranslationLanguages,
+  missingCaptionLines,
+  resolveCaptionTranslations,
+  resolvedCaptionLines,
+} from "./lines.js";
 import type { CaptionAspect, CaptionDocument, CaptionStyle } from "./model.js";
-import { captionDocumentSchema, DEFAULT_CAPTION_STYLE, ORIGINAL_CAPTION_LANGUAGE } from "./model.js";
+import { captionDisplayLanguage, captionDocumentSchema, DEFAULT_CAPTION_STYLE, ORIGINAL_CAPTION_LANGUAGE } from "./model.js";
 import type { CaptionSeedWord } from "./seed.js";
 import { keepTranscriptSpace } from "./script.js";
 import { reseedCaptionDocument, seedCaptionDocument } from "./seed.js";
@@ -57,6 +68,22 @@ interface PaidWork {
   usd: number | null;
 }
 
+export interface CaptionTranslationLineSummary {
+  phrase_id: string;
+  text: string | null;
+  edited: boolean;
+}
+
+export interface CaptionTranslationSummary {
+  language: string;
+  status: AnalysisComponentStatus;
+  available: boolean;
+  job_id: number | null;
+  error: string | null;
+  missing_lines: number;
+  lines?: CaptionTranslationLineSummary[];
+}
+
 export interface CaptionDraftSummary {
   revision: string;
   saved: boolean;
@@ -86,9 +113,16 @@ export interface CaptionReadModel {
   components: Record<string, ComponentSummary>;
   paid_work: PaidWork[];
   draft: CaptionDraftSummary | null;
+  translations: CaptionTranslationSummary[];
   document?: CaptionDocument;
+  translation_memory?: CaptionLineMemory;
   regions?: CaptionRegions["frames"];
   envelope?: { hz: number; values: number[] } | null;
+}
+
+interface CaptionLinesContext {
+  memory: CaptionLineMemory;
+  states: CaptionLineTranslationState[];
 }
 
 interface DraftContext {
@@ -99,6 +133,7 @@ interface DraftContext {
   message: string | null;
   saved: CaptionDraft | null;
   seed: { revision: string; document: CaptionDocument } | null;
+  lines: CaptionLinesContext;
 }
 
 function summary<T>(state: AnalysisComponentState<T> | null): ComponentSummary | null {
@@ -134,7 +169,18 @@ function clock(seconds: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
-function paidWork(context: Pick<DraftContext, "source" | "analysis" | "translation">, language: string, regionFrames: number | null): PaidWork[] {
+function linesWork(states: readonly CaptionLineTranslationState[]): PaidWork[] {
+  return states
+    .filter((state) => state.missing > 0 && (state.status === "missing" || state.status === "failed"))
+    .map((state) => ({
+      component: "lines",
+      provider: "openai",
+      description: `Translate ${state.missing} subtitle line${state.missing === 1 ? "" : "s"} into ${subtitleLanguageName(state.language)} with OpenAI`,
+      usd: null,
+    }));
+}
+
+function paidWork(context: Pick<DraftContext, "source" | "analysis" | "translation" | "lines">, language: string, regionFrames: number | null): PaidWork[] {
   const work: PaidWork[] = [];
   const { analysis, source } = context;
   if (analysis.transcript.status === "missing" || analysis.transcript.status === "failed") {
@@ -146,7 +192,7 @@ function paidWork(context: Pick<DraftContext, "source" | "analysis" | "translati
   if (language !== ORIGINAL_CAPTION_LANGUAGE && (!context.translation || context.translation.status === "missing" || context.translation.status === "failed")) {
     work.push({ component: "translation", provider: "openai", description: `Translate the transcript into ${language} with OpenAI`, usd: null });
   }
-  return work;
+  return [...work, ...linesWork(context.lines.states)];
 }
 
 async function legacyStyle(engine: Engine, artifactId: string): Promise<Partial<CaptionStyle>> {
@@ -198,7 +244,7 @@ function sourceFields(source: CaptionMediaSource): CaptionDocument["source"] {
   };
 }
 
-async function buildSeed(engine: Engine, context: Omit<DraftContext, "seed" | "saved">, language: string): Promise<{ revision: string; document: CaptionDocument } | null> {
+async function buildSeed(engine: Engine, context: Omit<DraftContext, "seed" | "saved" | "lines">, language: string): Promise<{ revision: string; document: CaptionDocument } | null> {
   if (context.status !== "ready") return null;
   const transcript = await readCaptionTranscript(engine, context.source);
   if (!transcript) return null;
@@ -226,6 +272,21 @@ async function buildSeed(engine: Engine, context: Omit<DraftContext, "seed" | "s
   return { revision, document };
 }
 
+function linesContext(engine: Engine, source: CaptionMediaSource, document: CaptionDocument | null): CaptionLinesContext {
+  const languages = document ? captionTranslationLanguages(document) : [];
+  const memory = readCaptionLineMemory(engine, source.artifactId, languages);
+  if (!document) return { memory, states: [] };
+  const sources = captionLineSources(document).map((line) => line.source);
+  const states = languages.map((language) => captionLineTranslationState(engine, {
+    artifactId: source.artifactId,
+    mediaHash: source.mediaHash,
+    language,
+    sources,
+    missing: missingCaptionLines(document, language, memory).length,
+  }));
+  return { memory, states };
+}
+
 async function draftContext(engine: Engine, artifactId: string, language: string): Promise<DraftContext> {
   const source = await captionMediaSource(engine, artifactId);
   const analysis = captionAnalysisStateFor(engine, source);
@@ -233,7 +294,24 @@ async function draftContext(engine: Engine, artifactId: string, language: string
   const { status, message } = overallStatus(analysis, translation, language);
   const base = { source, analysis, translation, status, message };
   const saved = readCaptionDraft(engine, artifactId, language);
-  return { ...base, saved, seed: await buildSeed(engine, base, language) };
+  const seed = await buildSeed(engine, base, language);
+  return { ...base, saved, seed, lines: linesContext(engine, source, (saved ?? seed)?.document ?? null) };
+}
+
+function translationSummaries(context: DraftContext, detail: "summary" | "full"): CaptionTranslationSummary[] {
+  const document = (context.saved ?? context.seed)?.document ?? null;
+  return context.lines.states.map((state) => ({
+    language: state.language,
+    status: state.status,
+    available: state.available,
+    job_id: state.jobId,
+    error: state.error,
+    missing_lines: state.missing,
+    ...(detail === "full" && document ? {
+      lines: resolvedCaptionLines(document, state.language, context.lines.memory)
+        .map((line) => ({ phrase_id: line.phraseId, text: line.text, edited: line.edited })),
+    } : {}),
+  }));
 }
 
 function correctedCount(document: CaptionDocument): number {
@@ -293,12 +371,14 @@ function readModel(context: DraftContext, language: string, detail: "summary" | 
     components,
     paid_work: paidWork(context, language, regionFrames),
     draft: draftSummary(context),
+    translations: translationSummaries(context, detail),
   };
   if (detail === "summary") return model;
   const vocalValue = context.analysis.vocal?.value ?? null;
   return {
     ...model,
     ...((context.saved ?? context.seed) ? { document: (context.saved ?? context.seed)!.document } : {}),
+    translation_memory: context.lines.memory,
     regions: context.analysis.regions?.value?.frames ?? [],
     envelope: vocalValue ? { hz: vocalValue.envelopeHz, values: vocalValue.envelope } : null,
   };
@@ -329,7 +409,38 @@ export async function prepareCaptions(
     languages: language === ORIGINAL_CAPTION_LANGUAGE ? [] : [language],
     force: options.force,
   });
+  await prepareCaptionLines(engine, bookId, artifactId, language, options.force.includes("lines"));
   return readCaptions(engine, artifactId, language, options.detail);
+}
+
+function editedLines(document: CaptionDocument, language: string): Record<string, string> {
+  return Object.fromEntries(resolvedCaptionLines(document, language, {})
+    .flatMap((line) => (line.edited && line.text !== null ? [[line.source, line.text] as const] : [])));
+}
+
+function needsLineTranslation(state: CaptionLineTranslationState, force: boolean): boolean {
+  if (!state.available || state.status === "queued" || state.status === "running") return false;
+  return force || state.missing > 0;
+}
+
+async function prepareCaptionLines(engine: Engine, bookId: string, artifactId: string, language: string, force: boolean): Promise<void> {
+  const context = await draftContext(engine, artifactId, language);
+  const document = (context.saved ?? context.seed)?.document;
+  if (!document || document.source.mediaHash !== context.source.mediaHash) return;
+  const sources = captionLineSources(document).map((line) => line.source);
+  if (sources.length === 0) return;
+  for (const state of context.lines.states.filter((candidate) => needsLineTranslation(candidate, force))) {
+    await enqueueCaptionLineTranslation(engine, {
+      bookId,
+      artifactId,
+      mediaHash: context.source.mediaHash,
+      language: state.language,
+      sourceLanguage: captionDisplayLanguage(document),
+      sources,
+      edited: editedLines(document, state.language),
+      force,
+    });
+  }
 }
 
 export interface CaptionUpdateInput {
@@ -438,8 +549,17 @@ export async function savedCaptionDraft(engine: Engine, bookId: string, artifact
     if (current.document.source.mediaHash !== context.source.mediaHash) {
       throw new CaptionServiceError("stale_source", "The video changed since these subtitles were edited. Realign, keep the timings or discard the edits before rendering.");
     }
-    return context.saved ?? writeCaptionDraft(engine, artifactId, language, current.document);
+    requireTranslatedLines(context.lines.states);
+    const draft = context.saved ?? writeCaptionDraft(engine, artifactId, language, current.document);
+    return { ...draft, document: resolveCaptionTranslations(draft.document, context.lines.memory) };
   });
+}
+
+function requireTranslatedLines(states: readonly CaptionLineTranslationState[]): void {
+  const missing = states.filter((state) => state.missing > 0);
+  if (missing.length === 0) return;
+  const counts = missing.map((state) => `${state.missing} ${subtitleLanguageName(state.language)} line${state.missing === 1 ? "" : "s"}`).join(" and ");
+  throw new CaptionServiceError("not_ready", `Translate the subtitle lines before rendering: ${counts} still missing. Prepare the subtitles to translate them, or write those lines yourself.`);
 }
 
 export async function captionDocumentForRender(
@@ -454,5 +574,6 @@ export async function captionDocumentForRender(
   const saved = context.saved && context.saved.document.source.mediaHash === source.mediaHash ? context.saved.document : null;
   const document = saved ?? context.seed?.document ?? null;
   if (!document) return null;
-  return { document: { ...document, aspect }, regions: context.analysis.regions?.value?.frames ?? [] };
+  const memory = readCaptionLineMemory(engine, artifactId, captionTranslationLanguages(document));
+  return { document: { ...resolveCaptionTranslations(document, memory), aspect }, regions: context.analysis.regions?.value?.frames ?? [] };
 }

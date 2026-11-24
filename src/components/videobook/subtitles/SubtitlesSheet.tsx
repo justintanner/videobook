@@ -4,7 +4,7 @@ import { captionsToSubtitleFile, type CaptionExportFormat } from '../../../../se
 import type { CaptionDocument } from '../../../../server/src/captions/model'
 import { ConfirmSheet } from '../confirm/ConfirmSheet'
 import type { SubtitleEditor, SubtitleSaveState } from '@/videobook/useSubtitleEditor'
-import { subtitlesRenderBlocker, type SubtitleRenderOutput } from '@/videobook/subtitles-model'
+import { resolvedSubtitleDocument, subtitlesRenderBlocker, type SubtitleRenderOutput } from '@/videobook/subtitles-model'
 import type { ConfirmSheetEffect } from '../confirm/ConfirmSheetHints'
 
 const SubtitlesBody = lazy(async () => ({ default: (await import('./SubtitlesBody')).SubtitlesBody }))
@@ -71,8 +71,8 @@ export function SubtitlesSheet({ editor, applyFormId, onClose }: { editor: Subti
           <button type="button" aria-label="Undo" title="Undo (⌘Z)" disabled={state.past.length === 0 || state.rendering} onClick={editor.undo}><Undo2 size={14} aria-hidden="true" /></button>
           <button type="button" aria-label="Redo" title="Redo (⇧⌘Z)" disabled={state.future.length === 0 || state.rendering} onClick={editor.redo}><Redo2 size={14} aria-hidden="true" /></button>
           <span className="subtitles-save-state" data-state={state.save}>{SAVE_LABELS[state.save]}</span>
-          <button type="button" disabled={!document} onClick={() => document && download(document, label, 'srt')}>SRT</button>
-          <button type="button" disabled={!document} onClick={() => document && download(document, label, 'vtt')}>VTT</button>
+          <button type="button" disabled={!document} onClick={() => document && download(resolvedSubtitleDocument(document, state.read), label, 'srt')}>SRT</button>
+          <button type="button" disabled={!document} onClick={() => document && download(resolvedSubtitleDocument(document, state.read), label, 'vtt')}>VTT</button>
         </div>
       )}
     >

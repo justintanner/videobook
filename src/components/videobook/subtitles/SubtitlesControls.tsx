@@ -13,7 +13,9 @@ import {
   type CaptionStyle,
 } from '../../../../server/src/captions/model'
 import { SUBTITLE_LANGUAGE_NAMES } from '../../../../server/src/subtitle-languages'
+import type { SubtitleLineProgress } from '@/videobook/subtitles-model'
 import type { SubtitlePositionTarget } from './SubtitlesPreview'
+import { SubtitlesTranslationLines } from './SubtitlesTranslationLines'
 
 type Edit = (edits: CaptionEdit[], coalesce?: string | null) => boolean
 
@@ -25,7 +27,10 @@ type SubtitlesControlsProps = {
   positionTarget: SubtitlePositionTarget
   guides: boolean
   disabled: boolean
+  busy: boolean
+  lineProgress: SubtitleLineProgress[]
   onEdit: Edit
+  onTranslateLines: (again: boolean) => void
   onLanguage: (language: string) => void
   onPositionTarget: (target: SubtitlePositionTarget) => void
   onGuides: (guides: boolean) => void
@@ -227,6 +232,15 @@ export function SubtitlesControls(props: SubtitlesControlsProps) {
           {Object.entries(SUBTITLE_LANGUAGE_NAMES).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
         </select>
       </Group>
+
+      <SubtitlesTranslationLines
+        document={document}
+        progress={props.lineProgress}
+        disabled={disabled}
+        busy={props.busy}
+        onEdit={onEdit}
+        onTranslate={props.onTranslateLines}
+      />
 
       <Group title="Faces and on-screen text">
         <div className="subtitles-switches">

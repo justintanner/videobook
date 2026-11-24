@@ -131,6 +131,19 @@ export function writeAnalysisComponent<T>(engine: Engine, stored: StoredAnalysis
   retain(engine, stored.artifactId, stored.component, stored.key, stored.sourceHash);
 }
 
+export function retainedAnalysisComponents<T>(
+  engine: Engine,
+  artifactId: string,
+  spec: AnalysisComponentSpec,
+  schema: ZodType<T>,
+): StoredAnalysisComponent<T>[] {
+  const entries = readIndex(engine, artifactId)[spec.component] ?? [];
+  return [...entries].reverse().flatMap((entry) => {
+    const stored = readAnalysisComponent(engine, spec, entry.key, schema);
+    return stored ? [stored] : [];
+  });
+}
+
 export function hasAnalysisRecords(engine: Engine, artifactId: string, component: string): boolean {
   return (readIndex(engine, artifactId)[component] ?? []).length > 0;
 }

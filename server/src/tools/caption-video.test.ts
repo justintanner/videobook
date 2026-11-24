@@ -4,6 +4,9 @@ import { writeGraphicsDraft } from "../graphics/drafts.js";
 import { graphicsDocumentFromLayers } from "../graphics/model.js";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createServer } from "node:http";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -11,7 +14,7 @@ import type { Client } from "@modelcontextprotocol/client";
 import { randomUUID } from "node:crypto";
 import type { Engine } from "videobook-engine";
 import { NOTEBOOK_GRID_COLUMN_COUNT, NOTEBOOK_GRID_ROW_COUNT } from "videobook-engine";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeAnalysisComponent } from "../analysis-components.js";
 import { CAPTION_TRANSLATION, translationComponentKey } from "../captions/analysis.js";
 import { captionsToSubtitleFile } from "../captions/export.js";
@@ -21,6 +24,7 @@ import { joinCaptionWords } from "../captions/script.js";
 import type { CaptionReadModel } from "../captions/service.js";
 import { createEngineForTest } from "../engine.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import { configureProviderEndpoints } from "../media/endpoints.js";
 import { synthesizeWordTimings } from "../jobs/_translate-transcript.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import { toolSpendsMoney } from "../paid-tools.js";
@@ -61,6 +65,22 @@ function thaiTranscript() {
       ...letters(["แ", "ม", "ว", "น", "อ", "น", "อ", "ยู่", "บ", "น", "โ", "ต๊", "ะ"], 2, 0.08),
     ],
   };
+}
+
+type LineRequest = { name: string; instructions: string; lines: Array<{ i: number; text: string; translation?: string }> };
+
+function responsesBody(text: string): string {
+  return JSON.stringify({
+    id: "resp_caption_lines", object: "response", created_at: 0, status: "completed", model: "gpt-5.6-sol",
+    output: [{ type: "message", id: "msg_1", role: "assistant", status: "completed", content: [{ type: "output_text", text, annotations: [] }] }],
+    instructions: null, previous_response_id: null, temperature: null, top_p: null, max_output_tokens: null,
+    store: false, tools: [], reasoning: null, text: { format: { type: "text" } },
+    usage: { input_tokens: 10, output_tokens: 10, total_tokens: 20 }, error: null, incomplete_details: null, metadata: {},
+  });
+}
+
+function english(text: string): string {
+  return `EN(${text})`;
 }
 
 function phraseTexts(document: CaptionDocument): string[] {
@@ -445,6 +465,168 @@ describe("caption_video", () => {
     const forgotten = await client.callTool({ name: "delete_asset", arguments: { book_id: bookId, asset_id: assetId, forget: true } });
     expect(forgotten.isError).not.toBe(true);
     expect(keys()).toEqual([]);
+  });
+
+  it("without OpenAI, translated lines wait for hand-written text and never queue a translation", async () => {
+    const assetId = await video({ transcript: thaiTranscript() });
+    const full = await ready(assetId);
+    const saved = await save({ asset_id: assetId, expected_revision: full.draft.revision, edits: [{ op: "set_translations", translations: [{ language: "en" }] }] });
+    const read = await ok({ asset_id: assetId, op: "prepare" });
+    expect(read).toMatchObject({ status: "ready", translations: [{ language: "en", status: "unavailable", available: false, job_id: null, missing_lines: 2, error: expect.stringMatching(/OPENAI_API_KEY/) }] });
+    expect(read.paid_work.some((work) => work.component === "lines")).toBe(false);
+    expect(engine.jobs.queue.list({ type: "caption_line_translation", limit: 50 }).filter((job) => job.payload.sourceArtifactId === assetId)).toEqual([]);
+    const written = ["I really like eating rice.", "The cat sleeps on the table."];
+    const own = await save({
+      asset_id: assetId, expected_revision: saved.revision,
+      edits: full.document.phrases.map((phrase, index) => ({ op: "set_phrase_translation", phrase_id: phrase.id, language: "en", text: written[index] })),
+    });
+    const done = await ok({ asset_id: assetId, op: "prepare", force: ["lines"], detail: "full" });
+    expect(done.translations[0]).toMatchObject({ status: "ready", available: false, missing_lines: 0, lines: written.map((text) => ({ text, edited: true })) });
+    expect(engine.jobs.queue.list({ type: "caption_line_translation", limit: 50 }).filter((job) => job.payload.sourceArtifactId === assetId)).toEqual([]);
+    const same = await call({ asset_id: assetId, op: "update", expected_revision: own.revision, edits: [{ op: "set_translations", translations: [{ language: "th" }] }] });
+    expect(same).toMatchObject({ error: true, body: { status: "invalid", message: expect.stringMatching(/already in th/) } });
+  });
+
+  describe("with OpenAI translating the lines", () => {
+    let model: Server;
+    let restoreEndpoints: () => void = () => undefined;
+    let requests: LineRequest[] = [];
+
+    function answer(body: string): string | null {
+      const parsed = JSON.parse(body) as { instructions: string; input: Array<{ content: string }>; text: { format: { name: string } } };
+      if (parsed.text.format.name !== "translated_subtitle_lines") return null;
+      const content = parsed.input[0].content;
+      const lines = JSON.parse(content.slice(content.indexOf("\n") + 1)) as LineRequest["lines"];
+      requests.push({ name: parsed.text.format.name, instructions: parsed.instructions, lines });
+      return responsesBody(JSON.stringify({ translations: lines.map((line) => line.translation ?? english(line.text)) }));
+    }
+
+    async function preparedWithoutRegions(assetId: string): Promise<Read> {
+      await ok({ asset_id: assetId, op: "prepare", regions: false });
+      await expect.poll(async () => (await ok({ asset_id: assetId })).status, { timeout: testBudget(30_000) }).toBe("ready");
+      return ok({ asset_id: assetId, detail: "full" });
+    }
+
+    async function withEnglish(): Promise<{ assetId: string; full: Read }> {
+      const assetId = await video({ transcript: thaiTranscript() });
+      const full = await preparedWithoutRegions(assetId);
+      await save({ asset_id: assetId, expected_revision: full.draft.revision, edits: [{ op: "set_translations", translations: [{ language: "en" }] }] });
+      return { assetId, full };
+    }
+
+    async function translatedLines(assetId: string): Promise<Read> {
+      await expect.poll(async () => (await ok({ asset_id: assetId })).translations[0]?.status, { timeout: testBudget(30_000) }).toBe("ready");
+      return ok({ asset_id: assetId, detail: "full" });
+    }
+
+    beforeAll(async () => {
+      model = createServer((request, response) => {
+        const chunks: Buffer[] = [];
+        request.on("data", (chunk: Buffer) => chunks.push(chunk));
+        request.on("end", () => {
+          const body = answer(Buffer.concat(chunks).toString("utf8"));
+          response.writeHead(body ? 200 : 400, { "content-type": "application/json" });
+          response.end(body ?? JSON.stringify({ error: { message: "Only subtitle lines are answered here." } }));
+        });
+      });
+      await new Promise<void>((resolve) => model.listen(0, "127.0.0.1", resolve));
+    });
+
+    beforeEach(() => {
+      requests = [];
+      vi.stubEnv("OPENAI_API_KEY", "offline-openai-key");
+      restoreEndpoints = configureProviderEndpoints({ openaiBaseURL: `http://127.0.0.1:${(model.address() as AddressInfo).port}` });
+    });
+
+    afterEach(() => restoreEndpoints());
+
+    afterAll(async () => {
+      await new Promise<void>((resolve) => {
+        model.closeAllConnections();
+        model.close(() => resolve());
+      });
+    });
+
+    it("translates each Thai phrase into an English line under it and renders both from one snapshot", async () => {
+      const { assetId, full } = await withEnglish();
+      const pending = await ok({ asset_id: assetId });
+      expect(pending.translations).toEqual([{ language: "en", status: "missing", available: true, job_id: null, error: null, missing_lines: 2 }]);
+      expect(pending.paid_work).toContainEqual({ component: "lines", provider: "openai", description: "Translate 2 subtitle lines into English with OpenAI", usd: null });
+      const refused = await call({ asset_id: assetId, op: "render", source_hash: full.source.media_hash, expected_revision: pending.draft.revision, request_id: randomUUID() });
+      expect(refused).toMatchObject({ error: true, body: { status: "not_ready", message: expect.stringMatching(/2 English lines still missing/) } });
+
+      await ok({ asset_id: assetId, op: "prepare", regions: false });
+      const translated = await translatedLines(assetId);
+      expect(requests).toHaveLength(1);
+      expect(requests[0].lines).toEqual(THAI_CLAUSES.map((text, i) => ({ i, text })));
+      expect(requests[0].instructions).toMatch(/from Thai into English/);
+      expect(translated.translations[0]).toMatchObject({
+        status: "ready",
+        missing_lines: 0,
+        lines: translated.document.phrases.map((phrase, index) => ({ phrase_id: phrase.id, text: english(THAI_CLAUSES[index]), edited: false })),
+      });
+      expect(translated.translation_memory).toEqual({ en: Object.fromEntries(THAI_CLAUSES.map((clause) => [clause, english(clause)])) });
+      expect(translated.paid_work.some((work) => work.component === "lines")).toBe(false);
+      expect(translated.document.phrases.some((phrase) => phrase.translations)).toBe(false);
+
+      const realBookId = engine.book.get().bookId;
+      await pauseBookQueueForTests(realBookId);
+      try {
+        const requestId = randomUUID();
+        await ok({ asset_id: assetId, op: "render", source_hash: full.source.media_hash, expected_revision: translated.draft.revision, request_id: requestId });
+        const request = readCaptionRenderRequest(engine, requestId);
+        expect(request?.document.translations).toEqual([{ language: "en", color: "#FFFFFF", scale: 0.6 }]);
+        expect(request?.document.phrases.map((phrase) => phrase.translations)).toEqual(THAI_CLAUSES.map((clause) => ({ en: english(clause) })));
+        expect(readCaptionDraft(engine, assetId, "original")?.document.phrases.some((phrase) => phrase.translations)).toBe(false);
+        for (const job of engine.jobs.queue.list({ type: "render_captions", limit: 50 }).filter((candidate) => candidate.state === "queued")) {
+          await engine.jobs.queue.abort(job.id, "translated lines render test");
+        }
+      } finally {
+        await resumeBookQueueForTests(realBookId);
+      }
+    });
+
+    it("translates only lines whose Thai changed, keeps hand-written lines and can translate everything again", async () => {
+      const { assetId } = await withEnglish();
+      await ok({ asset_id: assetId, op: "prepare", regions: false });
+      const first = await translatedLines(assetId);
+      const [one, two] = first.document.phrases;
+      const fixed = "เธอชอบกินข้าวมาก";
+      const handWritten = "The cat sleeps on the table.";
+      await save({
+        asset_id: assetId, expected_revision: first.draft.revision,
+        edits: [
+          { op: "set_word_text", word_id: one.wordIds[0], text: "เธอ" },
+          { op: "set_phrase_translation", phrase_id: two.id, language: "en", text: handWritten },
+        ],
+      });
+      const changed = await ok({ asset_id: assetId, detail: "full" });
+      expect(changed.translations[0]).toMatchObject({
+        status: "missing",
+        missing_lines: 1,
+        lines: [{ phrase_id: one.id, text: null, edited: false }, { phrase_id: two.id, text: handWritten, edited: true }],
+      });
+
+      requests = [];
+      await ok({ asset_id: assetId, op: "prepare", regions: false });
+      const second = await translatedLines(assetId);
+      expect(requests).toHaveLength(1);
+      expect(requests[0].lines).toEqual([{ i: 0, text: fixed }, { i: 1, text: THAI_CLAUSES[1], translation: handWritten }]);
+      expect(requests[0].instructions).toMatch(/already comes with a translation keeps it/);
+      expect(second.translations[0].lines?.map((line) => line.text)).toEqual([english(fixed), handWritten]);
+
+      requests = [];
+      await save({ asset_id: assetId, expected_revision: second.draft.revision, edits: [{ op: "reset_word", word_id: one.wordIds[0] }] });
+      const restored = await ok({ asset_id: assetId, detail: "full" });
+      expect(restored.translations[0]).toMatchObject({ status: "ready", missing_lines: 0 });
+      expect(restored.translations[0].lines?.[0].text).toBe(english(THAI_CLAUSES[0]));
+
+      await ok({ asset_id: assetId, op: "prepare", regions: false, force: ["lines"] });
+      await expect.poll(() => requests.length, { timeout: testBudget(30_000) }).toBe(1);
+      await translatedLines(assetId);
+      expect(requests[0].lines).toEqual([{ i: 0, text: THAI_CLAUSES[0] }, { i: 1, text: THAI_CLAUSES[1], translation: handWritten }]);
+      expect(requests).toHaveLength(1);
+    });
   });
 
   it("is billable only when preparing and stays out of chat routing", () => {

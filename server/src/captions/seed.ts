@@ -237,7 +237,7 @@ function mergedPhrases(previous: CaptionDocument, words: readonly CaptionWord[],
     flushOrphans();
     const last = phrases.at(-1);
     if (last && last.id === owner.id) last.wordIds.push(word.id);
-    else phrases.push({ id: owner.id, wordIds: [word.id], positions: { ...owner.positions } });
+    else phrases.push(carriedPhrase(owner, word.id));
   }
   flushOrphans();
   return { phrases: uniquePhraseIds(phrases, () => {
@@ -247,6 +247,11 @@ function mergedPhrases(previous: CaptionDocument, words: readonly CaptionWord[],
   }), nextId };
 }
 
+function carriedPhrase(owner: CaptionPhrase, wordId: string): CaptionPhrase {
+  const phrase: CaptionPhrase = { id: owner.id, wordIds: [wordId], positions: { ...owner.positions } };
+  return owner.translations ? { ...phrase, translations: { ...owner.translations } } : phrase;
+}
+
 function uniquePhraseIds(phrases: CaptionPhrase[], mint: () => string): CaptionPhrase[] {
   const seen = new Set<string>();
   return phrases.map((phrase) => {
@@ -254,7 +259,7 @@ function uniquePhraseIds(phrases: CaptionPhrase[], mint: () => string): CaptionP
       seen.add(phrase.id);
       return phrase;
     }
-    return { ...phrase, id: mint(), positions: {} };
+    return { id: mint(), wordIds: phrase.wordIds, positions: {} };
   });
 }
 
@@ -270,6 +275,7 @@ export function reseedCaptionDocument(previous: CaptionDocument, seed: CaptionDo
     aspect: previous.aspect,
     positions: previous.positions,
     style: previous.style,
+    ...(previous.translations ? { translations: previous.translations } : {}),
     words: merged.words,
     phrases: phrases.phrases,
     nextId: phrases.nextId,

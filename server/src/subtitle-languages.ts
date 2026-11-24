@@ -19,3 +19,7 @@ export const SUBTITLE_LANGUAGE_NAMES: Readonly<Record<string, string>> = {
   th: "Thai",
   uk: "Ukrainian",
 };
+
+export function subtitleLanguageName(code: string): string {
+  return Object.hasOwn(SUBTITLE_LANGUAGE_NAMES, code) ? SUBTITLE_LANGUAGE_NAMES[code] : code;
+}

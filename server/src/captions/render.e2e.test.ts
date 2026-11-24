@@ -298,7 +298,11 @@ describe("caption render", () => {
     await waitForBookQueuesIdleForTests({ budgetMs: testBudget(120_000) });
   }, testBudget(BENCHMARK ? 1_800_000 : 600_000));
 
-  async function scriptRender(words: Array<{ text: string; start: number; end: number }>, language: string): Promise<{ path: string; box: Box }> {
+  async function scriptRender(
+    words: Array<{ text: string; start: number; end: number }>,
+    language: string,
+    extraEdits: (document: CaptionDocument) => object[] = () => [],
+  ): Promise<{ path: string; box: Box }> {
     const created = await engine.artifacts.create("video", `script ${language}`);
     if (!created.ok) throw new Error(created.error.message);
     const previous = assetId;
@@ -317,8 +321,10 @@ describe("caption render", () => {
       if (!transcript.ok) throw new Error(transcript.error.message);
       await call({ op: "prepare" });
       await expect.poll(async () => (await call<Read>({})).status, { timeout: testBudget(60_000) }).toBe("ready");
-      const read = await call<Read>({});
-      const saved = await call<{ revision: string }>({ op: "update", expected_revision: read.draft!.revision, edits: [{ op: "set_style", style: { snapToOnsets: false } }] });
+      const read = await call<Read>({ detail: "full" });
+      const saved = await call<{ revision: string }>({
+        op: "update", expected_revision: read.draft!.revision, edits: [{ op: "set_style", style: { snapToOnsets: false } }, ...extraEdits(read.document)],
+      });
       await call({ op: "render", expected_revision: saved.revision, source_hash: read.source.media_hash, request_id: randomUUID() });
       await expect.poll(async () => (await call<Read>({})).render?.status, { timeout: testBudget(300_000), interval: 1000 }).toBe("completed");
       const render = (await call<Read>({})).render!;
@@ -333,6 +339,22 @@ describe("caption render", () => {
     const { box } = await scriptRender([{ text: "Привет", start: 0.2, end: 0.9 }, { text: "мир", start: 1.0, end: 1.6 }], "rus");
     expect(box.count).toBeGreaterThan(200);
     expect(box.maxX - box.minX).toBeGreaterThan(80);
+  });
+
+  it("burns a plain translated line under the karaoke phrase for as long as the phrase shows", async () => {
+    const cyan = [0, 255, 255] as const;
+    const thai = [{ text: "ฉัน", start: 0.3, end: 0.7 }, { text: "ชอบ", start: 0.7, end: 1.1 }, { text: "แมว", start: 1.1, end: 1.6 }];
+    const { path, box } = await scriptRender(thai, "tha", (document) => [
+      { op: "set_translations", translations: [{ language: "en", color: "#00FFFF" }] },
+      ...document.phrases.map((phrase) => ({ op: "set_phrase_translation", phrase_id: phrase.id, language: "en", text: "I like cats" })),
+    ]);
+    const line = colorBox(await frame(path, 0.5), cyan, 60);
+    expect(box.count).toBeGreaterThan(200);
+    expect(line.count).toBeGreaterThan(200);
+    expect(line.minY).toBeGreaterThan(box.maxY);
+    expect(Math.abs((line.minX + line.maxX) / 2 - WIDTH / 2)).toBeLessThan(40);
+    expect(colorBox(await frame(path, 1.4), cyan, 60).count).toBeGreaterThan(200);
+    expect(colorBox(await frame(path, 0.1), cyan, 60).count).toBe(0);
   });
 
   it("burns the reviewed subtitles into the source video in place and keeps its earlier version", async () => {

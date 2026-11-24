@@ -205,22 +205,26 @@ function buildInstructions(targetLanguage: string, lineCount: number): string {
   );
 }
 
-async function requestTranslations(
-  sentences: SourceSentence[],
-  targetLanguage: string,
+export interface TranslationListRequest {
+  formatName: string;
+  instructions: string;
+  content: string;
+  count: number;
+  maxOutputTokens: number;
+}
+
+export async function requestTranslationList(
+  request: TranslationListRequest,
   responses: ResponsesFn,
   signal?: AbortSignal,
 ): Promise<string[]> {
   const response = await responses(intelligenceRequest({
-    instructions: buildInstructions(targetLanguage, sentences.length),
-    input: [{
-      role: "user",
-      content: `TRANSCRIPT LINES (JSON):\n${JSON.stringify(sentences.map((s, i) => ({ i, text: s.text })))}`,
-    }],
+    instructions: request.instructions,
+    input: [{ role: "user", content: request.content }],
     text: {
       format: {
         type: "json_schema",
-        name: "translated_transcript",
+        name: request.formatName,
         schema: {
           type: "object",
           required: ["translations"],
@@ -228,8 +232,8 @@ async function requestTranslations(
           properties: {
             translations: {
               type: "array",
-              minItems: sentences.length,
-              maxItems: sentences.length,
+              minItems: request.count,
+              maxItems: request.count,
               items: { type: "string" },
             },
           },
@@ -237,7 +241,7 @@ async function requestTranslations(
         strict: true,
       },
     },
-    max_output_tokens: 4096,
+    max_output_tokens: request.maxOutputTokens,
   }), signal);
 
   const content = firstResponseText(response);
@@ -249,12 +253,27 @@ async function requestTranslations(
     throw new Error(`Translation model returned no translations array. Got keys: ${Object.keys(parsed).join(",")}`);
   }
   const translations = parsed.translations;
-  if (translations.length !== sentences.length || !translations.every((t) => typeof t === "string")) {
+  if (translations.length !== request.count || !translations.every((t) => typeof t === "string")) {
     throw new Error(
-      `Translation model returned ${translations.length} entries for ${sentences.length} lines`,
+      `Translation model returned ${translations.length} entries for ${request.count} lines`,
     );
   }
   return (translations as string[]).map((t) => t.trim());
+}
+
+function requestTranslations(
+  sentences: SourceSentence[],
+  targetLanguage: string,
+  responses: ResponsesFn,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  return requestTranslationList({
+    formatName: "translated_transcript",
+    instructions: buildInstructions(targetLanguage, sentences.length),
+    content: `TRANSCRIPT LINES (JSON):\n${JSON.stringify(sentences.map((s, i) => ({ i, text: s.text })))}`,
+    count: sentences.length,
+    maxOutputTokens: 4096,
+  }, responses, signal);
 }
 
 function collectSentences(segments: Segment[]): SourceSentence[] {

@@ -7,7 +7,9 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { writeAnalysisComponent } from '../../server/src/analysis-components.js'
 import { BookManager } from '../../server/src/book-manager.js'
+import { lineTranslationKey, lineTranslationSpec } from '../../server/src/captions/line-translation.js'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
 import { registerMediaProbe } from '../../server/src/notebook-media-ops.js'
 import { extractVideoPoster } from '../../server/src/video-poster.js'
@@ -30,6 +32,9 @@ const TRANSCRIPT = {
 }
 const THAI_TEXT = 'นี่คือสวนสนุกร้างที่ไม่มีใครมานานแล้ว'
 const THAI_WORDS = ['นี่', 'คือ', 'สวน', 'สนุก', 'ร้าง', 'ที่', 'ไม่มี', 'ใคร', 'มา', 'นาน', 'แล้ว']
+const EDITED_THAI_TEXT = THAI_TEXT.replace('ร้าง', 'เก่า')
+const MACHINE_LINE = 'An old empty theme park'
+const OWN_LINE = 'A theme park nobody visits'
 
 describe('subtitle editor in the composer', () => {
   let root = ''
@@ -54,7 +59,16 @@ describe('subtitle editor in the composer', () => {
     await input.fill(text)
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
   }
-  type Read = { status: string; draft: { revision: string; saved: boolean; corrected_words: number } | null; document: { positions: Record<string, number>; phrases: Array<{ id: string; positions: Record<string, number> }>; words: Array<{ id: string; text: string; start: number; textCorrected: boolean; timingCorrected: boolean }> } }
+  type Read = {
+    status: string
+    draft: { revision: string; saved: boolean; corrected_words: number } | null
+    document: {
+      positions: Record<string, number>
+      translations?: Array<{ language: string; color: string; scale: number }>
+      phrases: Array<{ id: string; positions: Record<string, number>; translations?: Record<string, string> }>
+      words: Array<{ id: string; text: string; start: number; textCorrected: boolean; timingCorrected: boolean }>
+    }
+  }
   type NotebookWire = { cells: Array<{ id: string; output_artifact_id?: string; slot: { row: number; column: number } }> }
   const draft = (assetId = sourceId) => call<Read>('caption_video', { asset_id: assetId, detail: 'full' })
   const saved = () => expect.poll(() => sheet().locator('.subtitles-save-state').textContent(), { timeout: 15_000 }).toBe('Saved')
@@ -93,6 +107,17 @@ describe('subtitle editor in the composer', () => {
       language_code: 'tha', text: THAI_TEXT,
       words: [...THAI_TEXT].map((text, index) => ({ text, start: (index + 2) * 0.05, end: (index + 3) * 0.05, type: 'word' })),
     }))
+    const secondManifest = await engine.files.manifest(secondId)
+    if (!secondManifest.ok) throw new Error(secondManifest.error.message)
+    const secondHash = secondManifest.value.files.find((file) => file.name === 'original.mp4')?.objectHash ?? ''
+    writeAnalysisComponent(engine, {
+      component: lineTranslationSpec('en').component,
+      key: lineTranslationKey(secondHash, 'en', [EDITED_THAI_TEXT]),
+      artifactId: secondId,
+      sourceHash: secondHash,
+      provenance: { analyzer: 'subtitles-ui', version: 1, provider: null, model: null, createdAt: new Date().toISOString() },
+      value: { language: 'en', lines: [{ source: EDITED_THAI_TEXT, text: MACHINE_LINE }] },
+    })
     const notebook = engine.notebooks.list()[0]!
     notebookId = notebook.id
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 0 }, outputArtifactId: sourceId }))
@@ -292,4 +317,50 @@ describe('subtitle editor in the composer', () => {
     expect((await draft(secondId)).document.words.find((item) => item.text === 'เก่า')).toMatchObject({ textCorrected: true })
     expect(errors).toEqual([])
   }, testBudget(60_000))
+  it('shows an English line under the Thai karaoke, edits it by hand and removes it', async () => {
+    await command('/subs @a2')
+    await expect.poll(() => word('เก่า').isVisible(), { timeout: testBudget(30_000) }).toBe(true)
+    await sheet().getByRole('button', { name: 'Add a translated line', exact: true }).click()
+    await saved()
+    const line = () => sheet().getByLabel('English line', { exact: true })
+    await expect.poll(() => line().inputValue(), { timeout: testBudget(15_000) }).toBe(MACHINE_LINE)
+    expect(await sheet().getByText('Every phrase has a line.').isVisible()).toBe(true)
+    await word('สนุก').click()
+    const stageLine = sheet().locator('.subtitles-stage [data-caption-translation="en"]')
+    await expect.poll(() => stageLine.textContent(), { timeout: testBudget(35_000) }).toBe(MACHINE_LINE)
+    expect(await sheet().getByRole('button', { name: /^Render/ }).isDisabled()).toBe(false)
+    await shot('subtitles-translated-line')
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect.poll(() => line().isVisible()).toBe(true)
+    expect(await sheet().evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+    await shot('subtitles-translated-line-phone')
+    await page.setViewportSize({ width: 1440, height: 1000 })
+
+    await line().fill(OWN_LINE)
+    await line().press('Enter')
+    await saved()
+    expect((await draft(secondId)).document.phrases[0].translations).toEqual({ en: OWN_LINE })
+    await expect.poll(() => stageLine.textContent(), { timeout: testBudget(15_000) }).toBe(OWN_LINE)
+    await sheet().getByRole('button', { name: 'Use the machine English translation', exact: true }).click()
+    await saved()
+    await expect.poll(() => line().inputValue()).toBe(MACHINE_LINE)
+    expect((await draft(secondId)).document.phrases[0].translations).toBeUndefined()
+
+    await sheet().getByLabel('English line color', { exact: true }).fill('#9be7ff')
+    await saved()
+    expect((await draft(secondId)).document.translations).toEqual([{ language: 'en', color: '#9BE7FF', scale: 0.6 }])
+    await expect.poll(() => stageLine.evaluate((element) => getComputedStyle(element).color), { timeout: testBudget(15_000) }).toBe('rgb(155, 231, 255)')
+
+    await sheet().getByLabel('Language of translated line 1', { exact: true }).selectOption('es')
+    await saved()
+    await expect.poll(() => sheet().getByText(/OPENAI_API_KEY/).first().isVisible(), { timeout: testBudget(15_000) }).toBe(true)
+    expect(await sheet().getByRole('button', { name: /^Render/ }).isDisabled()).toBe(true)
+    expect(await sheet().getByRole('button', { name: /^Translate/ }).count()).toBe(0)
+    await shot('subtitles-translated-line-missing')
+    await sheet().getByRole('button', { name: 'Remove the Spanish line', exact: true }).click()
+    await saved()
+    expect((await draft(secondId)).document.translations).toBeUndefined()
+    await expect.poll(() => sheet().locator('.subtitles-stage [data-caption-translation]').count()).toBe(0)
+    expect(errors).toEqual([])
+  }, testBudget(90_000))
 })

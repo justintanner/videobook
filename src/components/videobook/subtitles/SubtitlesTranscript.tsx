@@ -1,12 +1,17 @@
-import { memo, useMemo, useState, type KeyboardEvent } from 'react'
+import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Eye, EyeOff, Merge, Plus, RotateCcw, Scissors } from 'lucide-react'
 import type { CaptionEdit } from '../../../../server/src/captions/edits'
-import type { CaptionDocument, CaptionWord } from '../../../../server/src/captions/model'
+import type { CaptionLineMemory } from '../../../../server/src/captions/lines'
+import { MAX_CAPTION_TRANSLATION_LENGTH, type CaptionDocument, type CaptionWord } from '../../../../server/src/captions/model'
 import { effectiveWordTiming } from '../../../../server/src/captions/timing'
+import { subtitleLanguageName } from '../../../../server/src/subtitle-languages'
 import {
   formatCaptionTime,
   isCorrectedWord,
+  phraseLinesOf,
+  subtitlePhraseLines,
   subtitlePhraseRows,
+  type SubtitlePhraseLine,
   type SubtitlePhraseRow,
 } from '@/videobook/subtitles-model'
 
@@ -14,6 +19,7 @@ type Edit = (edits: CaptionEdit[], coalesce?: string | null) => boolean
 
 type SubtitlesTranscriptProps = {
   document: CaptionDocument
+  memory: CaptionLineMemory
   activeWordId: string | null
   selectedWordId: string | null
   selectedPhraseId: string | null
@@ -27,6 +33,7 @@ type SubtitlesTranscriptProps = {
 type PhraseRowProps = {
   row: SubtitlePhraseRow
   document: CaptionDocument
+  lines: SubtitlePhraseLine[]
   activeWordId: string | null
   selectedWordId: string | null
   selected: boolean
@@ -34,9 +41,67 @@ type PhraseRowProps = {
   onSeek: (seconds: number) => void
   onSelectWord: (wordId: string, phraseId: string) => void
   onSelectPhrase: (phraseId: string) => void
+  onEdit: Edit
 }
 
-const PhraseRow = memo(function PhraseRow({ row, document, activeWordId, selectedWordId, selected, disabled, onSeek, onSelectWord, onSelectPhrase }: PhraseRowProps) {
+function consumeEnter(event: KeyboardEvent<HTMLInputElement>, commit: () => void, cancel: () => void) {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    commit()
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    cancel()
+  }
+}
+
+type TranslationFieldProps = {
+  phraseId: string
+  line: SubtitlePhraseLine
+  disabled: boolean
+  onEdit: Edit
+}
+
+function TranslationField({ phraseId, line, disabled, onEdit }: TranslationFieldProps) {
+  const [draft, setDraft] = useState(line.text ?? '')
+  const committed = useRef(false)
+  const name = subtitleLanguageName(line.language)
+  const setLine = (text: string | null) => onEdit([{ op: 'set_phrase_translation', phrase_id: phraseId, language: line.language, text }], `translation:${phraseId}:${line.language}`)
+  const commit = () => {
+    if (committed.current || draft === (line.text ?? '')) return
+    committed.current = true
+    if (!setLine(draft)) {
+      committed.current = false
+      setDraft(line.text ?? '')
+    }
+  }
+  return (
+    <div className="subtitles-phrase-translation" data-edited={line.edited ? 'true' : undefined} data-missing={line.text === null ? 'true' : undefined}>
+      <span className="subtitles-translation-tag" title={name}>{line.language.toUpperCase()}</span>
+      <input
+        type="text"
+        value={draft}
+        maxLength={MAX_CAPTION_TRANSLATION_LENGTH}
+        placeholder="Not translated yet"
+        disabled={disabled}
+        aria-label={`${name} line`}
+        title={line.edited ? 'Written by you' : undefined}
+        onChange={(event) => {
+          committed.current = false
+          setDraft(event.target.value)
+        }}
+        onBlur={commit}
+        onKeyDown={(event) => consumeEnter(event, commit, () => setDraft(line.text ?? ''))}
+      />
+      {line.edited && (
+        <button type="button" disabled={disabled} aria-label={`Use the machine ${name} translation`} title="Use the machine translation" onClick={() => setLine(null)}>
+          <RotateCcw size={12} aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+const PhraseRow = memo(function PhraseRow({ row, document, lines, activeWordId, selectedWordId, selected, disabled, onSeek, onSelectWord, onSelectPhrase, onEdit }: PhraseRowProps) {
   const override = document.phrases[row.index]?.positions[document.aspect]
   return (
     <li className="subtitles-phrase" data-selected={selected ? 'true' : undefined}>
@@ -75,6 +140,9 @@ const PhraseRow = memo(function PhraseRow({ row, document, activeWordId, selecte
           </button>
         ))}
       </div>
+      {lines.map((line) => (
+        <TranslationField key={`${line.language}:${line.edited}:${line.text ?? ''}`} phraseId={row.id} line={line} disabled={disabled} onEdit={onEdit} />
+      ))}
     </li>
   )
 })
@@ -82,16 +150,6 @@ const PhraseRow = memo(function PhraseRow({ row, document, activeWordId, selecte
 function seconds(value: string): number | null {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? Math.round(parsed * 1000) / 1000 : null
-}
-
-function consumeEnter(event: KeyboardEvent<HTMLInputElement>, commit: () => void, cancel: () => void) {
-  if (event.key === 'Enter') {
-    event.preventDefault()
-    commit()
-  } else if (event.key === 'Escape') {
-    event.preventDefault()
-    cancel()
-  }
 }
 
 type WordEditorProps = {
@@ -200,6 +258,7 @@ function WordEditor({ document, word, phraseId, disabled, onEdit, onSeek }: Word
 export function SubtitlesTranscript(props: SubtitlesTranscriptProps) {
   const { document, activeWordId, selectedWordId, selectedPhraseId, disabled } = props
   const rows = useMemo(() => subtitlePhraseRows(document), [document])
+  const lines = useMemo(() => subtitlePhraseLines(document, props.memory), [document, props.memory])
   const selectedWord = selectedWordId ? document.words.find((word) => word.id === selectedWordId) ?? null : null
   const phraseOfSelected = selectedWord ? rows.find((row) => row.words.some((word) => word.id === selectedWord.id))?.id ?? null : null
   return (
@@ -227,6 +286,7 @@ export function SubtitlesTranscript(props: SubtitlesTranscriptProps) {
               key={row.id}
               row={row}
               document={document}
+              lines={phraseLinesOf(lines, row.id)}
               activeWordId={contains(activeWordId)}
               selectedWordId={contains(selectedWordId)}
               selected={row.id === selectedPhraseId}
@@ -234,6 +294,7 @@ export function SubtitlesTranscript(props: SubtitlesTranscriptProps) {
               onSeek={props.onSeek}
               onSelectWord={props.onSelectWord}
               onSelectPhrase={props.onSelectPhrase}
+              onEdit={props.onEdit}
             />
           )
         })}

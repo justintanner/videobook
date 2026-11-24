@@ -1,8 +1,10 @@
+import { splitUnspacedText } from "../transcript-words.js";
 import type { CaptionRegion } from "./analysis.js";
-import type { CaptionAspect, CaptionDocument, CaptionPreset } from "./model.js";
-import { CAPTION_ASPECT_SIZES } from "./model.js";
+import type { CaptionAspect, CaptionDocument, CaptionPreset, CaptionTranslationLine } from "./model.js";
+import { CAPTION_ASPECT_SIZES, captionDisplayLanguage } from "./model.js";
 import { captionPresetFont } from "./fonts.js";
 import { containRect } from "./geometry.js";
+import { phraseTranslationTexts } from "./lines.js";
 import { captionCase, isUnspacedText, textDirection } from "./script.js";
 import type { CaptionCue, TimedCaptionWord } from "./timing.js";
 import { captionCues } from "./timing.js";
@@ -32,6 +34,22 @@ export interface CaptionLayoutLine {
 
 export type CaptionPlacement = "phrase" | "global" | "auto" | "avoided";
 
+export interface CaptionTranslationLayoutLine {
+  text: string;
+  width: number;
+}
+
+export interface CaptionTranslationBlock {
+  language: string;
+  color: string;
+  fontSize: number;
+  lineHeight: number;
+  gap: number;
+  height: number;
+  lines: CaptionTranslationLayoutLine[];
+  direction: "ltr" | "rtl";
+}
+
 export interface CaptionBlock {
   cue: CaptionCue;
   fontSize: number;
@@ -39,6 +57,8 @@ export interface CaptionBlock {
   lineHeight: number;
   gap: number;
   lines: CaptionLayoutLine[];
+  textHeight: number;
+  translations: CaptionTranslationBlock[];
   x: number;
   y: number;
   width: number;
@@ -73,6 +93,9 @@ const BASE_FONT_RATIO: Record<CaptionPreset, number> = { karaoke: 0.066, stack: 
 const MAX_LINES: Record<CaptionPreset, number> = { karaoke: 2, stack: 4, punch: 1 };
 const LINE_HEIGHT: Record<CaptionPreset, number> = { karaoke: 1.18, stack: 0.98, punch: 1 };
 const STACK_WORDS_PER_LINE = 2;
+const TRANSLATION_MAX_LINES = 2;
+const TRANSLATION_LINE_HEIGHT = 1.2;
+const TRANSLATION_GAP = 0.3;
 const MIN_FONT_SCALE = 0.6;
 const SHRINK_STEP = 0.92;
 const EDGE_MARGIN = 0.02;
@@ -98,12 +121,8 @@ export function baseCaptionFontSize(document: CaptionDocument, aspect: CaptionAs
   return Math.round(Math.min(frame.width, frame.height) * BASE_FONT_RATIO[document.style.preset] * document.style.fontScale);
 }
 
-function captionLanguage(document: CaptionDocument): string | null {
-  return document.language === "original" ? document.sourceLanguage : document.language;
-}
-
 function measured(words: readonly TimedCaptionWord[], document: CaptionDocument, font: CaptionFontSpec, measure: CaptionMeasure): CaptionLayoutWord[] {
-  const language = captionLanguage(document);
+  const language = captionDisplayLanguage(document);
   return words.map((word) => {
     const display = captionCase(word.text, document.style.uppercase, language);
     return { ...word, display, width: measure(display, font) };
@@ -178,6 +197,90 @@ function shrinkingSizes(base: number): number[] {
   const sizes: number[] = [];
   for (let size = base; size > minimum; size = Math.floor(size * SHRINK_STEP)) sizes.push(size);
   return [...sizes, minimum];
+}
+
+interface TranslationToken {
+  text: string;
+  spaced: boolean;
+}
+
+interface TranslationLineTokens {
+  tokens: TranslationToken[];
+  width: number;
+}
+
+interface FittedTranslation {
+  fontSize: number;
+  lines: TranslationLineTokens[];
+}
+
+export function translationBaseFontSize(document: CaptionDocument, aspect: CaptionAspect, scale: number): number {
+  const frame = CAPTION_ASPECT_SIZES[aspect];
+  return Math.max(1, Math.round(Math.min(frame.width, frame.height) * BASE_FONT_RATIO.karaoke * document.style.fontScale * scale));
+}
+
+function translationTokens(text: string): TranslationToken[] {
+  return text.split(/\s+/u).filter((chunk) => chunk.length > 0).flatMap((chunk) => {
+    const parts = isUnspacedText(chunk) ? splitUnspacedText(chunk) : [chunk];
+    return parts.map((part, index) => ({ text: part, spaced: index === 0 }));
+  });
+}
+
+function joinTokens(tokens: readonly TranslationToken[]): string {
+  return tokens.map((token, index) => (index > 0 && token.spaced ? ` ${token.text}` : token.text)).join("");
+}
+
+function wrapTokens(tokens: readonly TranslationToken[], font: CaptionFontSpec, limit: number, measure: CaptionMeasure): TranslationLineTokens[] {
+  const space = measure(" ", font);
+  const lines: TranslationLineTokens[] = [];
+  let current: TranslationLineTokens = { tokens: [], width: 0 };
+  for (const token of tokens) {
+    const width = measure(token.text, font);
+    const extra = current.tokens.length > 0 && token.spaced ? space + width : width;
+    if (current.tokens.length > 0 && current.width + extra > limit) {
+      lines.push(current);
+      current = { tokens: [token], width };
+    } else {
+      current = { tokens: [...current.tokens, token], width: current.width + extra };
+    }
+  }
+  return current.tokens.length > 0 ? [...lines, current] : lines;
+}
+
+function fitTranslation(text: string, line: CaptionTranslationLine, document: CaptionDocument, aspect: CaptionAspect, measure: CaptionMeasure): FittedTranslation {
+  const face = captionPresetFont(document.style.preset);
+  const tokens = translationTokens(captionCase(text, document.style.uppercase, line.language));
+  const limit = captionTextWidthLimit(aspect);
+  let fitted: FittedTranslation = { fontSize: 1, lines: [] };
+  for (const size of shrinkingSizes(translationBaseFontSize(document, aspect, line.scale))) {
+    fitted = { fontSize: size, lines: wrapTokens(tokens, { family: face.family, weight: face.weight, size }, limit, measure) };
+    if (fitted.lines.length <= TRANSLATION_MAX_LINES && fitted.lines.every((candidate) => candidate.width <= limit)) break;
+  }
+  return fitted;
+}
+
+function translationBlock(text: string, line: CaptionTranslationLine, document: CaptionDocument, aspect: CaptionAspect, measure: CaptionMeasure): CaptionTranslationBlock {
+  const fitted = fitTranslation(text, line, document, aspect, measure);
+  const lineHeight = fitted.fontSize * TRANSLATION_LINE_HEIGHT;
+  return {
+    language: line.language,
+    color: line.color,
+    fontSize: fitted.fontSize,
+    lineHeight,
+    gap: fitted.fontSize * TRANSLATION_GAP,
+    height: fitted.lines.length * lineHeight,
+    lines: fitted.lines.map((tokens) => ({ text: joinTokens(tokens.tokens), width: tokens.width })),
+    direction: textDirection(text),
+  };
+}
+
+function translationBlocks(cue: CaptionCue, document: CaptionDocument, aspect: CaptionAspect, measure: CaptionMeasure): CaptionTranslationBlock[] {
+  const looks = new Map((document.translations ?? []).map((line) => [line.language, line]));
+  const phrase = document.phrases.find((candidate) => candidate.id === cue.phraseId);
+  return phraseTranslationTexts(document, phrase).flatMap(({ language, text }) => {
+    const look = looks.get(language);
+    return look ? [translationBlock(text, look, document, aspect, measure)] : [];
+  });
 }
 
 function phraseRegions(cue: CaptionCue, frames: readonly CaptionRegionFrame[]): CaptionRegion[] {
@@ -256,11 +359,14 @@ function placement(document: CaptionDocument, cue: CaptionCue, aspect: CaptionAs
 function layoutCue(cue: CaptionCue, input: CaptionLayoutInput, aspect: CaptionAspect): CaptionBlock {
   const { document, measure } = input;
   const fitted = fitLines(cue.words, document, aspect, measure);
+  const translations = translationBlocks(cue, document, aspect, measure);
   const lineHeight = fitted.fontSize * LINE_HEIGHT[document.style.preset];
   const gap = document.style.preset === "stack" ? fitted.fontSize * 0.06 : 0;
-  const width = Math.max(1, ...fitted.lines.map((line) => line.width));
+  const translationWidths = translations.flatMap((block) => block.lines.map((line) => line.width));
+  const width = Math.max(1, ...fitted.lines.map((line) => line.width), ...translationWidths);
   const visibleLines = document.style.preset === "punch" ? Math.min(1, fitted.lines.length) : fitted.lines.length;
-  const height = visibleLines * lineHeight + Math.max(0, visibleLines - 1) * gap;
+  const textHeight = visibleLines * lineHeight + Math.max(0, visibleLines - 1) * gap;
+  const height = translations.reduce((sum, block) => sum + block.gap + block.height, textHeight);
   const frame = CAPTION_ASPECT_SIZES[aspect];
   const preferred = placement(document, cue, aspect);
   const automatic = preferred.source === "auto"
@@ -274,6 +380,8 @@ function layoutCue(cue: CaptionCue, input: CaptionLayoutInput, aspect: CaptionAs
     lineHeight,
     gap,
     lines: fitted.lines,
+    textHeight,
+    translations,
     ...box,
     centerY: automatic.centerY,
     placement: automatic.moved ? "avoided" : preferred.source,

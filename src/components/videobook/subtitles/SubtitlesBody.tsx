@@ -7,6 +7,9 @@ import {
   activeSubtitleWordId,
   phraseOfWord,
   placeholderCaptionDocument,
+  resolvedSubtitleDocument,
+  subtitleLineMemory,
+  subtitleLineProgress,
   subtitlesPreparationLabel,
 } from '@/videobook/subtitles-model'
 import { SubtitlesControls } from './SubtitlesControls'
@@ -97,7 +100,9 @@ export function SubtitlesBody({ editor }: { editor: SubtitleEditor }) {
   const [activeWordId, setActiveWordId] = useState<string | null>(null)
   const read = state.read
   const placeholder = useMemo(() => (read ? placeholderCaptionDocument(read) : null), [read])
-  const document = state.document ?? placeholder
+  const resolved = useMemo(() => (state.document ? resolvedSubtitleDocument(state.document, read) : null), [read, state.document])
+  const lineProgress = useMemo(() => (state.document ? subtitleLineProgress(read, state.document) : []), [read, state.document])
+  const document = resolved ?? placeholder
   const editable = state.document !== null && read?.status === 'ready' && !read.draft?.stale_source && state.save !== 'conflict' && !state.rendering
   const regions = read?.regions ?? NO_REGIONS
   const fps = document?.source.fps ?? 30
@@ -158,6 +163,7 @@ export function SubtitlesBody({ editor }: { editor: SubtitleEditor }) {
       {state.document && (
         <SubtitlesTranscript
           document={state.document}
+          memory={subtitleLineMemory(read)}
           activeWordId={activeWordId}
           selectedWordId={selectedWordId}
           selectedPhraseId={selectedPhraseId}
@@ -177,7 +183,10 @@ export function SubtitlesBody({ editor }: { editor: SubtitleEditor }) {
           positionTarget={positionTarget}
           guides={guides}
           disabled={!editable}
+          busy={state.preparing || state.renderQueued}
+          lineProgress={lineProgress}
           onEdit={edit}
+          onTranslateLines={(again) => void editor.prepare(again ? ['lines'] : [])}
           onLanguage={(language) => void editor.setLanguage(language)}
           onPositionTarget={setPositionTarget}
           onGuides={setGuides}

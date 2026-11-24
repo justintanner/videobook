@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyCaptionEdits } from "./edits.js";
 import type { CaptionMeasure, CaptionRegionFrame } from "./layout.js";
-import { activeCaptionBlock, baseCaptionFontSize, captionTextWidthLimit, DEFAULT_CAPTION_POSITIONS, layoutCaptions } from "./layout.js";
+import { activeCaptionBlock, baseCaptionFontSize, captionTextWidthLimit, DEFAULT_CAPTION_POSITIONS, layoutCaptions, translationBaseFontSize } from "./layout.js";
 import type { CaptionDocument } from "./model.js";
 import { captionOutputFps, containRect, displayDimensions } from "./geometry.js";
 import { captionWordLook, cueVisibility, punchWord } from "./motion.js";
@@ -118,5 +118,59 @@ describe("caption layout", () => {
     expect(captionWordLook(second, 0.35, document.style, 70, false).highlighted).toBe(false);
     expect(cueVisibility(block!.cue, block!.cue.start, 70).opacity).toBe(0);
     expect(cueVisibility(block!.cue, block!.cue.start + 0.2, 70).opacity).toBeCloseTo(1, 6);
+  });
+});
+
+describe("translated line layout", () => {
+  function translated(texts: string[], lines: Array<{ language: string; text: string }>): CaptionDocument {
+    const base = documentOf(texts);
+    return applyCaptionEdits(base, [
+      { op: "set_translations", translations: lines.map(({ language }) => ({ language })) },
+      ...lines.map(({ language, text }) => ({ op: "set_phrase_translation" as const, phrase_id: base.phrases[0].id, language, text })),
+    ]);
+  }
+
+  it("stacks a plain translated line under the phrase in one block around the same centre", () => {
+    const plain = layoutCaptions({ document: documentOf(["hello", "world"]), regions: [], measure })[0];
+    const document = applyCaptionEdits(translated(["hello", "world"], [{ language: "th", text: "สวัสดีชาวโลก" }]), [
+      { op: "set_translations", translations: [{ language: "th", color: "#9BE7FF" }] },
+    ]);
+    const [block] = layoutCaptions({ document, regions: [], measure });
+    const [line] = block.translations;
+    expect(line).toMatchObject({ language: "th", color: "#9BE7FF", fontSize: translationBaseFontSize(document, "9:16", 0.6), direction: "ltr" });
+    expect(line.fontSize).toBe(43);
+    expect(line.lines.map((row) => row.text)).toEqual(["สวัสดีชาวโลก"]);
+    expect(block.textHeight).toBeCloseTo(plain.height, 6);
+    expect(block.height).toBeCloseTo(plain.height + line.gap + line.height, 6);
+    expect(block.centerY).toBeCloseTo(plain.centerY, 6);
+    expect(block.y).toBeLessThan(plain.y);
+    expect(block.lines).toEqual(plain.lines);
+  });
+
+  it("shrinks a long line to fit two rows inside the safe width", () => {
+    const text = Array.from({ length: 12 }, (_, index) => `word${index}`).join(" ");
+    const document = translated(["hi"], [{ language: "es", text }]);
+    const [line] = layoutCaptions({ document, regions: [], measure })[0].translations;
+    expect(line.fontSize).toBe(39);
+    expect(line.lines.map((row) => row.text)).toEqual([
+      "word0 word1 word2 word3 word4 word5",
+      "word6 word7 word8 word9 word10 word11",
+    ]);
+    for (const row of line.lines) expect(row.width).toBeLessThanOrEqual(captionTextWidthLimit("9:16") + 1e-6);
+  });
+
+  it("breaks unspaced lines between words, sets right-to-left lines and skips phrases or languages without a line", () => {
+    const thai = "ฉันชอบกินข้าวมากแมวนอนอยู่บนโต๊ะ".repeat(3);
+    const document = translated(["hi"], [{ language: "th", text: thai }, { language: "ar", text: "مرحبا بالعالم" }]);
+    const [block] = layoutCaptions({ document, regions: [], measure });
+    const [thaiLine, arabicLine] = block.translations;
+    expect(thaiLine.lines.length).toBeGreaterThan(1);
+    expect(thaiLine.lines.map((row) => row.text).join("")).toBe(thai);
+    expect(arabicLine).toMatchObject({ language: "ar", direction: "rtl", lines: [{ text: "مرحبا بالعالم" }] });
+    expect(block.height).toBeCloseTo(block.textHeight + thaiLine.gap + thaiLine.height + arabicLine.gap + arabicLine.height, 6);
+    const removed = applyCaptionEdits(document, [{ op: "set_translations", translations: [] }]);
+    expect(layoutCaptions({ document: removed, regions: [], measure })[0].translations).toEqual([]);
+    const blank = applyCaptionEdits(document, [{ op: "set_phrase_translation", phrase_id: document.phrases[0].id, language: "th", text: "" }]);
+    expect(layoutCaptions({ document: blank, regions: [], measure })[0].translations.map((line) => line.language)).toEqual(["ar"]);
   });
 });
