@@ -45,7 +45,7 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const aspect = useMemo(() => graphicsCanvas(source, framing), [source, framing])
   const canvasSource = useMemo(() => ({ ...source, ...aspect }), [source, aspect])
-  const stage = useStageSize(containerRef, aspect, '.confirm-graphics', 0, 'container')
+  const stage = useStageSize(containerRef, aspect, '.confirm-graphics', 0, 'grid')
   const frameWidth = stage.width ? Math.max(stage.width, MIN_TRANSPORT_WIDTH) : undefined
   const { onLayout } = props
 

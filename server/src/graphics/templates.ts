@@ -9,6 +9,7 @@ import { queue } from "../queue.js";
 import type { WatermarkPlatform } from "../watermark-platform.js";
 import { WATERMARK_PLATFORM_LABELS, WATERMARK_PLATFORMS } from "../watermark-platform.js";
 import { GraphicsServiceError } from "./errors.js";
+import { withoutGraphicsLogos } from "./logo.js";
 import type { GraphicsDocument } from "./model.js";
 import { MAX_GRAPHICS_NAME_LENGTH, parseGraphicsDocument } from "./model.js";
 import { clearGraphicsSlots } from "./slots.js";
@@ -130,7 +131,7 @@ function requireRoom(count: number): void {
 }
 
 function templateDocument(document: GraphicsDocument): GraphicsDocument {
-  const parsed = parseGraphicsDocument(clearGraphicsSlots(document));
+  const parsed = parseGraphicsDocument(clearGraphicsSlots(withoutGraphicsLogos(document)));
   if (!parsed.ok) throw new GraphicsServiceError("invalid", parsed.error, { issues: parsed.issues });
   return parsed.document;
 }

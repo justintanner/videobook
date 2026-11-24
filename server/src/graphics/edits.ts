@@ -1,6 +1,7 @@
 import type {
   GraphicsDocument,
   GraphicsImageLayer,
+  GraphicsImageRole,
   GraphicsLayer,
   GraphicsLayerInput,
   GraphicsPlate,
@@ -19,6 +20,7 @@ import {
   DEFAULT_GRAPHICS_PLATE,
   definedFields,
   GRAPHICS_LAYER_KINDS,
+  isGraphicsLogoLayer,
   MAX_GRAPHICS_ITEMS,
   MAX_GRAPHICS_LAYERS,
   MAX_GRAPHICS_NAME_LENGTH,
@@ -26,10 +28,12 @@ import {
   normalizeGraphicsText,
   parseGraphicsDocument,
   textItemFrom,
+  withoutGraphicsImageRole,
 } from "./model.js";
 import { fillGraphicsSlots, graphicsSlotValues, writeGraphicsSlot } from "./slots.js";
 
 type PlatePatch = Partial<GraphicsPlate> | null;
+type ImagePatch = Partial<Pick<GraphicsImageLayer, "artifactId" | "size">> & { role?: GraphicsImageRole | null };
 
 export type GraphicsEdit =
   | { op: "add_layer"; layer: GraphicsLayerInput; index?: number }
@@ -44,7 +48,7 @@ export type GraphicsEdit =
   | { op: "remove_item"; layer_id: string; item_id: string }
   | { op: "move_item"; layer_id: string; item_id: string; index: number }
   | { op: "set_item"; layer_id: string; item_id: string; item: GraphicsTextItemInput }
-  | { op: "set_image"; layer_id: string; image: Partial<Pick<GraphicsImageLayer, "artifactId" | "size">> }
+  | { op: "set_image"; layer_id: string; image: ImagePatch }
   | { op: "set_qr"; layer_id: string; qr: Partial<Pick<GraphicsQrLayer, "url" | "slot" | "size" | "style" | "dark" | "light" | "level">> }
   | { op: "set_scrim"; layer_id: string; scrim: Partial<Pick<GraphicsScrimLayer, "edge" | "height" | "color" | "strength">> }
   | { op: "set_slot_text"; slot: GraphicsSlot; text: string }
@@ -152,7 +156,8 @@ function addLayer(document: GraphicsDocument, input: GraphicsLayerInput, index: 
   const at = index ?? document.layers.length;
   checkIndex(at, document.layers.length, "Layer index");
   const { layer, nextId } = createGraphicsLayer(input, document.nextId);
-  return { ...document, layers: insertAt(document.layers, at, layer), nextId };
+  const added = { ...document, layers: insertAt(document.layers, at, layer), nextId };
+  return isGraphicsLogoLayer(layer) ? oneLogo(added, layer.id) : added;
 }
 
 function removeLayer(document: GraphicsDocument, layerId: string): GraphicsDocument {
@@ -169,7 +174,7 @@ function duplicateLayer(document: GraphicsDocument, layerId: string): GraphicsDo
   checkLayerRoom(document);
   const original = document.layers[index];
   const { layer, nextId } = createGraphicsLayer(original, document.nextId);
-  const copy = { ...layer, name: copyName(original.name) };
+  const copy = { ...withoutGraphicsImageRole(layer), name: copyName(original.name) };
   return { ...document, layers: insertAt(document.layers, index + 1, copy), nextId };
 }
 
@@ -253,9 +258,20 @@ function setItem(document: GraphicsDocument, layerId: string, itemId: string, pa
   return replaceLayer(document, { ...layer, items });
 }
 
-function setImage(document: GraphicsDocument, layerId: string, patch: Partial<Pick<GraphicsImageLayer, "artifactId" | "size">>): GraphicsDocument {
+function withRole(layer: GraphicsImageLayer, role: GraphicsImageRole | null | undefined): GraphicsImageLayer {
+  if (role === undefined) return layer;
+  return role === null ? withoutGraphicsImageRole(layer) : { ...layer, role };
+}
+
+function oneLogo(document: GraphicsDocument, logoId: string): GraphicsDocument {
+  return { ...document, layers: document.layers.map((layer) => (layer.id !== logoId && isGraphicsLogoLayer(layer) ? withoutGraphicsImageRole(layer) : layer)) };
+}
+
+function setImage(document: GraphicsDocument, layerId: string, patch: ImagePatch): GraphicsDocument {
   const layer = requireKind(document, layerId, "image");
-  return replaceLayer(document, { ...layer, ...definedFields({ artifactId: patch.artifactId, size: patch.size }) });
+  const next = withRole({ ...layer, ...definedFields({ artifactId: patch.artifactId, size: patch.size }) }, patch.role);
+  const replaced = replaceLayer(document, next);
+  return patch.role === "logo" ? oneLogo(replaced, layerId) : replaced;
 }
 
 function setQr(
@@ -297,7 +313,12 @@ function setSlotText(document: GraphicsDocument, slot: GraphicsSlot, text: strin
 function applyTemplate(document: GraphicsDocument, template: GraphicsDocument): GraphicsDocument {
   const parsed = parseGraphicsDocument(template);
   if (!parsed.ok) throw new EditFailure("invalid", `Template: ${parsed.error}`);
-  const replaced = appendGraphicsLayers({ ...document, layers: [] }, parsed.document.layers);
+  const logos = document.layers.filter(isGraphicsLogoLayer);
+  const look = logos.length > 0 ? parsed.document.layers.filter((layer) => !isGraphicsLogoLayer(layer)) : parsed.document.layers;
+  if (look.length + logos.length > MAX_GRAPHICS_LAYERS) {
+    throw new EditFailure("layer_limit", `This template and the logo come to more than ${MAX_GRAPHICS_LAYERS} layers.`);
+  }
+  const replaced = appendGraphicsLayers({ ...document, layers: [] }, [...look, ...logos]);
   return fillGraphicsSlots(replaced, graphicsSlotValues(document), { overwrite: true });
 }
 

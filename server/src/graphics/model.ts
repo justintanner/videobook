@@ -28,8 +28,10 @@ export const GRAPHICS_CASES = ["none", "upper"] as const;
 export const GRAPHICS_QR_STYLES = ["plain", "tile"] as const;
 export const GRAPHICS_QR_LEVELS = ["L", "M", "Q", "H"] as const;
 export const GRAPHICS_SCRIM_EDGES = ["top", "bottom"] as const;
+export const GRAPHICS_IMAGE_ROLES = ["logo"] as const;
 
 export type GraphicsLayerKind = typeof GRAPHICS_LAYER_KINDS[number];
+export type GraphicsImageRole = typeof GRAPHICS_IMAGE_ROLES[number];
 export type GraphicsAnchor = typeof GRAPHICS_ANCHORS[number];
 export type GraphicsSpace = typeof GRAPHICS_SPACES[number];
 export type GraphicsTextSlot = typeof GRAPHICS_TEXT_SLOTS[number];
@@ -149,6 +151,7 @@ const imageLayerSchema = z.object({
   artifactId: z.string({ error: "Image layers name an image artifact." }).min(1, "Image layers name an image artifact.").max(200, "Artifact ids are limited to 200 characters."),
   position: positionSchema,
   size: between(0.02, 1, "Image size must be between 0.02 and 1 of the frame's short side."),
+  role: oneOf(GRAPHICS_IMAGE_ROLES, "Image role").optional(),
 }).strict();
 
 const urlMessage = `QR URLs start with http:// or https:// and are at most ${MAX_GRAPHICS_URL_LENGTH} characters.`;
@@ -310,7 +313,7 @@ export type GraphicsTextLayerInput = LayerInputFields & PlacedInputFields & Part
   items?: readonly GraphicsTextItemInput[];
 };
 
-export type GraphicsImageLayerInput = LayerInputFields & PlacedInputFields & Partial<Pick<GraphicsImageLayer, "size">> & {
+export type GraphicsImageLayerInput = LayerInputFields & PlacedInputFields & Partial<Pick<GraphicsImageLayer, "size" | "role">> & {
   kind: "image";
   artifactId: string;
 };
@@ -467,4 +470,13 @@ export function appendGraphicsLayers(document: GraphicsDocument, inputs: readonl
 
 export function graphicsDocumentFromLayers(inputs: readonly GraphicsLayerInput[]): GraphicsDocument {
   return appendGraphicsLayers(emptyGraphicsDocument(), inputs);
+}
+
+export function isGraphicsLogoLayer(layer: GraphicsLayer): layer is GraphicsImageLayer {
+  return layer.kind === "image" && layer.role === "logo";
+}
+
+export function withoutGraphicsImageRole<T extends GraphicsLayer>(layer: T): T {
+  if (layer.kind !== "image" || layer.role === undefined) return layer;
+  return Object.fromEntries(Object.entries(layer).filter(([key]) => key !== "role")) as T;
 }

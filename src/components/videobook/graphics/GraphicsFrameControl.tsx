@@ -2,6 +2,26 @@ import { useRef, type PointerEvent } from 'react'
 import type { GraphicsFraming } from '../../../../server/src/graphics/frame'
 import { graphicsFocusPoint } from '@/videobook/graphics-pointer'
 
+const ASPECTS: readonly GraphicsFraming['aspect'][] = ['original', '9:16', '1:1', '4:5', '16:9']
+const FITS: readonly GraphicsFraming['fit'][] = ['crop', 'blur']
+const FIT_LABELS: Record<GraphicsFraming['fit'], string> = { crop: 'Crop', blur: 'Blur' }
+
+function Segments<T extends string>({ label, value, options, labels, onChange }: {
+  label: string
+  value: T
+  options: readonly T[]
+  labels: (option: T) => string
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="graphics-frame-segments" role="group" aria-label={label}>
+      {options.map((option) => (
+        <button key={option} type="button" aria-pressed={option === value} onClick={() => onChange(option)}>{labels(option)}</button>
+      ))}
+    </div>
+  )
+}
+
 export function GraphicsFrameControl({ frame, source, mediaUrl, disabled, subtitleAspect, onChange }: {
   frame: GraphicsFraming
   source: { width: number; height: number }
@@ -18,12 +38,10 @@ export function GraphicsFrameControl({ frame, source, mediaUrl, disabled, subtit
   }
   return (
     <fieldset className="graphics-frame-control" disabled={disabled}>
-      <legend>Frame</legend>
+      <legend className="graphics-section-label">Frame</legend>
       {subtitleAspect && <p className="graphics-muted">Using the subtitle draft’s {subtitleAspect} frame and background. Turn off “With subtitles” to choose another frame.</p>}
-      <label>Aspect <select aria-label="Frame aspect" value={frame.aspect} onChange={(event) => onChange({ ...frame, aspect: event.target.value as GraphicsFraming['aspect'] })}>
-        {(['original', '9:16', '1:1', '4:5', '16:9'] as const).map((aspect) => <option key={aspect} value={aspect}>{aspect === 'original' ? 'Original' : aspect}</option>)}
-      </select></label>
-      {frame.aspect !== 'original' && <label> Fit <select aria-label="Frame fit" value={frame.fit} onChange={(event) => onChange({ ...frame, fit: event.target.value as GraphicsFraming['fit'] })}><option value="crop">Crop</option><option value="blur">Blur</option></select></label>}
+      <Segments label="Frame aspect" value={frame.aspect} options={ASPECTS} labels={(aspect) => (aspect === 'original' ? 'Original' : aspect)} onChange={(aspect) => onChange({ ...frame, aspect })} />
+      {frame.aspect !== 'original' && <Segments label="Frame fit" value={frame.fit} options={FITS} labels={(fit) => FIT_LABELS[fit]} onChange={(fit) => onChange({ ...frame, fit })} />}
       {frame.aspect !== 'original' && frame.fit === 'crop' && <>
         <p className="graphics-muted">Drag the focus point to choose what stays in the frame.</p>
         <div className="graphics-focus-map" role="group" aria-label="Crop focus point" style={{ aspectRatio: `${source.width}/${source.height}`, position: 'relative', maxWidth: 240, overflow: 'hidden', touchAction: 'none' }}

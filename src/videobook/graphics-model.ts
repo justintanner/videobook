@@ -6,7 +6,9 @@ import {
   GRAPHICS_ANCHORS,
   GRAPHICS_SPACES,
   graphicsDocumentFromLayers,
+  isGraphicsLogoLayer,
   isGraphicsUrl,
+  MAX_GRAPHICS_ITEMS,
   MAX_GRAPHICS_NAME_LENGTH,
   nextGraphicsId,
   parseGraphicsDocument,
@@ -28,7 +30,14 @@ import {
   type GraphicsSuggestKind,
   type GraphicsSuggestLanguage,
 } from '../../server/src/graphics/slots'
-import { GRAPHICS_BLOCK_SLOTS, graphicsSlotBlock, type GraphicsBlockText } from '../../server/src/graphics/starters'
+import { GRAPHICS_BLOCK_SLOTS, graphicsSlotBlock, graphicsSlotItemInput, type GraphicsBlockSlot, type GraphicsBlockText } from '../../server/src/graphics/starters'
+import {
+  graphicsLogoFrom,
+  graphicsLogoLayer,
+  graphicsLogoLayerInput,
+  GRAPHICS_LOGO_NAME,
+  type GraphicsLogo,
+} from '../../server/src/graphics/logo'
 import {
   graphicsDrawnBox,
   graphicsLayerCovers,
@@ -84,6 +93,10 @@ const watermarkSchema = z.object({
   qr: z.record(z.string(), z.unknown()).nullable(),
 })
 
+const positionSchema = z.object({ anchor: z.enum(GRAPHICS_ANCHORS), x: z.number(), y: z.number(), space: z.enum(GRAPHICS_SPACES) })
+
+const logoSchema = z.object({ asset_id: z.string(), position: positionSchema, size: z.number(), opacity: z.number() })
+
 const regionFrameSchema = z.object({
   time: z.number(),
   regions: z.array(z.object({
@@ -110,6 +123,7 @@ const readSchema = z.object({
   starters: z.array(z.object({ id: z.string(), name: z.string(), document: z.unknown() })),
   templates: z.array(templateSchema).default([]),
   default_template_id: z.string().default('tiktok-title'),
+  logo: logoSchema.nullable().default(null),
   images: z.record(z.string(), imageSchema),
   render: renderSchema.nullable(),
   burned: burnedSchema.nullable(),
@@ -122,11 +136,12 @@ type ReadWire = z.infer<typeof readSchema>
 type GraphicsStarterChoice = { id: string; name: string; document: GraphicsDocument }
 type GraphicsSavedTemplate = Omit<z.infer<typeof templateSchema>, 'document'> & { document: GraphicsDocument }
 type GraphicsWatermarkRead = Omit<z.infer<typeof watermarkSchema>, 'look' | 'qr'> & { look: GraphicsDocument; qr: GraphicsQrLayerInput | null }
-export type GraphicsRead = Omit<ReadWire, 'document' | 'starters' | 'templates' | 'watermark'> & {
+export type GraphicsRead = Omit<ReadWire, 'document' | 'starters' | 'templates' | 'watermark' | 'logo'> & {
   document: GraphicsDocument
   starters: GraphicsStarterChoice[]
   templates: GraphicsSavedTemplate[]
   watermark: GraphicsWatermarkRead | null
+  logo: GraphicsLogo | null
 }
 export type GraphicsRenderStatus = z.infer<typeof renderSchema>
 export type GraphicsBurned = z.infer<typeof burnedSchema>
@@ -137,6 +152,12 @@ function documentOf(value: unknown): GraphicsDocument {
   const parsed = parseGraphicsDocument(value)
   if (!parsed.ok) throw new Error(parsed.error)
   return parsed.document
+}
+
+function logoOf(value: z.infer<typeof logoSchema> | null): GraphicsLogo | null {
+  if (!value) return null
+  const parsed = graphicsLogoFrom({ artifactId: value.asset_id, position: value.position, size: value.size, opacity: value.opacity })
+  return parsed.ok ? parsed.logo : null
 }
 
 function qrLayerInput(value: Record<string, unknown> | null): GraphicsQrLayerInput | null {
@@ -153,6 +174,7 @@ export function parseGraphicsRead(value: unknown): GraphicsRead {
     starters: read.starters.map((starter) => ({ id: starter.id, name: starter.name, document: documentOf(starter.document) })),
     templates: read.templates.map((template) => ({ ...template, document: documentOf(template.document) })),
     watermark: read.watermark && { ...read.watermark, look: documentOf(read.watermark.look), qr: qrLayerInput(read.watermark.qr) },
+    logo: logoOf(read.logo),
   }
 }
 
@@ -171,9 +193,15 @@ export function graphicsTemplateChoices(read: GraphicsRead): GraphicsTemplateCho
   return [...starters, ...saved].map((choice) => ({ ...choice, isDefault: choice.id === read.default_template_id }))
 }
 
-export type GraphicsTemplateOp = 'save_template' | 'rename_template' | 'delete_template' | 'set_default_template' | 'copy_templates' | 'save_watermark' | 'set_watermark_template'
+export type GraphicsTemplateOp = 'save_template' | 'rename_template' | 'delete_template' | 'set_default_template' | 'copy_templates' | 'save_watermark' | 'set_watermark_template' | 'set_logo'
 
 const templateResultSchema = z.object({ template: z.object({ name: z.string() }).optional() })
+
+const logoResultSchema = z.object({ logo: z.object({ asset_id: z.string() }).nullable() })
+
+function logoMessage(value: unknown): string {
+  return logoResultSchema.parse(value).logo ? 'New videos in this book start with this logo.' : 'New videos in this book start without a logo.'
+}
 
 const copyResultSchema = z.object({
   from_book_name: z.string(),
@@ -205,6 +233,7 @@ function watermarkMessage(op: 'save_watermark' | 'set_watermark_template', value
 
 export function graphicsTemplateMessage(op: GraphicsTemplateOp, value: unknown, options: { name?: string; overwrite?: boolean; platform?: WatermarkPlatform } = {}): string {
   if (op === 'copy_templates') return copyMessage(value)
+  if (op === 'set_logo') return logoMessage(value)
   if (op === 'save_watermark' || op === 'set_watermark_template') return watermarkMessage(op, value, options.platform ?? 'tiktok')
   const name = templateResultSchema.parse(value).template?.name ?? options.name ?? 'The template'
   if (op === 'save_template') return options.overwrite ? `Updated “${name}” with this look.` : `Saved “${name}” as a template.`
@@ -381,15 +410,78 @@ export function graphicsDrawnDocument(document: GraphicsDocument, watermark: boo
   return watermark ? watermarkDrawnDocument(document) : document
 }
 
-export type GraphicsImageChoice = { artifactId: string; address: string; label: string }
+export type GraphicsImageChoice = { artifactId: string; address: string; label: string; url: string | null }
 
 export function graphicsImageChoices(assets: readonly GraphicsEditorAsset[], mentions: readonly GraphicsEditorMention[]): GraphicsImageChoice[] {
   const images = new Map(assets.filter((asset) => asset.type === 'image').map((asset) => [asset.artifactId, asset]))
   return mentions.flatMap((mention, index) => {
     const asset = images.get(mention.artifactId)
     if (!asset || mentions.findIndex((entry) => entry.artifactId === mention.artifactId) !== index) return []
-    return [{ artifactId: asset.artifactId, address: mention.cellAddress, label: asset.label }]
+    return [{ artifactId: asset.artifactId, address: mention.cellAddress, label: asset.label, url: asset.mediaUrl }]
   })
+}
+
+export interface GraphicsLogoChoice {
+  artifactId: string
+  label: string
+  url: string | null
+  isDefault: boolean
+}
+
+const MAX_LOGO_CHOICES = 3
+
+function imageIds(document: GraphicsDocument): string[] {
+  return document.layers.flatMap((layer) => (layer.kind === 'image' ? [layer.artifactId] : []))
+}
+
+export function graphicsLogoChoices(document: GraphicsDocument, read: GraphicsRead, imageChoices: readonly GraphicsImageChoice[]): GraphicsLogoChoice[] {
+  const ids = [read.logo?.artifactId, graphicsLogoLayer(document)?.artifactId, ...imageIds(document)]
+    .filter((id): id is string => typeof id === 'string')
+  return [...new Set(ids)].slice(0, MAX_LOGO_CHOICES).map((artifactId) => {
+    const choice = imageChoices.find((entry) => entry.artifactId === artifactId)
+    const image = read.images[artifactId]
+    return {
+      artifactId,
+      label: choice ? `@${choice.address}` : image?.label ?? 'Image',
+      url: image?.url ?? choice?.url ?? null,
+      isDefault: artifactId === read.logo?.artifactId,
+    }
+  })
+}
+
+function logoPlacement(artifactId: string, placement: GraphicsLogo | null): GraphicsLogo | null {
+  if (placement) return { ...placement, artifactId }
+  const fresh = graphicsLogoFrom({ artifactId })
+  return fresh.ok ? fresh.logo : null
+}
+
+export function graphicsLogoPickEdits(document: GraphicsDocument, artifactId: string, placement: GraphicsLogo | null): GraphicsEdit[] {
+  const current = graphicsLogoLayer(document)
+  if (current) return current.artifactId === artifactId ? [] : [{ op: 'set_image', layer_id: current.id, image: { artifactId } }]
+  const existing = document.layers.find((layer) => layer.kind === 'image' && layer.artifactId === artifactId)
+  if (existing) {
+    return [
+      { op: 'set_image', layer_id: existing.id, image: { role: 'logo' } },
+      { op: 'set_layer', layer_id: existing.id, layer: { name: GRAPHICS_LOGO_NAME } },
+    ]
+  }
+  const logo = logoPlacement(artifactId, placement)
+  return logo ? [{ op: 'add_layer', layer: graphicsLogoLayerInput(logo) }] : []
+}
+
+export function graphicsLogoRemoveEdits(document: GraphicsDocument): GraphicsEdit[] {
+  return document.layers.flatMap((layer): GraphicsEdit[] => (isGraphicsLogoLayer(layer) ? [{ op: 'remove_layer', layer_id: layer.id }] : []))
+}
+
+export function graphicsSlotAddEdits(document: GraphicsDocument, slot: GraphicsBlockSlot): GraphicsEdit[] {
+  const holder = graphicsSlotHolder(document, 'headline')
+  const layer = holder ? document.layers.find((entry) => entry.id === holder.layerId) : undefined
+  if (holder && layer?.kind === 'text' && layer.items.length < MAX_GRAPHICS_ITEMS) {
+    const after = layer.items.findIndex((item) => item.id === holder.itemId) + 1
+    return [{ op: 'add_item', layer_id: layer.id, item: graphicsSlotItemInput(slot), index: slot === 'secondary' ? after : layer.items.length }]
+  }
+  const block = graphicsSlotBlock({ [slot]: '' })
+  return block ? [{ op: 'add_layer', layer: block }] : []
 }
 
 export type GraphicsAddKind = GraphicsLayerKind
@@ -421,8 +513,6 @@ export function graphicsSelectionAfterRemove(document: GraphicsDocument, layerId
   if (index < 0) return null
   return document.layers[index - 1]?.id ?? document.layers[index + 1]?.id ?? null
 }
-
-const positionSchema = z.object({ anchor: z.enum(GRAPHICS_ANCHORS), x: z.number(), y: z.number(), space: z.enum(GRAPHICS_SPACES) })
 
 const coverSchema = z.object({ kind: z.enum(['face', 'text']), time: z.number() })
 

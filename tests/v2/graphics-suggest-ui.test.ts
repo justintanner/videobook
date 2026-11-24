@@ -130,8 +130,9 @@ describe('suggested text in the graphics editor', () => {
     expect(html).not.toContain('No credit in this look')
     expect(fields(look(''))).toMatch(/placeholder="Platform\/@handle"[^>]*data-slot="credit"/u)
     const neither = fields(graphicsDocumentFromLayers([{ kind: 'text', items: [{ slot: 'headline', text: '' }] }]))
-    expect(neither).toMatch(/disabled=""[^>]*placeholder="No credit in this look"[^>]*data-slot="credit"|placeholder="No credit in this look"[^>]*disabled=""[^>]*data-slot="credit"/u)
-    expect(neither).toContain('Apply a template with a credit to add one.')
+    expect(neither).not.toMatch(/<input[^>]*data-slot="credit"/u)
+    expect(neither).toMatch(/<div class="graphics-field graphics-field-empty" data-slot="credit">.*Credit<\/span><span class="graphics-muted">Not in this look<\/span><\/span><button type="button" aria-label="Add a credit to this look">/u)
+    expect(neither).toContain('aria-label="Add a second line to this look"')
   })
 
   it('offers the saved handle beside the Credit field when the look carries another one', () => {

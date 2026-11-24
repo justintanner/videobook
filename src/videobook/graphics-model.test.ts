@@ -2,8 +2,8 @@ import { ORIGINAL_GRAPHICS_FRAME } from '../../server/src/graphics/frame'
 import { editGraphicsFrame, graphicsEffectiveFrame } from './graphics-model'
 import { describe, expect, it } from 'vitest'
 import type { GraphicsLayerLayout } from '../../server/src/graphics/layout'
-import { graphicsDocumentFromLayers, type GraphicsDocument, type GraphicsQrLayerInput } from '../../server/src/graphics/model'
-import type { GraphicsEdit } from '../../server/src/graphics/edits'
+import { appendGraphicsLayers, graphicsDocumentFromLayers, type GraphicsDocument, type GraphicsQrLayerInput } from '../../server/src/graphics/model'
+import { applyGraphicsEdits, type GraphicsEdit } from '../../server/src/graphics/edits'
 import { platformWatermarkDocument } from '../../server/src/graphics/starters'
 import { watermarkLayerInputs } from '../../server/src/graphics/watermark-profile'
 import { LIGHTNING_WATERMARK_PROFILE, watermarkProfileFor } from '../../server/src/lightning-defaults'
@@ -33,6 +33,10 @@ import {
   graphicsClearSpotMessage,
   graphicsCoverWarning,
   graphicsLayerPlacements,
+  graphicsLogoChoices,
+  graphicsLogoPickEdits,
+  graphicsLogoRemoveEdits,
+  graphicsSlotAddEdits,
   graphicsSlotText,
   graphicsSuggestKind,
   graphicsTemplateChoices,
@@ -328,8 +332,8 @@ describe('graphics layer list', () => {
   it('offers the image cells of the book once each, in grid order', () => {
     const mentions = [{ artifactId: 'video-1', cellAddress: 'a1' }, { artifactId: 'badge-1', cellAddress: 'a2' }, { artifactId: 'logo-1', cellAddress: 'b2' }, { artifactId: 'badge-1', cellAddress: 'c3' }]
     expect(graphicsImageChoices(assets, mentions)).toEqual([
-      { artifactId: 'badge-1', address: 'a2', label: 'Badge' },
-      { artifactId: 'logo-1', address: 'b2', label: 'Logo' },
+      { artifactId: 'badge-1', address: 'a2', label: 'Badge', url: '/b.png' },
+      { artifactId: 'logo-1', address: 'b2', label: 'Logo', url: '/l.png' },
     ])
   })
 
@@ -346,7 +350,7 @@ describe('graphics layer list', () => {
     const qr = apply(document, [graphicsAddLayer(document, 'qr', { profileUrl: 'https://www.tiktok.com/@jtbkk' })!.edit]).layers.at(-1)
     expect(qr).toMatchObject({ kind: 'qr', slot: 'profile', url: 'https://www.tiktok.com/@jtbkk' })
     expect(apply(document, [graphicsAddLayer(document, 'qr', { profileUrl: 'not a link' })!.edit]).layers.at(-1)).toMatchObject({ url: '' })
-    const image = graphicsAddLayer(document, 'image', { image: { artifactId: 'logo-1', address: 'b2', label: 'Logo' } })!
+    const image = graphicsAddLayer(document, 'image', { image: { artifactId: 'logo-1', address: 'b2', label: 'Logo', url: null } })!
     expect(apply(document, [image.edit]).layers.at(-1)).toMatchObject({ id: image.layerId, kind: 'image', name: 'Logo', artifactId: 'logo-1', position: { anchor: 'top-left', space: 'safe' } })
     expect(graphicsAddLayer(document, 'image')).toBeNull()
   })
@@ -391,7 +395,7 @@ describe('graphics layer list', () => {
       'Profile link',
       'Top shade',
     ])
-    expect(graphicsLayerSummary(document.layers[2]!, images, [{ artifactId: 'logo', address: 'b2', label: 'logo' }])).toBe('@b2')
+    expect(graphicsLayerSummary(document.layers[2]!, images, [{ artifactId: 'logo', address: 'b2', label: 'logo', url: null }])).toBe('@b2')
     expect(graphicsPercent(0.045)).toBe('4.5%')
     expect(graphicsPercent(1)).toBe('100%')
   })
@@ -414,7 +418,7 @@ describe('graphics layer list', () => {
       { op: 'add_item', layer_id: text.layerId, item: { text: THAI_TITLE, slot: 'secondary', size: 0.045 } },
       { op: 'add_item', layer_id: text.layerId, item: { text: 'TikTok/@pomkondeena', slot: 'credit', icon: 'camera', size: 0.03 } },
     ])
-    step([graphicsAddLayer(document, 'image', { image: { artifactId: 'logo-1', address: 'b2', label: 'Logo' } })!.edit])
+    step([graphicsAddLayer(document, 'image', { image: { artifactId: 'logo-1', address: 'b2', label: 'Logo', url: null } })!.edit])
     expect(document.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'image'])
     expect(document.layers[0]).toMatchObject({ edge: 'bottom' })
     expect(document.layers[1]).toMatchObject({
@@ -665,3 +669,62 @@ describe('quick text fields', () => {
   expect(stepGraphicsHistory(undone, 'undo')!.frame).toBeUndefined()
   expect(graphicsEffectiveFrame(framing, null, null)).toEqual(framing)
  })
+
+describe('graphics logo', () => {
+  const bookLogo = { asset_id: 'logo', position: { anchor: 'bottom-right', x: 1, y: 1, space: 'safe' }, size: 0.155, opacity: 0.55 }
+  const choices = [
+    { artifactId: 'logo', address: 'c2', label: 'jtbkk', url: '/files/book/logo/thumb.png' },
+    { artifactId: 'badge', address: 'c1', label: 'badge', url: '/files/book/badge/original.png' },
+  ]
+
+  function appliedEdits(document: GraphicsDocument, edits: GraphicsEdit[]): GraphicsDocument {
+    const result = applyGraphicsEdits(document, edits)
+    if (!result.ok) throw new Error(result.error.message)
+    return result.document
+  }
+
+  it('reads the book logo and offers it, then this video’s images, once each', () => {
+    const document = appendGraphicsLayers(titled(), [{ kind: 'image', name: 'thumb3', artifactId: 'badge' }, { kind: 'image', artifactId: 'logo' }])
+    const current = read({ logo: bookLogo, document })
+    expect(current.logo).toEqual({ artifactId: 'logo', position: bookLogo.position, size: 0.155, opacity: 0.55 })
+    expect(read().logo).toBeNull()
+    expect(graphicsLogoChoices(document, current, choices)).toEqual([
+      { artifactId: 'logo', label: '@c2', url: '/files/book/logo/original.png', isDefault: true },
+      { artifactId: 'badge', label: '@c1', url: '/files/book/badge/original.png', isDefault: false },
+    ])
+  })
+
+  it('marks an image layer as the logo, adds one where the book keeps it, swaps its image and removes it', () => {
+    const document = appendGraphicsLayers(titled(), [{ kind: 'image', name: 'thumb3', artifactId: 'badge', opacity: 0.55 }])
+    expect(appliedEdits(document, graphicsLogoPickEdits(document, 'badge', null)).layers.at(-1)).toMatchObject({ role: 'logo', name: 'Logo', artifactId: 'badge', opacity: 0.55 })
+    const placement = read({ logo: bookLogo }).logo
+    const added = appliedEdits(titled(), graphicsLogoPickEdits(titled(), 'logo', placement))
+    expect(added.layers.at(-1)).toMatchObject({ role: 'logo', artifactId: 'logo', size: 0.155, opacity: 0.55, position: { anchor: 'bottom-right', space: 'safe' } })
+    expect(appliedEdits(titled(), graphicsLogoPickEdits(titled(), 'logo', null)).layers.at(-1)).toMatchObject({ role: 'logo', size: 0.15, opacity: 0.8 })
+    const logoId = added.layers.at(-1)!.id
+    expect(graphicsLogoPickEdits(added, 'badge', placement)).toEqual([{ op: 'set_image', layer_id: logoId, image: { artifactId: 'badge' } }])
+    expect(graphicsLogoPickEdits(added, 'logo', placement)).toEqual([])
+    expect(graphicsLogoRemoveEdits(added)).toEqual([{ op: 'remove_layer', layer_id: logoId }])
+    expect(graphicsLogoRemoveEdits(titled())).toEqual([])
+  })
+
+  it('adds a missing second line under the headline, a credit at the end, or a block when there is no headline', () => {
+    const headline = graphicsDocumentFromLayers([
+      { kind: 'scrim', edge: 'top' },
+      { kind: 'text', name: 'Headline', items: [{ slot: 'headline', text: THAI_TITLE, font: 'display' }, { slot: null, text: 'tag' }] },
+    ])
+    expect(graphicsSlotAddEdits(headline, 'secondary')).toEqual([{ op: 'add_item', layer_id: 'l2', item: expect.objectContaining({ slot: 'secondary', size: 0.044 }), index: 1 }])
+    expect(graphicsSlotAddEdits(headline, 'credit')).toEqual([{ op: 'add_item', layer_id: 'l2', item: expect.objectContaining({ slot: 'credit', icon: 'camera' }), index: 2 }])
+    const added = appliedEdits(headline, graphicsSlotAddEdits(headline, 'secondary'))
+    expect(graphicsSlotText(added, 'secondary')).toBe('')
+    expect(graphicsSlotAddEdits(graphicsDocumentFromLayers([{ kind: 'scrim' }]), 'headline')).toEqual([
+      { op: 'add_layer', layer: expect.objectContaining({ kind: 'text', items: [expect.objectContaining({ slot: 'headline', text: '' })] }) },
+    ])
+  })
+
+  it('says what a changed book logo means for new videos', () => {
+    expect(graphicsTemplateMessage('set_logo', { logo: bookLogo })).toBe('New videos in this book start with this logo.')
+    expect(graphicsTemplateMessage('set_logo', { logo: null })).toBe('New videos in this book start without a logo.')
+  })
+})
+

@@ -50,6 +50,7 @@ type Layer = {
   visible: boolean
   opacity: number
   artifactId?: string
+  role?: string
   edge?: string
   align?: string
   size?: number
@@ -63,6 +64,7 @@ type Read = {
   document: { layers: Layer[] }
   templates: Array<{ id: string; name: string; document: { layers: Layer[] }; missing_layer_ids: string[] }>
   default_template_id: string
+  logo?: { asset_id: string; size: number; position: { anchor: string; x: number; y: number; space: string } } | null
   images: Record<string, { url: string | null }>
   render: { request_id: string; status: string; output_asset_id: string; address: string | null; error: string | null } | null
   burned: { request_id: string; output: string } | null
@@ -315,17 +317,18 @@ describe('graphics editor in the composer', () => {
     expect(errors).toEqual([])
   })
 
-  it('sets the chat log beside one header row over a tall preview, quick text, inspector and a timeline that scrubs and trims, with the handle in the Credit field', async () => {
+  it('spans the dock without the chat log: one header row, a tall preview beside three inspector columns and a full-width timeline that scrubs and trims, with the handle in the Credit field', async () => {
     await expect.poll(() => field('Headline').inputValue()).toBe(THAI_TITLE)
     expect(await page.locator('.command-composer-dock-bar').isVisible()).toBe(false)
     expect(await sheet().locator('.confirm-sheet-foot').count()).toBe(0)
     expect((await sheet().locator('.confirm-sheet-head').boundingBox())!.height).toBeLessThanOrEqual(41)
 
     const sheetBox = (await sheet().boundingBox())!
-    const log = (await page.locator('.composer-history-panel').boundingBox())!
-    expect(log.x + log.width).toBeLessThanOrEqual(sheetBox.x + 1)
-    expect(log.height).toBeGreaterThan(sheetBox.height * 0.9)
-    expect((await sheet().locator('.graphics-stage').boundingBox())!.height).toBeGreaterThan(sheetBox.height * 0.75)
+    const dock = (await page.locator('.command-composer').boundingBox())!
+    expect(await page.locator('.composer-history-panel').isVisible()).toBe(false)
+    expect(sheetBox.width).toBeGreaterThan(dock.width - 12)
+    expect(dock.y).toBeLessThan(90)
+    expect((await sheet().locator('.graphics-stage').boundingBox())!.height).toBeGreaterThan(sheetBox.height * 0.6)
 
     const preview = (await sheet().locator('.graphics-preview').boundingBox())!
     const controls = (await sheet().locator('.graphics-controls').boundingBox())!
@@ -335,6 +338,15 @@ describe('graphics editor in the composer', () => {
       expect(button.x + button.width).toBeLessThanOrEqual(preview.x + preview.width + 0.5)
     }
     expect(controls.x).toBeGreaterThanOrEqual(preview.x + preview.width)
+    const columns = await sheet().locator('.graphics-column').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().toJSON() as Box))
+    expect(columns).toHaveLength(3)
+    for (const [index, column] of columns.slice(1).entries()) {
+      expect(column.x).toBeGreaterThanOrEqual(columns[index]!.x + columns[index]!.width - 1)
+      expect(Math.abs(column.y - columns[0]!.y)).toBeLessThanOrEqual(1)
+    }
+    const timeline = (await sheet().getByRole('region', { name: 'Layers' }).boundingBox())!
+    expect(timeline.y).toBeGreaterThanOrEqual(preview.y + preview.height - 1)
+    expect(timeline.width).toBeGreaterThan(sheetBox.width * 0.9)
     expect(await sheet().getByLabel('Playback position', { exact: true }).count()).toBe(1)
 
     const handle = slotText(await read(), 'handle')!
@@ -1270,6 +1282,52 @@ describe('graphics editor in the composer', () => {
       ['check_placement', placementId, expect.any(String)],
       ['detect_regions', suggestId, expect.any(String)],
     ])
+    await sheet().getByRole('button', { name: /^Close/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
+    expect(errors).toEqual([])
+  })
+
+  it('puts the book logo on a video from the Logo section, keeps it through a template and makes it the default for new videos', async () => {
+    const logo = () => sheet().getByRole('region', { name: 'Logo', exact: true })
+    const notice = () => logo().locator('p.graphics-template-notice')
+    await command('/osg @a2')
+    await sheet().waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
+    expect(await logo().getByRole('button', { name: 'None', exact: true }).getAttribute('aria-pressed')).toBe('true')
+
+    await logo().getByRole('button', { name: 'Image…', exact: true }).click()
+    await logo().getByRole('group', { name: 'Choose the logo image', exact: true }).getByRole('button', { name: /@b2/ }).click()
+    await saved()
+    expect((await read(secondId)).document.layers.at(-1)).toMatchObject({ kind: 'image', role: 'logo', name: 'Logo', artifactId: logoId, position: { anchor: 'bottom-right', space: 'safe' } })
+    expect(await logo().getByRole('button', { name: '@b2', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    await logo().getByRole('button', { name: 'Logo in the top left corner', exact: true }).click()
+    await saved()
+    expect((await read(secondId)).document.layers.at(-1)?.position).toEqual({ anchor: 'top-left', x: 0, y: 0, space: 'safe' })
+    await shot('graphics-logo')
+
+    const makeDefault = logo().getByRole('switch', { name: 'Start new videos in graphics-ui with this logo', exact: true })
+    await makeDefault.check()
+    await expect.poll(() => notice().textContent(), { timeout: testBudget(15_000) }).toBe('New videos in this book start with this logo.')
+    expect((await read(secondId)).logo).toMatchObject({ asset_id: logoId, position: { anchor: 'top-left', space: 'safe' } })
+    expect(await logo().textContent()).toContain('Book default')
+    await logo().getByLabel('Logo size', { exact: true }).fill('0.25')
+    await saved()
+    await logo().getByRole('button', { name: 'Update default', exact: true }).click()
+    await expect.poll(async () => (await read(secondId)).logo?.size, { timeout: testBudget(15_000) }).toBe(0.25)
+
+    await sheet().getByRole('button', { name: 'Headline', exact: true }).click()
+    await saved()
+    const restyled = (await read(secondId)).document.layers
+    expect(restyled.at(-1)).toMatchObject({ kind: 'image', role: 'logo', artifactId: logoId, size: 0.25 })
+    expect(restyled.filter((layer) => layer.kind === 'image')).toHaveLength(1)
+
+    await logo().getByRole('button', { name: 'None', exact: true }).click()
+    await saved()
+    expect((await read(secondId)).document.layers.some((layer) => layer.kind === 'image')).toBe(false)
+    expect(await makeDefault.isChecked()).toBe(true)
+    await makeDefault.uncheck()
+    await expect.poll(() => notice().textContent(), { timeout: testBudget(15_000) }).toBe('New videos in this book start without a logo.')
+    expect((await read(secondId)).logo).toBeNull()
     await sheet().getByRole('button', { name: /^Close/ }).click()
     await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
     expect(errors).toEqual([])

@@ -21,8 +21,11 @@ import { readGraphicsDraft, writeGraphicsDraft } from "./drafts.js";
 import type { GraphicsEdit } from "./edits.js";
 import { applyGraphicsEdits } from "./edits.js";
 import { GraphicsServiceError } from "./errors.js";
-import type { GraphicsDocument, GraphicsFrame, GraphicsLayerInput } from "./model.js";
-import { isGraphicsUrl, parseGraphicsDocument } from "./model.js";
+import type { GraphicsLogo } from "./logo.js";
+import { graphicsLogoLayer, graphicsLogoLayerInput } from "./logo.js";
+import { isBookImage, readGraphicsLogo } from "./logo-store.js";
+import type { GraphicsDocument, GraphicsFrame, GraphicsLayerInput, GraphicsPosition } from "./model.js";
+import { appendGraphicsLayers, isGraphicsUrl, MAX_GRAPHICS_LAYERS, parseGraphicsDocument } from "./model.js";
 import type { GraphicsRegionFrame } from "./placement.js";
 import type { GraphicsSlotValues } from "./slots.js";
 import { fillGraphicsSlots, graphicsSlotValues } from "./slots.js";
@@ -40,6 +43,8 @@ type GraphicsSavedTemplate = { id: string; name: string; updated_at: string; doc
 type Revisioned = { revision: string; document: GraphicsDocument };
 
 export type GraphicsLook = { platform: WatermarkPlatform; watermark: boolean };
+
+export type GraphicsLogoRead = { asset_id: string; position: GraphicsPosition; size: number; opacity: number };
 
 type GraphicsWatermarkLook = {
   platform: WatermarkPlatform;
@@ -63,6 +68,7 @@ export type GraphicsReadModel = {
   starters: GraphicsStarterDocument[];
   templates: GraphicsSavedTemplate[];
   default_template_id: string;
+  logo: GraphicsLogoRead | null;
   images: Record<string, GraphicsImage>;
   watermark: GraphicsWatermarkLook | null;
   regions: GraphicsRegionFrame[];
@@ -76,6 +82,7 @@ type GraphicsContext = {
   values: GraphicsSlotValues;
   starters: GraphicsStarterDocument[];
   templates: GraphicsTemplateStore;
+  logo: GraphicsLogo | null;
   watermark: GraphicsWatermarkLook | null;
 };
 
@@ -121,6 +128,15 @@ function defaultTemplateDocument(
     ?? starters.find((candidate) => candidate.id === DEFAULT_GRAPHICS_STARTER_ID)
     ?? starters[0];
   return starter.document;
+}
+
+function withBookLogo(engine: Engine, document: GraphicsDocument, logo: GraphicsLogo | null): GraphicsDocument {
+  if (!logo || graphicsLogoLayer(document) || document.layers.length >= MAX_GRAPHICS_LAYERS || !isBookImage(engine, logo.artifactId)) return document;
+  return appendGraphicsLayers(document, [graphicsLogoLayerInput(logo)]);
+}
+
+export function graphicsLogoRead(logo: GraphicsLogo | null): GraphicsLogoRead | null {
+  return logo ? { asset_id: logo.artifactId, position: logo.position, size: logo.size, opacity: logo.opacity } : null;
 }
 
 function defaultDocument(document: GraphicsDocument): Revisioned {
@@ -197,11 +213,12 @@ async function graphicsContext(engine: Engine, artifactId: string, look: Graphic
   const values: GraphicsSlotValues = { ...watermarkSlotValues(profile), ...(credit ? { credit: credit.text } : {}) };
   const starters = starterDocuments({ width: source.width, height: source.height }, profile, values);
   const templates = readGraphicsTemplates(engine);
+  const logo = readGraphicsLogo(engine);
   const watermark = look.watermark
     ? await watermarkLook(engine, look.platform, { source, profile, values, template: watermarkGraphicsTemplate(engine, look.platform) })
     : null;
-  const fallback = defaultDocument(watermark?.look ?? defaultTemplateDocument(templates, starters, values));
-  return { source, saved: readGraphicsDraft(engine, artifactId), fallback, credit, values, starters, templates, watermark };
+  const fallback = defaultDocument(watermark?.look ?? withBookLogo(engine, defaultTemplateDocument(templates, starters, values), logo));
+  return { source, saved: readGraphicsDraft(engine, artifactId), fallback, credit, values, starters, templates, logo, watermark };
 }
 
 function notebooksFor(engine: Engine, notebookId: string | null): NotebookDocument[] {
@@ -244,6 +261,10 @@ function templateImageIds(templates: GraphicsTemplateStore): string[] {
   return templates.templates.flatMap((template) => graphicsTemplateImageIds(template.document));
 }
 
+function lookImageIds(context: GraphicsContext): string[] {
+  return [...templateImageIds(context.templates), ...(context.logo ? [context.logo.artifactId] : [])];
+}
+
 async function bookImages(engine: Engine, ids: readonly string[]): Promise<Record<string, GraphicsImage>> {
   const entries = await Promise.all([...new Set(ids)].map(async (id) => [id, await imageInfo(engine, id)] as const));
   return Object.fromEntries(entries.filter((entry): entry is readonly [string, GraphicsImage] => entry[1] !== null));
@@ -266,7 +287,7 @@ export async function readGraphics(
 ): Promise<GraphicsReadModel> {
   const context = await graphicsContext(engine, artifactId, options.look);
   const current = context.saved ?? context.fallback;
-  const images = await bookImages(engine, [...graphicsTemplateImageIds(current.document), ...templateImageIds(context.templates)]);
+  const images = await bookImages(engine, [...graphicsTemplateImageIds(current.document), ...lookImageIds(context)]);
   return {
     asset_id: artifactId,
     address: videoAddress(engine, artifactId, options.notebookId),
@@ -291,6 +312,7 @@ export async function readGraphics(
     starters: context.starters,
     templates: savedTemplates(context, images),
     default_template_id: context.templates.defaultId ?? DEFAULT_GRAPHICS_STARTER_ID,
+    logo: graphicsLogoRead(context.logo),
     images,
     watermark: context.watermark,
     regions: cachedFrameRegions(engine, context.source.mediaHash),
@@ -309,8 +331,8 @@ function nextDocument(current: GraphicsDocument, input: GraphicsUpdateInput): Gr
   throw new GraphicsServiceError("invalid", message, { edit });
 }
 
-function requireBookImages(engine: Engine, before: GraphicsDocument, after: GraphicsDocument, templates: GraphicsTemplateStore): void {
-  const known = new Set([...graphicsTemplateImageIds(before), ...templateImageIds(templates)]);
+function requireBookImages(engine: Engine, before: GraphicsDocument, after: GraphicsDocument, context: GraphicsContext): void {
+  const known = new Set([...graphicsTemplateImageIds(before), ...lookImageIds(context)]);
   for (const layer of after.layers) {
     if (layer.kind !== "image" || known.has(layer.artifactId)) continue;
     const artifact = engine.artifacts.get(layer.artifactId);
@@ -332,7 +354,7 @@ export async function updateGraphics(engine: Engine, artifactId: string, input: 
       throw new GraphicsServiceError("conflict", "These graphics changed somewhere else. Reload them before editing.", { revision: current.revision });
     }
     const next = nextDocument(current.document, input);
-    requireBookImages(engine, current.document, next, context.templates);
+    requireBookImages(engine, current.document, next, context);
     const frame = graphicsFrameSchema.safeParse(input.frame ?? context.saved?.frame ?? ORIGINAL_GRAPHICS_FRAME);
     if (!frame.success) throw new GraphicsServiceError("invalid", "Choose a valid frame, fit and focus point.");
     if (input.look.watermark && input.frame !== undefined && frame.data.aspect !== "original") throw new GraphicsServiceError("invalid", "Watermarks use the source frame.");

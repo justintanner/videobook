@@ -301,6 +301,37 @@ describe("graphics edits", () => {
     });
   });
 
+  it("keeps one logo: marking a layer unmarks the others, a copy is no logo, and null clears the role", () => {
+    const marked = applied(base(), [{ op: "set_image", layer_id: "l5", image: { role: "logo" } }]);
+    expect(layer(marked, "l5")).toMatchObject({ kind: "image", role: "logo", artifactId: "logo-1" });
+    const second = applied(marked, [{ op: "add_layer", layer: { kind: "image", artifactId: "badge-1", role: "logo" } }]);
+    expect(layer(second, "l5")).not.toHaveProperty("role");
+    expect(layer(second, "l7")).toMatchObject({ role: "logo", artifactId: "badge-1" });
+    const copied = applied(marked, [{ op: "duplicate_layer", layer_id: "l5" }]);
+    expect(layer(copied, "l5")).toMatchObject({ role: "logo" });
+    expect(layer(copied, "l7")).not.toHaveProperty("role");
+    expect(layer(applied(marked, [{ op: "set_image", layer_id: "l5", image: { role: null } }]), "l5")).not.toHaveProperty("role");
+    expect(failed(base(), [{ op: "set_image", layer_id: "l5", image: { role: "badge" } } as unknown as GraphicsEdit])).toMatchObject({ code: "invalid" });
+  });
+
+  it("apply_template keeps the video's logo on top, over any logo the template carries", () => {
+    const template = GRAPHICS_STARTERS.find((starter) => starter.id === "headline")!.build({ width: 1080, height: 1920 });
+    const withLogo = applied(base(), [
+      { op: "set_image", layer_id: "l5", image: { role: "logo", size: 0.15 } },
+      { op: "set_layer", layer_id: "l5", layer: { opacity: 0.55 } },
+    ]);
+    const restyled = applied(withLogo, [{ op: "apply_template", template }]);
+    expect(restyled.layers.map((candidate) => candidate.kind)).toEqual(["scrim", "text", "image"]);
+    expect(restyled.layers.at(-1)).toMatchObject({ kind: "image", role: "logo", artifactId: "logo-1", size: 0.15, opacity: 0.55 });
+    const branded = graphicsDocumentFromLayers([...template.layers, { kind: "image", artifactId: "kit-logo", role: "logo" }]);
+    const kept = applied(withLogo, [{ op: "apply_template", template: branded }]);
+    expect(kept.layers.flatMap((candidate) => (candidate.kind === "image" ? [candidate.artifactId] : []))).toEqual(["logo-1"]);
+    const plain = applied(base(), [{ op: "apply_template", template: branded }]);
+    expect(plain.layers.at(-1)).toMatchObject({ role: "logo", artifactId: "kit-logo" });
+    const crowded = graphicsDocumentFromLayers(Array.from({ length: 24 }, () => ({ kind: "scrim" as const })));
+    expect(failed(withLogo, [{ op: "apply_template", template: crowded }])).toMatchObject({ code: "layer_limit" });
+  });
+
   it("reports the failing edit and keeps earlier edits out of a failed result", () => {
     const error = failed(base(), [
       { op: "set_layer", layer_id: "l1", layer: { name: "Bottom shade" } },

@@ -4,6 +4,7 @@ import { MAX_GRAPHICS_NAME_LENGTH } from '../../../../server/src/graphics/model'
 import type { BookProjectSummary } from '@/videobook/book-project-catalog'
 import { graphicsTemplateChoices, type GraphicsRead, type GraphicsTemplateChoice } from '@/videobook/graphics-model'
 import type { GraphicsEditor, GraphicsTemplateOutcome } from '@/videobook/useGraphicsEditor'
+import { GraphicsTemplateThumb } from './GraphicsTemplateThumb'
 
 type Run = (action: () => Promise<GraphicsTemplateOutcome>) => Promise<boolean>
 type RowMode = 'idle' | 'rename' | 'delete'
@@ -161,30 +162,32 @@ export function GraphicsTemplates({ editor, read, disabled, books, onApply }: {
   }
   return (
     <section className="graphics-templates" aria-label="Templates">
-      <div className="graphics-templates-bar">
+      <div className="graphics-templates-head">
         <span className="graphics-section-label">Templates</span>
-        <div className="graphics-starter-row" role="group" aria-label="Apply a template">
-          {choices.map((choice) => (
-            <button
-              key={choice.id}
-              type="button"
-              data-template={choice.id}
-              data-saved={choice.saved ? 'true' : undefined}
-              data-default={choice.isDefault ? 'true' : undefined}
-              title={chipTitle(choice)}
-              disabled={disabled}
-              onClick={() => onApply(choice)}
-            >
-              {choice.isDefault && <Star size={11} aria-hidden="true" />}
-              {choice.name}
-              {choice.missingImages > 0 && <TriangleAlert size={11} aria-hidden="true" />}
-            </button>
-          ))}
-        </div>
-        <SaveTemplate disabled={locked} onSave={(name) => run(() => editor.saveTemplate(name))} />
         <button type="button" aria-expanded={managing} onClick={() => setManaging((current) => !current)}>{managing ? 'Done' : 'Manage templates'}</button>
-        {notice && <p className="graphics-template-notice" role={notice.ok ? 'status' : 'alert'} data-tone={notice.ok ? 'info' : 'error'}>{notice.message}</p>}
       </div>
+      <div className="graphics-template-tiles" role="group" aria-label="Apply a template">
+        {choices.map((choice) => (
+          <button
+            key={choice.id}
+            type="button"
+            className="graphics-template-tile"
+            data-template={choice.id}
+            data-saved={choice.saved ? 'true' : undefined}
+            data-default={choice.isDefault ? 'true' : undefined}
+            title={chipTitle(choice)}
+            disabled={disabled}
+            onClick={() => onApply(choice)}
+          >
+            <GraphicsTemplateThumb document={choice.document} images={read.images} />
+            <span className="graphics-template-tile-name">{choice.name}</span>
+            {choice.isDefault && <Star size={10} className="graphics-template-tile-star" aria-hidden="true" />}
+            {choice.missingImages > 0 && <TriangleAlert size={11} className="graphics-template-tile-missing" aria-hidden="true" />}
+          </button>
+        ))}
+      </div>
+      <SaveTemplate disabled={locked} onSave={(name) => run(() => editor.saveTemplate(name))} />
+      {notice && <p className="graphics-template-notice" role={notice.ok ? 'status' : 'alert'} data-tone={notice.ok ? 'info' : 'error'}>{notice.message}</p>}
       {managing && (
         <>
           <ul className="graphics-template-list" aria-label="Manage templates">

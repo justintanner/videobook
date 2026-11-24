@@ -16,6 +16,7 @@ export function resolveVideoAssetReference(
   engine: Engine,
   reference: string,
   notebookId?: string,
+  label = "Video source",
 ): string {
   const normalized = normalizeNotebookReference(reference);
   if (!normalized) throw new Error("asset_id is required");
@@ -27,12 +28,12 @@ export function resolveVideoAssetReference(
   });
   if (!("code" in result)) return result.artifactId;
   if (result.code === "ambiguous") {
-    throw new Error(`Video source @${normalized} is ambiguous; include notebook_id`);
+    throw new Error(`${label} @${normalized} is ambiguous; include notebook_id`);
   }
   if (result.code === "no_output" || result.code === "not_media") {
-    throw new Error(`Video source @${normalized} has no media output yet`);
+    throw new Error(`${label} @${normalized} has no media output yet`);
   }
-  throw new Error(`Video source @${normalized} was not found`);
+  throw new Error(`${label} @${normalized} was not found`);
 }
 
 export type VideoCutSource = {

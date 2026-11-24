@@ -28,6 +28,7 @@ import {
 import { graphicsNudgePosition, graphicsShortcut, type GraphicsPoint } from '@/videobook/graphics-pointer'
 import { GraphicsInspector, type GraphicsInspectorTab } from './GraphicsInspector'
 import { GraphicsLayers } from './GraphicsLayers'
+import { GraphicsLogo } from './GraphicsLogo'
 import { GraphicsPreview } from './GraphicsPreview'
 import { GraphicsQuickFields, GraphicsWarnings } from './GraphicsQuickFields'
 import { GraphicsSuggestionTray } from './GraphicsSuggestions'
@@ -151,6 +152,7 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   const edit = useCallback((edits: GraphicsEdit[], coalesce: string | null = null) => editor.edit(edits, coalesce), [editor])
   const playhead = useCallback(() => (playerRef.current?.getCurrentFrame() ?? 0) / (source?.fps || 1), [source?.fps])
   const otherBooks = useMemo(() => books.filter((book) => book.bookId !== editor.bookId), [books, editor.bookId])
+  const bookName = books.find((book) => book.bookId === editor.bookId)?.name ?? null
   const applyTemplate = useCallback((template: GraphicsTemplateChoice) => {
     editor.edit([{ op: 'apply_template', template: template.document }])
   }, [editor])
@@ -164,7 +166,11 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   }, [document])
   const revealLayer = useCallback((layerId: string | null) => {
     setSelectedLayerId(layerId)
-    if (layerId) requestAnimationFrame(() => revealInColumn(controlsRef.current, selectionRef.current))
+    if (!layerId) return
+    requestAnimationFrame(() => {
+      revealInColumn(controlsRef.current, selectionRef.current)
+      selectionRef.current?.scrollTo({ top: 0 })
+    })
   }, [])
   const pickSuggestion = useCallback((slot: GraphicsTextSlot, option: string) => {
     editor.edit([{ op: 'set_slot_text', slot, text: option }])
@@ -243,61 +249,80 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
       )}
       {document && drawn && read && (
         <div className="graphics-controls" ref={controlsRef}>
-          {watermark && <GraphicsWatermark editor={editor} read={read} platform={watermark.platform} disabled={!editable} />}
-          <GraphicsWarnings warnings={warnings} />
-          <GraphicsQuickFields
-            document={document}
-            read={read}
-            disabled={!editable}
-            suggestions={state.suggestions}
-            onEdit={edit}
-            onSuggest={suggest}
-            onFocusSlot={focusSlot}
-          />
-          <GraphicsSuggestionTray
-            document={document}
-            suggestions={state.suggestions}
-            disabled={!editable}
-            onPick={pickSuggestion}
-            onDismiss={editor.dismissSuggestions}
-          />
-          <GraphicsTemplates editor={editor} read={read} disabled={!editable} books={otherBooks} onApply={applyTemplate} />
-          {!watermark && <GraphicsFrameControl frame={framing} source={read.source} mediaUrl={state.target?.mediaUrl ?? ''} disabled={!editable || Boolean(subtitle)} subtitleAspect={subtitle?.aspect} onChange={editor.setFrame} />}
-          <GraphicsLayers
-            document={document}
-            drawn={drawn}
-            read={read}
-            imageChoices={imageChoices}
-            selectedLayerId={selectedLayer?.id ?? null}
-            warnings={coverWarnings}
-            disabled={!editable}
-            playerRef={playerRef}
-            onEdit={edit}
-            onSelect={revealLayer}
-          />
-          <div className="graphics-selection" ref={selectionRef}>
-            {selectedLayer
-              ? (
-                <GraphicsInspector
-                  key={selectedLayer.id}
+          <div className="graphics-columns">
+            <div className="graphics-column graphics-column-text">
+              {watermark && <GraphicsWatermark editor={editor} read={read} platform={watermark.platform} disabled={!editable} />}
+              <GraphicsWarnings warnings={warnings} />
+              <GraphicsQuickFields
+                document={document}
+                read={read}
+                disabled={!editable}
+                suggestions={state.suggestions}
+                onEdit={edit}
+                onSuggest={suggest}
+                onFocusSlot={focusSlot}
+              />
+              <GraphicsSuggestionTray
+                document={document}
+                suggestions={state.suggestions}
+                disabled={!editable}
+                onPick={pickSuggestion}
+                onDismiss={editor.dismissSuggestions}
+              />
+              {!watermark && <GraphicsFrameControl frame={framing} source={read.source} mediaUrl={state.target?.mediaUrl ?? ''} disabled={!editable || Boolean(subtitle)} subtitleAspect={subtitle?.aspect} onChange={editor.setFrame} />}
+            </div>
+            <div className="graphics-column graphics-column-look">
+              <GraphicsTemplates editor={editor} read={read} disabled={!editable} books={otherBooks} onApply={applyTemplate} />
+              {!watermark && (
+                <GraphicsLogo
                   document={document}
-                  layer={selectedLayer}
                   read={read}
-                  frame={canvas ?? undefined}
                   imageChoices={imageChoices}
-                  box={selectedBox}
-                  placement={selectedPlacement}
-                  playhead={playhead}
+                  bookName={bookName}
                   disabled={!editable}
-                  tab={inspectorTab}
-                  onTab={setInspectorTab}
                   onEdit={edit}
-                  onFindClearSpot={findClearSpot}
+                  onSetDefault={editor.setLogoDefault}
                 />
-              )
-              : <p className="graphics-muted graphics-side-hint">Select a layer in the list or the preview to edit it.</p>}
+              )}
+            </div>
+            <div className="graphics-column graphics-column-layer graphics-selection" ref={selectionRef}>
+              {selectedLayer
+                ? (
+                  <GraphicsInspector
+                    key={selectedLayer.id}
+                    document={document}
+                    layer={selectedLayer}
+                    read={read}
+                    frame={canvas ?? undefined}
+                    imageChoices={imageChoices}
+                    box={selectedBox}
+                    placement={selectedPlacement}
+                    playhead={playhead}
+                    disabled={!editable}
+                    tab={inspectorTab}
+                    onTab={setInspectorTab}
+                    onEdit={edit}
+                    onFindClearSpot={findClearSpot}
+                  />
+                )
+                : <p className="graphics-muted graphics-side-hint">Select a layer in the timeline or the preview to edit it here.</p>}
+            </div>
           </div>
         </div>
+      )}
+      {document && drawn && read && (
+        <GraphicsLayers
+          document={document}
+          drawn={drawn}
+          read={read}
+          imageChoices={imageChoices}
+          selectedLayerId={selectedLayer?.id ?? null}
+          warnings={coverWarnings}
+          disabled={!editable}
+          playerRef={playerRef}
+          onEdit={edit}
+          onSelect={revealLayer}
+        />
       )}
     </div>
   )

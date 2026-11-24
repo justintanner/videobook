@@ -116,6 +116,7 @@ export default defineConfig({
       'src/videobook/graphics-model.test.ts',
       'src/videobook/graphics-pointer.test.ts',
       'src/videobook/graphics-timing.test.ts',
+      'src/videobook/graphics-thumb.test.ts',
       'server/src/app-state.test.ts',
       'server/src/har-capture.test.ts',
       'server/src/har-export.test.ts',

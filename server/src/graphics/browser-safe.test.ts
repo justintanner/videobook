@@ -21,6 +21,7 @@ const BROWSER_SAFE_FILES = [
   "qr.ts",
   "icons.ts",
   "placement.ts",
+  "logo.ts",
 ];
 const MODULE_SPECIFIER = /^\s*(?:import|export)\s+(type\s+)?[\w$*{}\s,]*?\s*from\s+["']([^"']+)["']|^\s*import\s+["']([^"']+)["']/gmu;
 const BUILTINS = new Set(builtinModules);

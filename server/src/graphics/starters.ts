@@ -107,6 +107,10 @@ function lowerThird(): GraphicsDocument {
   ]);
 }
 
+export function graphicsSlotItemInput(slot: GraphicsBlockSlot): GraphicsTextItemInput {
+  return LOWER_THIRD_ITEMS[slot];
+}
+
 export function graphicsSlotBlock(text: GraphicsBlockText): GraphicsTextLayerInput | null {
   const items = GRAPHICS_BLOCK_SLOTS.flatMap((slot) => {
     const value = text[slot];

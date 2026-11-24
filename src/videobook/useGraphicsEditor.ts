@@ -2,6 +2,7 @@ import { graphicsAspectChanged, ORIGINAL_GRAPHICS_FRAME, type GraphicsFraming } 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GraphicsEdit } from '../../server/src/graphics/edits'
 import type { GraphicsRect } from '../../server/src/graphics/layout'
+import type { GraphicsLogo } from '../../server/src/graphics/logo'
 import type { GraphicsDocument, GraphicsTextSlot } from '../../server/src/graphics/model'
 import { GRAPHICS_SUGGEST_SLOTS, type GraphicsSuggestKind, type GraphicsSuggestLanguage } from '../../server/src/graphics/slots'
 import type { WatermarkPlatform } from '../../server/src/watermark-platform'
@@ -438,6 +439,10 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
 
   const copyTemplates = useCallback((fromBookId: string) => templateAction('copy_templates', () => ({ from_book: fromBookId })), [templateAction])
 
+  const setLogoDefault = useCallback((logo: GraphicsLogo | null) => templateAction('set_logo', () => ({
+    logo: logo ? { asset_id: logo.artifactId, position: logo.position, size: logo.size, opacity: logo.opacity } : null,
+  })), [templateAction])
+
   const saveWatermark = useCallback(() => templateAction('save_watermark', () => ({ expected_revision: stateRef.current.revision })), [templateAction])
 
   const resetWatermark = useCallback(async (): Promise<GraphicsTemplateOutcome> => {
@@ -541,6 +546,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     deleteTemplate,
     setDefaultTemplate,
     copyTemplates,
+    setLogoDefault,
     saveWatermark,
     resetWatermark,
     setPlatform,
