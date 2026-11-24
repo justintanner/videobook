@@ -1997,7 +1997,8 @@ describe('chat composer browser flow', () => {
         for (const id of [imageId, videoId, lastId]) {
           await positionForClick(id)
           const before = await layout(id)
-          await notebookCellNode(page, id).locator('.cell-node-body').click()
+          const body = notebookCellNode(page, id).locator('.cell-node-body')
+          await body.click({ position: { x: (await body.boundingBox())!.width / 2, y: 8 } })
           await expect.poll(async () => (await layout(id)).topGap).toBeGreaterThanOrEqual(0)
           await expect.poll(async () => (await layout(id)).bottomGap).toBeGreaterThanOrEqual(8)
           if (id !== lastId) {
@@ -2040,6 +2041,7 @@ describe('chat composer browser flow', () => {
       throw error
     } finally {
       await page.emulateMedia({ reducedMotion: 'no-preference' })
+      await page.setViewportSize({ width: 1440, height: 1000 })
       for (const cellId of ids) await tool('delete_notebook_cell', { cell_id: cellId })
       await client.close()
       await input.fill('')
@@ -4933,6 +4935,7 @@ describe('chat composer browser flow', () => {
       'Subtitles',
       'Graphics',
       'Edit cold open',
+      'Auto-edit',
       'Download video',
       'Extract frame',
       'Generate video',
@@ -5183,7 +5186,7 @@ describe('chat composer browser flow', () => {
     const secondCell = notebookCellNode(page, generationCellId)
     await firstCell.waitFor({ state: 'visible' })
     await secondCell.waitFor({ state: 'visible' })
-    await firstCell.scrollIntoViewIfNeeded()
+    await firstCell.evaluate((element) => element.scrollIntoView({ block: 'center', inline: 'nearest' }))
     await secondCell.scrollIntoViewIfNeeded()
     const pane = page.locator('.notebook-flow .react-flow__pane')
     const firstCellBox = await firstCell.boundingBox()
