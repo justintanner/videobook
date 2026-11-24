@@ -1828,8 +1828,8 @@ textarea:focus-visible {
 .cell-route-badge-incoming {
   position: absolute;
   top: calc(-1 * var(--route-overhang));
-  left: calc(8px * var(--route-scale));
-  max-width: calc(100% - 16px * var(--route-scale));
+  left: calc(var(--cell-gutter) - 2px * var(--route-scale));
+  max-width: calc(100% - var(--cell-gutter) - 6px * var(--route-scale));
 }
 
 .cell-route-badge-outgoing {
@@ -2091,8 +2091,8 @@ textarea:focus-visible {
   position: absolute;
   top: -1px;
   left: -1px;
-  width: 17px;
-  height: 17px;
+  width: min(17px, calc(17px * var(--notebook-detail-scale, 1)));
+  height: min(17px, calc(17px * var(--notebook-detail-scale, 1)));
   border-top: 2px solid var(--green);
   border-left: 2px solid var(--green);
   content: '';
@@ -2365,7 +2365,7 @@ textarea:focus-visible {
 
 .cell-state-clock-body {
   flex-direction: column;
-  gap: calc(11px * var(--notebook-detail-scale, 1));
+  gap: min(calc(11px * var(--notebook-detail-scale, 1)), 11%);
   padding: 12px 14px;
 }
 
@@ -2390,6 +2390,11 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.cell-state-clock-body > .cell-state-meta {
+  flex: none;
+  line-height: 1.2;
+}
+
 .cell-generator-provider {
   flex: none;
   color: var(--cyan);
@@ -2406,11 +2411,11 @@ textarea:focus-visible {
 
 .cell-generator-chip {
   position: absolute;
-  left: 8px;
+  left: var(--cell-gutter);
   bottom: 8px;
   z-index: 1;
   display: inline-flex;
-  max-width: calc(100% - 16px);
+  max-width: calc(100% - var(--cell-gutter) - 8px);
   align-items: center;
   gap: 6px;
   padding: 0 6px;

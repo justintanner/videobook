@@ -169,15 +169,23 @@ describe('a generated output tile', () => {
     expect(html).toContain('cell-media-badge cell-media-badge-wide')
   })
 
-  it('pins the chip to the preview corner and clips a long model instead of the provider', () => {
+  it('starts the chip on the cell gutter and clips a long model instead of the provider', () => {
     const chip = rule('.cell-generator-chip')
     expect(declaration(chip, 'position')).toBe('absolute')
-    expect(declaration(chip, 'left')).toBe('8px')
+    expect(declaration(chip, 'left')).toBe('var(--cell-gutter)')
     expect(declaration(chip, 'bottom')).toBe('8px')
-    expect(declaration(chip, 'max-width')).toBe('calc(100% - 16px)')
+    expect(declaration(chip, 'max-width')).toBe('calc(100% - var(--cell-gutter) - 8px)')
     expect(declaration(chip, 'font-size')).toBe('var(--cell-label-font-size)')
     expect(declaration(rule('.cell-generator-provider'), 'flex')).toBe('none')
     expect(declaration(rule('.cell-generator-model'), 'text-overflow')).toBe('ellipsis')
     expect(declaration(rule('.cell-state-meta'), 'text-overflow')).toBeNull()
+  })
+
+  it('keeps the provider line whole while the generating stack tightens its gaps', () => {
+    const meta = rule('.cell-state-clock-body > .cell-state-meta')
+    expect(declaration(meta, 'flex')).toBe('none')
+    expect(Number(declaration(meta, 'line-height'))).toBeGreaterThan(1)
+    expect(declaration(rule('.cell-state-clock-body'), 'gap'))
+      .toBe('min(calc(11px * var(--notebook-detail-scale, 1)), 11%)')
   })
 })

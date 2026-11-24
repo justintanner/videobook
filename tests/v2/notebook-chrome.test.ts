@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { notebookGrid } from '../../src/videobook/notebook-grid'
+import { notebookGrid, notebookGridDetailScale } from '../../src/videobook/notebook-grid'
 
 const css = readFileSync(new URL('../../src/index.css', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../../src/App.tsx', import.meta.url), 'utf8')
@@ -124,6 +124,29 @@ describe('notebook chrome tokens', () => {
     expect(declaration(rule(css, '.cell-route-badge-fill'), 'font-family')).toContain('JetBrains Mono')
     expect(declaration(rule(css, '.cell-node-has-inputs:not(.cell-node-media-tile) .cell-node-header'), 'padding-top'))
       .toBe('calc(26px * var(--notebook-detail-scale, 1) - var(--route-overhang) + 3px)')
+  })
+
+  it('starts the incoming tab on the cell gutter, clear of the corner mark at every zoom', () => {
+    const incoming = rule(css, '.cell-route-badge-incoming')
+    expect(declaration(incoming, 'left')).toBe('calc(var(--cell-gutter) - 2px * var(--route-scale))')
+    expect(declaration(incoming, 'max-width')).toBe('calc(100% - var(--cell-gutter) - 6px * var(--route-scale))')
+    const badge = rule(css, '.cell-route-badge')
+    expect(declaration(badge, '--route-scale')).toBe('var(--notebook-detail-scale, 1)')
+    const knockout = Number(declaration(badge, 'padding').match(/^calc\((\d+)px \* var\(--route-scale\)\)$/u)?.[1])
+    const gutter = Number(declaration(rule(css, '\n.cell-node'), '--cell-gutter').match(/^calc\((\d+)px \*/u)?.[1])
+    const corner = rule(css, '.cell-node::before')
+    expect(declaration(corner, 'left')).toBe('-1px')
+    expect(declaration(corner, 'height')).toBe(declaration(corner, 'width'))
+    const arm = pixelCount(declaration(corner, 'width').match(/^min\((\d+px), calc\(\d+px \* var\(--notebook-detail-scale, 1\)\)\)$/u)?.[1] ?? '')
+    expect(knockout).toBe(2)
+    expect(gutter).toBe(22)
+    expect(arm).toBe(17)
+    for (const zoom of [0.4, 0.5, 0.75, 0.89, 1, 1.25, 1.5, 2]) {
+      const scale = notebookGridDetailScale(zoom)
+      const armEnd = Math.min(arm, arm * scale) - 1
+      const tabStart = (gutter - knockout) * scale
+      expect((tabStart - armEnd) * zoom).toBeGreaterThanOrEqual(3)
+    }
   })
 
   it('shows whole metadata items in the footer and beside the audio duration', () => {
