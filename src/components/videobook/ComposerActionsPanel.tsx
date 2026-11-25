@@ -2,6 +2,8 @@ import { X } from 'lucide-react'
 import type { WorkspaceAction } from '../../../server/src/workspace-action-contract'
 import { actionUnavailableReason, type WorkspaceActionContext } from '@/videobook/workspace-actions'
 
+const sentences = new Intl.Segmenter('en', { granularity: 'sentence' })
+
 export function ComposerActionsPanel({ actions, groups, group, context, loading, error, listId, selectedIndex,
   onGroupChange, onClose, onSelect }: {
   actions: readonly WorkspaceAction[]
@@ -29,12 +31,16 @@ export function ComposerActionsPanel({ actions, groups, group, context, loading,
     <div id={listId} role="listbox" aria-label="Available actions" className="workspace-actions-list">
       {actions.map((action, index) => {
         const unavailable = actionUnavailableReason(action, context)
+        const summary = sentences.segment(action.description).containing(0)?.segment ?? ''
+        const details = action.description.slice(summary.length)
         return <button type="button" role="option" id={`${listId}-option-${index}`} key={action.id}
           aria-selected={index === selectedIndex} className={index === selectedIndex ? 'active' : ''}
           data-action-id={action.id} data-command={action.command}
           onMouseDown={event => event.preventDefault()} onClick={() => onSelect(action)}>
           <span><strong>{action.title}</strong><code>{action.command}</code></span>
-          <small>{action.description}</small>
+          <small className="composer-action-description" title={action.description}>
+            {summary}{details && <span className="composer-action-details">{details}</span>}
+          </small>
           {unavailable && <small className="composer-action-unavailable">{unavailable}</small>}
         </button>
       })}

@@ -88,6 +88,7 @@
 .command-composer-dock-body > .composer-actions-panel .workspace-actions-list > button > span { display: grid; gap: 3px; white-space: normal; }
 .command-composer-dock-body > .composer-actions-panel .workspace-actions-list > button strong { color: #c4ead5; font-size: 13px; }
 .composer-actions-panel .workspace-actions-list small { font-size: 11px; overflow-wrap: anywhere; }
+.composer-actions-panel .composer-action-details { font: inherit; white-space: inherit; }
 .composer-actions-panel .workspace-actions-list code { font-size: 11px; overflow-wrap: anywhere; }
 .composer-actions-panel .composer-action-unavailable { grid-column: 1 / -1; color: #e3b869; }
 .composer-actions-panel p { font-size: 11px; margin: 8px 4px; color: #a6c5b3; }
@@ -113,6 +114,26 @@
 .workspace-preview-composer-host { min-width: 0; padding: 12px; }
 .notebook-media-composer-host.actions-only { right: 28px; }
 
+@media (max-width: 600px), (max-height: 500px) {
+  .command-composer-dock-body > .composer-actions-panel .workspace-actions-list > [role='option'] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    min-height: 44px;
+    padding: 5px 8px;
+    align-content: center;
+  }
+  .composer-actions-panel .composer-action-description {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--ink);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .composer-actions-panel .workspace-actions-list code { color: var(--ink); }
+  .composer-actions-panel .composer-action-details,
+  .composer-actions-panel button:has(.composer-action-unavailable) .composer-action-description { display: none; }
+  .composer-actions-panel .composer-action-unavailable { grid-column: auto; }
+}
+
 @media (max-width: 600px) {
   .command-line-shell {
     grid-template-areas: 'editor editor' 'actions mode';
@@ -133,9 +154,25 @@
   .mcp-call-trail { gap: 4px; }
   .command-composer-dock-body > .composer-actions-panel { padding-left: 12px; padding-right: 12px; }
   .command-line-shell > .composer-mode-switch { justify-self: end; }
-  .command-composer-dock-body > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-  .composer-actions-panel > header label { font-size: 0; }
-  .composer-actions-panel > header select { max-width: 110px; font-size: 11px; }
+  .command-composer-dock-body > .composer-actions-panel .workspace-actions-list > [role='option'] { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .command-composer-dock-body > .composer-actions-panel .workspace-actions-list > button > span {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 8px;
+  }
+  .composer-actions-panel > header {
+    display: grid;
+    grid-template-areas: 'title category close' 'count category close';
+    grid-template-columns: auto minmax(0, 1fr) 32px;
+    gap: 0 8px;
+  }
+  .composer-actions-panel > header > strong { grid-area: title; }
+  .composer-actions-panel > header > span { grid-area: count; margin-left: 0; }
+  .composer-actions-panel > header > button { grid-area: close; }
+  .composer-actions-panel > header label { grid-area: category; display: block; font-size: 0; }
+  .composer-actions-panel > header select { width: 100%; font-size: 11px; }
   .notebook-media-composer-host.actions-only { right: 12px; left: 12px; bottom: 12px; }
 }
 
@@ -152,15 +189,6 @@
 @media (max-height: 500px) {
   .command-composer-dock-body > .composer-actions-panel { max-height: min(280px, 48dvh); }
   .composer-actions-panel .composer-actions-help { display: none; }
-}
-
-@media (max-width: 600px), (max-height: 500px) {
-  .composer-actions-panel .workspace-actions-list small {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-  }
 }
 
 @media (pointer: coarse) {

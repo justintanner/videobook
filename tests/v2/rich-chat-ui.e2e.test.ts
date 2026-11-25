@@ -314,6 +314,13 @@ describe('rich chat references with real notebook media', () => {
         const rect = element.getBoundingClientRect()
         return rect.top >= 0 && rect.left >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight && element.scrollWidth <= element.clientWidth
       })).toBe(true)
+      if (viewport.width <= 600) {
+        expect(await panel.locator('header').evaluate(header => {
+          const category = header.querySelector('select')!.getBoundingClientRect()
+          const close = header.querySelector('button')!.getBoundingClientRect()
+          return close.top < category.bottom && category.top < close.bottom
+        })).toBe(true)
+      }
       await input().press('End')
       const active = page.locator('.workspace-actions-list [aria-selected="true"]')
       await expect.poll(() => active.evaluate(element => {
@@ -321,6 +328,19 @@ describe('rich chat references with real notebook media', () => {
         const rect = element.getBoundingClientRect()
         return rect.top >= parent.top - 1 && rect.bottom <= parent.bottom + 1
       }), { message: `Selected action stays visible at ${viewport.width}x${viewport.height}` }).toBe(true)
+      const trending = panel.locator('[data-command="/trending"] .composer-action-description')
+      if (viewport.width <= 600 || viewport.height <= 500) {
+        expect((await trending.innerText()).trim()).toBe('Schedule or sample TikTok research.')
+        expect(await trending.getAttribute('title')).toContain('Defaults to Thailand')
+        const placement = await trending.evaluate(description => {
+          const preview = description.getBoundingClientRect()
+          const identity = description.previousElementSibling!.getBoundingClientRect()
+          return { below: preview.top >= identity.bottom - 1, beside: preview.left >= identity.right - 1 }
+        })
+        expect(viewport.width <= 600 ? placement.below : placement.beside).toBe(true)
+      } else {
+        expect(await trending.innerText()).toContain('Defaults to Thailand')
+      }
       await page.screenshot({ path: join(evidence, `actions-${viewport.width}.png`) })
       await input().press('Escape')
     }

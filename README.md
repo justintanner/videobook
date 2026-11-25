@@ -58,6 +58,24 @@ Assets carry editable tags across three automatic facets — people, places and
 editing — plus free-form custom tags, with exact filtering in the Library and
 over MCP. See [docs/asset-tags.md](docs/asset-tags.md).
 
+### Composer Actions in small windows
+
+Open **Actions** beside the command input to search by name, slash command or
+description. Use the arrow keys to move through results, or Home and End to
+jump to either end. Choosing a result puts its command in the input for review.
+
+At widths up to 600px, each row puts the name and slash command on one line
+when they fit, with a preview underneath. Wider windows up to 500px tall put
+the preview in a second column. Both layouts give each row at least 44px of
+height and keep the category, result count and close button above the list.
+[320 × 640 example](docs/images/composer-actions-narrow.png) ·
+[667 × 375 example](docs/images/composer-actions-short.png)
+
+The preview uses the first sentence and fits at most two lines. For example,
+`/trending` shows “Schedule or sample TikTok research.” Search still matches
+the full description, including country defaults and source names. When an
+action requires an open project or notebook, the row shows that requirement.
+
 ## Remove burned-in video graphics
 
 Open `/remove-graphics @a1` (also `/remove-osg` or `/remove-titles`) to find
