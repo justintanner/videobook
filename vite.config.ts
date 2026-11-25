@@ -18,7 +18,7 @@ function clientManualChunk(id: string): string | undefined {
   if (id.includes('/src/components/videobook/JobsScreen')) {
     return 'jobs-ui'
   }
-  if (id.includes('/src/components/videobook/MusicVideoEditor')) {
+  if (id.includes('/src/components/videobook/Music')) {
     return 'music-video'
   }
   if (id.includes('/server/src/remotion/graphics/GraphicsOverlay.tsx') || id.includes('/server/src/remotion/captions/caption-fonts.ts')) {
@@ -63,6 +63,9 @@ function clientManualChunk(id: string): string | undefined {
   }
   if (id.includes('/server/src/')) {
     return 'shared'
+  }
+  if (/\/src\/videobook\/use[A-Z-]/u.test(id)) {
+    return 'videobook-hooks'
   }
   if (id.includes('/src/videobook/')) {
     return 'videobook'
