@@ -43,28 +43,24 @@ function inspector(layer: GraphicsTextLayer, tab: GraphicsInspectorTab): string 
   }))
 }
 
-function backgroundSwitch(html: string): string | null {
-  return html.match(/<label class="graphics-switch"><input type="checkbox" role="switch"[^>]*\/><span>Background<\/span><\/label>/u)?.[0] ?? null
-}
-
 describe('text layer background in the graphics inspector', () => {
-  it('offers the background switch on the Text tab beside the text styling, off until it is turned on', () => {
+  it('shows background color and opacity on the Text tab with no background as opacity Off and a hint to drag it up', () => {
     const html = inspector(bare, 'text')
     expect(html).toContain('aria-label="Text items 1/6"')
     expect(html).toContain('aria-label="Background"')
-    expect(backgroundSwitch(html)).not.toBeNull()
-    expect(backgroundSwitch(html)).not.toContain('checked')
-    expect(html).toContain('At 100% opacity it hides text burned into the video.')
-    expect(html).not.toContain('aria-label="Background color"')
-    expect(html).not.toContain('Background opacity')
+    expect(html).toContain('<input type="color" aria-label="Background color" value="#000000"/>')
+    expect(html).toMatch(/<span>Background opacity<output>Off<\/output><\/span><input type="range" aria-label="Background opacity" min="0" max="1" step="0.01" value="0"\/>/u)
+    expect(html).toContain('Drag Background opacity up to put a box behind this text. At 100% it hides text burned into the video.')
+    expect(html).not.toContain('role="switch"><span>Background')
+    expect(html).not.toContain('Padding across')
   })
 
-  it('shows the background color and opacity on the Text tab and leaves its shape to Block', () => {
+  it('shows the layer background on the Text tab and leaves its shape to Block', () => {
     const html = inspector(covered, 'text')
-    expect(backgroundSwitch(html)).toContain('checked')
     expect(html).toContain('<input type="color" aria-label="Background color" value="#101010"/>')
-    expect(html).toMatch(/<span>Background opacity<output>100%<\/output><\/span><input type="range" aria-label="Background opacity"/u)
+    expect(html).toMatch(/<span>Background opacity<output>100%<\/output><\/span><input type="range" aria-label="Background opacity"[^>]*value="1"\/>/u)
     expect(html).toContain('Padding, corners and border are under Block.')
+    expect(html).not.toContain('Drag Background opacity up')
     expect(html).not.toContain('Padding across')
     expect(html).not.toContain('Corner rounding')
     expect(html).not.toContain('Background border')
@@ -73,7 +69,6 @@ describe('text layer background in the graphics inspector', () => {
   it('keeps the whole background, shape included, on the Block tab', () => {
     const html = inspector(covered, 'block')
     expect(html).toContain('aria-label="Block"')
-    expect(backgroundSwitch(html)).toContain('checked')
     expect(html).toContain('aria-label="Background color"')
     expect(html).toContain('aria-label="Background opacity"')
     expect(html).toContain('aria-label="Padding across"')
@@ -81,6 +76,14 @@ describe('text layer background in the graphics inspector', () => {
     expect(html).toContain('aria-label="Corner rounding"')
     expect(html).toContain('<span>Background border</span>')
     expect(html).not.toContain('Backing plate')
+    expect(html).not.toContain('under Block')
     expect(html).not.toContain('aria-label="Text items 1/6"')
+  })
+
+  it('offers the same off background and hint on the Block tab with no shape controls yet', () => {
+    const html = inspector(bare, 'block')
+    expect(html).toMatch(/<span>Background opacity<output>Off<\/output><\/span>/u)
+    expect(html).toContain('Drag Background opacity up to put a box behind this text.')
+    expect(html).not.toContain('Padding across')
   })
 })

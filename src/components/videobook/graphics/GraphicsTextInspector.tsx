@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
 import {
+  DEFAULT_GRAPHICS_PLATE,
   GRAPHICS_ACCENTS,
   GRAPHICS_ALIGNS,
   GRAPHICS_CASES,
@@ -13,6 +14,7 @@ import {
   nextGraphicsId,
   type GraphicsDocument,
   type GraphicsIcon,
+  type GraphicsPlate,
   type GraphicsTextItem,
   type GraphicsTextItemInput,
   type GraphicsTextLayer,
@@ -42,31 +44,41 @@ function blockSetter({ layer, onEdit }: Pick<BackgroundProps, 'layer' | 'onEdit'
   return (block: BlockPatch, coalesce: string | null = null) => onEdit([{ op: 'set_text_block', layer_id: layer.id, block }], coalesce)
 }
 
+const BACKGROUND_HINT = 'Drag Background opacity up to put a box behind this text. At 100% it hides text burned into the video.'
+
+function backgroundOpacityLabel(opacity: number): string {
+  return opacity === 0 ? 'Off' : graphicsPercent(opacity)
+}
+
+function BackgroundShape({ layer, plate, disabled, onEdit }: BackgroundProps & { plate: GraphicsPlate }) {
+  const setBlock = blockSetter({ layer, onEdit })
+  const setPlate = (patch: PlatePatch, field: string) => setBlock({ plate: patch }, `${layer.id}:plate-${field}`)
+  return (
+    <div className="graphics-subfields">
+      <Range label="Padding across" value={plate.paddingX} min={0} max={0.2} step={0.001} format={graphicsPercent} disabled={disabled}
+        onChange={(paddingX) => setPlate({ paddingX }, 'padding-x')} />
+      <Range label="Padding down" value={plate.paddingY} min={0} max={0.2} step={0.001} format={graphicsPercent} disabled={disabled}
+        onChange={(paddingY) => setPlate({ paddingY }, 'padding-y')} />
+      <Range label="Corner rounding" value={plate.radius} min={0} max={1} step={0.01} format={graphicsPercent} disabled={disabled}
+        onChange={(radius) => setPlate({ radius }, 'radius')} />
+      <Toggle label="Background border" checked={plate.border} disabled={disabled} onChange={(border) => setPlate({ border }, 'border')} />
+    </div>
+  )
+}
+
 function BackgroundFields({ layer, disabled, onEdit, shape }: BackgroundProps & { shape: boolean }) {
   const setBlock = blockSetter({ layer, onEdit })
-  const setPlate = (plate: PlatePatch, field: string) => setBlock({ plate }, `${layer.id}:plate-${field}`)
   const { plate } = layer
+  const setOpacity = (opacity: number) => setBlock({ plate: opacity === 0 ? null : { opacity } }, `${layer.id}:plate-opacity`)
+  const setColor = (color: string) => setBlock({ plate: plate ? { color } : { color, opacity: 1 } }, `${layer.id}:plate-color`)
+  const note = plate === null ? BACKGROUND_HINT : shape ? null : 'Padding, corners and border are under Block.'
   return (
     <>
-      <Toggle label="Background" checked={plate !== null} disabled={disabled} onChange={(on) => setBlock({ plate: on ? {} : null })} />
-      {plate && (
-        <div className="graphics-subfields">
-          <Color label="Background color" value={plate.color} disabled={disabled} onChange={(color) => setPlate({ color }, 'color')} />
-          <Range label="Background opacity" value={plate.opacity} min={0} max={1} step={0.01} format={graphicsPercent} disabled={disabled}
-            onChange={(opacity) => setPlate({ opacity }, 'opacity')} />
-          {shape && (
-            <>
-              <Range label="Padding across" value={plate.paddingX} min={0} max={0.2} step={0.001} format={graphicsPercent} disabled={disabled}
-                onChange={(paddingX) => setPlate({ paddingX }, 'padding-x')} />
-              <Range label="Padding down" value={plate.paddingY} min={0} max={0.2} step={0.001} format={graphicsPercent} disabled={disabled}
-                onChange={(paddingY) => setPlate({ paddingY }, 'padding-y')} />
-              <Range label="Corner rounding" value={plate.radius} min={0} max={1} step={0.01} format={graphicsPercent} disabled={disabled}
-                onChange={(radius) => setPlate({ radius }, 'radius')} />
-              <Toggle label="Background border" checked={plate.border} disabled={disabled} onChange={(border) => setPlate({ border }, 'border')} />
-            </>
-          )}
-        </div>
-      )}
+      <Color label="Background color" value={plate?.color ?? DEFAULT_GRAPHICS_PLATE.color} disabled={disabled} onChange={setColor} />
+      <Range label="Background opacity" value={plate?.opacity ?? 0} min={0} max={1} step={0.01} format={backgroundOpacityLabel} disabled={disabled}
+        onChange={setOpacity} />
+      {plate && shape && <BackgroundShape layer={layer} plate={plate} disabled={disabled} onEdit={onEdit} />}
+      {note && <p className="graphics-muted graphics-section-note">{note}</p>}
     </>
   )
 }
@@ -75,9 +87,6 @@ export function GraphicsTextBackground({ layer, disabled, onEdit }: BackgroundPr
   return (
     <Section title="Background">
       <BackgroundFields layer={layer} disabled={disabled} onEdit={onEdit} shape={false} />
-      <p className="graphics-muted graphics-section-note">
-        {layer.plate ? 'Padding, corners and border are under Block.' : 'Fills the box behind this text. At 100% opacity it hides text burned into the video.'}
-      </p>
     </Section>
   )
 }
