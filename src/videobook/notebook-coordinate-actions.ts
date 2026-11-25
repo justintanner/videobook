@@ -151,7 +151,7 @@ export function planNotebookCoordinateAction(
   if (parsed.kind === 'create') {
     const placement = parsed.destination
       ? { slot: parsed.destination, makeRoom: false }
-      : notebookCreationPlacement(parsed.cellType, document.cells)
+      : notebookCreationPlacement(parsed.cellType, document)
     const destination = placement.slot
     if (!placement.makeRoom && notebookCellAtSlot(document, destination)) {
       throw new Error(`Notebook cell ${notebookGridTag(destination)} is occupied`)

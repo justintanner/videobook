@@ -7,7 +7,7 @@ import {
   allocateGenerateVideoResult,
   allocateGenerateAudioResult,
 } from "./notebook-cell-outputs.js";
-import { placeInNotebookLane } from "./notebook-lanes.js";
+import { placeNewGenerator } from "./notebook-rounds-placement.js";
 import { notebookCellFingerprint } from "./jobs/run-notebook.js";
 import { tryResolveModel } from "./media/descriptor.js";
 import { generationLabel } from "./artifact-label.js";
@@ -106,12 +106,15 @@ async function placeGeneration(input: ChainGenerationPlacementInput): Promise<Ch
         produced.outputCellId = output.id;
         return notebook;
       }
-      const placed = placeInNotebookLane(notebook.cells, "gen");
+      const anchors = input.pins.flatMap((pin) => {
+        const anchor = notebook.cells.find(cell => pin.cellId ? cell.id === pin.cellId : cell.outputArtifactId === pin.artifactId);
+        return anchor ? [{ anchor, pin }] : [];
+      });
       const model = producerModel(input.params);
       const producer = input.engine.notebooks.createCell({
         type: input.placement,
         label: producerLabel(input.params, input.placement),
-        slot: placed.slot,
+        slot: placeNewGenerator(notebook, anchors.map(({ anchor }) => anchor.id)),
         tool: input.tool,
         ...(model ? { model: model.id, provider: model.provider, operation: model.entry.operations[0]! } : {}),
         ...(typeof input.params.prompt === "string"
@@ -123,13 +126,11 @@ async function placeGeneration(input: ChainGenerationPlacementInput): Promise<Ch
           ...(input.goalOrigin ? { goalOrigin: input.goalOrigin } : {}),
         },
       });
-      const provenance = input.pins.flatMap((pin) => {
-        const anchor = notebook.cells.find(cell => pin.cellId ? cell.id === pin.cellId : cell.outputArtifactId === pin.artifactId);
-        return anchor ? [input.engine.notebooks.createEdge({ source: anchor.id, target: producer.id, targetInput: pinTargetInput(pin) })] : [];
-      });
+      const provenance = anchors.map(({ anchor, pin }) =>
+        input.engine.notebooks.createEdge({ source: anchor.id, target: producer.id, targetInput: pinTargetInput(pin) }));
       const withProducer = {
         ...notebook,
-        cells: [...placed.cells, producer],
+        cells: [...notebook.cells, producer],
         edges: [...notebook.edges, ...provenance],
       };
       const allocate = {

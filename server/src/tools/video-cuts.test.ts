@@ -149,7 +149,7 @@ describe("trim_video and split_video", () => {
       source_asset_id: sourceArtifactId,
       source_address: "@a1",
       output: "new",
-      address: "@b1",
+      address: "@a2",
       keep_ranges: [{ startSeconds: 0, endSeconds: SOURCE_SECONDS - 2 }],
       status: "queued",
     });
@@ -169,17 +169,17 @@ describe("trim_video and split_video", () => {
   }, testBudget(120_000));
 
   it("splits a notebook video at cut points into one cell per piece", async () => {
-    await placeOnNotebook(1);
+    await placeOnNotebook(3);
     const split = resultValue(await splitVideoDef(engine).handler({
-      asset_id: "@a2",
+      asset_id: "@a4",
       book_id: bookId,
       notebook_id: notebookId,
       cut_points: ["2s"],
     }));
     expect(split).toMatchObject({
-      source_address: "@a2",
+      source_address: "@a4",
       pieces: [{ startSeconds: 0, endSeconds: 2 }, { startSeconds: 2, endSeconds: SOURCE_SECONDS }],
-      cells: [{ address: "@b2" }, { address: "@c2" }],
+      cells: [{ address: "@a5" }, { address: "@a6" }],
     });
     await waitForQueueJob(String(split.job_id));
     const durations = (split.cells as Array<{ cell_id: string }>)

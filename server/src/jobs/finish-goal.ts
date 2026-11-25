@@ -80,14 +80,15 @@ async function burnSavedWatermark(engine: Engine, artifactId: string, sourceArti
 async function placeFinishedCell(engine: Engine, goal: GoalRecord, artifactId: string, sourceArtifactId: string): Promise<void> {
   const placed = await mutateNotebook(engine, goal.notebookId, "goal_finish", notebook => {
     if (notebook.cells.some(cell => cell.outputArtifactId === artifactId)) return notebook;
+    const destination = coldOpenDestination(notebook, sourceArtifactId);
     const cell = engine.notebooks.createCell({
       type: "video",
       label: "Finished",
-      slot: coldOpenDestination(notebook, sourceArtifactId),
+      slot: destination.slot,
       outputArtifactId: artifactId,
       inputs: { sourceOperation: "goal_finish", sourceArtifactId, state: "completed" },
     });
-    return { ...notebook, cells: [...notebook.cells, cell] };
+    return { ...notebook, cells: [...destination.cells, cell] };
   }, { goalId: goal.goalId, artifactId });
   if (!placed.ok) throw new Error(placed.error.message);
 }

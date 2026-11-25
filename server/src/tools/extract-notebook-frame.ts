@@ -15,7 +15,7 @@ import {
   findGenerationMediaOutput,
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
-import { placeInNotebookLane } from "../notebook-lanes.js";
+import { placeDerivedCell } from "../notebook-rounds-placement.js";
 import { resolvePublishedPostSourceCell } from "../notebook-published-post.js";
 import {
   notebookCellFingerprint,
@@ -119,7 +119,7 @@ export function extractNotebookFrameDef(engine: Engine): ToolDef {
           }
           const anchor = notebook.cells.find((cell) => cell.id === source.id);
           if (!anchor) throw new Error(`Source cell not found: ${source.id}`);
-          const placed = placeInNotebookLane(notebook.cells, "image");
+          const placed = placeDerivedCell(notebook, anchor.id);
           const cell = engine.notebooks.createCell({
             type: "image",
             label,

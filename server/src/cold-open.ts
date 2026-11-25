@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { findCanonicalMediaFile } from "./original-media-file.js";
-import type { Engine, NotebookDocument, NotebookGridSlot } from "videobook-engine";
+import type { Engine, NotebookCell, NotebookDocument, NotebookGridSlot } from "videobook-engine";
 import { z } from "zod";
 import { INTELLIGENCE_MODEL } from "./openai-intelligence.js";
 import { coldOpenRangeError } from "./cold-open-model.js";
-import { slotBelowArtifactOrFirstFree } from "./notebook-placement.js";
+import { placeAfterArtifact } from "./notebook-placement.js";
 
 const coldOpenSuggestionSchema = z.object({
   sourceArtifactId: z.string().uuid(),
@@ -51,8 +51,8 @@ export function readColdOpenSuggestion(engine: Engine, key: string) {
   return parsed.data;
 }
 
-export function coldOpenDestination(notebook: NotebookDocument, sourceArtifactId: string): NotebookGridSlot {
-  return slotBelowArtifactOrFirstFree(notebook, sourceArtifactId, "The notebook needs one empty cell for the cold-open copy.");
+export function coldOpenDestination(notebook: NotebookDocument, sourceArtifactId: string): { cells: NotebookCell[]; slot: NotebookGridSlot } {
+  return placeAfterArtifact(notebook, sourceArtifactId, "The notebook needs one empty cell for the cold-open copy.");
 }
 
 export function checkColdOpenNotebook(engine: Engine, notebookId: string | undefined, sourceArtifactId: string): void {

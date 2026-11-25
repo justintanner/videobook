@@ -87,7 +87,7 @@ const schema = {
   with_graphics: z.boolean().optional().describe("render: include the saved graphics draft in the same encode, below subtitles"),
   graphics_revision: z.string().optional().describe("render with_graphics: reviewed graphics revision from get"),
   output: z.enum(RENDER_OUTPUTS).optional()
-    .describe("render: new (default) writes a subtitled copy into a new video cell below the source, a version of the earlier copy when one exists; replace burns the subtitles into the source video itself, keeping its earlier version in history"),
+    .describe("render: new (default) writes a subtitled copy into a new video cell beside the source (after its round when the source is a generated take), a version of the earlier copy when one exists; replace burns the subtitles into the source video itself, keeping its earlier version in history"),
   edits: z.array(editSchema).max(500).optional()
     .describe("update: edit operations applied in order (word text/timing, hide/insert/reset words, split/merge phrases, positions 0..1 of the frame height, style, aspect, translated lines under each phrase and their hand-written text)"),
   document: advertisedAs(z.unknown(), {

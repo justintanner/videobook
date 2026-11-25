@@ -607,14 +607,14 @@ describe("postToX helper", () => {
     });
 
     expect(firstResult.cell_id).not.toBe(secondResult.cell_id);
-    expect(secondResult.cell_address).toBe("@a3");
+    expect(secondResult.cell_address).toBe("@b2");
     const notebook = fs.notebooks.read(seeded.notebookId);
     if (!notebook.ok) throw new Error(notebook.error.message);
     const published = notebook.value.cells.filter(isPublishedPostCell);
     expect(published).toHaveLength(2);
     expect(published.map((cell) => cell.slot)).toEqual([
       { row: 0, column: 1 },
-      { row: 0, column: 2 },
+      { row: 1, column: 1 },
     ]);
     expect(notebook.value.edges.filter((edge) => edge.targetInput === "post")).toHaveLength(2);
   });

@@ -142,7 +142,7 @@ describe("render_auto_edit job", () => {
     expect(job.state).toBe("done");
     const result = job.result as { output_asset_id: string; frames: number; address: string };
     expect(result.frames).toBe(90);
-    expect(result.address).toBe("@b1");
+    expect(result.address).toBe("@a2");
 
     const manifest = await engine.files.manifest(result.output_asset_id);
     if (!manifest.ok) throw new Error(manifest.error.message);

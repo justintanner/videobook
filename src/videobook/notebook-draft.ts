@@ -24,6 +24,7 @@ import {
 } from './notebook-route-tags'
 import { generationInputTarget, nextGenerationInputPort } from '../../server/src/generation-input-targets'
 import { notebookCellLane, type NotebookLane } from '../../server/src/notebook-lanes'
+import { notebookRoundsModel } from '../../server/src/notebook-rounds'
 
 export type NotebookFlowEdge = Edge<NotebookBusRiverRoute, 'busRiver'>
 
@@ -54,6 +55,12 @@ export interface NotebookCellData extends Record<string, unknown> {
   frameProvenance?: NotebookFrameProvenance
   producerProvider?: string
   producerModel?: string
+  promptVersion?: NotebookPromptVersion
+}
+
+export interface NotebookPromptVersion {
+  version: number
+  count: number
 }
 
 type NotebookFrameProvenance = {
@@ -157,8 +164,20 @@ function cellFrameProvenance(
   }
 }
 
+function notebookPromptVersions(document: NotebookDocument): Map<string, NotebookPromptVersion> {
+  const versions = new Map<string, NotebookPromptVersion>()
+  for (const generator of notebookRoundsModel(document).generators) {
+    if (generator.rounds.length < 2) continue
+    generator.rounds.forEach((round, index) => {
+      for (const takeId of round.takeIds) versions.set(takeId, { version: index + 1, count: generator.rounds.length })
+    })
+  }
+  return versions
+}
+
 export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCellData>> {
   const cellsById = new Map(document.cells.map((cell) => [cell.id, cell]))
+  const promptVersions = notebookPromptVersions(document)
   const routes = notebookBusRiverRoutes(document)
   const targetInputs = new Map<string, string[]>()
   const targetConnectionCounts = new Map<string, number>()
@@ -185,6 +204,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
   return document.cells.map((cell) => {
     const frameProvenance = cellFrameProvenance(cellsById, cell)
     const producer = mediaGenerationProducer(cell, document.cells, document.edges)
+    const promptVersion = promptVersions.get(cell.id)
     return {
       id: cell.id,
       type: cell.type === 'timeline' || cell.type === 'goal' ? cell.type : 'cell',
@@ -224,6 +244,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
           ? {}
           : { producerProvider: producer.provider }),
         ...(producer?.model === undefined ? {} : { producerModel: producer.model }),
+        ...(promptVersion === undefined ? {} : { promptVersion }),
       },
     }
   })

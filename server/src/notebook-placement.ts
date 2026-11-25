@@ -1,19 +1,22 @@
 import type { NotebookCell, NotebookDocument, NotebookGridSlot } from "videobook-engine";
 import { NOTEBOOK_GRID_COLUMN_COUNT, NOTEBOOK_GRID_ROW_COUNT } from "videobook-engine";
-import { notebookGridTag, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
+import { firstEmptyNotebookGridSlot, NOTEBOOK_GRID_FULL_ERROR, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
+import { placeDerivedCell } from "./notebook-rounds-placement.js";
 
-export function slotBelowArtifactOrFirstFree(notebook: NotebookDocument, sourceArtifactId: string, fullMessage: string): NotebookGridSlot {
-  const occupied = new Set(notebookOccupiedSlots(notebook.cells).map(notebookGridTag));
+export function placeAfterArtifact(
+  notebook: NotebookDocument,
+  sourceArtifactId: string,
+  fullMessage: string,
+): { cells: NotebookCell[]; slot: NotebookGridSlot } {
   const source = notebook.cells.find((cell) => cell.outputArtifactId === sourceArtifactId);
-  const below = source ? { row: source.slot.row + 1, column: source.slot.column } : null;
-  if (below && below.row < NOTEBOOK_GRID_ROW_COUNT && !occupied.has(notebookGridTag(below))) return below;
-  for (let row = 0; row < NOTEBOOK_GRID_ROW_COUNT; row += 1) {
-    for (let column = 0; column < NOTEBOOK_GRID_COLUMN_COUNT; column += 1) {
-      const slot = { row, column };
-      if (!occupied.has(notebookGridTag(slot))) return slot;
-    }
+  try {
+    return source
+      ? placeDerivedCell(notebook, source.id)
+      : { cells: [...notebook.cells], slot: firstEmptyNotebookGridSlot(notebookOccupiedSlots(notebook.cells)) };
+  } catch (error) {
+    if (error instanceof Error && error.message === NOTEBOOK_GRID_FULL_ERROR) throw new Error(fullMessage);
+    throw error;
   }
-  throw new Error(fullMessage);
 }
 
 export function slotRight(slot: NotebookGridSlot): NotebookGridSlot {

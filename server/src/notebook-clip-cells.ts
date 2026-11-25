@@ -1,7 +1,8 @@
 import type { Engine, NotebookCell, NotebookDocument, NotebookGridSlot } from "videobook-engine";
-import { nextVerticalSlotFrom, notebookGridTag, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
+import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { CUT_CLIP_OUTPUT_ROLE } from "./notebook-cell-outputs.js";
 import { mutateNotebook } from "./notebook-mutations.js";
+import { placeDerivedCells } from "./notebook-rounds-placement.js";
 import { enqueueNotebookRun } from "./notebook-run-enqueue.js";
 import type { VideoRange } from "./video-cut-ranges.js";
 
@@ -16,18 +17,6 @@ export type ClipCellsResult = {
   jobId: string;
   runId: string;
 };
-
-function clipSlots(cells: readonly NotebookCell[], sourceSlot: NotebookGridSlot, count: number): NotebookGridSlot[] {
-  const occupied = notebookOccupiedSlots(cells);
-  const slots: NotebookGridSlot[] = [];
-  let cursor = sourceSlot;
-  for (let index = 0; index < count; index += 1) {
-    const slot = nextVerticalSlotFrom(cursor, [...occupied, ...slots]);
-    slots.push(slot);
-    cursor = slot;
-  }
-  return slots;
-}
 
 function clipCell(engine: Engine, source: NotebookCell, request: ClipCellRequest, slot: NotebookGridSlot): NotebookCell {
   const first = request.keepRanges[0]!;
@@ -55,15 +44,15 @@ function withClipCells(
 ): { document: NotebookDocument; cells: NotebookCell[] } {
   const source = document.cells.find((cell) => cell.id === sourceCellId);
   if (!source) throw new Error("The source cell was removed");
-  const slots = clipSlots(document.cells, source.slot, requests.length);
-  const cells = requests.map((request, index) => clipCell(engine, source, request, slots[index]!));
+  const placed = placeDerivedCells(document, source.id, requests.length);
+  const cells = requests.map((request, index) => clipCell(engine, source, request, placed.slots[index]!));
   const edges = cells.map((cell) => engine.notebooks.createEdge({
     source: source.id,
     target: cell.id,
     targetInput: "segment",
   }));
   return {
-    document: { ...document, cells: [...document.cells, ...cells], edges: [...document.edges, ...edges] },
+    document: { ...document, cells: [...placed.cells, ...cells], edges: [...document.edges, ...edges] },
     cells,
   };
 }

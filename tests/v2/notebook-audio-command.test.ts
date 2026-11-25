@@ -66,7 +66,7 @@ describe('notebook audio commands', () => {
     }
   })
 
-  it('creates, runs, re-runs, and attaches to a horizontal Extract Audio workflow', async () => {
+  it('creates, runs, re-runs, and attaches to an Extract Audio cell beside its source', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-audio-command-'))
     books = new BookManager({
       libraryDir: join(rootDir, 'books'),
@@ -171,7 +171,7 @@ describe('notebook audio commands', () => {
       reusedAction: false,
       sourceCellId: source.id,
       sourceAddress: '@a1',
-      actionAddress: '@a3',
+      actionAddress: '@b2',
       outputCellId: firstRun.actionCellId,
     })
     expect(calledTools.at(-1)).toBe('extract_notebook_audio')
@@ -183,7 +183,7 @@ describe('notebook audio commands', () => {
     expect(action).toMatchObject({
       type: 'audio',
       label: 'Extract audio',
-      slot: { row: 0, column: 2 },
+      slot: { row: 1, column: 1 },
       outputArtifactId: expect.any(String),
       inputs: expect.objectContaining({
         state: 'completed',
@@ -223,7 +223,7 @@ describe('notebook audio commands', () => {
     })
     expect(secondRun).toMatchObject({
       actionCellId: firstRun.actionCellId,
-      actionAddress: '@a3',
+      actionAddress: '@b2',
       outputCellId: firstRun.actionCellId,
       reusedAction: true,
       sourceCellId: source.id,

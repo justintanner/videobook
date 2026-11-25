@@ -52,7 +52,7 @@ export function NotebookToolbar({
         <button
           type="button"
           className="canvas-auto-arrange"
-          title="Clean up cells by workflow and media type"
+          title="Arrange into rounds: inputs, then each prompt version over its takes, then finishing and posts"
           aria-label="Clean up notebook"
           disabled={arrangeDisabled}
           onClick={() => void onArrange()}

@@ -16,17 +16,21 @@ const existingCells = [
   },
 ] as NotebookCell[]
 
+function routed(tool: string, result: unknown, cells: NotebookCell[]) {
+  return routedMediaCellInputs(tool, result, { cells, edges: [] })
+}
+
 describe('routedMediaCellInputs', () => {
   it('leaves trim and split results to the tools, which place their own cells', () => {
-    expect(routedMediaCellInputs('split_video', {
+    expect(routed('split_video', {
       source_asset_id: SOURCE_ARTIFACT_ID,
       cells: [{ cell_id: 'cell-1', address: '@b1' }],
     }, existingCells)).toEqual([])
-    expect(routedMediaCellInputs('trim_video', {}, existingCells)).toEqual([])
+    expect(routed('trim_video', {}, existingCells)).toEqual([])
   })
 
-  it('places a cover-song audio result in the Audio lane with job provenance', () => {
-    expect(routedMediaCellInputs('make_cover_song', {
+  it('places a cover-song audio result beside its source with job provenance', () => {
+    expect(routed('make_cover_song', {
       audio_asset_id: COVER_ARTIFACT_ID,
       source_asset_id: SOURCE_ARTIFACT_ID,
       source_kind: 'video',
@@ -39,7 +43,7 @@ describe('routedMediaCellInputs', () => {
     }])).toEqual([{
       cell: {
         type: 'audio',
-        slot: { row: 1, column: 0 },
+        slot: { row: 0, column: 1 },
         inputs: {
           sourceOperation: 'make_cover_song',
           source_asset_id: SOURCE_ARTIFACT_ID,
@@ -54,7 +58,7 @@ describe('routedMediaCellInputs', () => {
   })
 
   it('does not place a routed artifact that is already on the grid', () => {
-    expect(routedMediaCellInputs('make_cover_song', {
+    expect(routed('make_cover_song', {
       audio_asset_id: COVER_ARTIFACT_ID,
       source_asset_id: SOURCE_ARTIFACT_ID,
     }, [{
@@ -63,8 +67,8 @@ describe('routedMediaCellInputs', () => {
     }])).toEqual([])
   })
 
-  it('places a completed splice in the Videos lane below the source videos with provenance', () => {
-    expect(routedMediaCellInputs('splice_video', {
+  it('places a completed splice under the square beside its first source when that square is taken', () => {
+    expect(routed('splice_video', {
       asset_id: SPLICE_ARTIFACT_ID,
       first: SOURCE_ARTIFACT_ID,
       second: SECOND_VIDEO_ARTIFACT_ID,
@@ -85,7 +89,7 @@ describe('routedMediaCellInputs', () => {
     ])).toEqual([{
       cell: {
         type: 'video',
-        slot: { row: 1, column: 0 },
+        slot: { row: 1, column: 1 },
         inputs: {
           sourceOperation: 'splice_video',
           first_asset_id: SOURCE_ARTIFACT_ID,
@@ -99,8 +103,8 @@ describe('routedMediaCellInputs', () => {
     }])
   })
 
-  it('opens a Videos row ahead of later lanes for a splice', () => {
-    expect(routedMediaCellInputs('splice_video', {
+  it('stacks a splice in the child column of its first source', () => {
+    expect(routed('splice_video', {
       asset_id: SPLICE_ARTIFACT_ID,
       first: SOURCE_ARTIFACT_ID,
       second: SECOND_VIDEO_ARTIFACT_ID,
@@ -126,15 +130,15 @@ describe('routedMediaCellInputs', () => {
         slot: { row: 2, column: 0 },
       } as NotebookCell,
     ])).toMatchObject([{
-      cell: { type: 'video', slot: { row: 2, column: 0 } },
-      makeRoom: true,
+      cell: { type: 'video', slot: { row: 1, column: 1 } },
+      makeRoom: false,
     }])
   })
 
   it('keeps additional splice sources in provenance and placement', () => {
     const thirdId = '019fabcd-1234-7000-8000-000000000108'
     const fourthId = '019fabcd-1234-7000-8000-000000000109'
-    expect(routedMediaCellInputs('splice_video', {
+    expect(routed('splice_video', {
       asset_id: SPLICE_ARTIFACT_ID,
       first: SOURCE_ARTIFACT_ID,
       second: SECOND_VIDEO_ARTIFACT_ID,
@@ -168,7 +172,7 @@ describe('routedMediaCellInputs', () => {
     ])).toEqual([{
       cell: {
         type: 'video',
-        slot: { row: 1, column: 0 },
+        slot: { row: 1, column: 1 },
         inputs: {
           sourceOperation: 'splice_video',
           first_asset_id: SOURCE_ARTIFACT_ID,
@@ -184,14 +188,14 @@ describe('routedMediaCellInputs', () => {
   })
 
   it('rejects a completed splice without both source artifacts', () => {
-    expect(() => routedMediaCellInputs('splice_video', {
+    expect(() => routed('splice_video', {
       asset_id: SPLICE_ARTIFACT_ID,
       first: SOURCE_ARTIFACT_ID,
     }, existingCells)).toThrow('did not return both source artifacts')
   })
 
   it('places a smooth scene concat using its explicit source fields', () => {
-    const [placed] = routedMediaCellInputs('smooth_scene_concat', {
+    const [placed] = routed('smooth_scene_concat', {
       asset_id: SPLICE_ARTIFACT_ID,
       first_asset_id: SOURCE_ARTIFACT_ID,
       second_asset_id: SECOND_VIDEO_ARTIFACT_ID,
@@ -212,7 +216,7 @@ describe('routedMediaCellInputs', () => {
     ])
     expect(placed?.makeRoom).toBe(false)
     expect(placed?.cell).toMatchObject({
-      slot: { row: 1, column: 0 },
+      slot: { row: 1, column: 1 },
       inputs: {
         sourceOperation: 'smooth_scene_concat',
         first_asset_id: SOURCE_ARTIFACT_ID,

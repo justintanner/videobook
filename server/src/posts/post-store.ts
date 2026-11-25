@@ -6,6 +6,7 @@ import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { nextHorizontalSlotFrom, notebookGridTag, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
 import { slotRight } from "../notebook-placement.js";
+import { placeDerivedCell, placeLooseCell } from "../notebook-rounds-placement.js";
 import type { PostDefinition, PostDelivery, PostPlatform, PostRuntime, PostView } from "./post-contract.js";
 
 const key = (id: string) => `application.post.v1.${id}`;
@@ -129,9 +130,10 @@ export async function createPost(engine: Engine, args: {
       ...(platform === "tiktok" ? { delivery: args.delivery ?? "icloud" } : {}),
       createdAt: new Date().toISOString(), source: frozen, lineage: source ? captureLineage(notebook, source) : [],
     };
+    const placed = source ? placeDerivedCell(notebook, source.id) : { cells: notebook.cells, slot: placeLooseCell(notebook) };
     const cell = engine.notebooks.createCell({
       type: "post", label: `Post · ${definition.platform}`,
-      slot: nextHorizontalSlotFrom(source ? slotRight(source.slot) : { row: 0, column: 0 }, notebookOccupiedSlots(notebook.cells)),
+      slot: placed.slot,
       inputs: { post: definition },
       ...(frozen?.snapshotArtifactId ? { outputArtifactId: frozen.snapshotArtifactId, references: [{
         id: uuidv7(), kind: "artifact", targetId: frozen.artifactId,
@@ -139,7 +141,7 @@ export async function createPost(engine: Engine, args: {
       }] } : {}),
     });
     createdId = cell.id;
-    const result = await engine.notebooks.write({ ...notebook, cells: [...notebook.cells, cell], edges: source ? [...notebook.edges, engine.notebooks.createEdge({ source: source.id, target: cell.id, targetInput: "post" })] : notebook.edges }, { operation: "create_post" });
+    const result = await engine.notebooks.write({ ...notebook, cells: [...placed.cells, cell], edges: source ? [...notebook.edges, engine.notebooks.createEdge({ source: source.id, target: cell.id, targetInput: "post" })] : notebook.edges }, { operation: "create_post" });
     if (!result.ok) throw new Error(result.error.message);
   });
   return getPost(engine, createdId);

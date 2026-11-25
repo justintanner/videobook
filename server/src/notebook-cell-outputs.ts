@@ -10,7 +10,7 @@ import {
   findGenerateVideoOutputCell,
 } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
-import { placeInNotebookLane, type NotebookLane } from "./notebook-lanes.js";
+import { placeGenerationTake } from "./notebook-rounds-placement.js";
 import { isPublishedPostCell } from "./notebook-published-post.js";
 
 export const EXTRACT_FRAME_OUTPUT_ROLE = "extract-frame-output";
@@ -356,7 +356,6 @@ type GenerationResultMatch = {
 type GenerationOutputSpec = {
   producerType: GenerationProducerType;
   outputType: GenerationOutputType;
-  lane: NotebookLane;
   mediaRole: string;
   labelSuffix: string;
   concurrent: boolean;
@@ -365,7 +364,6 @@ type GenerationOutputSpec = {
 const IMAGE_OUTPUT_SPEC: GenerationOutputSpec = {
   producerType: "generate_image",
   outputType: "image",
-  lane: "image",
   mediaRole: GENERATE_IMAGE_OUTPUT_ROLE,
   labelSuffix: "image",
   concurrent: true,
@@ -374,7 +372,6 @@ const IMAGE_OUTPUT_SPEC: GenerationOutputSpec = {
 const VIDEO_OUTPUT_SPEC: GenerationOutputSpec = {
   producerType: "generate_video",
   outputType: "video",
-  lane: "video",
   mediaRole: GENERATE_VIDEO_OUTPUT_ROLE,
   labelSuffix: "video",
   concurrent: true,
@@ -383,7 +380,6 @@ const VIDEO_OUTPUT_SPEC: GenerationOutputSpec = {
 const AUDIO_OUTPUT_SPEC: GenerationOutputSpec = {
   producerType: "generate_audio",
   outputType: "audio",
-  lane: "audio",
   mediaRole: GENERATE_AUDIO_OUTPUT_ROLE,
   labelSuffix: "audio",
   concurrent: false,
@@ -569,7 +565,7 @@ function allocateGenerationResult(
   },
 ): AllocatedGenerationResult {
   const producer = requireProducer(document, producerCellId, spec);
-  const placed = placeInNotebookLane(document.cells, spec.lane);
+  const placed = placeGenerationTake(document, producer.id);
   const created = engine.notebooks.createCell({
     type: spec.outputType,
     label: generationOutputLabel(producer, spec.labelSuffix),

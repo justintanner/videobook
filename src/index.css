@@ -1777,6 +1777,121 @@ textarea:focus-visible {
     0 0 20px rgba(72, 178, 111, 0.06);
 }
 
+/* ---- rounds: earlier prompt versions ----
+   A generator heads the column of its current prompt; every earlier prompt
+   version that still has takes heads its own column with this tile, drawn on
+   the empty square above them. It is board decoration, not a cell. */
+.notebook-round-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: calc(7px * var(--notebook-detail-scale, 1));
+  box-sizing: border-box;
+  padding: calc(13px * var(--notebook-detail-scale, 1)) calc(16px * var(--notebook-detail-scale, 1)) calc(10px * var(--notebook-detail-scale, 1));
+  overflow: hidden;
+  border: 1px dashed rgba(114, 231, 170, 0.28);
+  border-radius: 3px;
+  color: #9dbfae;
+  background: rgba(4, 14, 9, 0.97);
+  font-family: 'Videobook Tile Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: var(--cell-body-font-size, calc(13px * var(--notebook-detail-scale, 1)));
+}
+
+.notebook-round-header::before {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: min(17px, calc(17px * var(--notebook-detail-scale, 1)));
+  height: min(17px, calc(17px * var(--notebook-detail-scale, 1)));
+  border-top: 2px solid rgba(114, 231, 170, 0.55);
+  border-left: 2px solid rgba(114, 231, 170, 0.55);
+  border-top-left-radius: 3px;
+  content: '';
+}
+
+.notebook-round-header-title {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(6px * var(--notebook-detail-scale, 1));
+  color: #8fb7a1;
+  font-size: calc(11px * var(--notebook-detail-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.notebook-round-header-title > svg {
+  flex: none;
+  width: calc(12px * var(--notebook-detail-scale, 1));
+  height: calc(12px * var(--notebook-detail-scale, 1));
+}
+
+.notebook-round-header-takes {
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.notebook-round-header-rewritten {
+  flex: none;
+  color: #a3f2c8;
+  font-size: calc(10px * var(--notebook-detail-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.notebook-round-header-prompt {
+  display: -webkit-box;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+  line-height: 1.45;
+  letter-spacing: 0.015em;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+.notebook-round-header-token {
+  padding: 0 3px;
+  border-radius: 3px;
+  color: #a3f2c8;
+  background: rgba(114, 231, 170, 0.16);
+}
+
+.notebook-round-header-diff {
+  display: grid;
+  gap: calc(3px * var(--notebook-detail-scale, 1));
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  line-height: 1.45;
+}
+
+.notebook-round-header-diff > li {
+  display: grid;
+  grid-template-columns: 1.1em minmax(0, 1fr);
+  overflow-wrap: anywhere;
+}
+
+.notebook-round-header-removed {
+  color: #8aa898;
+}
+
+.notebook-round-header-added {
+  color: #a3f2c8;
+}
+
 .react-flow {
   z-index: 2;
 }
@@ -2688,6 +2803,18 @@ textarea:focus-visible {
 
 .cell-route-segment + .cell-route-detail,
 .cell-route-more + .cell-route-detail {
+  padding-left: calc(6px * var(--route-scale));
+  border-left: 1px solid rgba(169, 214, 191, 0.22);
+}
+
+.cell-route-version {
+  flex: none;
+  color: #c9f8dd;
+  font-weight: 600;
+}
+
+.cell-route-version + .cell-route-generator {
+  margin-left: calc(6px * var(--route-scale));
   padding-left: calc(6px * var(--route-scale));
   border-left: 1px solid rgba(169, 214, 191, 0.22);
 }

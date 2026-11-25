@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Engine, Job, NotebookCell, NotebookDocument, NotebookGridSlot } from "videobook-engine";
-import { slotBelowArtifactOrFirstFree } from "./notebook-placement.js";
+import { placeAfterArtifact } from "./notebook-placement.js";
 
 export const RENDER_OUTPUTS = ["new", "replace"] as const;
 export type RenderOutput = typeof RENDER_OUTPUTS[number];
@@ -16,7 +16,7 @@ export interface RenderRequestStatus {
 }
 
 type RenderRequestRecord = { requestId: string; jobId: number | null; outputArtifactId: string };
-type RenderDestination = { existing: NotebookCell | null; slot: NotebookGridSlot };
+type RenderDestination = { existing: NotebookCell | null; slot: NotebookGridSlot; cells: NotebookCell[] };
 
 const REUSABLE_JOB_STATES: ReadonlySet<string> = new Set(["queued", "running", "completing", "done"]);
 
@@ -88,5 +88,7 @@ export function renderDestination(
   fullMessage: string,
 ): RenderDestination {
   const existing = notebook.cells.find(isOutputCell);
-  return existing ? { existing, slot: existing.slot } : { existing: null, slot: slotBelowArtifactOrFirstFree(notebook, sourceArtifactId, fullMessage) };
+  return existing
+    ? { existing, slot: existing.slot, cells: notebook.cells }
+    : { existing: null, ...placeAfterArtifact(notebook, sourceArtifactId, fullMessage) };
 }

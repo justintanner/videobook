@@ -36,6 +36,7 @@ import {
 import { postPlatformName } from '@/videobook/post-delivery-review'
 import { PostTile } from '@/components/videobook/PostTile'
 import type { CanvasCellData, CanvasNode, RunningTakes } from '@/videobook/notebook-canvas'
+import type { NotebookPromptVersion } from '@/videobook/notebook-draft'
 import {
   isNotebookGenerationCellType,
   notebookCellFamily,
@@ -558,15 +559,20 @@ function generatorDetail(
   identity: GenerationIdentity,
   shownProvider: string | null,
   shownModel: string | null,
+  promptVersion: NotebookPromptVersion | null = null,
 ): CellSourceDetail {
+  const made = `Made with ${identity.label}`
   return {
     node: (
-      <CellGeneratorIdentity
-        identity={{ ...identity, provider: shownProvider ?? identity.provider, model: shownModel }}
-        className="cell-route-generator"
-      />
+      <>
+        {promptVersion && <span className="cell-route-version">v{promptVersion.version}</span>}
+        <CellGeneratorIdentity
+          identity={{ ...identity, provider: shownProvider ?? identity.provider, model: shownModel }}
+          className="cell-route-generator"
+        />
+      </>
     ),
-    label: `Made with ${identity.label}`,
+    label: promptVersion ? `${made}, prompt version ${promptVersion.version} of ${promptVersion.count}` : made,
   }
 }
 
@@ -587,6 +593,7 @@ function cellSourceDetail({
   generator,
   generatorProvider,
   generatorModel,
+  promptVersion,
   toolName,
   frameProvenance,
   hasIncoming,
@@ -594,11 +601,18 @@ function cellSourceDetail({
   generator: GenerationIdentity | null
   generatorProvider: string | null
   generatorModel: string | null
+  promptVersion: NotebookPromptVersion | null
   toolName: string | null
   frameProvenance: CanvasCellData['frameProvenance']
   hasIncoming: boolean
 }): CellSourceDetail | null {
-  if (generator) return generatorDetail(generator, generatorProvider, generatorModel)
+  if (generator) return generatorDetail(generator, generatorProvider, generatorModel, promptVersion)
+  if (promptVersion) {
+    return {
+      node: <span className="cell-route-version">v{promptVersion.version}</span>,
+      label: `Prompt version ${promptVersion.version} of ${promptVersion.count}`,
+    }
+  }
   const frame = frameDetail(frameProvenance, hasIncoming)
   if (frame) return frame
   return toolName
@@ -789,6 +803,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
       generatorModel: generationResult && (data.model ?? data.producerModel)
         ? compactGenerationModelLabel(data.model ?? data.producerModel ?? '', data.provider ?? data.producerProvider ?? null)
         : null,
+      promptVersion: generationResult ? data.promptVersion ?? null : null,
       toolName: mediaTile && data.model
         ? catalogEntry?.title ?? data.model
         : mediaTile ? data.tool ?? null : null,

@@ -66,7 +66,7 @@ describe('last-work placement', () => {
     expect(lastCreatedCellSlot([later, earlier])).toEqual(later.slot)
   })
 
-  it('places each new tile in its lane so the board already matches Clean', async () => {
+  it('places each new tile by the rounds rules and keeps a cleaned board clean', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
@@ -91,7 +91,7 @@ describe('last-work placement', () => {
     }>
     const notebookId = notebooks[0]!.id
     const place = async (type: NotebookCellType, label: string) => {
-      const placement = notebookCreationPlacement(type, value(engine.notebooks.read(notebookId)).cells)
+      const placement = notebookCreationPlacement(type, value(engine.notebooks.read(notebookId)))
       const cell = resultJson(await invoke('create_notebook_cell', {
         notebook_id: notebookId,
         ...(placement.makeRoom ? { make_room: true } : {}),
@@ -106,24 +106,29 @@ describe('last-work placement', () => {
     const image = await place('generate_image', 'gen-image')
     expect(image.placement).toEqual({ slot: { row: 1, column: 0 }, makeRoom: false })
     const audio = await place('generate_audio', 'gen-audio')
-    expect(audio.placement).toEqual({ slot: { row: 1, column: 1 }, makeRoom: false })
-    expect(slotOf(audio.output_cell!.id)).toEqual({ row: 2, column: 0 })
-    const frame = await place('image', 'frame')
-    expect(frame.placement).toEqual({ slot: { row: 2, column: 0 }, makeRoom: true })
+    expect(audio.placement).toEqual({ slot: { row: 2, column: 0 }, makeRoom: false })
     expect(slotOf(audio.output_cell!.id)).toEqual({ row: 3, column: 0 })
+    const frame = await place('image', 'frame')
+    expect(frame.placement).toEqual({ slot: { row: 4, column: 0 }, makeRoom: false })
     const video = await place('generate_video', 'gen-video')
-    expect(video.placement).toEqual({ slot: { row: 1, column: 2 }, makeRoom: false })
+    expect(video.placement).toEqual({ slot: { row: 5, column: 0 }, makeRoom: false })
     const secondSource = await place('video', 'second-source')
-    expect(secondSource.placement).toEqual({ slot: { row: 0, column: 1 }, makeRoom: false })
+    expect(secondSource.placement).toEqual({ slot: { row: 6, column: 0 }, makeRoom: false })
 
     const notebook = value(engine.notebooks.read(notebookId))
     expect(findGenerateImageOutput(notebook, image.id)).toBeNull()
     expect(findGenerateVideoOutput(notebook, video.id)).toBeNull()
     expect(findGenerateAudioOutput(notebook, audio.id)?.outputCell.slot).toEqual({ row: 3, column: 0 })
-    expect(notebookDocumentsEqual(notebook, relayoutNotebookDocument(engine, notebook))).toBe(true)
     const occupiedKeys = notebook.cells.map((cell) =>
       `${cell.slot.row}:${cell.slot.column}`)
     expect(new Set(occupiedKeys).size).toBe(occupiedKeys.length)
+
+    const cleaned = relayoutNotebookDocument(engine, notebook)
+    value(await engine.notebooks.write(cleaned))
+    const looseMedia = await place('image', 'late-image')
+    expect(looseMedia.placement).toEqual({ slot: { row: 4, column: 3 }, makeRoom: false })
+    const grown = value(engine.notebooks.read(notebookId))
+    expect(notebookDocumentsEqual(grown, relayoutNotebookDocument(engine, grown))).toBe(true)
   })
 
   it('places analyze output and workflow scaffolds next to existing work', async () => {

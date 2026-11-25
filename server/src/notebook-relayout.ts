@@ -2,13 +2,13 @@ import type { Engine, NotebookDocument } from "videobook-engine";
 import { NOTEBOOK_GRID_ROW_COUNT } from "videobook-engine/notebook-grid";
 import { ensureGenerationMediaOutputs } from "./notebook-cell-outputs.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
-import { arrangeNotebookLanes } from "./notebook-lanes.js";
+import { arrangeNotebookRounds } from "./notebook-rounds-arrange.js";
 
-function arrangeLanes(document: NotebookDocument): NotebookDocument {
-  const arranged = arrangeNotebookLanes(document.cells);
+function arrangeRounds(document: NotebookDocument): NotebookDocument {
+  const arranged = arrangeNotebookRounds(document);
   if (!arranged.ok) {
     throw new Error(
-      `The lane layout needs ${arranged.requiredRows} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
+      `The rounds layout needs ${arranged.requiredRows} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
     );
   }
   const slots = new Map(arranged.slots.map(({ id, row, column }) => [id, { row, column }]));
@@ -25,7 +25,7 @@ export function relayoutNotebookDocument(
   const migrated = ensureGenerationMediaOutputs(engine, document);
   return migrated.cells.some((cell) => cell.type === "goal")
     ? arrangeGoalNotebook(migrated)
-    : arrangeLanes(migrated);
+    : arrangeRounds(migrated);
 }
 
 export function notebookDocumentsEqual(

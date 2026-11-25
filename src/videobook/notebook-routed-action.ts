@@ -1,5 +1,5 @@
-import type { NotebookCell } from 'videobook-engine'
-import { notebookLanePlacement, openNotebookRow, type NotebookLaneCell } from '../../server/src/notebook-lanes.js'
+import type { NotebookCell, NotebookEdge } from 'videobook-engine'
+import { placeDerivedCell, placeLooseCell } from '../../server/src/notebook-rounds-placement.js'
 import { isPublishedPostCell } from './notebook-published-post.js'
 import { nonBlankStringValue, recordValue } from './value-decoders.js'
 
@@ -13,6 +13,11 @@ interface RoutedMediaCellInput {
 interface RoutedMediaCellPlacement {
   cell: RoutedMediaCellInput
   makeRoom: boolean
+}
+
+interface RoutedNotebook {
+  cells: readonly NotebookCell[]
+  edges: readonly NotebookEdge[]
 }
 
 interface RoutedMediaOutput {
@@ -103,28 +108,41 @@ function spliceOutput(
   }
 }
 
+function routedSourceArtifactId(output: RoutedMediaOutput): string | null {
+  return nonBlankStringValue(output.inputs.source_asset_id) ?? nonBlankStringValue(output.inputs.first_asset_id)
+}
+
+function movedAny(before: readonly NotebookCell[], after: readonly NotebookCell[]): boolean {
+  return after.some((cell, index) =>
+    cell.slot.row !== before[index]?.slot.row || cell.slot.column !== before[index]?.slot.column)
+}
+
 function placeRoutedOutputs(
   outputs: readonly RoutedMediaOutput[],
-  cells: readonly NotebookCell[],
+  document: RoutedNotebook,
 ): RoutedMediaCellPlacement[] {
-  let working: NotebookLaneCell[] = [...cells]
+  let working: NotebookCell[] = [...document.cells]
   return outputs.map((output, index) => {
-    const placement = notebookLanePlacement(working, output.type === 'audio' ? 'audio' : 'video')
-    if (placement.makeRoom) working = openNotebookRow(working, placement.slot.row)
-    working = [...working, {
+    const sourceArtifactId = routedSourceArtifactId(output)
+    const anchor = sourceArtifactId ? working.find((cell) => cell.outputArtifactId === sourceArtifactId) : undefined
+    const placed = anchor
+      ? placeDerivedCell({ cells: working, edges: document.edges }, anchor.id)
+      : { cells: working, slot: placeLooseCell({ cells: working, edges: document.edges }) }
+    const makeRoom = movedAny(working, placed.cells)
+    working = [...placed.cells, {
       id: `routed-output-${index}`,
       type: output.type,
-      slot: placement.slot,
+      slot: placed.slot,
       inputs: output.inputs,
     }]
     return {
       cell: {
         type: output.type,
-        slot: placement.slot,
+        slot: placed.slot,
         inputs: output.inputs,
         output_artifact_id: output.artifactId,
       },
-      makeRoom: placement.makeRoom,
+      makeRoom,
     }
   })
 }
@@ -132,7 +150,7 @@ function placeRoutedOutputs(
 export function routedMediaCellInputs(
   tool: string,
   result: unknown,
-  cells: readonly NotebookCell[],
+  document: RoutedNotebook,
 ): RoutedMediaCellPlacement[] {
   if (
     tool !== 'make_cover_song'
@@ -144,7 +162,7 @@ export function routedMediaCellInputs(
   const outputs = tool === 'make_cover_song'
     ? [coverSongOutput(value)]
     : [spliceOutput(tool, value)]
-  const unplaced = outputs.filter((output) => !cells.some((cell) =>
+  const unplaced = outputs.filter((output) => !document.cells.some((cell) =>
     !isPublishedPostCell(cell) && cell.outputArtifactId === output.artifactId))
-  return placeRoutedOutputs(unplaced, cells)
+  return placeRoutedOutputs(unplaced, document)
 }

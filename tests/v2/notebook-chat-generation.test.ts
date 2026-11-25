@@ -277,7 +277,7 @@ describe('notebook chat generation', () => {
     expect(connected.value.cells.find((cell) => cell.id === materialized.cellId))
       .toMatchObject({
         type: 'generate_image',
-        slot: { row: 1, column: 0 },
+        slot: { row: 0, column: 3 },
         prompt: 'neon rain',
         provider: 'kie',
         model: 'kie:nano-banana-2-1',

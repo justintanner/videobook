@@ -189,7 +189,7 @@ const schema = {
   with_subtitles: z.string().regex(/^(original|[a-z]{2})$/u).optional().describe("render: include the saved subtitle draft in this language in one encode, using its aspect and background"),
   subtitles_revision: z.string().optional().describe("render with_subtitles: reviewed revision from subtitles in get"),
   output: z.enum(RENDER_OUTPUTS).optional()
-    .describe("render: new (default) writes a copy with the graphics into a new video cell below the source, a version of the earlier copy when one exists; replace burns the graphics into the source video itself, keeping its earlier version in history, and clears the saved graphics"),
+    .describe("render: new (default) writes a copy with the graphics into a new video cell beside the source (after its round when the source is a generated take), a version of the earlier copy when one exists; replace burns the graphics into the source video itself, keeping its earlier version in history, and clears the saved graphics"),
   edits: z.array(editSchema).max(200).optional()
     .describe("update: edits applied in order. Sizes, gaps and paddings are fractions of the frame's short side, text width a fraction of the positioning space, a box's width and height fractions of the positioning space's width and height, positions 0..1 inside the space, times in seconds"),
   frame: graphicsFrameSchema.optional().describe("update: saved canvas aspect, crop or blur fit and normalized focus; templates never store this setting"),

@@ -66,7 +66,7 @@ describe('notebook coordinate chat actions', () => {
     ])
   })
 
-  it('auto-places new cells row-major and honors explicit destinations', () => {
+  it('appends new cells after the last loose cell and honors explicit destinations', () => {
     const current = document([cell('one', 0, 0), cell('three', 0, 2)])
     const automatic = planNotebookCoordinateAction(
       current,
@@ -75,9 +75,9 @@ describe('notebook coordinate chat actions', () => {
     expect(automatic.action).toEqual({
       kind: 'create',
       cellType: 'prompt',
-      destination: { row: 0, column: 1 },
+      destination: { row: 0, column: 3 },
     })
-    expect(automatic.summary).toBe('Create a prompt cell at @a2')
+    expect(automatic.summary).toBe('Create a prompt cell at @a4')
 
     const explicit = planNotebookCoordinateAction(
       current,
@@ -87,7 +87,7 @@ describe('notebook coordinate chat actions', () => {
     expect(explicit.expectations).toEqual([{ address: '@bl8', cellId: null }])
   })
 
-  it('places new cells in their lane and opens a row when the lane is missing', () => {
+  it('starts a new generator on a fresh row below the content', () => {
     const current = document([
       { id: 'source', type: 'video', slot: { row: 0, column: 0 } },
       cell('gen', 1, 4),
@@ -100,9 +100,9 @@ describe('notebook coordinate chat actions', () => {
     expect(image.action).toEqual({
       kind: 'create',
       cellType: 'generate_image',
-      destination: { row: 1, column: 0 },
+      destination: { row: 3, column: 0 },
     })
-    expect(image.expectations).toEqual([{ address: '@b1', cellId: null }])
+    expect(image.expectations).toEqual([{ address: '@d1', cellId: null }])
     const video = planNotebookCoordinateAction(
       document([
         { id: 'source', type: 'video', slot: { row: 0, column: 0 } },
@@ -113,10 +113,9 @@ describe('notebook coordinate chat actions', () => {
     expect(video.action).toEqual({
       kind: 'create',
       cellType: 'generate_video',
-      destination: { row: 1, column: 0 },
-      makeRoom: true,
+      destination: { row: 2, column: 0 },
     })
-    expect(video.expectations).toEqual([{ address: '@b1', cellId: 'image' }])
+    expect(video.expectations).toEqual([{ address: '@c1', cellId: null }])
   })
 
   it('rejects empty sources, occupied creates, and a full grid', () => {

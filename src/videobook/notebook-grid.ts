@@ -12,13 +12,9 @@ import {
   parseNotebookGridAddress,
 } from 'videobook-engine/notebook-grid'
 import type { NotebookCellType, NotebookGridSlot } from 'videobook-engine'
-import {
-  notebookLanePlacement,
-  notebookRowOpening,
-  notebookTypeLane,
-  type NotebookLaneCell,
-  type NotebookLanePlacement,
-} from '../../server/src/notebook-lanes'
+import { notebookRowOpening } from '../../server/src/notebook-lanes'
+import { isRoundsGenerator, type RoundsDocument } from '../../server/src/notebook-rounds'
+import { placeLooseCell, placeNewGenerator } from '../../server/src/notebook-rounds-placement'
 
 export interface NotebookGridData extends Record<string, unknown> {
   slot: NotebookGridSlot
@@ -231,14 +227,20 @@ export function openNotebookGridNodeRow<T extends NotebookGridData & { kind: str
   })
 }
 
+export interface NotebookCreationPlacement {
+  slot: NotebookGridSlot
+  makeRoom: boolean
+}
+
 export function notebookCreationPlacement(
   type: NotebookCellType,
-  cells: readonly NotebookLaneCell[],
-): NotebookLanePlacement {
+  document: RoundsDocument,
+): NotebookCreationPlacement {
   if (type === 'timeline') {
-    return { slot: firstEmptyNotebookGridRow(notebookOccupiedSlots(cells)), makeRoom: false }
+    return { slot: firstEmptyNotebookGridRow(notebookOccupiedSlots(document.cells)), makeRoom: false }
   }
-  return notebookLanePlacement(cells, notebookTypeLane(type))
+  const slot = isRoundsGenerator({ type }) ? placeNewGenerator(document) : placeLooseCell(document)
+  return { slot, makeRoom: false }
 }
 
 export interface NotebookGridMetrics {

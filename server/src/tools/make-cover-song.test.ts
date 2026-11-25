@@ -343,7 +343,7 @@ describe("make_cover_song tool", () => {
     const placements = routedMediaCellInputs(
       "make_cover_song",
       parsed,
-      current.value.cells,
+      current.value,
     );
 
     expect(placements).toHaveLength(1);

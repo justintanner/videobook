@@ -19,7 +19,7 @@ type RenderedCellInput = {
   sourceArtifactId: string;
   outputArtifactId: string;
   fallbackLabel: string;
-  destination: (notebook: NotebookDocument) => { existing: NotebookCell | null; slot: NotebookGridSlot };
+  destination: (notebook: NotebookDocument) => { existing: NotebookCell | null; slot: NotebookGridSlot; cells: NotebookCell[] };
   inputs: Record<string, unknown>;
 };
 
@@ -49,7 +49,7 @@ function placeOutput(engine: Engine, notebook: NotebookDocument, input: Rendered
     outputArtifactId: input.outputArtifactId,
     inputs: { ...input.inputs, state: "completed" },
   });
-  return { notebook: { ...notebook, cells: [...notebook.cells, cell] }, cell };
+  return { notebook: { ...notebook, cells: [...destination.cells, cell] }, cell };
 }
 
 export async function placeRenderedCell(engine: Engine, input: RenderedCellInput): Promise<RenderedCellPlacement> {

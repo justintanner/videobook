@@ -1,4 +1,3 @@
-import { notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import type {
   Engine,
   NotebookCell,
@@ -6,7 +5,6 @@ import type {
 } from "videobook-engine";
 import {
   findVideoFile,
-  nextHorizontalSlotFrom,
   notebookGridTag,
   resolveNotebookCellArtifactId,
 } from "videobook-engine";
@@ -21,7 +19,7 @@ import {
   findGenerationMediaOutput,
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
-import { slotRight } from "../notebook-placement.js";
+import { placeDerivedCell } from "../notebook-rounds-placement.js";
 import { resolvePublishedPostSourceCell } from "../notebook-published-post.js";
 import {
   notebookCellFingerprint,
@@ -131,12 +129,11 @@ export function extractNotebookAudioDef(engine: Engine): ToolDef {
           }
           const anchor = notebook.cells.find((cell) => cell.id === source.id);
           if (!anchor) throw new Error(`Source cell not found: ${source.id}`);
-          const occupied = notebookOccupiedSlots(notebook.cells);
-          const slot = nextHorizontalSlotFrom(slotRight(anchor.slot), occupied);
+          const placed = placeDerivedCell(notebook, anchor.id);
           const cell = engine.notebooks.createCell({
             type: "audio",
             label,
-            slot,
+            slot: placed.slot,
             inputs: {
               mediaRole: EXTRACT_AUDIO_OUTPUT_ROLE,
               sourceCellId: anchor.id,
@@ -155,7 +152,7 @@ export function extractNotebookAudioDef(engine: Engine): ToolDef {
           const queuedAt = new Date().toISOString();
           return {
             ...notebook,
-            cells: [...notebook.cells, cell],
+            cells: [...placed.cells, cell],
             edges: [...notebook.edges, edge],
             execution: {
               ...(notebook.execution ?? {}),

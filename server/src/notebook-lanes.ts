@@ -1,11 +1,5 @@
 import type { NotebookCell, NotebookCellType, NotebookGridSlot } from "videobook-engine";
-import {
-  firstEmptyNotebookGridSlot,
-  NOTEBOOK_GRID_COLUMN_COUNT,
-  NOTEBOOK_GRID_FULL_ERROR,
-  NOTEBOOK_GRID_ROW_COUNT,
-  notebookOccupiedSlots,
-} from "videobook-engine/notebook-grid";
+import { NOTEBOOK_GRID_FULL_ERROR, NOTEBOOK_GRID_ROW_COUNT } from "videobook-engine/notebook-grid";
 
 export type NotebookLane = "source" | "gen" | "image" | "video" | "audio" | "work";
 
@@ -34,21 +28,6 @@ export interface NotebookGridCell {
   id: string;
   type: string;
   slot: NotebookGridSlot;
-}
-
-export interface NotebookLaneSlot {
-  id: string;
-  row: number;
-  column: number;
-}
-
-export type NotebookLaneArrangement =
-  | { ok: true; rowCount: number; slots: NotebookLaneSlot[] }
-  | { ok: false; requiredRows: number };
-
-export interface NotebookLanePlacement {
-  slot: NotebookGridSlot;
-  makeRoom: boolean;
 }
 
 type VideoLane = Extract<NotebookLane, "source" | "video">;
@@ -144,112 +123,8 @@ export function notebookLaneLabel(lane: NotebookLane): string {
   return NOTEBOOK_LANE_LABELS[lane];
 }
 
-function laneRank(lane: NotebookLane): number {
-  return NOTEBOOK_LANE_ORDER.indexOf(lane);
-}
-
-function readingOrder(left: NotebookLaneCell, right: NotebookLaneCell): number {
-  return left.slot.row - right.slot.row
-    || left.slot.column - right.slot.column
-    || left.id.localeCompare(right.id);
-}
-
-function slotKey(slot: NotebookGridSlot): string {
-  return `${slot.row}:${slot.column}`;
-}
-
 function timelineRows(cells: readonly NotebookGridCell[]): Set<number> {
   return new Set(cells.filter((cell) => cell.type === "timeline").map((cell) => cell.slot.row));
-}
-
-function laneCellIds(cells: readonly NotebookLaneCell[]): Record<NotebookLane, string[]> {
-  const ids: Record<NotebookLane, string[]> = {
-    source: [],
-    gen: [],
-    image: [],
-    video: [],
-    audio: [],
-    work: [],
-  };
-  for (const cell of [...cells].sort(readingOrder)) {
-    if (cell.type === "timeline") continue;
-    ids[notebookCellLane(cell, cells)].push(cell.id);
-  }
-  return ids;
-}
-
-function laneRowCount(cellCount: number): number {
-  return Math.ceil(cellCount / NOTEBOOK_GRID_COLUMN_COUNT);
-}
-
-function laneRowsOf(ids: readonly string[]): string[][] {
-  return Array.from(
-    { length: laneRowCount(ids.length) },
-    (_, index) => ids.slice(index * NOTEBOOK_GRID_COLUMN_COUNT, (index + 1) * NOTEBOOK_GRID_COLUMN_COUNT),
-  );
-}
-
-export function arrangeNotebookLanes(
-  cells: readonly NotebookLaneCell[],
-): NotebookLaneArrangement {
-  const timelines = cells.filter((cell) => cell.type === "timeline");
-  const reserved = timelineRows(cells);
-  const idsByLane = laneCellIds(cells);
-  const requiredRows = NOTEBOOK_LANE_ORDER.reduce(
-    (total, lane) => total + laneRowCount(idsByLane[lane].length),
-    0,
-  );
-  if (requiredRows + reserved.size > NOTEBOOK_GRID_ROW_COUNT) return { ok: false, requiredRows };
-  const slots: NotebookLaneSlot[] = timelines.map((cell) => ({ id: cell.id, ...cell.slot }));
-  let nextRow = 0;
-  for (const lane of NOTEBOOK_LANE_ORDER) {
-    for (const ids of laneRowsOf(idsByLane[lane])) {
-      while (reserved.has(nextRow)) nextRow += 1;
-      ids.forEach((id, column) => slots.push({ id, row: nextRow, column }));
-      nextRow += 1;
-    }
-  }
-  return {
-    ok: true,
-    rowCount: Math.max(nextRow, ...timelines.map((cell) => cell.slot.row + 1)),
-    slots,
-  };
-}
-
-function notebookRowLanes(
-  cells: readonly NotebookLaneCell[],
-): Map<number, NotebookLane> {
-  const lanes = new Map<number, NotebookLane>();
-  for (const cell of [...cells].sort(readingOrder)) {
-    if (cell.type === "timeline" || lanes.has(cell.slot.row)) continue;
-    lanes.set(cell.slot.row, notebookCellLane(cell, cells));
-  }
-  return lanes;
-}
-
-function firstFreeLaneSlot(
-  rowLanes: ReadonlyMap<number, NotebookLane>,
-  lane: NotebookLane,
-  occupied: ReadonlySet<string>,
-): NotebookGridSlot | null {
-  const rows = [...rowLanes].filter(([, rowLane]) => rowLane === lane).map(([row]) => row).sort((left, right) => left - right);
-  for (const row of rows) {
-    for (let column = 0; column < NOTEBOOK_GRID_COLUMN_COUNT; column += 1) {
-      if (!occupied.has(slotKey({ row, column }))) return { row, column };
-    }
-  }
-  return null;
-}
-
-function laneAnchorRow(
-  rowLanes: ReadonlyMap<number, NotebookLane>,
-  lane: NotebookLane,
-): number {
-  const rows = [...rowLanes];
-  const own = rows.filter(([, rowLane]) => rowLane === lane).map(([row]) => row);
-  if (own.length > 0) return Math.max(...own);
-  const earlier = rows.filter(([, rowLane]) => laneRank(rowLane) < laneRank(lane)).map(([row]) => row);
-  return Math.max(-1, ...earlier);
 }
 
 function nextOpenRow(row: number, reserved: ReadonlySet<number>): number {
@@ -290,32 +165,4 @@ export function openNotebookRow<T extends NotebookGridCell>(
     const slot = moves.get(cell.id);
     return slot ? { ...cell, slot } : cell;
   });
-}
-
-export function notebookLanePlacement(
-  cells: readonly NotebookLaneCell[],
-  lane: NotebookLane,
-): NotebookLanePlacement {
-  const occupiedSlots = notebookOccupiedSlots(cells);
-  const occupied = new Set(occupiedSlots.map(slotKey));
-  const rowLanes = notebookRowLanes(cells);
-  const free = firstFreeLaneSlot(rowLanes, lane, occupied);
-  if (free) return { slot: free, makeRoom: false };
-  const row = nextOpenRow(laneAnchorRow(rowLanes, lane), timelineRows(cells));
-  const makeRoom = rowLanes.has(row);
-  if (row < NOTEBOOK_GRID_ROW_COUNT && (!makeRoom || notebookRowOpening(cells, row))) {
-    return { slot: { row, column: 0 }, makeRoom };
-  }
-  return { slot: firstEmptyNotebookGridSlot(occupiedSlots), makeRoom: false };
-}
-
-export function placeInNotebookLane<T extends NotebookLaneCell>(
-  cells: readonly T[],
-  lane: NotebookLane,
-): { cells: T[]; slot: NotebookGridSlot } {
-  const placement = notebookLanePlacement(cells, lane);
-  return {
-    cells: placement.makeRoom ? openNotebookRow(cells, placement.slot.row) : [...cells],
-    slot: placement.slot,
-  };
 }

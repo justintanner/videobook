@@ -197,7 +197,7 @@ export function trimVideoDef(engine: Engine): ToolDef {
   return {
     name: "trim_video",
     description:
-      "Trim a video: keep a range (trim_start/trim_end), remove ranges (cut_start/cut_end or cuts), or shave seconds off the ends (head_seconds/tail_seconds, e.g. 'remove the last 2s' is tail_seconds 2). output in_place rewrites the source; output new keeps the source and writes the result to a new cell below a notebook source (or a new asset). Times accept seconds, 15s or 1:30.",
+      "Trim a video: keep a range (trim_start/trim_end), remove ranges (cut_start/cut_end or cuts), or shave seconds off the ends (head_seconds/tail_seconds, e.g. 'remove the last 2s' is tail_seconds 2). output in_place rewrites the source; output new keeps the source and writes the result to a new cell beside a notebook source (or a new asset). Times accept seconds, 15s or 1:30.",
     annotations: {
       title: "Trim video",
       readOnlyHint: false,

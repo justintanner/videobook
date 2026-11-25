@@ -1,5 +1,5 @@
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
-import { notebookLanePlacement } from '../../server/src/notebook-lanes'
+import { placeNewGenerator } from '../../server/src/notebook-rounds-placement'
 import type { NotebookDocument } from 'videobook-engine'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
@@ -79,7 +79,7 @@ export async function materializeNotebookSpeakCommand(input: {
   const voiceId = input.voiceId.trim()
   if (!prompt) throw new Error('Speak text is required')
   if (!voiceId) throw new Error('Speak voice is required')
-  const { slot, makeRoom } = notebookLanePlacement(input.document.cells, 'gen')
+  const slot = placeNewGenerator(input.document)
   let cellId: string | null = null
   let outputCellId: string | null = null
   try {
@@ -89,7 +89,6 @@ export async function materializeNotebookSpeakCommand(input: {
       ...(input.expectedRevision
         ? { expected_revision: input.expectedRevision }
         : {}),
-      ...(makeRoom ? { make_room: true } : {}),
       cell: {
         type: 'generate_audio',
         label: 'Speak',

@@ -201,14 +201,15 @@ async function render(engine: Engine, payload: EditPayload, signal: AbortSignal)
     if (payload.notebookId) {
       const placed = await mutateNotebook(engine, payload.notebookId, "edit_cold_open", notebook => {
         const existing = notebook.cells.find(cell => cell.outputArtifactId === payload.assetId);
+        const destination = existing ? null : coldOpenDestination(notebook, payload.sourceArtifactId);
         const cell = existing ?? engine.notebooks.createCell({
           type: "video", label: `${source.artifact.label ?? "Video"} — Cold open`,
-          slot: coldOpenDestination(notebook, payload.sourceArtifactId), outputArtifactId: payload.assetId,
+          slot: destination!.slot, outputArtifactId: payload.assetId,
           inputs: { sourceOperation: "edit_cold_open", sourceArtifactId: payload.sourceArtifactId, state: "completed" },
         });
         placement.cellId = cell.id;
         placement.address = notebookGridTag(cell.slot);
-        return existing ? notebook : { ...notebook, cells: [...notebook.cells, cell] };
+        return destination ? { ...notebook, cells: [...destination.cells, cell] } : notebook;
       }, { sourceArtifactId: payload.sourceArtifactId, outputArtifactId: payload.assetId }, { artifactId: payload.assetId });
       if (!placed.ok) throw new Error(placed.error.message);
     }

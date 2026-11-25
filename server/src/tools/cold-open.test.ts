@@ -119,7 +119,7 @@ describe("reviewed cold-open copies", () => {
     const repeated = value(await edit({ request_id: requestId }));
     expect(repeated.output_asset_id).toBe(queued.output_asset_id);
     const output = await done(queued.job_id);
-    expect(output.address).toBe("@b1");
+    expect(output.address).toBe("@a2");
     expect(output.duration).toBeCloseTo(8, 1);
     expect(output.output_asset_id).not.toBe(assetId);
     const manifest = await engine.files.manifest(output.output_asset_id);

@@ -1771,7 +1771,7 @@ export function videobookDomainDefs(
     {
       name: "relayout_notebook",
       description:
-        "Arrange cells into the Clean lanes (source videos, generators, images, generated videos, audio, work; Timeline rows stay put; goal notebooks keep the goal layout). Migrates legacy inline generate_video / generate_image artifacts into output cells.",
+        "Arrange cells into rounds: each generator gets a band with its inputs on the left, one column per prompt version in run order (the generator heads its current prompt's column, earlier versions head theirs) with takes stacked under the prompt that made them, and each take's follow-ups such as graphics and posts to its right. Unlinked cells follow, then Timeline rows; goal notebooks keep the goal layout. Migrates legacy inline generate_video / generate_image artifacts into output cells.",
       scope: "book",
       recordsOwnActivity: true,
       schema: {

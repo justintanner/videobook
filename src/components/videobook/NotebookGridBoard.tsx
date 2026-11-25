@@ -1,4 +1,5 @@
 import { ViewportPortal } from '@xyflow/react'
+import { History } from 'lucide-react'
 import {
   notebookGrid,
   notebookGridAddress,
@@ -10,6 +11,8 @@ import {
 } from '@/videobook/notebook-grid'
 import type { NotebookReviewRole } from '@/videobook/notebook-review-focus'
 import type { NotebookLaneSection } from '@/videobook/notebook-lane-policy'
+import type { NotebookRoundHeader } from '@/videobook/notebook-round-headers'
+import { generationPromptSegments } from '@/videobook/output-generation'
 
 interface NotebookGridBoardProps {
   sections: readonly NotebookLaneSection[]
@@ -21,6 +24,7 @@ interface NotebookGridBoardProps {
   // What an open review is about, by grid address. A target with no cell in it
   // yet is marked here, on the empty square itself.
   reviewRoles: ReadonlyMap<string, NotebookReviewRole>
+  roundHeaders: readonly NotebookRoundHeader[]
 }
 
 // How far a lane band reaches past its squares, so a cell never sits flush
@@ -40,6 +44,69 @@ function laneBandStyle(section: NotebookLaneSection, cellHeight: number) {
   }
 }
 
+function RoundPromptText({ prompt }: { prompt: string }) {
+  let start = 0
+  return generationPromptSegments(prompt).map((segment) => {
+    const key = start
+    start += segment.text.length
+    return segment.token
+      ? <span key={key} className="notebook-round-header-token">{segment.text}</span>
+      : <span key={key}>{segment.text}</span>
+  })
+}
+
+function RoundHeaderChange({ header }: { header: NotebookRoundHeader }) {
+  const { change } = header
+  if (change.kind === 'edited') {
+    return (
+      <ul className="notebook-round-header-diff">
+        {change.removed.map((text, index) => (
+          <li key={`removed-${index}`} className="notebook-round-header-removed">
+            <span aria-hidden="true">−</span>
+            <s><span className="sr-only">Removed </span>{text}</s>
+          </li>
+        ))}
+        {change.added.map((text, index) => (
+          <li key={`added-${index}`} className="notebook-round-header-added">
+            <span aria-hidden="true">+</span>
+            <span><span className="sr-only">Added </span>{text}</span>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+  return (
+    <>
+      {change.kind === 'rewritten' && <span className="notebook-round-header-rewritten">Rewritten</span>}
+      <p className="notebook-round-header-prompt"><RoundPromptText prompt={header.prompt} /></p>
+    </>
+  )
+}
+
+function RoundHeaderTile({ header, cellHeight }: { header: NotebookRoundHeader; cellHeight: number }) {
+  const position = notebookGridPosition(header.slot, cellHeight)
+  const takes = header.takeCount === 1 ? '1 take' : `${header.takeCount} takes`
+  return (
+    <section
+      className="notebook-round-header"
+      aria-label={`Prompt version ${header.version}, ${takes}`}
+      data-round-version={header.version}
+      style={{
+        width: notebookGrid.cellWidth,
+        height: cellHeight,
+        transform: `translate(${position.x}px, ${position.y}px)`,
+      }}
+    >
+      <header className="notebook-round-header-title">
+        <History aria-hidden="true" />
+        <span>Prompt v{header.version}</span>
+        <span className="notebook-round-header-takes">{takes}</span>
+      </header>
+      <RoundHeaderChange header={header} />
+    </section>
+  )
+}
+
 export function NotebookGridBoard({
   sections,
   metrics,
@@ -48,6 +115,7 @@ export function NotebookGridBoard({
   mediaDropActive,
   mediaDropSlot,
   reviewRoles,
+  roundHeaders,
 }: NotebookGridBoardProps) {
   const previewPosition = previewSlot ? notebookGridPosition(previewSlot, metrics.cellHeight) : null
   const occupiedSlotKeys = new Set(occupiedSlots.map(notebookGridSlotKey))
@@ -120,6 +188,13 @@ export function NotebookGridBoard({
               </span>
             )
           })
+        ))}
+        {roundHeaders.map((header) => (
+          <RoundHeaderTile
+            key={`${header.generatorId}-${header.version}`}
+            header={header}
+            cellHeight={metrics.cellHeight}
+          />
         ))}
         {previewPosition && (
           <div

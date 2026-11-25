@@ -232,7 +232,7 @@ describe("auto_edit tool", () => {
       expect(conflicting.isError).toBe(true);
 
       const result1 = await waitForJob(queued1.job_id);
-      expect(result1.address).toBe("@b1");
+      expect(result1.address).toBe("@a2");
       const notebookAfter1 = engine.notebooks.read(notebookId);
       if (!notebookAfter1.ok) throw new Error(notebookAfter1.error.message);
       expect(notebookAfter1.value.cells).toHaveLength(2);
@@ -244,7 +244,7 @@ describe("auto_edit tool", () => {
       expect(afterGet.last_render).toMatchObject({
         output_asset_id: result1.output_asset_id,
         cell_id: result1.cell_id,
-        address: "@b1",
+        address: "@a2",
         status: "completed",
       });
 
@@ -302,7 +302,7 @@ describe("auto_edit tool", () => {
       );
       const result2 = await waitForJob(queued2.job_id);
       expect(result2.cell_id).toBe(result1.cell_id);
-      expect(result2.address).toBe("@b1");
+      expect(result2.address).toBe("@a2");
       const notebookAfter2 = engine.notebooks.read(notebookId);
       if (!notebookAfter2.ok) throw new Error(notebookAfter2.error.message);
       expect(notebookAfter2.value.cells).toHaveLength(2);

@@ -1,7 +1,7 @@
 import type { NotebookDocument } from 'videobook-engine'
 import { NOTEBOOK_GRID_ROW_COUNT } from 'videobook-engine/notebook-grid'
 import { arrangeGoalNotebook } from '../../server/src/notebook-goal-layout'
-import { arrangeNotebookLanes } from '../../server/src/notebook-lanes'
+import { arrangeNotebookRounds } from '../../server/src/notebook-rounds-arrange'
 
 interface NotebookAutoArrangeAssignment {
   id: string
@@ -61,7 +61,7 @@ export function planNotebookArrangement(
     }
   }
 
-  const arranged = arrangeNotebookLanes(document.cells)
+  const arranged = arrangeNotebookRounds(document)
   if (!arranged.ok) {
     return failure(
       'capacity',

@@ -9,7 +9,7 @@ import { replaceNotebookMentions } from 'videobook-engine/notebook-mentions'
 import { generationInputMentions } from '../../server/src/generation-input-mentions'
 import { generationInputTarget, sequentialGenerationInputPorts } from '../../server/src/generation-input-targets'
 import { frameAspectRatio } from '../../server/src/media/frame-options'
-import { notebookLanePlacement } from '../../server/src/notebook-lanes'
+import { placeNewGenerator } from '../../server/src/notebook-rounds-placement'
 import {
   compatibleGenerationModes,
   generationActionForSelection,
@@ -352,11 +352,11 @@ export function planNotebookChatGeneration(input: {
     ...(mode ? { generationMode: mode.id } : {}),
     ...(Object.keys(settings).length > 0 ? { generationSettings: settings } : {}),
   }
-  const placement = notebookLanePlacement(input.document.cells, 'gen')
+  const slot = placeNewGenerator(input.document, sources.map((source) => source.cell.id))
   const cell: NotebookCell = {
     id: input.cellId,
     type: input.command.cellType,
-    slot: placement.slot,
+    slot,
     prompt: input.command.prompt,
     ...selection,
     ...(Object.keys(cellInputs).length > 0 ? { inputs: cellInputs } : {}),
@@ -369,7 +369,6 @@ export function planNotebookChatGeneration(input: {
       sourceCellId: source.cell.id,
       targetInput: targetInputs[index] ?? source.kind,
     })),
-    ...(placement.makeRoom ? { makeRoom: true } : {}),
     sourceCellIds: sources.map((source) => source.cell.id),
     sourceAddresses: sources.map((source) => notebookCellTag(source.cell)),
   }

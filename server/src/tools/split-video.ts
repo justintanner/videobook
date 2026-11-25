@@ -121,7 +121,7 @@ export function splitVideoDef(engine: Engine): ToolDef {
   return {
     name: "split_video",
     description:
-      "Split a video into consecutive clips while keeping the source: at cut_points (e.g. [15] for 'first 15s and the rest'), into chunks of the given durations plus the leftover, or at detected scenes (scenes: true). A notebook source gets one new cell per clip below it; any other video gets new assets.",
+      "Split a video into consecutive clips while keeping the source: at cut_points (e.g. [15] for 'first 15s and the rest'), into chunks of the given durations plus the leftover, or at detected scenes (scenes: true). A notebook source gets one new cell per clip, running right of it; any other video gets new assets.",
     annotations: {
       title: "Split video into clips",
       readOnlyHint: false,

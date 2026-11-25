@@ -149,6 +149,7 @@ import {
   BusRiverEdge,
 } from '@/components/videobook/BusRiverEdge'
 import { NotebookGridBoard } from '@/components/videobook/NotebookGridBoard'
+import { notebookRoundHeaders } from '@/videobook/notebook-round-headers'
 import { useGenerationCellPreview } from '@/videobook/use-generation-cell-preview'
 import { useGenerationPreviewRefresh } from '@/videobook/useGenerationPreviewRefresh'
 import {
@@ -2647,6 +2648,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => nodes.flatMap((node) => notebookCellOccupiedSlots({ type: node.data.kind, slot: node.data.slot })),
     [nodes],
   )
+  const notebookRoundHeaderList = useMemo(
+    () => notebookRoundHeaders({
+      cells: nodes.map((node) => ({
+        id: node.id,
+        type: node.data.kind,
+        slot: node.data.slot,
+        inputs: node.data.inputs,
+        outputArtifactId: node.data.outputArtifactId,
+        prompt: node.data.prompt,
+      })),
+      edges: notebook?.edges ?? [],
+    }),
+    [nodes, notebook?.edges],
+  )
   const notebookLaneCells = useMemo(
     () => nodes.map((node) => ({
       id: node.id,
@@ -4516,7 +4531,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     try {
       const placement = position
         ? { slot: notebookGridDropSlot(position, notebookBaseMetrics), makeRoom: false }
-        : notebookCreationPlacement(type, notebook.cells)
+        : notebookCreationPlacement(type, notebook)
       slot = type === 'timeline' ? { row: placement.slot.row, column: 0 } : placement.slot
       makeRoom = placement.makeRoom
       const footprint = new Set(notebookCellOccupiedSlots({ type, slot }).map(notebookGridSlotKey))
@@ -5212,7 +5227,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (cellId === null) {
         const { slot, makeRoom } = picker.slot
           ? { slot: picker.slot, makeRoom: false }
-          : notebookCreationPlacement(kind, notebook.cells)
+          : notebookCreationPlacement(kind, notebook)
         const created = recordValue(await call('create_notebook_cell', {
           book_id: bookId,
           notebook_id: notebook.id,
@@ -6238,7 +6253,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     const placement = slot
       ? { slot, makeRoom: false }
-      : notebookCreationPlacement('video', notebook.cells)
+      : notebookCreationPlacement('video', notebook)
     const cell = downloadVideoCellInput(result, sourceUrl, placement.slot)
     let createdCellId: string
     try {
@@ -7004,7 +7019,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : { ...outcome, nextInput: '', selectInput: false }
       }
       const routedCells = notebook
-        ? routedMediaCellInputs(plan.tool, result, notebook.cells)
+        ? routedMediaCellInputs(plan.tool, result, notebook)
         : []
       if (notebook && routedCells.length > 0) {
         const placements: string[] = []
@@ -8225,7 +8240,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return await completeVideoDownload(result, asString(args.url) ?? '', undefined, chat)
     }
     const routedCells = notebook
-      ? routedMediaCellInputs(tool, result, notebook.cells)
+      ? routedMediaCellInputs(tool, result, notebook)
       : []
     if (notebook && routedCells.length > 0) {
       const placements: string[] = []
@@ -10605,7 +10620,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         try {
           const { slot, makeRoom } = mediaLibraryPicker?.slot
             ? { slot: mediaLibraryPicker.slot, makeRoom: false }
-            : notebookCreationPlacement(kind, notebook.cells)
+            : notebookCreationPlacement(kind, notebook)
           void createMediaCellFromFile(slot, file, makeRoom)
         } catch (error) {
           setNotice(error instanceof Error ? error.message : String(error), 'error')
@@ -11190,6 +11205,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                               mediaDropActive={mediaDropActive && !busy}
                               mediaDropSlot={mediaDropSlot}
                               reviewRoles={pendingReviewRoles}
+                              roundHeaders={notebookRoundHeaderList}
                             />
                             {nodes.length === 0 && (
                               <NotebookStartTiles
