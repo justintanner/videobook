@@ -1,4 +1,5 @@
 import type {
+  GraphicsBoxLayer,
   GraphicsDocument,
   GraphicsImageLayer,
   GraphicsImageRole,
@@ -34,6 +35,7 @@ import { fillGraphicsSlots, graphicsSlotValues, writeGraphicsSlot } from "./slot
 
 type PlatePatch = Partial<GraphicsPlate> | null;
 type ImagePatch = Partial<Pick<GraphicsImageLayer, "artifactId" | "size">> & { role?: GraphicsImageRole | null };
+type BoxPatch = Partial<Pick<GraphicsBoxLayer, "width" | "height" | "color" | "radius">>;
 
 export type GraphicsEdit =
   | { op: "add_layer"; layer: GraphicsLayerInput; index?: number }
@@ -51,6 +53,7 @@ export type GraphicsEdit =
   | { op: "set_image"; layer_id: string; image: ImagePatch }
   | { op: "set_qr"; layer_id: string; qr: Partial<Pick<GraphicsQrLayer, "url" | "slot" | "size" | "style" | "dark" | "light" | "level">> }
   | { op: "set_scrim"; layer_id: string; scrim: Partial<Pick<GraphicsScrimLayer, "edge" | "height" | "color" | "strength">> }
+  | { op: "set_box"; layer_id: string; box: BoxPatch }
   | { op: "set_slot_text"; slot: GraphicsSlot; text: string }
   | { op: "apply_template"; template: GraphicsDocument };
 
@@ -93,6 +96,7 @@ const KIND_NAMES: Record<GraphicsLayer["kind"], string> = {
   image: "an image layer",
   qr: "a QR layer",
   scrim: "a scrim layer",
+  box: "a box layer",
 };
 
 function insertAt<T>(list: readonly T[], index: number, value: T): T[] {
@@ -302,6 +306,12 @@ function setScrim(
   return replaceLayer(document, { ...layer, ...changes });
 }
 
+function setBox(document: GraphicsDocument, layerId: string, patch: BoxPatch): GraphicsDocument {
+  const layer = requireKind(document, layerId, "box");
+  const changes = definedFields({ width: patch.width, height: patch.height, color: patch.color, radius: patch.radius });
+  return replaceLayer(document, { ...layer, ...changes });
+}
+
 function setSlotText(document: GraphicsDocument, slot: GraphicsSlot, text: string): GraphicsDocument {
   if (graphicsSlotValues(document)[slot] === undefined) {
     throw new EditFailure("unknown_slot", `No layer holds the ${slot} slot.`);
@@ -339,6 +349,7 @@ function applyGraphicsEdit(document: GraphicsDocument, edit: GraphicsEdit): Grap
     case "set_image": return setImage(document, edit.layer_id, edit.image);
     case "set_qr": return setQr(document, edit.layer_id, edit.qr);
     case "set_scrim": return setScrim(document, edit.layer_id, edit.scrim);
+    case "set_box": return setBox(document, edit.layer_id, edit.box);
     case "set_slot_text": return setSlotText(document, edit.slot, edit.text);
     case "apply_template": return applyTemplate(document, edit.template);
     default: throw new EditFailure("invalid", `Unknown edit operation ${String((edit as { op: unknown }).op)}.`);

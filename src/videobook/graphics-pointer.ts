@@ -2,8 +2,11 @@ import type { GraphicsEdit } from '../../server/src/graphics/edits'
 import { graphicsPlaceBox, graphicsPositionForBox, graphicsSpaceRect, type GraphicsRect } from '../../server/src/graphics/layout'
 import {
   GRAPHICS_ANCHOR_POINTS,
+  GRAPHICS_ANCHORS,
   MAX_GRAPHICS_PLATE_PADDING,
+  MIN_GRAPHICS_BOX_SIDE,
   type GraphicsAnchor,
+  type GraphicsBoxLayer,
   type GraphicsFrame,
   type GraphicsLayer,
   type GraphicsPosition,
@@ -16,13 +19,16 @@ export type GraphicsPoint = { x: number; y: number }
 export type GraphicsGuide = { axis: 'x' | 'y'; at: number }
 export type GraphicsSnapLines = { x: readonly number[]; y: readonly number[] }
 export type GraphicsSnap = { lines: GraphicsSnapLines; threshold: number }
-export type GraphicsHandle = 'size' | 'width-start' | 'width-end' | 'height'
+export type GraphicsBoxHandle = Exclude<GraphicsAnchor, 'center'>
+export type GraphicsHandle = 'size' | 'width-start' | 'width-end' | 'height' | GraphicsBoxHandle
 export type GraphicsHandlePoint = GraphicsPoint & { handle: GraphicsHandle }
 export type GraphicsMove = { position: GraphicsPosition; box: GraphicsRect; guides: GraphicsGuide[] }
 export type GraphicsPlacedLayer = Exclude<GraphicsLayer, GraphicsScrimLayer>
 
 type Range = { min: number; max: number }
+type Span = { start: number; size: number }
 type WidthHandle = Extract<GraphicsHandle, 'width-start' | 'width-end'>
+type ScaledLayer = Exclude<GraphicsPlacedLayer, GraphicsBoxLayer>
 
 export type GraphicsResizeInput = {
   frame: GraphicsFrame
@@ -43,6 +49,8 @@ const PLATE_PADDING: Range = { min: 0, max: MAX_GRAPHICS_PLATE_PADDING }
 const IMAGE_SIZE: Range = { min: 0.02, max: 1 }
 const QR_SIZE: Range = { min: 0.05, max: 0.6 }
 const SCRIM_HEIGHT: Range = { min: 0.05, max: 1 }
+const BOX_SIDE: Range = { min: MIN_GRAPHICS_BOX_SIDE, max: 1 }
+export const GRAPHICS_BOX_HANDLES: readonly GraphicsBoxHandle[] = GRAPHICS_ANCHORS.filter((anchor): anchor is GraphicsBoxHandle => anchor !== 'center')
 const ARROWS: Readonly<Record<string, GraphicsPoint>> = {
   ArrowLeft: { x: -1, y: 0 },
   ArrowRight: { x: 1, y: 0 },
@@ -158,11 +166,14 @@ export function graphicsRepositionEdits(
 ): GraphicsEdit[] {
   const next = { ...layer.position, ...change }
   const edits: GraphicsEdit[] = [{ op: 'set_position', layer_id: layer.id, position: box ? graphicsPositionForBox(frame, next, box) : next }]
-  if (layer.kind !== 'text' || !change.space || change.space === layer.position.space) return edits
-  const from = graphicsSpaceRect(frame, layer.position.space).width
-  const to = graphicsSpaceRect(frame, change.space).width
-  if (!(from > 0 && to > 0)) return edits
-  return [...edits, { op: 'set_text_block', layer_id: layer.id, block: { width: within((layer.width * from) / to, TEXT_WIDTH) } }]
+  if (!change.space || change.space === layer.position.space) return edits
+  const from = graphicsSpaceRect(frame, layer.position.space)
+  const to = graphicsSpaceRect(frame, change.space)
+  if (!(from.width > 0 && to.width > 0 && from.height > 0 && to.height > 0)) return edits
+  if (layer.kind === 'text') return [...edits, { op: 'set_text_block', layer_id: layer.id, block: { width: within((layer.width * from.width) / to.width, TEXT_WIDTH) } }]
+  if (layer.kind !== 'box') return edits
+  const size = { width: within((layer.width * from.width) / to.width, BOX_SIDE), height: within((layer.height * from.height) / to.height, BOX_SIDE) }
+  return [...edits, { op: 'set_box', layer_id: layer.id, box: size }]
 }
 
 export function graphicsSizeCorner(anchor: GraphicsAnchor): GraphicsPoint {
@@ -191,6 +202,7 @@ export function graphicsTextWidthDrag(frame: GraphicsFrame, layer: GraphicsTextL
 export function graphicsLayerHandles(layer: GraphicsLayer, box: GraphicsRect): GraphicsHandlePoint[] {
   if (layer.kind === 'scrim') return [{ handle: 'height', x: box.x + box.width / 2, y: layer.edge === 'bottom' ? box.y : box.y + box.height }]
   if (box.width <= 0 || box.height <= 0) return []
+  if (layer.kind === 'box') return GRAPHICS_BOX_HANDLES.map((handle) => ({ handle, ...boxPoint(box, GRAPHICS_ANCHOR_POINTS[handle]) }))
   const size: GraphicsHandlePoint = { handle: 'size', ...boxPoint(box, graphicsSizeCorner(layer.position.anchor)) }
   if (layer.kind !== 'text') return [size]
   const middle = box.y + box.height / 2
@@ -216,7 +228,7 @@ function textScaleEdits(layer: GraphicsTextLayer, factor: number): GraphicsEdit[
   ]
 }
 
-function sizeEdits(layer: GraphicsPlacedLayer, factor: number): GraphicsEdit[] {
+function sizeEdits(layer: ScaledLayer, factor: number): GraphicsEdit[] {
   if (layer.kind === 'text') return textScaleEdits(layer, factor)
   if (layer.kind === 'image') return [{ op: 'set_image', layer_id: layer.id, image: { size: within(layer.size * factor, IMAGE_SIZE) } }]
   return [{ op: 'set_qr', layer_id: layer.id, qr: { size: within(layer.size * factor, QR_SIZE) } }]
@@ -232,9 +244,40 @@ function scrimHeightEdit(frame: GraphicsFrame, layer: GraphicsScrimLayer, delta:
   return [{ op: 'set_scrim', layer_id: layer.id, scrim: { height: within(layer.height + change, SCRIM_HEIGHT) } }]
 }
 
+function isBoxHandle(handle: GraphicsHandle): handle is GraphicsBoxHandle {
+  return GRAPHICS_BOX_HANDLES.some((candidate) => candidate === handle)
+}
+
+function draggedSpan(span: Span, side: number, delta: number, room: Span): (Span & { fraction: number }) | null {
+  if (side !== 0 && side !== 1) return null
+  const least = BOX_SIDE.min * room.size
+  const end = span.start + span.size
+  if (side === 0) {
+    const fraction = within((end - clamp(span.start + delta, room.start, end - least)) / room.size, BOX_SIDE)
+    return { start: end - fraction * room.size, size: fraction * room.size, fraction }
+  }
+  const fraction = within((clamp(end + delta, span.start + least, room.start + room.size) - span.start) / room.size, BOX_SIDE)
+  return { start: span.start, size: fraction * room.size, fraction }
+}
+
+function boxResizeEdits(frame: GraphicsFrame, layer: GraphicsBoxLayer, box: GraphicsRect, handle: GraphicsBoxHandle, delta: GraphicsPoint): GraphicsEdit[] {
+  const space = graphicsSpaceRect(frame, layer.position.space)
+  if (!(space.width > 0 && space.height > 0)) return []
+  const side = GRAPHICS_ANCHOR_POINTS[handle]
+  const across = draggedSpan({ start: box.x, size: box.width }, side.x, delta.x, { start: space.x, size: space.width })
+  const down = draggedSpan({ start: box.y, size: box.height }, side.y, delta.y, { start: space.y, size: space.height })
+  const rect = { x: across?.start ?? box.x, y: down?.start ?? box.y, width: across?.size ?? box.width, height: down?.size ?? box.height }
+  const size = { ...(across ? { width: across.fraction } : {}), ...(down ? { height: down.fraction } : {}) }
+  return [
+    { op: 'set_box', layer_id: layer.id, box: size },
+    { op: 'set_position', layer_id: layer.id, position: graphicsPositionForBox(frame, layer.position, rect) },
+  ]
+}
+
 export function graphicsResizeEdits(input: GraphicsResizeInput): GraphicsEdit[] {
   const { frame, layer, box, handle, delta } = input
   if (layer.kind === 'scrim') return handle === 'height' ? scrimHeightEdit(frame, layer, delta) : []
+  if (layer.kind === 'box') return isBoxHandle(handle) ? boxResizeEdits(frame, layer, box, handle, delta) : []
   if (handle === 'size') return sizeEdits(layer, scaleFactor(box, layer.position.anchor, delta))
   if (layer.kind === 'text' && (handle === 'width-start' || handle === 'width-end')) return textWidthEdit(frame, layer, box, handle, delta)
   return []

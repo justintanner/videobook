@@ -295,9 +295,10 @@ requests already submitted may still finish.
 `/graphics @a1` (also `/overlay` and `/osg`), the cell menu or the media dock
 opens a video's graphics: layers of text, images, QR codes and shade, placed in
 the platform's safe area and sized to the frame, so one look fits 9:16, 1:1 and
-16:9. The editor previews with the same drawing code the render uses, saves as
-you edit, and renders only when you press Render: into a new connected cell by
-default, or in place.
+16:9. A solid box layer covers burned-in text anywhere in the frame: drag it
+over the text, then drag its edges and corners to fit. The editor previews with
+the same drawing code the render uses, saves as you edit, and renders only when
+you press Render: into a new connected cell by default, or in place.
 
 - **Motion.** Each layer enters and exits with Fade, Slide (from or to the
   nearest edge), Pop or, for text, Words (one word after another). The fade

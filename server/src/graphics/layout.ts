@@ -7,6 +7,7 @@ import type { GraphicsFontFace } from "./fonts.js";
 import { graphicsLineMetrics, graphicsPresetFont } from "./fonts.js";
 import type {
   GraphicsAccent,
+  GraphicsBoxLayer,
   GraphicsDocument,
   GraphicsFrame,
   GraphicsImageLayer,
@@ -60,7 +61,9 @@ export type GraphicsQrLayout = {
 
 export type GraphicsScrimLayout = { kind: "scrim"; layerId: string; box: GraphicsRect };
 
-export type GraphicsLayerLayout = GraphicsTextLayout | GraphicsImageLayout | GraphicsQrLayout | GraphicsScrimLayout;
+export type GraphicsBoxLayout = { kind: "box"; layerId: string; box: GraphicsRect; radius: number };
+
+export type GraphicsLayerLayout = GraphicsTextLayout | GraphicsImageLayout | GraphicsQrLayout | GraphicsScrimLayout | GraphicsBoxLayout;
 
 export type GraphicsLayoutInput = {
   document: GraphicsDocument;
@@ -397,12 +400,20 @@ function scrimLayout(layer: GraphicsScrimLayer, frame: GraphicsFrame): GraphicsS
   return { kind: "scrim", layerId: layer.id, box: pixelRect({ x: 0, y, width: frame.width, height }) };
 }
 
+function boxLayout(layer: GraphicsBoxLayer, frame: GraphicsFrame): GraphicsBoxLayout {
+  const space = spaceRect(frame, layer.position.space);
+  const box = pixelRect(placeBox(space, layer.position, { width: layer.width * space.width, height: layer.height * space.height }));
+  const radius = (layer.radius * Math.min(box.width, box.height)) / 2;
+  return { kind: "box", layerId: layer.id, box, radius: Math.round(radius * 100) / 100 };
+}
+
 function layerLayout(layer: GraphicsLayer, context: LayoutContext): GraphicsLayerLayout {
   switch (layer.kind) {
     case "text": return textLayout(layer, context);
     case "image": return imageLayout(layer, context);
     case "qr": return qrLayout(layer, context);
     case "scrim": return scrimLayout(layer, context.frame);
+    case "box": return boxLayout(layer, context.frame);
   }
 }
 

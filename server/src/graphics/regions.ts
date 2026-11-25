@@ -51,6 +51,7 @@ async function placementTarget(engine: Engine, artifactId: string, look: Graphic
   const layer = current.document.layers.find((entry) => entry.id === layerId);
   if (!layer) throw new GraphicsServiceError("invalid", `Layer ${layerId} is not in these graphics. Save them first.`, { layer_id: layerId });
   if (layer.kind === "scrim") throw new GraphicsServiceError("invalid", "A shade spans the frame, so it has no spot to move to.", { layer_id: layerId });
+  if (layer.kind === "box") throw new GraphicsServiceError("invalid", "A box is placed by hand over what it covers, so it has no clear spot to find.", { layer_id: layerId });
   const window = graphicsLayerWindow(layer, current.source.durationSeconds);
   if (!window) throw new GraphicsServiceError("invalid", `Layer ${layerId} is never shown, so it covers nothing.`, { layer_id: layerId });
   return {

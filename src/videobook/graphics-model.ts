@@ -497,7 +497,7 @@ export function graphicsAddLayer(
 ): { edit: GraphicsEdit; layerId: string } | null {
   const layerId = graphicsNextLayerId(document)
   if (kind === 'text') return { layerId, edit: { op: 'add_layer', layer: { kind: 'text', items: [{ text: 'Your text', size: 0.06 }] } } }
-  if (kind === 'scrim') return { layerId, edit: { op: 'add_layer', layer: { kind: 'scrim' }, index: 0 } }
+  if (kind === 'scrim' || kind === 'box') return { layerId, edit: { op: 'add_layer', layer: { kind }, index: 0 } }
   if (kind === 'qr' && options.qr) return { layerId, edit: { op: 'add_layer', layer: options.qr } }
   if (kind === 'qr') {
     const url = options.profileUrl && isGraphicsUrl(options.profileUrl) ? options.profileUrl : ''
@@ -554,7 +554,7 @@ export function graphicsLayerPlacements(document: GraphicsDocument, layout: read
   return Object.fromEntries(document.layers.flatMap((layer) => {
     const entry = entries.get(layer.id)
     const window = graphicsLayerWindow(layer, read.source.duration_seconds)
-    if (layer.kind === 'scrim' || !layer.visible || !entry || !window) return []
+    if (layer.kind === 'scrim' || layer.kind === 'box' || !layer.visible || !entry || !window) return []
     const drawn = graphicsDrawnBox(entry)
     const placement: GraphicsLayerPlacement = {
       covers: drawn ? graphicsLayerCovers(drawn, frame, window, regions) : [],
@@ -596,6 +596,7 @@ export function graphicsLayerSummary(layer: GraphicsLayer, images: GraphicsRead[
   }
   if (layer.kind === 'qr') return layer.slot === 'profile' ? 'Profile link' : clipped(layer.url)
   if (layer.kind === 'scrim') return `${layer.edge === 'top' ? 'Top' : 'Bottom'} shade`
+  if (layer.kind === 'box') return `${graphicsPercent(layer.width)} × ${graphicsPercent(layer.height)} box`
   const typed = layer.items.find((item) => item.slot !== 'handle' && item.text.trim()) ?? layer.items.find((item) => item.text.trim())
   if (typed) return clipped(typed.text)
   const slots = layer.items.flatMap((item) => (item.slot ? [GRAPHICS_SLOT_LABELS[item.slot]] : []))
@@ -713,7 +714,7 @@ export function graphicsRenderBlocker(document: GraphicsDocument | null, duratio
   if (!document || durationSeconds === null) return 'The graphics are still loading.'
   if (framing.aspect !== 'original') return null
   if (graphicsStillGroups(graphicsDrawnDocument(document, watermark), durationSeconds).length > 0) return null
-  return watermark ? 'Add the handle, a title, an image or a QR code to render.' : 'Add text, an image, a QR code or a shade to render.'
+  return watermark ? 'Add the handle, a title, an image or a QR code to render.' : 'Add text, an image, a QR code, a shade or a box to render.'
 }
 
 export function graphicsBurnedNotice(burned: GraphicsBurned | null, artifactId: string): { message: string; sourceId: string | null } | null {

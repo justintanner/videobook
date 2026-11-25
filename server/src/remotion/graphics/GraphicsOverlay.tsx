@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from "react";
 import { AbsoluteFill, Img } from "remotion";
 import { GRAPHICS_ICON_PATHS, GRAPHICS_ICON_VIEWBOX } from "../../graphics/icons.js";
 import type {
+  GraphicsBoxLayout,
   GraphicsImageLayout,
   GraphicsLayerLayout,
   GraphicsRect,
@@ -12,6 +13,7 @@ import type {
 } from "../../graphics/layout.js";
 import { layoutGraphics } from "../../graphics/layout.js";
 import type {
+  GraphicsBoxLayer,
   GraphicsDocument,
   GraphicsFrame,
   GraphicsLayer,
@@ -181,6 +183,21 @@ const ScrimLayerView: React.FC<{ layer: GraphicsScrimLayer; layout: GraphicsScri
   />
 );
 
+const BoxLayerView: React.FC<{ layer: GraphicsBoxLayer; layout: GraphicsBoxLayout }> = ({ layer, layout }) => (
+  <div
+    style={{
+      position: "absolute",
+      left: layout.box.x,
+      top: layout.box.y,
+      width: layout.box.width,
+      height: layout.box.height,
+      borderRadius: layout.radius,
+      opacity: layer.opacity,
+      background: layer.color,
+    }}
+  />
+);
+
 const ImageLayerView: React.FC<{ layer: GraphicsLayer; layout: GraphicsImageLayout; image: GraphicsOverlayImage | undefined }> = ({ layer, layout, image }) => {
   if (!image || layout.missing) return null;
   return (
@@ -201,6 +218,7 @@ const LayerView: React.FC<{
   if (layer.kind === "text" && layout.kind === "text") return <TextLayerView layer={layer} layout={layout} frame={frame} reveal={reveal} />;
   if (layer.kind === "qr" && layout.kind === "qr") return <QrLayerView layer={layer} layout={layout} frame={frame} />;
   if (layer.kind === "scrim" && layout.kind === "scrim") return <ScrimLayerView layer={layer} layout={layout} />;
+  if (layer.kind === "box" && layout.kind === "box") return <BoxLayerView layer={layer} layout={layout} />;
   if (layer.kind === "image" && layout.kind === "image") return <ImageLayerView layer={layer} layout={layout} image={images[layer.artifactId]} />;
   return null;
 };

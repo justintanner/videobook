@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { applyGraphicsEdits, type GraphicsEdit } from '../../server/src/graphics/edits'
 import { graphicsSpaceRect, layoutGraphics, type GraphicsMeasure, type GraphicsRect } from '../../server/src/graphics/layout'
 import {
+  GRAPHICS_ANCHOR_POINTS,
   GRAPHICS_ANCHORS,
   graphicsDocumentFromLayers,
+  type GraphicsBoxLayerInput,
   type GraphicsDocument,
   type GraphicsFrame,
   type GraphicsImageLayer,
@@ -13,6 +15,7 @@ import {
   type GraphicsTextLayer,
 } from '../../server/src/graphics/model'
 import {
+  GRAPHICS_BOX_HANDLES,
   graphicsArrowDelta,
   graphicsLayerHandles,
   graphicsMoveLayer,
@@ -342,5 +345,75 @@ describe('graphicsResizeEdits', () => {
     expect((resize(document, PORTRAIT, top!.id, 'height', { x: 0, y: 128 }).layers.find((layer) => layer.id === top!.id) as GraphicsScrimLayer).height).toBeCloseTo(0.3, 4)
     expect((resize(document, PORTRAIT, top!.id, 'height', { x: 0, y: -5000 }).layers.find((layer) => layer.id === top!.id) as GraphicsScrimLayer).height).toBe(0.05)
     expect(graphicsResizeEdits({ frame: PORTRAIT, layer: top!, box: { x: 0, y: 0, width: 720, height: 256 }, handle: 'size', delta: { x: 0, y: 10 } })).toEqual([])
+  })
+})
+
+describe('box layers', () => {
+  function withBox(input: Omit<GraphicsBoxLayerInput, 'kind'> = {}) {
+    const document = applied(sample(), [{ op: 'add_layer', layer: { kind: 'box', ...input }, index: 0 }])
+    const box = layerNamed(document, 'box')
+    return { document, box, rect: boxes(document, PORTRAIT).get(box.id)! }
+  }
+
+  function resized(document: GraphicsDocument, layerId: string, handle: GraphicsHandle, delta: GraphicsPoint): GraphicsRect {
+    const layer = document.layers.find((entry) => entry.id === layerId)!
+    const box = boxes(document, PORTRAIT).get(layerId)!
+    return boxes(applied(document, graphicsResizeEdits({ frame: PORTRAIT, layer, box, handle, delta })), PORTRAIT).get(layerId)!
+  }
+
+  function edgesOf(rect: GraphicsRect) {
+    return { left: rect.x, top: rect.y, right: rect.x + rect.width, bottom: rect.y + rect.height }
+  }
+
+  it('puts a handle on every corner and edge of the box and none on an empty one', () => {
+    const { box, rect } = withBox()
+    expect(rect).toEqual({ x: 72, y: 947, width: 576, height: 154 })
+    expect(graphicsLayerHandles(box, rect)).toEqual([
+      { handle: 'top-left', x: 72, y: 947 },
+      { handle: 'top', x: 360, y: 947 },
+      { handle: 'top-right', x: 648, y: 947 },
+      { handle: 'left', x: 72, y: 1024 },
+      { handle: 'right', x: 648, y: 1024 },
+      { handle: 'bottom-left', x: 72, y: 1101 },
+      { handle: 'bottom', x: 360, y: 1101 },
+      { handle: 'bottom-right', x: 648, y: 1101 },
+    ])
+    expect(graphicsLayerHandles(box, { ...rect, width: 0 })).toEqual([])
+  })
+
+  it.each(GRAPHICS_BOX_HANDLES)('drags the %s handle while the opposite sides stay put', (handle) => {
+    const { document, box, rect } = withBox()
+    const delta = { x: 40, y: -30 }
+    const side = GRAPHICS_ANCHOR_POINTS[handle]
+    const before = edgesOf(rect)
+    const expected = {
+      left: before.left + (side.x === 0 ? delta.x : 0),
+      top: before.top + (side.y === 0 ? delta.y : 0),
+      right: before.right + (side.x === 1 ? delta.x : 0),
+      bottom: before.bottom + (side.y === 1 ? delta.y : 0),
+    }
+    const after = edgesOf(resized(document, box.id, handle, delta))
+    for (const edge of ['left', 'top', 'right', 'bottom'] as const) expect(Math.abs(after[edge] - expected[edge]), edge).toBeLessThanOrEqual(1)
+  })
+
+  it('stops at the edge of the frame and at the smallest box, and ignores the other handles', () => {
+    const { document, box, rect } = withBox()
+    expect(edgesOf(resized(document, box.id, 'bottom-right', { x: 5000, y: 5000 }))).toEqual({ left: rect.x, top: rect.y, right: 720, bottom: 1280 })
+    const smallest = resized(document, box.id, 'top-left', { x: 5000, y: 5000 })
+    expect(edgesOf(smallest)).toMatchObject({ right: rect.x + rect.width, bottom: rect.y + rect.height })
+    expect([smallest.width, smallest.height]).toEqual([7, 13])
+    expect(edgesOf(resized(document, box.id, 'left', { x: -5000, y: 0 }))).toMatchObject({ left: 0, right: rect.x + rect.width })
+    expect(graphicsResizeEdits({ frame: PORTRAIT, layer: box, box: rect, handle: 'size', delta: { x: 10, y: 10 } })).toEqual([])
+  })
+
+  it('moves like any placed layer and keeps its size in pixels when it changes space', () => {
+    const { document, box, rect } = withBox({ position: { anchor: 'center', x: 0.5, y: 0.5, space: 'frame' }, width: 0.5, height: 0.1 })
+    const moved = moveTo(document, PORTRAIT, box.id, { x: -30, y: 200 })
+    expect(boxes(moved.document, PORTRAIT).get(box.id)).toEqual({ ...rect, x: rect.x - 30, y: rect.y + 200 })
+    const safe = graphicsSpaceRect(PORTRAIT, 'safe')
+    const reframed = applied(document, graphicsRepositionEdits(PORTRAIT, box, rect, { space: 'safe' }))
+    const after = boxes(reframed, PORTRAIT).get(box.id)!
+    for (const key of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(after[key] - rect[key]), key).toBeLessThanOrEqual(1)
+    expect(layerNamed(reframed, 'box')).toMatchObject({ position: { space: 'safe' }, width: Math.round((360 / safe.width) * 10_000) / 10_000 })
   })
 })

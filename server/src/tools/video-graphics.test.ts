@@ -226,6 +226,23 @@ describe("video_graphics", () => {
     expect((await read(assetId)).revision).toBe(saved.revision);
   });
 
+  it("adds a cover box through MCP, sizes it with set_box and refuses to find it a clear spot", async () => {
+    const assetId = await video();
+    const fresh = await read(assetId);
+    const added = await save(assetId, {
+      expected_revision: fresh.revision,
+      edits: [{ op: "add_layer", index: 0, layer: { kind: "box", name: "Caption cover", position: { anchor: "bottom", x: 0.5, y: 0.92, space: "frame" }, color: "#101010" } }],
+    });
+    const box = added.document.layers[0];
+    expect(box).toMatchObject({ kind: "box", name: "Caption cover", width: 0.8, height: 0.12, color: "#101010", radius: 0, position: { anchor: "bottom", x: 0.5, y: 0.92, space: "frame" } });
+    const sized = await save(assetId, { expected_revision: added.revision, edits: [{ op: "set_box", layer_id: box.id, box: { width: 0.9, height: 0.06, radius: 0.2 } }] });
+    expect((await read(assetId)).document.layers[0]).toMatchObject({ id: box.id, width: 0.9, height: 0.06, radius: 0.2 });
+    expect(await fails({ asset_id: assetId, op: "update", expected_revision: sized.revision, edits: [{ op: "set_box", layer_id: box.id, box: { height: 2 } }] }))
+      .toMatchObject({ status: "invalid", edit: { code: "invalid", op: "set_box" }, message: expect.stringContaining("Box height must be between 0.01 and 1") });
+    expect(await fails({ asset_id: assetId, op: "check_placement", layer_id: box.id, box: { x: 54, y: 1650, width: 972, height: 115 } }))
+      .toMatchObject({ status: "invalid", message: "A box is placed by hand over what it covers, so it has no clear spot to find." });
+  });
+
   it("saves a replacement document as given", async () => {
     const assetId = await video();
     const fresh = await read(assetId);

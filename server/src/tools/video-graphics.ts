@@ -107,6 +107,7 @@ const qrPatch = z.object({
 }).partial().strict();
 
 const scrimPatch = z.object({ edge: z.enum(GRAPHICS_SCRIM_EDGES), height: z.number(), color: z.string(), strength: z.number() }).partial().strict();
+const boxPatch = z.object({ width: z.number(), height: z.number(), color: z.string(), radius: z.number() }).partial().strict();
 
 const commonLayer = { ...layerPatch.shape, timing: timingPatch.optional() };
 const placed = { position: positionPatch.optional() };
@@ -116,6 +117,7 @@ const layerInput = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("image"), ...commonLayer, ...placed, artifactId: z.string().min(1), size: z.number().optional(), role: z.enum(GRAPHICS_IMAGE_ROLES).optional() }).strict(),
   z.object({ kind: z.literal("qr"), ...commonLayer, ...placed, ...qrPatch.shape }).strict(),
   z.object({ kind: z.literal("scrim"), ...commonLayer, ...scrimPatch.shape }).strict(),
+  z.object({ kind: z.literal("box"), ...commonLayer, ...placed, ...boxPatch.shape }).strict(),
 ]);
 
 const layerId = z.string().describe("Layer id such as l2");
@@ -137,6 +139,7 @@ const editSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("set_image"), layer_id: layerId, image: imagePatch }).strict(),
   z.object({ op: z.literal("set_qr"), layer_id: layerId, qr: qrPatch }).strict(),
   z.object({ op: z.literal("set_scrim"), layer_id: layerId, scrim: scrimPatch }).strict(),
+  z.object({ op: z.literal("set_box"), layer_id: layerId, box: boxPatch }).strict(),
   z.object({ op: z.literal("set_slot_text"), slot: z.enum([...GRAPHICS_TEXT_SLOTS, ...GRAPHICS_QR_SLOTS]), text: z.string() }).strict(),
   z.object({
     op: z.literal("apply_template"),
@@ -188,7 +191,7 @@ const schema = {
   output: z.enum(RENDER_OUTPUTS).optional()
     .describe("render: new (default) writes a copy with the graphics into a new video cell below the source, a version of the earlier copy when one exists; replace burns the graphics into the source video itself, keeping its earlier version in history, and clears the saved graphics"),
   edits: z.array(editSchema).max(200).optional()
-    .describe("update: edits applied in order. Sizes, gaps and paddings are fractions of the frame's short side, text width a fraction of the positioning space, positions 0..1 inside the space, times in seconds"),
+    .describe("update: edits applied in order. Sizes, gaps and paddings are fractions of the frame's short side, text width a fraction of the positioning space, a box's width and height fractions of the positioning space's width and height, positions 0..1 inside the space, times in seconds"),
   frame: graphicsFrameSchema.optional().describe("update: saved canvas aspect, crop or blur fit and normalized focus; templates never store this setting"),
   document: advertisedAs(z.unknown(), {
     type: "object",
@@ -450,7 +453,7 @@ export function videoGraphicsDef(engine: Engine, books?: BookManager): ToolDef {
   return {
     name: "video_graphics",
     description:
-      "On-screen graphics drawn over a video: text blocks, images, QR codes and shades, each with a position, size, opacity and time window. get reads the saved layers, or the book's default look for a video without any (built in: the TikTok handle, an empty Thai title and an English line, no QR code), with the handle, profile URL and source credit to fill slots, the starter layouts, the book's saved templates, the latest render and any graphics already burned in; update saves edits or a replacement document against the revision from get; render burns the reviewed revision in the background into a new connected video cell (the source is kept) or into the source video in place; suggest (paid, one model call) offers headline options from the video's existing analysis, transcript and download text, or translations of the headline for the second line, for the operator to pick; check_placement says for free whether a layer covers a face or on-screen text already found in the video and where the clearest spot is, and detect_regions (paid when frames are unchecked) finds them first. Templates are named layouts saved per book: save_template, rename_template, delete_template, set_default_template (the look videos without graphics start from) and copy_templates (from another book, with the images they use). set_logo sets the book's logo, an image layer (role logo) that videos without graphics start with and that applying a template keeps. watermark: true edits the platform's watermark, what apply_watermark and goal finishing burn; save_watermark saves it as their watermark template and set_watermark_template picks a saved template instead. Videos only.",
+      "On-screen graphics drawn over a video: text blocks, images, QR codes, shades and solid boxes that cover burned-in text, each with a position, size, opacity and time window. get reads the saved layers, or the book's default look for a video without any (built in: the TikTok handle, an empty Thai title and an English line, no QR code), with the handle, profile URL and source credit to fill slots, the starter layouts, the book's saved templates, the latest render and any graphics already burned in; update saves edits or a replacement document against the revision from get; render burns the reviewed revision in the background into a new connected video cell (the source is kept) or into the source video in place; suggest (paid, one model call) offers headline options from the video's existing analysis, transcript and download text, or translations of the headline for the second line, for the operator to pick; check_placement says for free whether a layer covers a face or on-screen text already found in the video and where the clearest spot is, and detect_regions (paid when frames are unchecked) finds them first. Templates are named layouts saved per book: save_template, rename_template, delete_template, set_default_template (the look videos without graphics start from) and copy_templates (from another book, with the images they use). set_logo sets the book's logo, an image layer (role logo) that videos without graphics start with and that applying a template keeps. watermark: true edits the platform's watermark, what apply_watermark and goal finishing burn; save_watermark saves it as their watermark template and set_watermark_template picks a saved template instead. Videos only.",
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     schema,
     handler: async (input) => {

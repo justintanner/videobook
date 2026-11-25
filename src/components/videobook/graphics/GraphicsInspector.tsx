@@ -9,7 +9,9 @@ import {
   GRAPHICS_QR_STYLES,
   GRAPHICS_SCRIM_EDGES,
   isGraphicsUrl,
+  MIN_GRAPHICS_BOX_SIDE,
   type GraphicsAnchor,
+  type GraphicsBoxLayer,
   type GraphicsDocument,
   type GraphicsFrame,
   type GraphicsImageLayer,
@@ -53,7 +55,8 @@ type InspectorProps = {
 type PlacedLayer = Exclude<GraphicsLayer, GraphicsScrimLayer>
 type QrPatch = Extract<GraphicsEdit, { op: 'set_qr' }>['qr']
 type ScrimPatch = Extract<GraphicsEdit, { op: 'set_scrim' }>['scrim']
-export type GraphicsInspectorTab = 'text' | 'block' | 'image' | 'qr' | 'shade' | 'place' | 'timing'
+type BoxPatch = Extract<GraphicsEdit, { op: 'set_box' }>['box']
+export type GraphicsInspectorTab = 'text' | 'block' | 'image' | 'qr' | 'shade' | 'box' | 'place' | 'timing'
 
 const ANCHOR_OPTIONS: ReadonlyArray<{ value: GraphicsAnchor; label: string }> = GRAPHICS_ANCHORS.map((anchor) => ({
   value: anchor,
@@ -66,16 +69,17 @@ const SPACE_OPTIONS: ReadonlyArray<{ value: GraphicsSpace; label: string }> = [
   { value: 'frame', label: 'Whole frame' },
 ]
 
-const KIND_TITLES: Record<GraphicsLayer['kind'], string> = { text: 'Text', image: 'Image', qr: 'QR code', scrim: 'Shade' }
+const KIND_TITLES: Record<GraphicsLayer['kind'], string> = { text: 'Text', image: 'Image', qr: 'QR code', scrim: 'Shade', box: 'Box' }
 
 const KIND_TABS: Record<GraphicsLayer['kind'], readonly GraphicsInspectorTab[]> = {
   text: ['text', 'block', 'place', 'timing'],
   image: ['image', 'place', 'timing'],
   qr: ['qr', 'place', 'timing'],
   scrim: ['shade', 'timing'],
+  box: ['box', 'place', 'timing'],
 }
 
-const TAB_LABELS: Record<GraphicsInspectorTab, string> = { text: 'Text', block: 'Block', image: 'Image', qr: 'QR code', shade: 'Shade', place: 'Place', timing: 'Timing' }
+const TAB_LABELS: Record<GraphicsInspectorTab, string> = { text: 'Text', block: 'Block', image: 'Image', qr: 'QR code', shade: 'Shade', box: 'Box', place: 'Place', timing: 'Timing' }
 
 function framesLabel(count: number): string {
   return count === 1 ? '1 frame' : `${count} frames`
@@ -153,7 +157,7 @@ function Place({ layer, frame, box, placement, disabled, onEdit, onFindClearSpot
         onChange={(anchor) => onEdit(graphicsRepositionEdits(frame, layer, box, { anchor }))} />
       <Select label="Within" value={position.space} options={SPACE_OPTIONS} disabled={disabled}
         onChange={(space) => onEdit(graphicsRepositionEdits(frame, layer, box, { space }))} />
-      <ClearSpot placement={placement} disabled={disabled} onFind={onFindClearSpot} />
+      {layer.kind !== 'box' && <ClearSpot placement={placement} disabled={disabled} onFind={onFindClearSpot} />}
       <p className="graphics-muted graphics-section-note">Drag the layer in the preview, or nudge it with the arrow keys. The anchor stays put when the layer grows.</p>
     </Section>
   )
@@ -211,6 +215,19 @@ function ScrimFields({ layer, disabled, onEdit }: { layer: GraphicsScrimLayer; d
   )
 }
 
+function BoxFields({ layer, disabled, onEdit }: { layer: GraphicsBoxLayer; disabled: boolean; onEdit: Edit }) {
+  const set = (box: BoxPatch, field: string) => onEdit([{ op: 'set_box', layer_id: layer.id, box }], `${layer.id}:${field}`)
+  return (
+    <Section title="Box">
+      <Color label="Box color" value={layer.color} disabled={disabled} onChange={(color) => set({ color }, 'color')} />
+      <Range label="Width" value={layer.width} min={MIN_GRAPHICS_BOX_SIDE} max={1} step={0.005} format={graphicsPercent} disabled={disabled} onChange={(width) => set({ width }, 'width')} />
+      <Range label="Height" value={layer.height} min={MIN_GRAPHICS_BOX_SIDE} max={1} step={0.005} format={graphicsPercent} disabled={disabled} onChange={(height) => set({ height }, 'height')} />
+      <Range label="Corner rounding" value={layer.radius} min={0} max={1} step={0.01} format={graphicsPercent} disabled={disabled} onChange={(radius) => set({ radius }, 'radius')} />
+      <p className="graphics-muted graphics-section-note">Drag the box over burned-in text in the preview, then drag its edges and corners to fit. Opacity above sets how much shows through.</p>
+    </Section>
+  )
+}
+
 function TabFields({ tab, props }: { tab: GraphicsInspectorTab; props: InspectorProps }) {
   const { layer, disabled, onEdit } = props
   if (tab === 'timing') {
@@ -230,6 +247,7 @@ function TabFields({ tab, props }: { tab: GraphicsInspectorTab; props: Inspector
   }
   if (layer.kind === 'image') return <ImageFields read={props.read} imageChoices={props.imageChoices} disabled={disabled} onEdit={onEdit} layer={layer} />
   if (layer.kind === 'qr') return <QrFields read={props.read} layer={layer} disabled={disabled} onEdit={onEdit} />
+  if (layer.kind === 'box') return <BoxFields layer={layer} disabled={disabled} onEdit={onEdit} />
   return <ScrimFields layer={layer} disabled={disabled} onEdit={onEdit} />
 }
 

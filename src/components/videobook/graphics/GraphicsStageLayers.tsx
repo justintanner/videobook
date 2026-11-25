@@ -50,11 +50,30 @@ type StageLayersProps = {
 
 const DRAG_START_PX = 3
 const SNAP_PX = 6
+const BOX_TITLE = 'Drag to resize the box'
 const HANDLE_TITLES: Record<GraphicsHandle, string> = {
   size: 'Drag to resize',
   'width-start': 'Drag to change the text width',
   'width-end': 'Drag to change the text width',
   height: 'Drag to change the shade height',
+  'top-left': BOX_TITLE,
+  top: BOX_TITLE,
+  'top-right': BOX_TITLE,
+  left: BOX_TITLE,
+  right: BOX_TITLE,
+  'bottom-left': BOX_TITLE,
+  bottom: BOX_TITLE,
+  'bottom-right': BOX_TITLE,
+}
+const BOX_CURSORS: Partial<Record<GraphicsHandle, CSSProperties['cursor']>> = {
+  'top-left': 'nwse-resize',
+  'bottom-right': 'nwse-resize',
+  'top-right': 'nesw-resize',
+  'bottom-left': 'nesw-resize',
+  top: 'ns-resize',
+  bottom: 'ns-resize',
+  left: 'ew-resize',
+  right: 'ew-resize',
 }
 
 function percent(value: number): string {
@@ -80,6 +99,8 @@ function shownAt(layer: GraphicsLayer, seconds: number, durationSeconds: number)
 
 function handleCursor(layer: GraphicsLayer, handle: GraphicsHandle): CSSProperties['cursor'] {
   if (handle === 'height') return 'ns-resize'
+  const boxCursor = BOX_CURSORS[handle]
+  if (boxCursor) return boxCursor
   if (handle !== 'size' || layer.kind === 'scrim') return 'ew-resize'
   const corner = graphicsSizeCorner(layer.position.anchor)
   return corner.x === corner.y ? 'nwse-resize' : 'nesw-resize'

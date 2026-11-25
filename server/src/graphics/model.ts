@@ -8,6 +8,7 @@ export const MAX_GRAPHICS_NAME_LENGTH = 80;
 export const MAX_GRAPHICS_FADE_SECONDS = 2;
 export const MAX_GRAPHICS_PLATE_PADDING = 0.2;
 export const GRAPHICS_INSET_FRACTION = 0.02;
+export const MIN_GRAPHICS_BOX_SIDE = 0.01;
 const MAX_GRAPHICS_URL_LENGTH = 512;
 const MAX_GRAPHICS_LINES = 6;
 const MAX_FRAME_SIDE = 16_384;
@@ -15,7 +16,7 @@ const MAX_FRAME_SIDE = 16_384;
 export const GRAPHICS_MOTIONS = ["fade", "slide", "pop", "words"] as const;
 export type GraphicsMotion = typeof GRAPHICS_MOTIONS[number];
 
-export const GRAPHICS_LAYER_KINDS = ["text", "image", "qr", "scrim"] as const;
+export const GRAPHICS_LAYER_KINDS = ["text", "image", "qr", "scrim", "box"] as const;
 export const GRAPHICS_ANCHORS = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"] as const;
 export const GRAPHICS_SPACES = ["safe", "inset", "frame"] as const;
 export const GRAPHICS_TEXT_SLOTS = ["headline", "secondary", "credit", "handle"] as const;
@@ -182,9 +183,21 @@ const scrimLayerSchema = z.object({
   strength: between(0, 1, "Scrim strength must be between 0 and 1."),
 }).strict();
 
+const boxSideMessage = (side: string, axis: string) => `Box ${side} must be between ${MIN_GRAPHICS_BOX_SIDE} and 1 of the positioning space's ${axis}.`;
+
+const boxLayerSchema = z.object({
+  ...layerFields,
+  kind: z.literal("box"),
+  position: positionSchema,
+  width: between(MIN_GRAPHICS_BOX_SIDE, 1, boxSideMessage("width", "width")),
+  height: between(MIN_GRAPHICS_BOX_SIDE, 1, boxSideMessage("height", "height")),
+  color: hexColor,
+  radius: between(0, 1, "Box radius must be between 0 and 1 of half the box's shorter side."),
+}).strict();
+
 const layerSchema = z.discriminatedUnion(
   "kind",
-  [textLayerSchema, imageLayerSchema, qrLayerSchema, scrimLayerSchema],
+  [textLayerSchema, imageLayerSchema, qrLayerSchema, scrimLayerSchema, boxLayerSchema],
   { error: `Layer kind must be one of ${GRAPHICS_LAYER_KINDS.join(", ")}.` },
 );
 
@@ -229,6 +242,7 @@ export type GraphicsTextLayer = z.infer<typeof textLayerSchema>;
 export type GraphicsImageLayer = z.infer<typeof imageLayerSchema>;
 export type GraphicsQrLayer = z.infer<typeof qrLayerSchema>;
 export type GraphicsScrimLayer = z.infer<typeof scrimLayerSchema>;
+export type GraphicsBoxLayer = z.infer<typeof boxLayerSchema>;
 export type GraphicsLayer = z.infer<typeof layerSchema>;
 export type GraphicsDocument = z.infer<typeof graphicsDocumentSchema>;
 export type GraphicsFrame = z.infer<typeof graphicsFrameSchema>;
@@ -325,7 +339,11 @@ export type GraphicsScrimLayerInput = LayerInputFields & Partial<Pick<GraphicsSc
   kind: "scrim";
 };
 
-export type GraphicsLayerInput = GraphicsTextLayerInput | GraphicsImageLayerInput | GraphicsQrLayerInput | GraphicsScrimLayerInput;
+export type GraphicsBoxLayerInput = LayerInputFields & PlacedInputFields & Partial<Pick<GraphicsBoxLayer, "width" | "height" | "color" | "radius">> & {
+  kind: "box";
+};
+
+export type GraphicsLayerInput = GraphicsTextLayerInput | GraphicsImageLayerInput | GraphicsQrLayerInput | GraphicsScrimLayerInput | GraphicsBoxLayerInput;
 
 const WHOLE_CLIP: GraphicsTiming = { start: null, end: null, tail: null, fade: 0, enter: "fade", exit: "fade" };
 
@@ -352,10 +370,13 @@ const DEFAULT_TEXT_ITEM: Omit<GraphicsTextItem, "id"> = {
   shadow: true,
 };
 
-const DEFAULT_POSITIONS: Record<"text" | "image" | "qr", GraphicsPosition> = {
+type PlacedKind = Exclude<GraphicsLayerKind, "scrim">;
+
+const DEFAULT_POSITIONS: Record<PlacedKind, GraphicsPosition> = {
   text: { anchor: "center", x: 0.5, y: 0.5, space: "safe" },
   image: { anchor: "top-left", x: 0, y: 0, space: "safe" },
   qr: { anchor: "bottom-right", x: 1, y: 1, space: "inset" },
+  box: { anchor: "center", x: 0.5, y: 0.8, space: "frame" },
 };
 
 const DEFAULT_NAMES: Record<GraphicsLayerKind, string> = {
@@ -363,6 +384,7 @@ const DEFAULT_NAMES: Record<GraphicsLayerKind, string> = {
   image: "Image",
   qr: "QR code",
   scrim: "Shade",
+  box: "Box",
 };
 
 type MintedLayer = { layer: GraphicsLayer; nextId: number };
@@ -377,7 +399,7 @@ function commonFields(input: LayerInputFields, kind: GraphicsLayerKind, id: stri
   };
 }
 
-function positionFrom(input: PlacedInputFields, kind: "text" | "image" | "qr"): GraphicsPosition {
+function positionFrom(input: PlacedInputFields, kind: PlacedKind): GraphicsPosition {
   return { ...DEFAULT_POSITIONS[kind], ...definedFields(input.position ?? {}) };
 }
 
@@ -451,6 +473,19 @@ function scrimLayerFrom(input: GraphicsScrimLayerInput, id: string): GraphicsScr
   };
 }
 
+function boxLayerFrom(input: GraphicsBoxLayerInput, id: string): GraphicsBoxLayer {
+  return {
+    width: 0.8,
+    height: 0.12,
+    color: "#000000",
+    radius: 0,
+    ...definedFields(input),
+    ...commonFields(input, "box", id),
+    kind: "box",
+    position: positionFrom(input, "box"),
+  };
+}
+
 export function createGraphicsLayer(input: GraphicsLayerInput, nextId: number): MintedLayer {
   const minted = nextGraphicsId(nextId, "l");
   switch (input.kind) {
@@ -458,6 +493,7 @@ export function createGraphicsLayer(input: GraphicsLayerInput, nextId: number): 
     case "image": return { layer: imageLayerFrom(input, minted.id), nextId: minted.nextId };
     case "qr": return { layer: qrLayerFrom(input, minted.id), nextId: minted.nextId };
     case "scrim": return { layer: scrimLayerFrom(input, minted.id), nextId: minted.nextId };
+    case "box": return { layer: boxLayerFrom(input, minted.id), nextId: minted.nextId };
   }
 }
 

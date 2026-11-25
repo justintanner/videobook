@@ -5,7 +5,7 @@ import jsQRImport from "jsqr";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
-import type { GraphicsQrLayout } from "./layout.js";
+import type { GraphicsBoxLayout, GraphicsQrLayout } from "./layout.js";
 import { layoutGraphics } from "./layout.js";
 import type { GraphicsDocument, GraphicsFrame, GraphicsLayerInput } from "./model.js";
 import { graphicsDocumentFromLayers } from "./model.js";
@@ -81,6 +81,35 @@ describe("renderGraphicsStills", () => {
       }
     }
     expect(solid).toBeGreaterThan(2000);
+  });
+
+  it.each([PORTRAIT, SMALL])("fills a box with its colour and opacity exactly where the layout puts it at %j", async (frame) => {
+    const document = graphicsDocumentFromLayers([
+      { kind: "box", color: "#2563EB", width: 0.6, height: 0.08, position: { anchor: "bottom-left", x: 0.1, y: 0.9, space: "frame" } },
+      { kind: "box", color: "#F4F4F4", opacity: 0.5, width: 0.3, height: 0.1, radius: 1, position: { anchor: "top-right", x: 0.95, y: 0.05, space: "frame" } },
+    ]);
+    const { groups } = await render(document, frame);
+    expect(groups.map((group) => group.layerIds)).toEqual([["l1", "l2"]]);
+    const still = await raw(groups[0].path);
+    const [solid, rounded] = layoutGraphics({ document, frame, measure: () => 0 }) as GraphicsBoxLayout[];
+    expect(solid.box).toEqual({
+      x: Math.round(frame.width * 0.1),
+      y: Math.round(frame.height * 0.9 - frame.height * 0.08),
+      width: Math.round(frame.width * 0.7) - Math.round(frame.width * 0.1),
+      height: Math.round(frame.height * 0.9) - Math.round(frame.height * 0.9 - frame.height * 0.08),
+    });
+    const { x, y, width, height } = solid.box;
+    for (const [px, py] of [[x, y], [x + width - 1, y], [x, y + height - 1], [x + width - 1, y + height - 1], [x + width / 2, y + height / 2]]) {
+      const [red, green, blue, alpha] = pixel(still, Math.floor(px), Math.floor(py));
+      expect([alpha, Math.abs(red - 37) <= 2, Math.abs(green - 99) <= 2, Math.abs(blue - 235) <= 2]).toEqual([255, true, true, true]);
+    }
+    for (const [px, py] of [[x - 2, y + height / 2], [x + width + 1, y + height / 2], [x + width / 2, y - 2], [x + width / 2, y + height + 1]]) {
+      expect(pixel(still, Math.floor(px), Math.floor(py))[3]).toBe(0);
+    }
+    const middle = pixel(still, rounded.box.x + Math.floor(rounded.box.width / 2), rounded.box.y + Math.floor(rounded.box.height / 2));
+    expect(Math.abs(middle[3] - 128)).toBeLessThanOrEqual(2);
+    expect(pixel(still, rounded.box.x + 1, rounded.box.y + 1)[3]).toBe(0);
+    expect(pixel(still, rounded.box.x + rounded.box.width - 2, rounded.box.y + rounded.box.height - 2)[3]).toBe(0);
   });
 
   it.each([PORTRAIT, SMALL])("draws a tile QR code that decodes to its URL at %j", async (frame) => {

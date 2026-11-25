@@ -384,6 +384,24 @@ describe("layoutGraphics", () => {
     expect(gone).toEqual({ kind: "image", layerId: "l2", box: { x: 950, y: 22, width: 108, height: 108 }, missing: true });
   });
 
+  it("sizes a box from its space, places it by its anchor anywhere in the frame and rounds it from half its shorter side", () => {
+    const document = graphicsDocumentFromLayers([
+      { kind: "box" },
+      { kind: "box", position: { anchor: "bottom-right", x: 1, y: 1, space: "safe" }, width: 0.5, height: 0.1, radius: 1 },
+      { kind: "box", position: { anchor: "top-left", x: 0.9, y: 0.95, space: "frame" }, width: 0.3, height: 0.2, radius: 0.5 },
+    ]);
+    const [plain, rounded, pushed] = layout(document);
+    expect(plain).toEqual({ kind: "box", layerId: "l1", box: { x: 108, y: 1421, width: 864, height: 230 }, radius: 0 });
+    const safe = graphicsSpaceRect(PORTRAIT, "safe");
+    if (rounded.kind !== "box") throw new Error("expected a box");
+    expect(rounded.box.x + rounded.box.width).toBe(safe.x + safe.width);
+    expect(rounded.box.y + rounded.box.height).toBe(safe.y + safe.height);
+    expect(Math.abs(rounded.box.width - safe.width / 2)).toBeLessThanOrEqual(ROUNDING);
+    expect(Math.abs(rounded.box.height - safe.height / 10)).toBeLessThanOrEqual(ROUNDING);
+    expect(rounded.radius).toBe(rounded.box.height / 2);
+    expect(pushed).toEqual({ kind: "box", layerId: "l3", box: { x: 756, y: 1536, width: 324, height: 384 }, radius: 81 });
+  });
+
   it("lays out visible layers only, bottom to top", () => {
     const document = graphicsDocumentFromLayers([
       { kind: "scrim", edge: "top", height: 0.3 },

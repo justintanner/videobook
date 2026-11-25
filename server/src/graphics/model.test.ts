@@ -124,7 +124,7 @@ describe("graphics document model", () => {
   });
 
   it("names an unknown layer kind and lists every problem", () => {
-    expect(errorOf(withValue(["layers", 1, "kind"], "video"))).toMatch(/^layers\[1\](\.kind)?: Layer kind must be one of text, image, qr, scrim\.$/u);
+    expect(errorOf(withValue(["layers", 1, "kind"], "video"))).toMatch(/^layers\[1\](\.kind)?: Layer kind must be one of text, image, qr, scrim, box\.$/u);
     const document = withValue(["layers", 1, "opacity"], 2);
     (document.layers as JsonRecord[])[0].strength = -1;
     const result = parseGraphicsDocument(document);
@@ -158,4 +158,33 @@ it("defaults legacy timing to fades and rejects words on non-text layers", () =>
     const invalid = { ...document, layers: document.layers.map((layer) => ({ ...layer, timing: { ...layer.timing, [edge]: "words" } })) };
     expect(parseGraphicsDocument(invalid)).toMatchObject({ ok: false, error: expect.stringContaining("only available for text") });
   }
+});
+
+describe("graphics box layers", () => {
+  const boxDocument = () => graphicsDocumentFromLayers([{ kind: "box" }, { kind: "box", color: "#F4F4F4", width: 1, height: 0.05, radius: 0.5, position: { anchor: "top", y: 0 } }]);
+
+  it("start as a solid black box across the lower part of the whole frame", () => {
+    const [plain, styled] = boxDocument().layers;
+    expect(plain).toEqual({
+      id: "l1", kind: "box", name: "Box", visible: true, opacity: 1,
+      timing: { start: null, end: null, tail: null, fade: 0, enter: "fade", exit: "fade" },
+      position: { anchor: "center", x: 0.5, y: 0.8, space: "frame" },
+      width: 0.8, height: 0.12, color: "#000000", radius: 0,
+    });
+    expect(styled).toMatchObject({ color: "#F4F4F4", width: 1, height: 0.05, radius: 0.5, position: { anchor: "top", x: 0.5, y: 0, space: "frame" } });
+    expect(parseGraphicsDocument(boxDocument())).toEqual({ ok: true, document: boxDocument() });
+  });
+
+  it.each([
+    ["width", 0.005, "layers[0].width: Box width must be between 0.01 and 1 of the positioning space's width."],
+    ["width", 1.1, "layers[0].width: Box width must be between 0.01 and 1 of the positioning space's width."],
+    ["height", 0, "layers[0].height: Box height must be between 0.01 and 1 of the positioning space's height."],
+    ["radius", 1.5, "layers[0].radius: Box radius must be between 0 and 1 of half the box's shorter side."],
+    ["color", "red", "layers[0].color: Colours are #RRGGBB hex strings."],
+    ["edge", "top", "layers[0]: Unknown field \"edge\"."],
+  ] as const)("rejects a box %s of %j", (field, value, message) => {
+    const document = JSON.parse(JSON.stringify(boxDocument())) as JsonRecord;
+    (document.layers as JsonRecord[])[0][field] = value;
+    expect(errorOf(document)).toBe(message);
+  });
 });

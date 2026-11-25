@@ -1,5 +1,6 @@
 import { graphicsPlaceBox, graphicsSpaceRect, type GraphicsRect } from '../../server/src/graphics/layout'
 import type {
+  GraphicsBoxLayer,
   GraphicsDocument,
   GraphicsImageLayer,
   GraphicsLayer,
@@ -100,11 +101,18 @@ function shadeShape(layer: GraphicsScrimLayer): GraphicsThumbShape {
   return { kind: 'shade', key: layer.id, edge: layer.edge, height: layer.height * 100, strength: layer.strength, color: layer.color }
 }
 
+function boxShape(layer: GraphicsBoxLayer): GraphicsThumbShape {
+  const space = graphicsSpaceRect(FRAME, layer.position.space)
+  const box = graphicsPlaceBox(FRAME, layer.position, { width: layer.width * space.width, height: layer.height * space.height })
+  return { kind: 'plate', key: layer.id, box: percentBox(box), color: layer.color, opacity: layer.opacity }
+}
+
 function layerShapes(layer: GraphicsLayer, images: GraphicsThumbImages): GraphicsThumbShape[] {
   if (!layer.visible) return []
   if (layer.kind === 'text') return textShapes(layer)
   if (layer.kind === 'image') return [imageShape(layer, images)]
   if (layer.kind === 'qr') return [qrShape(layer)]
+  if (layer.kind === 'box') return [boxShape(layer)]
   return [shadeShape(layer)]
 }
 

@@ -261,6 +261,32 @@ describe("graphics edits", () => {
     expect(failed(base(), [{ op: "set_scrim", layer_id: "l2", scrim: { height: 0.3 } }])).toMatchObject({ code: "wrong_kind" });
   });
 
+  it("adds a box under the other layers, moves it anywhere and sets its size, colour and rounding with set_box", () => {
+    const document = applied(base(), [
+      { op: "add_layer", layer: { kind: "box" }, index: 0 },
+      { op: "set_position", layer_id: "l7", position: { anchor: "bottom-left", x: 0.05, y: 0.9 } },
+      { op: "set_box", layer_id: "l7", box: { width: 0.6, height: 0.08, color: "#F2F2F2", radius: 0.25 } },
+      { op: "set_layer", layer_id: "l7", layer: { opacity: 0.9 } },
+      { op: "duplicate_layer", layer_id: "l7" },
+    ]);
+    expect(ids(document)).toEqual(["l7", "l8", "l1", "l2", "l5", "l6"]);
+    expect(layer(document, "l7")).toMatchObject({
+      kind: "box",
+      opacity: 0.9,
+      position: { anchor: "bottom-left", x: 0.05, y: 0.9, space: "frame" },
+      width: 0.6,
+      height: 0.08,
+      color: "#F2F2F2",
+      radius: 0.25,
+    });
+    expect(layer(document, "l8")).toMatchObject({ kind: "box", name: "Box copy", width: 0.6, height: 0.08, color: "#F2F2F2" });
+    expect(failed(document, [{ op: "set_box", layer_id: "l7", box: { height: 0 } }])).toMatchObject({
+      code: "invalid",
+      message: "layers[0].height: Box height must be between 0.01 and 1 of the positioning space's height.",
+    });
+    expect(failed(base(), [{ op: "set_box", layer_id: "l1", box: { width: 0.5 } }])).toMatchObject({ code: "wrong_kind", message: "Layer l1 is a scrim layer, not a box layer." });
+  });
+
   it("set_slot_text fills every holder of a slot, including the QR profile URL", () => {
     const document = applied(base(), [
       { op: "duplicate_layer", layer_id: "l2" },
@@ -357,7 +383,7 @@ describe("graphics edits", () => {
     const unknownOp = { op: "explode", layer_id: "l1" } as unknown as GraphicsEdit;
     expect(failed(base(), [unknownOp])).toMatchObject({ code: "invalid", message: "Unknown edit operation explode.", index: 0, op: "explode" });
     const unknownKind = { op: "add_layer", layer: { kind: "video" } } as unknown as GraphicsEdit;
-    expect(failed(base(), [unknownKind])).toMatchObject({ code: "invalid", message: "Layer kind must be one of text, image, qr, scrim." });
+    expect(failed(base(), [unknownKind])).toMatchObject({ code: "invalid", message: "Layer kind must be one of text, image, qr, scrim, box." });
   });
 });
 

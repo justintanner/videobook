@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
 import type { PlayerRef } from '@remotion/player'
-import { ArrowDown, ArrowUp, Blend, Copy, Eye, EyeOff, Image, Pencil, Plus, QrCode, Trash2, TriangleAlert, Type, type LucideIcon } from 'lucide-react'
+import { ArrowDown, ArrowUp, Blend, Copy, Eye, EyeOff, Image, Pencil, Plus, QrCode, Square, Trash2, TriangleAlert, Type, type LucideIcon } from 'lucide-react'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
 import { MAX_GRAPHICS_LAYERS, MAX_GRAPHICS_NAME_LENGTH, type GraphicsDocument, type GraphicsLayer, type GraphicsLayerKind } from '../../../../server/src/graphics/model'
 import {
@@ -40,10 +40,10 @@ type LayersProps = {
 
 type TimelineClock = { durationSeconds: number; fps: number; playerRef: RefObject<PlayerRef | null> }
 
-const KIND_ICONS: Record<GraphicsLayerKind, LucideIcon> = { text: Type, image: Image, qr: QrCode, scrim: Blend }
-const ADD_LABELS: Record<GraphicsAddKind, string> = { text: 'Text', image: 'Image', qr: 'QR code', scrim: 'Shade' }
-const ADD_NAMES: Record<GraphicsAddKind, string> = { text: 'Add text layer', image: 'Add image layer', qr: 'Add QR code layer', scrim: 'Add shade layer' }
-const ADD_KINDS: readonly GraphicsAddKind[] = ['text', 'image', 'qr', 'scrim']
+const KIND_ICONS: Record<GraphicsLayerKind, LucideIcon> = { text: Type, image: Image, qr: QrCode, scrim: Blend, box: Square }
+const ADD_LABELS: Record<GraphicsAddKind, string> = { text: 'Text', image: 'Image', qr: 'QR code', scrim: 'Shade', box: 'Box' }
+const ADD_NAMES: Record<GraphicsAddKind, string> = { text: 'Add text layer', image: 'Add image layer', qr: 'Add QR code layer', scrim: 'Add shade layer', box: 'Add box layer' }
+const ADD_KINDS: readonly GraphicsAddKind[] = ['text', 'image', 'qr', 'scrim', 'box']
 const TRIM_TITLES: Record<GraphicsTimingBound, string> = { start: 'Drag to change when the layer appears', end: 'Drag to change when the layer leaves' }
 const TRIM_BOUNDS: readonly GraphicsTimingBound[] = ['start', 'end']
 const RULER_END = 0.9
