@@ -11,6 +11,7 @@
     ".": {
       "entry": [
         "index.html",
+        "docs/design/notebook-tiles/boards.{js,css}",
         "vitest.goal-live.config.ts",
         "tests/v2/server-idle-fixture.mjs",
         "scripts/**/*.{mjs,ts}",

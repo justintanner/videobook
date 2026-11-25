@@ -1,0 +1,656 @@
+Board,State,Part,Board x y width height (px) or mark properties,App x y width height (px) or mark properties,Result
+Audio,Empty audio slot,mark,"17px / 17px / rgb(201, 137, 162) / 8px","17px / 17px / rgb(201, 137, 162) / 8px",Match
+Audio,Empty audio slot,box,0 0 240 200,0 0 240 200,Match
+Audio,Empty audio slot,header,1 1 238 26.2,1 1 238 26.2,Match
+Audio,Empty audio slot,icon,17 14.6 12 12,17 14.6 12 12,Match
+Audio,Empty audio slot,footer,1 165 238 34,1 165 238 34,Match
+Audio,Empty audio slot,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Audio,Empty audio slot,menu,206 168.5 28 28,206 168.5 28 28,Match
+Audio,Empty audio slot,slot,9 35.2 222 121.8,9 35.2 222 121.8,Match
+Audio,Empty audio slot,upload,80.8 125.6 78.5 18.8,18 120 204 28,Differs
+Audio,Upload in progress,mark,"17px / 17px / rgb(201, 137, 162) / 8px","17px / 17px / rgb(201, 137, 162) / 8px",Match
+Audio,Upload in progress,box,0 0 240 200,0 0 240 200,Match
+Audio,Upload in progress,header,1 1 238 26.2,1 1 238 26.2,Match
+Audio,Upload in progress,icon,17 14.6 12 12,17 14.6 12 12,Match
+Audio,Upload in progress,footer,1 165 238 34,1 165 238 34,Match
+Audio,Upload in progress,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Audio,Upload in progress,menu,206 168.5 28 28,206 168.5 28 28,Match
+Audio,Upload in progress,slot,9 35.2 222 121.8,9 35.2 222 121.8,Match
+Audio,Upload in progress,flag,126.6 173.5 71.4 18,117.1 173.5 80.9 18,Differs
+Audio,Upload in progress,upload,80.8 125.6 78.5 18.8,18 120 204 28,Differs
+Audio,Waveform pending,mark,"17px / 17px / rgb(201, 137, 162) / 8px","17px / 17px / rgb(201, 137, 162) / 8px",Match
+Audio,Waveform pending,box,0 0 240 200,0 0 240 200,Match
+Audio,Waveform pending,header,1 1 238 26.2,1 1 238 26.2,Match
+Audio,Waveform pending,icon,17 14.6 12 12,17 14.6 12 12,Match
+Audio,Waveform pending,footer,1 165 238 34,1 165 238 34,Match
+Audio,Waveform pending,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Audio,Waveform pending,menu,206 168.5 28 28,206 168.5 28 28,Match
+Audio,Waveform pending,wave,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Audio,Waveform pending,rail,1 144.7 238 20.3,1 144.7 238 20.3,Match
+Audio,Waveform pending,pending,11 37.2 218 117.8,1 27.2 238 137.8,Differs
+Audio,Waveform pending,footerMeter,190.6 147.1 26.4 15.4,188.8 149.3 28.2 11,Differs
+Audio,Peaks and duration,mark,"17px / 17px / rgb(201, 137, 162) / 8px","17px / 17px / rgb(201, 137, 162) / 8px",Match
+Audio,Peaks and duration,box,0 0 240 200,0 0 240 200,Match
+Audio,Peaks and duration,header,1 1 238 26.2,1 1 238 26.2,Match
+Audio,Peaks and duration,icon,17 14.6 12 12,17 14.6 12 12,Match
+Audio,Peaks and duration,footer,1 165 238 34,1 165 238 34,Match
+Audio,Peaks and duration,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Audio,Peaks and duration,menu,206 168.5 28 28,206 168.5 28 28,Match
+Audio,Peaks and duration,wave,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Audio,Peaks and duration,rail,1 144.7 238 20.3,1 144.7 238 20.3,Match
+Audio,Peaks and duration,footerMeter,190.6 147.1 26.4 15.4,188.8 149.3 28.2 11,Differs
+Audio,Versioned audio,mark,"17px / 17px / rgb(201, 137, 162) / 8px","17px / 17px / rgb(201, 137, 162) / 8px",Match
+Audio,Versioned audio,box,0 0 240 200,0 0 240 200,Match
+Audio,Versioned audio,header,1 1 238 26.2,1 1 238 32.8,Differs
+Audio,Versioned audio,icon,17 14.6 12 12,17 17.9 12 12,Differs
+Audio,Versioned audio,footer,1 165 238 34,1 165 238 34,Match
+Audio,Versioned audio,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Audio,Versioned audio,menu,206 168.5 28 28,206 168.5 28 28,Match
+Audio,Versioned audio,wave,1 27.2 238 137.8,1 33.8 238 131.2,Differs
+Audio,Versioned audio,rail,1 144.7 238 20.3,1 144.7 238 20.3,Match
+Audio,Versioned audio,version,196.6 14 26.4 13.2,166.6 14 56.4 19.8,Differs
+Audio,Versioned audio,footerMeter,190.6 147.1 26.4 15.4,188.8 149.3 28.2 11,Differs
+Audio,Connected output,mark,"17px / 17px / rgb(201, 137, 162) / 8px","17px / 17px / rgb(201, 137, 162) / 8px",Match
+Audio,Connected output,box,0 0 240 200,0 0 240 200,Match
+Audio,Connected output,header,1 1 238 26.2,1 1 238 26.2,Match
+Audio,Connected output,icon,17 14.6 12 12,17 14.6 12 12,Match
+Audio,Connected output,footer,1 165 238 34,1 165 238 34,Match
+Audio,Connected output,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Audio,Connected output,menu,206 168.5 28 28,167.6 168.5 28 28,Differs
+Audio,Connected output,wave,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Audio,Connected output,rail,1 144.7 238 20.3,1 144.7 238 20.3,Match
+Audio,Connected output,outgoing,202.2 187 48.8 26,199.6 187 51.4 26,Differs
+Audio,Connected output,footerMeter,190.6 147.1 26.4 15.4,188.8 149.3 28.2 11,Differs
+Extract audio,No video,mark,"17px / 17px / rgb(201, 137, 162) / 8px","17px / 17px / rgb(201, 137, 162) / 8px",Match
+Extract audio,No video,box,0 0 240 200,0 0 240 200,Match
+Extract audio,No video,header,1 1 238 26.2,1 1 238 26.2,Match
+Extract audio,No video,icon,17 14.6 12 12,17 14.6 12 12,Match
+Extract audio,No video,footer,1 165 238 34,1 165 238 34,Match
+Extract audio,No video,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Extract audio,No video,menu,206 168.5 28 28,206 168.5 28 28,Match
+Extract audio,No video,hint,106 52.5 28 28,106 54.2 28 28,Differs
+Extract audio,Input connected,mark,"17px / 17px / rgb(201, 137, 162) / 8px","17px / 17px / rgb(201, 137, 162) / 8px",Match
+Extract audio,Input connected,box,0 0 240 200,0 0 240 200,Match
+Extract audio,Input connected,header,1 1 238 26.2,1 1 238 26.2,Match
+Extract audio,Input connected,icon,17 14.6 12 12,17 14.6 12 12,Match
+Extract audio,Input connected,footer,1 165 238 34,1 165 238 34,Match
+Extract audio,Input connected,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Extract audio,Input connected,menu,206 168.5 28 28,206 168.5 28 28,Match
+Extract audio,Input connected,hint,106 52.5 28 28,106 54.2 28 28,Differs
+Extract audio,Input connected,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Extract audio,Extracting,mark,"17px / 17px / rgb(201, 137, 162) / 8px","17px / 17px / rgb(201, 137, 162) / 8px",Match
+Extract audio,Extracting,box,0 0 240 200,0 0 240 200,Match
+Extract audio,Extracting,header,1 1 238 26.2,1 1 238 26.2,Match
+Extract audio,Extracting,icon,17 14.6 12 12,17 14.6 12 12,Match
+Extract audio,Extracting,footer,1 165 238 34,1 165 238 34,Match
+Extract audio,Extracting,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Extract audio,Extracting,menu,206 168.5 28 28,206 168.5 28 28,Match
+Extract audio,Extracting,flag,120 173.5 78 18,110.5 173.5 87.5 18,Differs
+Extract audio,Extracting,overlay,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Extract audio,Extracting,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Extract audio,Extracting,clock,114 82.1 48 28,112.8 86.1 50.4 20,Differs
+Extract audio,Extracting,hint,,106 54.2 28 28,App only
+Extract audio,Track awaiting peaks,mark,"17px / 17px / rgb(201, 137, 162) / 8px","17px / 17px / rgb(201, 137, 162) / 8px",Match
+Extract audio,Track awaiting peaks,box,0 0 240 200,0 0 240 200,Match
+Extract audio,Track awaiting peaks,header,1 1 238 26.2,1 1 238 26.2,Match
+Extract audio,Track awaiting peaks,icon,17 14.6 12 12,17 14.6 12 12,Match
+Extract audio,Track awaiting peaks,footer,1 165 238 34,1 165 238 34,Match
+Extract audio,Track awaiting peaks,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Extract audio,Track awaiting peaks,menu,206 168.5 28 28,206 168.5 28 28,Match
+Extract audio,Track awaiting peaks,wave,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Extract audio,Track awaiting peaks,rail,1 144.7 238 20.3,1 144.7 238 20.3,Match
+Extract audio,Track awaiting peaks,pending,11 37.2 218 117.8,1 27.2 238 137.8,Differs
+Extract audio,Track awaiting peaks,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Extract audio,Track awaiting peaks,footerMeter,190.6 147.1 26.4 15.4,188.8 149.3 28.2 11,Differs
+Extract audio,Extracted track,mark,"17px / 17px / rgb(201, 137, 162) / 8px","17px / 17px / rgb(201, 137, 162) / 8px",Match
+Extract audio,Extracted track,box,0 0 240 200,0 0 240 200,Match
+Extract audio,Extracted track,header,1 1 238 26.2,1 1 238 26.2,Match
+Extract audio,Extracted track,icon,17 14.6 12 12,17 14.6 12 12,Match
+Extract audio,Extracted track,footer,1 165 238 34,1 165 238 34,Match
+Extract audio,Extracted track,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Extract audio,Extracted track,menu,206 168.5 28 28,167.6 168.5 28 28,Differs
+Extract audio,Extracted track,wave,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Extract audio,Extracted track,rail,1 144.7 238 20.3,1 144.7 238 20.3,Match
+Extract audio,Extracted track,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Extract audio,Extracted track,outgoing,202.2 187 48.8 26,199.6 187 51.4 26,Differs
+Extract audio,Extracted track,footerMeter,190.6 147.1 26.4 15.4,188.8 149.3 28.2 11,Differs
+Extract audio,Extraction failed,mark,"17px / 17px / rgb(239, 68, 68) / 8px","17px / 17px / rgb(239, 68, 68) / 8px",Match
+Extract audio,Extraction failed,box,0 0 240 200,0 0 240 200,Match
+Extract audio,Extraction failed,header,1 1 238 26.2,1 1 238 26.2,Match
+Extract audio,Extraction failed,icon,17 14.6 12 12,17 14.6 12 12,Match
+Extract audio,Extraction failed,footer,1 165 238 34,1 165 238 34,Match
+Extract audio,Extraction failed,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Extract audio,Extraction failed,menu,206 168.5 28 28,206 168.5 28 28,Match
+Extract audio,Extraction failed,flag,146.4 173.5 51.6 18,146.4 173.5 51.6 18,Match
+Extract audio,Extraction failed,overlay,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Extract audio,Extraction failed,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Extract audio,Extraction failed,errorAction,92.2 104.5 55.6 24,79.4 104.1 81.1 28,Differs
+Extract audio,Extraction failed,errorTitle,100.2 63.7 39.6 15.4,52.2 60.1 135.7 12.6,Differs
+Extract audio,Extraction failed,hint,,106 54.2 28 28,App only
+Split video,Unconfigured range,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Split video,Unconfigured range,box,0 0 240 200,0 0 240 200,Match
+Split video,Unconfigured range,header,1 1 238 26.2,1 1 238 26.2,Match
+Split video,Unconfigured range,icon,17 14.6 12 12,17 14.6 12 12,Match
+Split video,Unconfigured range,footer,1 165 238 34,1 165 238 34,Match
+Split video,Unconfigured range,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Split video,Unconfigured range,menu,206 168.5 28 28,206 168.5 28 28,Match
+Split video,Unconfigured range,split,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Split video,Unconfigured range,frame,1 27.2 118.5 137.8,1 27.2 118.5 137.8,Match
+Split video,Unconfigured range,caption,6 112 108.5 48,6 112 108.5 48,Match
+Split video,Unconfigured range,firstFrameLabel,12 117 36.3 16.5,12 117 36.3 16.5,Match
+Split video,Unconfigured range,lastFrame,120.5 27.2 118.5 137.8,120.5 27.2 118.5 137.8,Match
+Split video,Unconfigured range,lastFrameLabel,125.5 112 108.5 48,125.5 112 108.5 48,Match
+Split video,Range set,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Split video,Range set,box,0 0 240 200,0 0 240 200,Match
+Split video,Range set,header,1 1 238 26.2,1 1 238 26.2,Match
+Split video,Range set,icon,17 14.6 12 12,17 14.6 12 12,Match
+Split video,Range set,footer,1 165 238 34,1 165 238 34,Match
+Split video,Range set,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Split video,Range set,menu,206 168.5 28 28,206 168.5 28 28,Match
+Split video,Range set,split,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Split video,Range set,frame,1 27.2 118.5 137.8,1 27.2 118.5 137.8,Match
+Split video,Range set,caption,6 133.5 108.5 26.5,6 133.5 108.5 26.5,Match
+Split video,Range set,firstFrameLabel,12 138.5 36.3 16.5,12 138.5 36.3 16.5,Match
+Split video,Range set,lastFrame,120.5 27.2 118.5 137.8,120.5 27.2 118.5 137.8,Match
+Split video,Range set,lastFrameLabel,125.5 133.5 108.5 26.5,125.5 133.5 108.5 26.5,Match
+Split video,Range set,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Split video,First frame available,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Split video,First frame available,box,0 0 240 200,0 0 240 200,Match
+Split video,First frame available,header,1 1 238 26.2,1 1 238 26.2,Match
+Split video,First frame available,icon,17 14.6 12 12,17 14.6 12 12,Match
+Split video,First frame available,footer,1 165 238 34,1 165 238 34,Match
+Split video,First frame available,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Split video,First frame available,menu,206 168.5 28 28,206 168.5 28 28,Match
+Split video,First frame available,split,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Split video,First frame available,frame,1 27.2 118.5 137.8,1 27.2 118.5 137.8,Match
+Split video,First frame available,caption,6 133.5 108.5 26.5,6 133.5 108.5 26.5,Match
+Split video,First frame available,firstFrameLabel,12 138.5 36.3 16.5,12 138.5 36.3 16.5,Match
+Split video,First frame available,lastFrame,120.5 27.2 118.5 137.8,120.5 27.2 118.5 137.8,Match
+Split video,First frame available,lastFrameLabel,125.5 133.5 108.5 26.5,125.5 133.5 108.5 26.5,Match
+Split video,First frame available,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Split video,Both frames available,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Split video,Both frames available,box,0 0 240 200,0 0 240 200,Match
+Split video,Both frames available,header,1 1 238 26.2,1 1 238 26.2,Match
+Split video,Both frames available,icon,17 14.6 12 12,17 14.6 12 12,Match
+Split video,Both frames available,footer,1 165 238 34,1 165 238 34,Match
+Split video,Both frames available,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Split video,Both frames available,menu,206 168.5 28 28,167.6 168.5 28 28,Differs
+Split video,Both frames available,split,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Split video,Both frames available,frame,1 27.2 118.5 137.8,1 27.2 118.5 137.8,Match
+Split video,Both frames available,caption,6 133.5 108.5 26.5,6 133.5 108.5 26.5,Match
+Split video,Both frames available,firstFrameLabel,12 138.5 36.3 16.5,12 138.5 36.3 16.5,Match
+Split video,Both frames available,lastFrame,120.5 27.2 118.5 137.8,120.5 27.2 118.5 137.8,Match
+Split video,Both frames available,lastFrameLabel,125.5 133.5 108.5 26.5,125.5 133.5 108.5 26.5,Match
+Split video,Both frames available,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Split video,Both frames available,outgoing,202.2 187 48.8 26,199.6 187 51.4 26,Differs
+Split video,Splitting,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Split video,Splitting,box,0 0 240 200,0 0 240 200,Match
+Split video,Splitting,header,1 1 238 26.2,1 1 238 26.2,Match
+Split video,Splitting,icon,17 14.6 12 12,17 14.6 12 12,Match
+Split video,Splitting,footer,1 165 238 34,1 165 238 34,Match
+Split video,Splitting,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Split video,Splitting,menu,206 168.5 28 28,206 168.5 28 28,Match
+Split video,Splitting,flag,126.6 173.5 71.4 18,117.1 173.5 80.9 18,Differs
+Split video,Splitting,overlay,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Split video,Splitting,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Split video,Splitting,clock,114 82.1 48 28,112.8 86.1 50.4 20,Differs
+Split video,Splitting,split,,1 27.2 238 137.8,App only
+Split video,Splitting,frame,,1 27.2 118.5 137.8,App only
+Split video,Splitting,caption,,6 112 108.5 48,App only
+Split video,Splitting,firstFrameLabel,,12 117 36.3 16.5,App only
+Split video,Splitting,lastFrame,,120.5 27.2 118.5 137.8,App only
+Split video,Splitting,lastFrameLabel,,125.5 112 108.5 48,App only
+Split video,Range failed,mark,"17px / 17px / rgb(239, 68, 68) / 3px","17px / 17px / rgb(239, 68, 68) / 3px",Match
+Split video,Range failed,box,0 0 240 200,0 0 240 200,Match
+Split video,Range failed,header,1 1 238 26.2,1 1 238 26.2,Match
+Split video,Range failed,icon,17 14.6 12 12,17 14.6 12 12,Match
+Split video,Range failed,footer,1 165 238 34,1 165 238 34,Match
+Split video,Range failed,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Split video,Range failed,menu,206 168.5 28 28,206 168.5 28 28,Match
+Split video,Range failed,flag,146.4 173.5 51.6 18,146.4 173.5 51.6 18,Match
+Split video,Range failed,overlay,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Split video,Range failed,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Split video,Range failed,errorAction,92.2 104.5 55.6 24,79.4 104.1 81.1 28,Differs
+Split video,Range failed,errorTitle,100.2 63.7 39.6 15.4,52.2 60.1 135.7 12.6,Differs
+Split video,Range failed,split,,1 27.2 238 137.8,App only
+Split video,Range failed,frame,,1 27.2 118.5 137.8,App only
+Split video,Range failed,caption,,6 112 108.5 48,App only
+Split video,Range failed,firstFrameLabel,,12 117 36.3 16.5,App only
+Split video,Range failed,lastFrame,,120.5 27.2 118.5 137.8,App only
+Split video,Range failed,lastFrameLabel,,125.5 112 108.5 48,App only
+Concat,No clips,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Concat,No clips,box,0 0 240 200,0 0 240 200,Match
+Concat,No clips,header,1 1 238 26.2,1 1 238 26.2,Match
+Concat,No clips,icon,17 14.6 12 12,17 14.6 12 12,Match
+Concat,No clips,footer,1 165 238 34,1 165 238 34,Match
+Concat,No clips,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Concat,No clips,menu,206 168.5 28 28,206 168.5 28 28,Match
+Concat,No clips,hint,106 57.1 28 28,106 54.2 28 28,Differs
+Concat,One input,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Concat,One input,box,0 0 240 200,0 0 240 200,Match
+Concat,One input,header,1 1 238 26.2,1 1 238 26.2,Match
+Concat,One input,icon,17 14.6 12 12,17 14.6 12 12,Match
+Concat,One input,footer,1 165 238 34,1 165 238 34,Match
+Concat,One input,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Concat,One input,menu,206 168.5 28 28,206 168.5 28 28,Match
+Concat,One input,hint,106 57.1 28 28,106 54.2 28 28,Differs
+Concat,One input,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Concat,Both inputs,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Concat,Both inputs,box,0 0 240 200,0 0 240 200,Match
+Concat,Both inputs,header,1 1 238 26.2,1 1 238 26.2,Match
+Concat,Both inputs,icon,17 14.6 12 12,17 14.6 12 12,Match
+Concat,Both inputs,footer,1 165 238 34,1 165 238 34,Match
+Concat,Both inputs,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Concat,Both inputs,menu,206 168.5 28 28,206 168.5 28 28,Match
+Concat,Both inputs,hint,106 57.1 28 28,106 54.2 28 28,Differs
+Concat,Both inputs,incoming,21 -13 81.8 26,21 -13 95.2 26,Differs
+Concat,Queued,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Concat,Queued,box,0 0 240 200,0 0 240 200,Match
+Concat,Queued,header,1 1 238 26.2,1 1 238 26.2,Match
+Concat,Queued,icon,17 14.6 12 12,17 14.6 12 12,Match
+Concat,Queued,footer,1 165 238 34,1 165 238 34,Match
+Concat,Queued,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Concat,Queued,menu,206 168.5 28 28,206 168.5 28 28,Match
+Concat,Queued,flag,146.4 173.5 51.6 18,146.4 173.5 51.6 18,Match
+Concat,Queued,overlay,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Concat,Queued,incoming,21 -13 81.8 26,21 -13 95.2 26,Differs
+Concat,Queued,clock,114 82.1 48 28,112.8 86.1 50.4 20,Differs
+Concat,Queued,hint,,106 54.2 28 28,App only
+Concat,Concatenating,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Concat,Concatenating,box,0 0 240 200,0 0 240 200,Match
+Concat,Concatenating,header,1 1 238 26.2,1 1 238 26.2,Match
+Concat,Concatenating,icon,17 14.6 12 12,17 14.6 12 12,Match
+Concat,Concatenating,footer,1 165 238 34,1 165 238 34,Match
+Concat,Concatenating,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Concat,Concatenating,menu,206 168.5 28 28,206 168.5 28 28,Match
+Concat,Concatenating,flag,100.2 173.5 97.8 18,90.7 173.5 107.3 18,Differs
+Concat,Concatenating,overlay,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Concat,Concatenating,incoming,21 -13 81.8 26,21 -13 95.2 26,Differs
+Concat,Concatenating,clock,114 82.1 48 28,112.8 86.1 50.4 20,Differs
+Concat,Concatenating,hint,,106 54.2 28 28,App only
+Concat,Job failed,mark,"17px / 17px / rgb(239, 68, 68) / 3px","17px / 17px / rgb(239, 68, 68) / 3px",Match
+Concat,Job failed,box,0 0 240 200,0 0 240 200,Match
+Concat,Job failed,header,1 1 238 26.2,1 1 238 26.2,Match
+Concat,Job failed,icon,17 14.6 12 12,17 14.6 12 12,Match
+Concat,Job failed,footer,1 165 238 34,1 165 238 34,Match
+Concat,Job failed,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Concat,Job failed,menu,206 168.5 28 28,206 168.5 28 28,Match
+Concat,Job failed,flag,146.4 173.5 51.6 18,146.4 173.5 51.6 18,Match
+Concat,Job failed,overlay,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Concat,Job failed,incoming,21 -13 81.8 26,21 -13 95.2 26,Differs
+Concat,Job failed,errorAction,92.2 104.5 55.6 24,79.4 104.1 81.1 28,Differs
+Concat,Job failed,errorTitle,100.2 63.7 39.6 15.4,52.2 60.1 135.7 12.6,Differs
+Concat,Job failed,hint,,106 54.2 28 28,App only
+Splice,No clips,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Splice,No clips,box,0 0 240 200,0 0 240 200,Match
+Splice,No clips,header,1 1 238 26.2,1 1 238 26.2,Match
+Splice,No clips,icon,17 14.6 12 12,17 14.6 12 12,Match
+Splice,No clips,footer,1 165 238 34,1 165 238 34,Match
+Splice,No clips,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Splice,No clips,menu,206 168.5 28 28,206 168.5 28 28,Match
+Splice,No clips,hint,106 57.1 28 28,106 54.2 28 28,Differs
+Splice,One input,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Splice,One input,box,0 0 240 200,0 0 240 200,Match
+Splice,One input,header,1 1 238 26.2,1 1 238 26.2,Match
+Splice,One input,icon,17 14.6 12 12,17 14.6 12 12,Match
+Splice,One input,footer,1 165 238 34,1 165 238 34,Match
+Splice,One input,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Splice,One input,menu,206 168.5 28 28,206 168.5 28 28,Match
+Splice,One input,hint,106 57.1 28 28,106 54.2 28 28,Differs
+Splice,One input,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Splice,Both inputs,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Splice,Both inputs,box,0 0 240 200,0 0 240 200,Match
+Splice,Both inputs,header,1 1 238 26.2,1 1 238 26.2,Match
+Splice,Both inputs,icon,17 14.6 12 12,17 14.6 12 12,Match
+Splice,Both inputs,footer,1 165 238 34,1 165 238 34,Match
+Splice,Both inputs,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Splice,Both inputs,menu,206 168.5 28 28,206 168.5 28 28,Match
+Splice,Both inputs,hint,106 57.1 28 28,106 54.2 28 28,Differs
+Splice,Both inputs,incoming,21 -13 81.8 26,21 -13 95.2 26,Differs
+Splice,Queued,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Splice,Queued,box,0 0 240 200,0 0 240 200,Match
+Splice,Queued,header,1 1 238 26.2,1 1 238 26.2,Match
+Splice,Queued,icon,17 14.6 12 12,17 14.6 12 12,Match
+Splice,Queued,footer,1 165 238 34,1 165 238 34,Match
+Splice,Queued,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Splice,Queued,menu,206 168.5 28 28,206 168.5 28 28,Match
+Splice,Queued,flag,146.4 173.5 51.6 18,146.4 173.5 51.6 18,Match
+Splice,Queued,overlay,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Splice,Queued,incoming,21 -13 81.8 26,21 -13 95.2 26,Differs
+Splice,Queued,clock,114 82.1 48 28,112.8 86.1 50.4 20,Differs
+Splice,Queued,hint,,106 54.2 28 28,App only
+Splice,Splicing,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Splice,Splicing,box,0 0 240 200,0 0 240 200,Match
+Splice,Splicing,header,1 1 238 26.2,1 1 238 26.2,Match
+Splice,Splicing,icon,17 14.6 12 12,17 14.6 12 12,Match
+Splice,Splicing,footer,1 165 238 34,1 165 238 34,Match
+Splice,Splicing,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Splice,Splicing,menu,206 168.5 28 28,206 168.5 28 28,Match
+Splice,Splicing,flag,133.2 173.5 64.8 18,123.7 173.5 74.3 18,Differs
+Splice,Splicing,overlay,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Splice,Splicing,incoming,21 -13 81.8 26,21 -13 95.2 26,Differs
+Splice,Splicing,clock,114 82.1 48 28,112.8 86.1 50.4 20,Differs
+Splice,Splicing,hint,,106 54.2 28 28,App only
+Splice,Job failed,mark,"17px / 17px / rgb(239, 68, 68) / 3px","17px / 17px / rgb(239, 68, 68) / 3px",Match
+Splice,Job failed,box,0 0 240 200,0 0 240 200,Match
+Splice,Job failed,header,1 1 238 26.2,1 1 238 26.2,Match
+Splice,Job failed,icon,17 14.6 12 12,17 14.6 12 12,Match
+Splice,Job failed,footer,1 165 238 34,1 165 238 34,Match
+Splice,Job failed,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Splice,Job failed,menu,206 168.5 28 28,206 168.5 28 28,Match
+Splice,Job failed,flag,146.4 173.5 51.6 18,146.4 173.5 51.6 18,Match
+Splice,Job failed,overlay,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Splice,Job failed,incoming,21 -13 81.8 26,21 -13 95.2 26,Differs
+Splice,Job failed,errorAction,92.2 104.5 55.6 24,79.4 104.1 81.1 28,Differs
+Splice,Job failed,errorTitle,100.2 63.7 39.6 15.4,52.2 60.1 135.7 12.6,Differs
+Splice,Job failed,hint,,106 54.2 28 28,App only
+Prompt,Empty prompt,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Prompt,Empty prompt,box,0 0 240 200,0 0 240 200,Match
+Prompt,Empty prompt,header,1 1 238 26.2,1 1 238 26.2,Match
+Prompt,Empty prompt,icon,17 14.6 12 12,17 14.6 12 12,Match
+Prompt,Empty prompt,footer,1 165 238 34,1 165 238 34,Match
+Prompt,Empty prompt,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Prompt,Empty prompt,menu,206 168.5 28 28,206 168.5 28 28,Match
+Prompt,Empty prompt,copy,23 33.2 194 18.8,23 33.2 194 18.8,Match
+Prompt,Short prompt,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Prompt,Short prompt,box,0 0 240 200,0 0 240 200,Match
+Prompt,Short prompt,header,1 1 238 26.2,1 1 238 26.2,Match
+Prompt,Short prompt,icon,17 14.6 12 12,17 14.6 12 12,Match
+Prompt,Short prompt,footer,1 165 238 34,1 165 238 34,Match
+Prompt,Short prompt,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Prompt,Short prompt,menu,206 168.5 28 28,206 168.5 28 28,Match
+Prompt,Short prompt,copy,23 33.2 194 18.8,23 33.2 194 18.8,Match
+Prompt,Multiline prompt,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Prompt,Multiline prompt,box,0 0 240 200,0 0 240 200,Match
+Prompt,Multiline prompt,header,1 1 238 26.2,1 1 238 26.2,Match
+Prompt,Multiline prompt,icon,17 14.6 12 12,17 14.6 12 12,Match
+Prompt,Multiline prompt,footer,1 165 238 34,1 165 238 34,Match
+Prompt,Multiline prompt,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Prompt,Multiline prompt,menu,206 168.5 28 28,206 168.5 28 28,Match
+Prompt,Multiline prompt,copy,23 33.2 194 56.5,23 33.2 194 56.5,Match
+Prompt,Long prompt,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Prompt,Long prompt,box,0 0 240 200,0 0 240 200,Match
+Prompt,Long prompt,header,1 1 238 26.2,1 1 238 26.2,Match
+Prompt,Long prompt,icon,17 14.6 12 12,17 14.6 12 12,Match
+Prompt,Long prompt,footer,1 165 238 34,1 165 238 34,Match
+Prompt,Long prompt,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Prompt,Long prompt,menu,206 168.5 28 28,206 168.5 28 28,Match
+Prompt,Long prompt,copy,23 33.2 194 131.9,23 33.2 194 113.1,Differs
+Prompt,Selected,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(79, 183, 125) / 3px",Differs
+Prompt,Selected,box,0 0 240 200,0 0 240 200,Match
+Prompt,Selected,header,1 1 238 26.2,1 1 238 26.2,Match
+Prompt,Selected,icon,17 14.6 12 12,17 14.6 12 12,Match
+Prompt,Selected,footer,1 165 238 34,1 165 238 34,Match
+Prompt,Selected,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Prompt,Selected,menu,206 168.5 28 28,206 168.5 28 28,Match
+Prompt,Selected,copy,23 33.2 194 18.8,23 33.2 194 18.8,Match
+Prompt,Prompt sent downstream,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Prompt,Prompt sent downstream,box,0 0 240 200,0 0 240 200,Match
+Prompt,Prompt sent downstream,header,1 1 238 26.2,1 1 238 26.2,Match
+Prompt,Prompt sent downstream,icon,17 14.6 12 12,17 14.6 12 12,Match
+Prompt,Prompt sent downstream,footer,1 165 238 34,1 165 238 34,Match
+Prompt,Prompt sent downstream,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Prompt,Prompt sent downstream,menu,206 168.5 28 28,167.6 168.5 28 28,Differs
+Prompt,Prompt sent downstream,copy,23 33.2 194 18.8,23 33.2 194 18.8,Match
+Prompt,Prompt sent downstream,outgoing,202.2 187 48.8 26,199.6 187 51.4 26,Differs
+Character,Unassigned,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Character,Unassigned,box,0 0 240 200,0 0 240 200,Match
+Character,Unassigned,header,1 1 238 26.2,1 1 238 26.2,Match
+Character,Unassigned,icon,17 14.6 12 12,17 14.6 12 12,Match
+Character,Unassigned,footer,1 165 238 34,1 165 238 34,Match
+Character,Unassigned,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Character,Unassigned,menu,206 168.5 28 28,206 168.5 28 28,Match
+Character,Unassigned,hint,106 57.1 28 28,106 58.9 28 28,Differs
+Character,Selected,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(79, 183, 125) / 3px",Differs
+Character,Selected,box,0 0 240 200,0 0 240 200,Match
+Character,Selected,header,1 1 238 26.2,1 1 238 26.2,Match
+Character,Selected,icon,17 14.6 12 12,17 14.6 12 12,Match
+Character,Selected,footer,1 165 238 34,1 165 238 34,Match
+Character,Selected,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Character,Selected,menu,206 168.5 28 28,206 168.5 28 28,Match
+Character,Selected,hint,106 57.1 28 28,106 58.9 28 28,Differs
+Character,One destination,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Character,One destination,box,0 0 240 200,0 0 240 200,Match
+Character,One destination,header,1 1 238 26.2,1 1 238 26.2,Match
+Character,One destination,icon,17 14.6 12 12,17 14.6 12 12,Match
+Character,One destination,footer,1 165 238 34,1 165 238 34,Match
+Character,One destination,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Character,One destination,menu,206 168.5 28 28,167.6 168.5 28 28,Differs
+Character,One destination,hint,106 57.1 28 28,106 58.9 28 28,Differs
+Character,One destination,outgoing,202.2 187 48.8 26,199.6 187 51.4 26,Differs
+Character,Multiple destinations,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Character,Multiple destinations,box,0 0 240 200,0 0 240 200,Match
+Character,Multiple destinations,header,1 1 238 26.2,1 1 238 26.2,Match
+Character,Multiple destinations,icon,17 14.6 12 12,17 14.6 12 12,Match
+Character,Multiple destinations,footer,1 165 238 34,1 165 238 34,Match
+Character,Multiple destinations,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Character,Multiple destinations,menu,206 168.5 28 28,126.8 168.5 28 28,Differs
+Character,Multiple destinations,hint,106 57.1 28 28,106 58.9 28 28,Differs
+Character,Multiple destinations,outgoing,182.4 187 68.6 26,158.8 187 92.2 26,Differs
+Analyze,Empty instruction,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Analyze,Empty instruction,box,0 0 240 200,0 0 240 200,Match
+Analyze,Empty instruction,header,1 1 238 26.2,1 1 238 26.2,Match
+Analyze,Empty instruction,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analyze,Empty instruction,footer,1 165 238 34,1 165 238 34,Match
+Analyze,Empty instruction,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analyze,Empty instruction,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analyze,Empty instruction,copy,23 33.2 194 18.8,23 33.2 194 18.8,Match
+Analyze,Instruction entered,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Analyze,Instruction entered,box,0 0 240 200,0 0 240 200,Match
+Analyze,Instruction entered,header,1 1 238 26.2,1 1 238 26.2,Match
+Analyze,Instruction entered,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analyze,Instruction entered,footer,1 165 238 34,1 165 238 34,Match
+Analyze,Instruction entered,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analyze,Instruction entered,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analyze,Instruction entered,copy,23 33.2 194 37.7,23 33.2 194 37.7,Match
+Analyze,Source connected,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Analyze,Source connected,box,0 0 240 200,0 0 240 200,Match
+Analyze,Source connected,header,1 1 238 26.2,1 1 238 26.2,Match
+Analyze,Source connected,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analyze,Source connected,footer,1 165 238 34,1 165 238 34,Match
+Analyze,Source connected,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analyze,Source connected,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analyze,Source connected,copy,23 33.2 194 18.8,23 33.2 194 18.8,Match
+Analyze,Source connected,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Analyze,Queued,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Analyze,Queued,box,0 0 240 200,0 0 240 200,Match
+Analyze,Queued,header,1 1 238 26.2,1 1 238 26.2,Match
+Analyze,Queued,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analyze,Queued,footer,1 165 238 34,1 165 238 34,Match
+Analyze,Queued,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analyze,Queued,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analyze,Queued,copy,23 33.2 194 18.8,23 33.2 194 18.8,Match
+Analyze,Queued,flag,146.4 173.5 51.6 18,146.4 173.5 51.6 18,Match
+Analyze,Queued,dock,1 121.6 238 43.4,1 122.8 238 42.2,Differs
+Analyze,Queued,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Analyze,Queued,clock,196.6 139.6 26.4 15.4,195.3 142.9 27.7 11,Differs
+Analyze,Analyzing,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Analyze,Analyzing,box,0 0 240 200,0 0 240 200,Match
+Analyze,Analyzing,header,1 1 238 26.2,1 1 238 26.2,Match
+Analyze,Analyzing,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analyze,Analyzing,footer,1 165 238 34,1 165 238 34,Match
+Analyze,Analyzing,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analyze,Analyzing,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analyze,Analyzing,copy,23 33.2 194 18.8,23 33.2 194 18.8,Match
+Analyze,Analyzing,flag,126.6 173.5 71.4 18,117.1 173.5 80.9 18,Differs
+Analyze,Analyzing,dock,1 121.6 238 43.4,1 122.8 238 42.2,Differs
+Analyze,Analyzing,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Analyze,Analyzing,clock,196.6 139.6 26.4 15.4,195.3 142.9 27.7 11,Differs
+Analyze,Analysis failed,mark,"17px / 17px / rgb(239, 68, 68) / 3px","17px / 17px / rgb(239, 68, 68) / 3px",Match
+Analyze,Analysis failed,box,0 0 240 200,0 0 240 200,Match
+Analyze,Analysis failed,header,1 1 238 26.2,1 1 238 26.2,Match
+Analyze,Analysis failed,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analyze,Analysis failed,footer,1 165 238 34,1 165 238 34,Match
+Analyze,Analysis failed,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analyze,Analysis failed,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analyze,Analysis failed,copy,23 33.2 194 18.8,23 33.2 194 18.8,Match
+Analyze,Analysis failed,flag,146.4 173.5 51.6 18,146.4 173.5 51.6 18,Match
+Analyze,Analysis failed,dock,1 90.2 238 74.8,1 82 238 83,Differs
+Analyze,Analysis failed,incoming,21 -13 48.8 26,21 -13 51.6 26,Differs
+Analyze,Analysis failed,errorAction,17 131 55.6 24,17 131 75 24,Differs
+Analyze,Analysis failed,errorTitle,17 101.2 39.6 13,17 92 206 12.6,Differs
+Analysis,Pending,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Analysis,Pending,box,0 0 240 200,0 0 240 200,Match
+Analysis,Pending,header,1 1 238 26.2,1 1 238 26.2,Match
+Analysis,Pending,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analysis,Pending,footer,1 165 238 34,1 165 238 34,Match
+Analysis,Pending,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analysis,Pending,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analysis,Pending,summary,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Analysis,Pending,shotCount,23 88 124.8 15,23 86.3 133.1 19.5,Differs
+Analysis,One shot,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Analysis,One shot,box,0 0 240 200,0 0 240 200,Match
+Analysis,One shot,header,1 1 238 26.2,1 1 238 26.2,Match
+Analysis,One shot,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analysis,One shot,footer,1 165 238 34,1 165 238 34,Match
+Analysis,One shot,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analysis,One shot,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analysis,One shot,summary,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Analysis,One shot,shots,23 98.5 194 21.4,23 98.8 194 22.5,Differs
+Analysis,One shot,shotCount,23 73.3 54.6 15,23 70.9 58.3 19.5,Differs
+Analysis,One shot,shotRow,23 98.5 194 21.4,23 98.8 194 22.5,Differs
+Analysis,Three visible shots,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Analysis,Three visible shots,box,0 0 240 200,0 0 240 200,Match
+Analysis,Three visible shots,header,1 1 238 26.2,1 1 238 26.2,Match
+Analysis,Three visible shots,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analysis,Three visible shots,footer,1 165 238 34,1 165 238 34,Match
+Analysis,Three visible shots,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analysis,Three visible shots,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analysis,Three visible shots,summary,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Analysis,Three visible shots,shots,23 72.1 194 74.2,23 71.3 194 77.5,Differs
+Analysis,Three visible shots,shotCount,23 46.9 54.6 15,23 43.4 58.3 19.5,Differs
+Analysis,Three visible shots,shotRow,23 72.1 194 21.4,23 71.3 194 22.5,Differs
+Analysis,More than three shots,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Analysis,More than three shots,box,0 0 240 200,0 0 240 200,Match
+Analysis,More than three shots,header,1 1 238 26.2,1 1 238 26.2,Match
+Analysis,More than three shots,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analysis,More than three shots,footer,1 165 238 34,1 165 238 34,Match
+Analysis,More than three shots,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analysis,More than three shots,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analysis,More than three shots,summary,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Analysis,More than three shots,shots,23 60.4 194 74.2,23 67.1 194 77.5,Differs
+Analysis,More than three shots,shotCount,23 35.2 54.6 15,23 39.2 58.3 19.5,Differs
+Analysis,More than three shots,shotRow,23 60.4 194 21.4,23 67.1 194 22.5,Differs
+Analysis,Structured output,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Analysis,Structured output,box,0 0 240 200,0 0 240 200,Match
+Analysis,Structured output,header,1 1 238 26.2,1 1 238 26.2,Match
+Analysis,Structured output,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analysis,Structured output,footer,1 165 238 34,1 165 238 34,Match
+Analysis,Structured output,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analysis,Structured output,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analysis,Structured output,summary,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Analysis,Structured output,shots,23 82.5 194 21.4,23 82.3 194 22.5,Differs
+Analysis,Structured output,json,23 111.9 194 24,23 113.8 194 24,Differs
+Analysis,Structured output,shotCount,23 57.3 54.6 15,23 54.4 58.3 19.5,Differs
+Analysis,Structured output,shotRow,23 82.5 194 21.4,23 82.3 194 22.5,Differs
+Analysis,JSON expanded,mark,"17px / 17px / rgb(114, 231, 170) / 3px","17px / 17px / rgb(114, 231, 170) / 3px",Match
+Analysis,JSON expanded,box,0 0 240 200,0 0 240 200,Match
+Analysis,JSON expanded,header,1 1 238 26.2,1 1 238 26.2,Match
+Analysis,JSON expanded,icon,17 14.6 12 12,17 14.6 12 12,Match
+Analysis,JSON expanded,footer,1 165 238 34,1 165 238 34,Match
+Analysis,JSON expanded,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Analysis,JSON expanded,menu,206 168.5 28 28,206 168.5 28 28,Match
+Analysis,JSON expanded,json,18 43.2 204 24,18 43.2 204 24,Match
+Analysis,JSON expanded,jsonSurface,9 35.2 222 121.8,9 35.2 222 121.8,Match
+Analysis,JSON expanded,summary,,1 27.2 238 137.8,App only
+Analysis,JSON expanded,shots,,23 98.8 194 22.5,App only
+Analysis,JSON expanded,shotCount,,23 70.9 58.3 19.5,App only
+Analysis,JSON expanded,shotRow,,23 98.8 194 22.5,App only
+Goal,Planning,mark,"17px / 17px / rgb(185, 169, 242) / 6px","17px / 17px / rgb(185, 169, 242) / 6px",Match
+Goal,Planning,box,0 0 240 200,0 0 240 200,Match
+Goal,Planning,header,1 1 238 26.2,1 1 238 26.2,Match
+Goal,Planning,icon,17 14.6 12 12,17 14.6 12 12,Match
+Goal,Planning,footer,1 165 238 34,1 165 238 34,Match
+Goal,Planning,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Goal,Planning,menu,206 168.5 28 28,206 168.5 28 28,Match
+Goal,Planning,flag,131.2 173.5 66.8 18,114.8 173.4 83.2 18.1,Differs
+Goal,Planning,plan,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Goal,Planning,skeleton,23 88.8 170.7 9,23 90.9 170.7 9,Differs
+Goal,Planning,progress,23 152 194 3,23 152 194 3,Match
+Goal,Planning,planTitle,23 29.2 194 16.8,23 29.2 194 18,Differs
+Goal,Planning,goalNote,23 52 194 30.8,23 53.2 194 29.7,Differs
+Goal,Plan review,mark,"17px / 17px / rgb(185, 169, 242) / 6px","17px / 17px / rgb(185, 169, 242) / 6px",Match
+Goal,Plan review,box,0 0 240 200,0 0 240 200,Match
+Goal,Plan review,header,1 1 238 26.2,1 1 238 26.2,Match
+Goal,Plan review,icon,17 14.6 12 12,17 14.6 12 12,Match
+Goal,Plan review,footer,1 165 238 34,1 165 238 34,Match
+Goal,Plan review,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Goal,Plan review,menu,206 168.5 28 28,206 168.5 28 28,Match
+Goal,Plan review,flag,144.4 173.5 53.6 18,139.1 173.4 58.9 18.1,Differs
+Goal,Plan review,plan,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Goal,Plan review,steps,23 52 194 72.6,23 53.2 194 72,Differs
+Goal,Plan review,step,23 52 194 16.5,23 53.2 194 16.5,Differs
+Goal,Plan review,progress,23 152 194 3,23 152 194 3,Match
+Goal,Plan review,planTitle,23 29.2 194 16.8,23 29.2 194 18,Differs
+Goal,Plan review,goalBadge,99.8 14 123.2 13.2,96.2 15.1 126.8 11,Differs
+Goal,Plan review,goalNote,23 130.6 194 15.4,23 131.2 194 14.8,Differs
+Goal,Plan review,stepNumber,23 52 17.6 16.5,23 53.2 17.6 16.5,Differs
+Goal,Plan review,stepState,170.8 52 46.2 16.5,203.8 53.2 13.2 16.5,Differs
+Goal,Shots running,mark,"17px / 17px / rgb(185, 169, 242) / 6px","17px / 17px / rgb(185, 169, 242) / 6px",Match
+Goal,Shots running,box,0 0 240 200,0 0 240 200,Match
+Goal,Shots running,header,1 1 238 26.2,1 1 238 26.2,Match
+Goal,Shots running,icon,17 14.6 12 12,17 14.6 12 12,Match
+Goal,Shots running,footer,1 165 238 34,1 165 238 34,Match
+Goal,Shots running,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Goal,Shots running,menu,206 168.5 28 28,206 168.5 28 28,Match
+Goal,Shots running,flag,137.8 173.5 60.2 18,129.1 173.4 68.9 18.1,Differs
+Goal,Shots running,plan,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Goal,Shots running,steps,23 52 194 88,23 53.2 194 92.8,Differs
+Goal,Shots running,step,23 52 194 16.5,23 53.2 194 16.5,Differs
+Goal,Shots running,progress,23 152 194 3,23 152 194 3,Match
+Goal,Shots running,planTitle,23 29.2 194 16.8,23 29.2 194 18,Differs
+Goal,Shots running,goalBadge,99.8 14 123.2 13.2,96.2 15.1 126.8 11,Differs
+Goal,Shots running,goalNote,23 146 194 0,,Board only
+Goal,Shots running,stepNumber,23 52 17.6 16.5,23 53.2 17.6 16.5,Differs
+Goal,Shots running,stepState,173 52 44 16.5,175.6 53.2 41.4 16.5,Differs
+Goal,Later shots waiting,mark,"17px / 17px / rgb(185, 169, 242) / 6px","17px / 17px / rgb(185, 169, 242) / 6px",Match
+Goal,Later shots waiting,box,0 0 240 200,0 0 240 200,Match
+Goal,Later shots waiting,header,1 1 238 26.2,1 1 238 26.2,Match
+Goal,Later shots waiting,icon,17 14.6 12 12,17 14.6 12 12,Match
+Goal,Later shots waiting,footer,1 165 238 34,1 165 238 34,Match
+Goal,Later shots waiting,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Goal,Later shots waiting,menu,206 168.5 28 28,206 168.5 28 28,Match
+Goal,Later shots waiting,flag,137.8 173.5 60.2 18,129.1 173.4 68.9 18.1,Differs
+Goal,Later shots waiting,plan,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Goal,Later shots waiting,steps,23 52 194 88,23 53.2 194 92.8,Differs
+Goal,Later shots waiting,step,23 52 194 16.5,23 53.2 194 16.5,Differs
+Goal,Later shots waiting,progress,23 152 194 3,23 152 194 3,Match
+Goal,Later shots waiting,planTitle,23 29.2 194 16.8,23 29.2 194 18,Differs
+Goal,Later shots waiting,goalBadge,99.8 14 123.2 13.2,96.2 15.1 126.8 11,Differs
+Goal,Later shots waiting,goalNote,23 146 194 0,,Board only
+Goal,Later shots waiting,stepNumber,23 52 17.6 16.5,23 53.2 17.6 16.5,Differs
+Goal,Later shots waiting,stepState,173 52 44 16.5,175.6 53.2 41.4 16.5,Differs
+Goal,Shot failed,mark,"17px / 17px / rgb(185, 169, 242) / 6px","17px / 17px / rgb(239, 68, 68) / 6px",Differs
+Goal,Shot failed,box,0 0 240 200,0 0 240 200,Match
+Goal,Shot failed,header,1 1 238 26.2,1 1 238 26.2,Match
+Goal,Shot failed,icon,17 14.6 12 12,17 14.6 12 12,Match
+Goal,Shot failed,footer,1 165 238 34,1 165 238 34,Match
+Goal,Shot failed,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Goal,Shot failed,menu,206 168.5 28 28,206 168.5 28 28,Match
+Goal,Shot failed,flag,144.4 173.5 53.6 18,139.1 173.4 58.9 18.1,Differs
+Goal,Shot failed,plan,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Goal,Shot failed,steps,23 52 194 72.6,23 53.2 194 72,Differs
+Goal,Shot failed,step,23 52 194 16.5,23 53.2 194 16.5,Differs
+Goal,Shot failed,progress,23 152 194 3,23 152 194 3,Match
+Goal,Shot failed,planTitle,23 29.2 194 16.8,23 29.2 194 18,Differs
+Goal,Shot failed,goalBadge,99.8 14 123.2 13.2,96.2 15.1 126.8 11,Differs
+Goal,Shot failed,goalNote,23 130.6 194 15.4,23 131.2 194 14.8,Differs
+Goal,Shot failed,stepNumber,23 52 17.6 16.5,23 53.2 17.6 16.5,Differs
+Goal,Shot failed,stepState,173 52 44 16.5,175.6 53.2 41.4 16.5,Differs
+Goal,Short complete,mark,"17px / 17px / rgb(185, 169, 242) / 6px","17px / 17px / rgb(185, 169, 242) / 6px",Match
+Goal,Short complete,box,0 0 240 200,0 0 240 200,Match
+Goal,Short complete,header,1 1 238 26.2,1 1 238 26.2,Match
+Goal,Short complete,icon,17 14.6 12 12,17 14.6 12 12,Match
+Goal,Short complete,footer,1 165 238 34,1 165 238 34,Match
+Goal,Short complete,address,17 173.8 25.2 17.5,17 173.8 25.2 17.5,Match
+Goal,Short complete,menu,206 168.5 28 28,206 168.5 28 28,Match
+Goal,Short complete,flag,131.2 173.5 66.8 18,124.8 173.4 73.2 18.1,Differs
+Goal,Short complete,plan,1 27.2 238 137.8,1 27.2 238 137.8,Match
+Goal,Short complete,steps,23 52 194 72.6,23 53.2 194 72,Differs
+Goal,Short complete,step,23 52 194 16.5,23 53.2 194 16.5,Differs
+Goal,Short complete,progress,23 152 194 3,23 152 194 3,Match
+Goal,Short complete,planTitle,23 29.2 194 16.8,23 29.2 194 18,Differs
+Goal,Short complete,goalBadge,99.8 14 123.2 13.2,96.2 15.1 126.8 11,Differs
+Goal,Short complete,goalNote,23 130.6 194 15.4,23 131.2 194 14.8,Differs
+Goal,Short complete,stepNumber,23 52 17.6 16.5,23 53.2 17.6 16.5,Differs
+Goal,Short complete,stepState,173 52 44 16.5,175.6 53.2 41.4 16.5,Differs
