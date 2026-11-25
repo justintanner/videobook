@@ -29,7 +29,7 @@ import {
 import type { GraphicsTemplateOutcome } from '@/videobook/useGraphicsEditor'
 import { graphicsRepositionEdits } from '@/videobook/graphics-pointer'
 import { CheckedText, Choice, Color, Range, Section, Select, Tabs } from './GraphicsFields'
-import { GraphicsTextBlock, GraphicsTextItems } from './GraphicsTextInspector'
+import { GraphicsTextBackground, GraphicsTextBlock, GraphicsTextItems } from './GraphicsTextInspector'
 import { GraphicsTimingSection } from './GraphicsTiming'
 
 type Edit = (edits: GraphicsEdit[], coalesceKey?: string | null) => boolean
@@ -219,10 +219,14 @@ function TabFields({ tab, props }: { tab: GraphicsInspectorTab; props: Inspector
   if (tab === 'place' && layer.kind !== 'scrim') {
     return <Place layer={layer} frame={props.frame ?? props.read.source} box={props.box} placement={props.placement} disabled={disabled} onEdit={onEdit} onFindClearSpot={props.onFindClearSpot} />
   }
+  if (layer.kind === 'text' && tab === 'block') return <GraphicsTextBlock layer={layer} disabled={disabled} onEdit={onEdit} />
   if (layer.kind === 'text') {
-    return tab === 'block'
-      ? <GraphicsTextBlock layer={layer} disabled={disabled} onEdit={onEdit} />
-      : <GraphicsTextItems key={layer.id} document={props.document} layer={layer} disabled={disabled} onEdit={onEdit} />
+    return (
+      <>
+        <GraphicsTextItems key={layer.id} document={props.document} layer={layer} disabled={disabled} onEdit={onEdit} />
+        <GraphicsTextBackground layer={layer} disabled={disabled} onEdit={onEdit} />
+      </>
+    )
   }
   if (layer.kind === 'image') return <ImageFields read={props.read} imageChoices={props.imageChoices} disabled={disabled} onEdit={onEdit} layer={layer} />
   if (layer.kind === 'qr') return <QrFields read={props.read} layer={layer} disabled={disabled} onEdit={onEdit} />
