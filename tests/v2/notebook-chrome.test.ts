@@ -6,6 +6,8 @@ const css = readFileSync(new URL('../../src/index.css', import.meta.url), 'utf8'
 const app = readFileSync(new URL('../../src/App.tsx', import.meta.url), 'utf8')
 const musicCss = readFileSync(new URL('../../src/components/videobook/MusicVideoEditor.css', import.meta.url), 'utf8')
 const fullscreen = readFileSync(new URL('../../src/components/videobook/NotebookMediaFullscreen.tsx', import.meta.url), 'utf8')
+const indexHtml = readFileSync(new URL('../../index.html', import.meta.url), 'utf8')
+const postsCss = readFileSync(new URL('../../src/components/videobook/Posts.css', import.meta.url), 'utf8')
 
 function braceBlock(source: string, openAt: number): string {
   const bodyStart = source.indexOf('{', openAt)
@@ -49,6 +51,28 @@ function pixelCount(value: string): number {
   return Number(match[1])
 }
 
+
+describe('tile fonts', () => {
+  it('loads the tile weights under tile-only names so the rest of the app keeps its fonts', () => {
+    const googleFonts = indexHtml.match(/https:\/\/fonts\.googleapis\.com\/css2\?[^"]+/u)?.[0] ?? ''
+    expect(googleFonts).toContain('family=JetBrains+Mono:wght@400;700&')
+    expect(googleFonts).not.toContain('Inter')
+    const faces = [...css.matchAll(/@font-face \{([^}]*)\}/gu)].map((match) => match[1] ?? '')
+    const mono = faces.filter((face) => face.includes("font-family: 'Videobook Tile Mono'"))
+    const sans = faces.filter((face) => face.includes("font-family: 'Videobook Tile Sans'"))
+    expect(mono.length).toBeGreaterThan(0)
+    expect(mono.every((face) => face.includes('font-weight: 400 700;') && face.includes('https://fonts.gstatic.com/s/jetbrainsmono/'))).toBe(true)
+    expect(sans.length).toBeGreaterThan(0)
+    expect(sans.every((face) => face.includes('font-weight: 400;') && face.includes('https://fonts.gstatic.com/s/inter/'))).toBe(true)
+    expect(faces.some((face) => /font-family: '(?:JetBrains Mono|Inter)'/u.test(face))).toBe(false)
+    expect(declaration(rule(css, ':root'), 'font-family')).toBe("'JetBrains Mono', 'SFMono-Regular', Consolas, monospace")
+    expect(declaration(rule(css, '\n.cell-node'), 'font-family')).toMatch(/^'Videobook Tile Mono', 'JetBrains Mono'/u)
+    expect(declaration(rule(css, '.cell-ref-address-draggable::after'), 'font-family')).toBe("'Videobook Tile Sans', system-ui, sans-serif")
+    const tileStacks = [...css.matchAll(/font-family: ([^;]*'JetBrains Mono'[^;]*);/gu)].map((match) => match[1] ?? '')
+    expect(tileStacks.filter((stack) => !stack.startsWith("'Videobook Tile Mono'"))).toEqual(["'JetBrains Mono', 'SFMono-Regular', Consolas, monospace"])
+    expect([...postsCss.matchAll(/font-family:([^;]*JetBrains Mono[^;]*);/gu)].every((match) => match[1]?.startsWith("'Videobook Tile Mono'"))).toBe(true)
+  })
+})
 describe('notebook chrome tokens', () => {
   it('keeps grid origins at zero so the chrome inset owns the gutter', () => {
     const shell = rule(css, '.app-shell')
