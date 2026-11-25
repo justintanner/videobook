@@ -154,6 +154,15 @@
   .composer-actions-panel .composer-actions-help { display: none; }
 }
 
+@media (max-width: 600px), (max-height: 500px) {
+  .composer-actions-panel .workspace-actions-list small {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+}
+
 @media (pointer: coarse) {
   .composer-history-entry { min-height: 44px; }
 }

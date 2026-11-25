@@ -329,7 +329,7 @@ describe('rich chat references with real notebook media', () => {
     expect(await page.locator('html').evaluate(element => element.scrollWidth <= innerWidth)).toBe(true)
     await input().focus()
     await input().press('Tab')
-    expect(await page.getByLabel('Chat model').evaluate(element => document.activeElement === element)).toBe(true)
+    expect(await page.getByLabel('Start voice conversation', { exact: true }).evaluate(element => document.activeElement === element)).toBe(true)
     await page.keyboard.press('Shift+Tab')
     expect(await input().evaluate(element => document.activeElement === element)).toBe(true)
   })
