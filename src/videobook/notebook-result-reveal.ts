@@ -63,14 +63,22 @@ export function notebookRevealScroll(
   geometry: NotebookRevealGeometry,
   mode: NotebookRevealMode,
   horizontal = true,
+  heading: NotebookScrollPosition | null = null,
 ): NotebookScrollPosition | null {
   if (geometry.visible.bottom <= geometry.visible.top) return null
   if (mode === 'offscreen' && rectContains(geometry.visible, geometry.cells)) return null
-  const top = centeredTop(geometry)
-  const left = horizontal ? nearestLeft(geometry) : geometry.scrollLeft
-  const moved = Math.abs(top - geometry.scrollTop) > SCROLL_TOLERANCE_PX
-    || Math.abs(left - geometry.scrollLeft) > SCROLL_TOLERANCE_PX
-  return moved ? { top, left } : null
+  const next = {
+    top: centeredTop(geometry),
+    left: horizontal ? nearestLeft(geometry) : geometry.scrollLeft,
+  }
+  const current = { top: geometry.scrollTop, left: geometry.scrollLeft }
+  const moved = beyondTolerance(next, current) || (heading !== null && beyondTolerance(next, heading))
+  return moved ? next : null
+}
+
+function beyondTolerance(a: NotebookScrollPosition, b: NotebookScrollPosition): boolean {
+  return Math.abs(a.top - b.top) > SCROLL_TOLERANCE_PX
+    || Math.abs(a.left - b.left) > SCROLL_TOLERANCE_PX
 }
 
 function unionRect(elements: readonly Element[]): NotebookRevealRect {
@@ -142,6 +150,7 @@ export function revealNotebookCells(
   const deadline = performance.now() + (options.waitMs ?? 0)
   let frame = 0
   let stopped = false
+  let heading: NotebookScrollPosition | null = null
   const stop = () => {
     stopped = true
     window.cancelAnimationFrame(frame)
@@ -163,8 +172,11 @@ export function revealNotebookCells(
       measureReveal(target, composer, cells),
       mode,
       options.horizontal ?? true,
+      heading,
     )
-    if (next) target.scrollTo({ ...next, behavior: scrollBehavior() })
+    if (!next) return
+    heading = next
+    target.scrollTo({ ...next, behavior: scrollBehavior() })
   }
   const schedule = () => {
     if (stopped) return

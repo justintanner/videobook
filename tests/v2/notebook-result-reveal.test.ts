@@ -45,6 +45,23 @@ function geometry(input: {
 }
 
 describe('notebook cell reveal scroll', () => {
+  it('turns a smooth scroll still heading for a spot the dock has since moved', () => {
+    const settled = geometry({ cell: { top: 860, left: 500 }, scrollTop: 640, dockTop: 560 })
+    const target = notebookRevealScroll(settled, 'center')!
+    const nearTarget = geometry({ cell: { top: 860, left: 500 }, scrollTop: target.top - 1, dockTop: 560 })
+
+    expect(notebookRevealScroll(nearTarget, 'center')).toBeNull()
+    expect(notebookRevealScroll(nearTarget, 'center', true, { top: target.top + 3, left: target.left })).toEqual(target)
+  })
+
+  it('leaves a smooth scroll alone once it is heading for the right spot', () => {
+    const settled = geometry({ cell: { top: 860, left: 500 }, scrollTop: 640, dockTop: 560 })
+    const target = notebookRevealScroll(settled, 'center')!
+    const nearTarget = geometry({ cell: { top: 860, left: 500 }, scrollTop: target.top - 1, dockTop: 560 })
+
+    expect(notebookRevealScroll(nearTarget, 'center', true, { top: target.top + 1, left: target.left })).toBeNull()
+  })
+
   it('brings row a back when a new tile lands there after the canvas scrolled down', () => {
     const next = notebookRevealScroll(geometry({
       cell: { top: 20, left: 8 },
