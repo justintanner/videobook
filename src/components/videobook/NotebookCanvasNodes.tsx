@@ -1062,7 +1062,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           statusError={data.statusError}
           icon={<CellStateIcon kind={data.kind} status={data.status} />}
           generation={generationRun}
-          docked={generationCell}
+          docked={generationCell || textCell}
           overPicture={mediaTile}
           onRepair={generationRun ? () => {
             void cellActions.repairCell(id)

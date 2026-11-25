@@ -2232,6 +2232,10 @@ textarea:focus-visible {
   border-top-left-radius: 12px;
 }
 
+.cell-family-goal::before {
+  border-top-left-radius: 6px;
+}
+
 .cell-family-audio::before {
   border-color: #c989a2;
   border-top-left-radius: 8px;
@@ -3927,11 +3931,15 @@ textarea:focus-visible {
   -webkit-line-clamp: 5;
 }
 
-.cell-node-generation:has(.cell-state-dock-clock) .cell-copy-text p {
+.cell-node-generation:has(.cell-state-dock-clock) .cell-copy-text p,
+.cell-kind-analyze:has(.cell-state-dock-clock) .cell-copy-text p,
+.cell-kind-prompt:has(.cell-state-dock-clock) .cell-copy-text p {
   -webkit-line-clamp: 3;
 }
 
-.cell-node-generation:has(.cell-state-dock-failed) .cell-copy-text p {
+.cell-node-generation:has(.cell-state-dock-failed) .cell-copy-text p,
+.cell-kind-analyze:has(.cell-state-dock-failed) .cell-copy-text p,
+.cell-kind-prompt:has(.cell-state-dock-failed) .cell-copy-text p {
   -webkit-line-clamp: 1;
 }
 
