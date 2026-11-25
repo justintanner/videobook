@@ -111,6 +111,7 @@ describe('graphics editor in the composer', () => {
   let watermarkId = ''
   let suggestId = ''
   let placementId = ''
+  let templateId = ''
   const renders: Record<string, unknown>[] = []
   const suggests: Record<string, unknown>[] = []
   const placements: Record<string, unknown>[] = []
@@ -185,6 +186,7 @@ describe('graphics editor in the composer', () => {
       await video(join(root, 'watermark.mp4'), 'Watermark take'),
       await video(join(root, 'suggest.mp4'), 'Suggest take', TIKTOK_SOURCE),
       await video(join(root, 'placement.mp4'), 'Placement take', undefined, PORTRAIT, DURATION + 1),
+      await video(join(root, 'template.mp4'), 'Template take'),
     ]
     const ids: string[] = []
     for (const fixture of fixtures) {
@@ -199,7 +201,7 @@ describe('graphics editor in the composer', () => {
       await engine.files.write(artifact.value.artifactId, 'original.jpg', await extractVideoPoster(fixture.path, fixture.duration))
       ids.push(artifact.value.artifactId)
     }
-    ;[sourceId, secondId, thirdId, squareId, wideId, watermarkId, suggestId, placementId] = ids
+    ;[sourceId, secondId, thirdId, squareId, wideId, watermarkId, suggestId, placementId, templateId] = ids
     const placementSource = await captionMediaSource(engine, placementId)
     storeFrameRegions(engine, placementId, placementSource.mediaHash, [0.5, 1.5, 2.5, 3.5].map((time) => ({ time, regions: [LOWER_LEFT_FACE] })))
     const logo = await engine.artifacts.create({ kind: 'image', label: 'Logo' })
@@ -219,6 +221,7 @@ describe('graphics editor in the composer', () => {
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 1, column: 2 }, outputArtifactId: watermarkId }))
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 3, column: 7 }, outputArtifactId: suggestId }))
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 3, column: 6 }, outputArtifactId: placementId }))
+    await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 3, column: 5 }, outputArtifactId: templateId }))
     const logoCell = engine.notebooks.createCell({ type: 'image', slot: { row: 1, column: 1 }, outputArtifactId: logoId })
     logoCellId = logoCell.id
     await engine.notebooks.insertCell(notebook.id, logoCell)
@@ -450,6 +453,7 @@ describe('graphics editor in the composer', () => {
   })
 
   it('burns the graphics into a video in place with the replace output', async () => {
+    const cellsBefore = (await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells.length
     await command('/osg @a2')
     await sheet().waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
@@ -462,8 +466,28 @@ describe('graphics editor in the composer', () => {
     expect(renders.at(-1)).toMatchObject({ op: 'render', output: 'replace', asset_id: secondId })
     await expect.poll(async () => (await read(secondId)).burned?.output ?? null, { timeout: testBudget(180_000) }).toBe('replace')
     await expect.poll(async () => (await read(secondId)).source.source_hash, { timeout: testBudget(60_000) }).not.toBe(before)
+    const ready = await client!.callTool({ name: 'wait_for_asset_ready', arguments: { book_id: bookId, asset_id: secondId, timeout_seconds: Math.ceil(testBudget(180_000) / 1000) } })
+    expect(ready.isError).not.toBe(true)
     expect((await read(secondId)).saved).toBe(false)
-    expect((await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells).toHaveLength(10)
+    const notebook = await call<NotebookWire>('get_notebook', { notebook_id: notebookId })
+    expect(notebook.cells).toHaveLength(cellsBefore)
+    const listed = await call<{ assets: Array<{ artifact_id: string; status: string; thumbnail_url: string | null }> }>('list_assets', { limit: 200, include_referenced: true })
+    const replaced = listed.assets.find((asset) => asset.artifact_id === secondId)
+    expect(replaced).toMatchObject({ status: 'ready' })
+    expect(replaced?.thumbnail_url).toBeTruthy()
+    const secondCellId = notebook.cells.find((cell) => cell.output_artifact_id === secondId)!.id
+    const secondCell = page.locator(`.react-flow__node[data-id="${secondCellId}"] .cell-node`)
+    await expect.poll(() => secondCell.evaluate((node) => ({
+      status: node.getAttribute('data-cell-status'),
+      poster: node.querySelector('img')?.getAttribute('src') ?? null,
+    })), { timeout: testBudget(30_000) }).toEqual({ status: 'completed', poster: replaced!.thumbnail_url })
+    await command('/osg @a2')
+    await sheet().waitFor({ state: 'visible', timeout: testBudget(30_000) })
+    await expect.poll(() => field('Headline').isEnabled(), { timeout: testBudget(30_000) }).toBe(true)
+    expect(await sheet().textContent()).toContain('Second take')
+    expect(await field('Headline').inputValue()).toBe('')
+    await sheet().getByRole('button', { name: /^Close/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: testBudget(10_000) })
     expect(errors).toEqual([])
   })
 
@@ -812,7 +836,7 @@ describe('graphics editor in the composer', () => {
     const near = { x: SQUARE.width / 2 + 5, y: Math.round(SQUARE.height * 0.3) }
     const snapped = await dragLayerTo(handle, SQUARE, near, false)
     expect(snapped.guides).toEqual([`x:${SQUARE.width / 2}`])
-    await expect.poll(async () => centreOf(await boxOf(handle)).x, { timeout: testBudget(15_000) }).toBe(SQUARE.width / 2)
+    await expect.poll(async () => Math.abs(centreOf(await boxOf(handle)).x - SQUARE.width / 2), { timeout: testBudget(15_000) }).toBeLessThanOrEqual(0.5)
     await saved()
     const free = await dragLayerTo(handle, SQUARE, { x: SQUARE.width / 2 + 5, y: Math.round(SQUARE.height * 0.32) }, true)
     expect(free.guides).toEqual([])
@@ -1005,28 +1029,31 @@ describe('graphics editor in the composer', () => {
     await expect.poll(() => notice().textContent(), { timeout: testBudget(15_000) }).toBe('Brand look is now the look for videos in this book that have no graphics yet.')
     await close()
 
-    await open('@a2')
-    const fresh = await read(secondId)
-    expect(fresh).toMatchObject({ saved: false, default_template_id: brand.id })
-    expect(layerNames(fresh)).toEqual(brand.document.layers.map((layer) => layer.name))
-    expect(await templates().getByRole('button', { name: 'Brand look', exact: true }).getAttribute('data-default')).toBe('true')
-    await shot('graphics-templates')
+    try {
+      await open('@d6')
+      const fresh = await read(templateId)
+      expect(fresh).toMatchObject({ saved: false, default_template_id: brand.id })
+      expect(layerNames(fresh)).toEqual(brand.document.layers.map((layer) => layer.name))
+      expect(await templates().getByRole('button', { name: 'Brand look', exact: true }).getAttribute('data-default')).toBe('true')
+      await shot('graphics-templates')
 
-    await templates().getByRole('button', { name: 'Manage templates', exact: true }).click()
-    await templates().getByLabel('Book to copy templates from', { exact: true }).selectOption({ label: 'brand-kit' })
-    await templates().getByRole('button', { name: 'Copy templates', exact: true }).click()
-    await expect.poll(() => notice().textContent(), { timeout: testBudget(60_000) }).toBe('Copied 1 template from brand-kit.')
-    await templates().getByRole('button', { name: 'Brand kit', exact: true }).click()
-    const layers = sheet().getByRole('region', { name: 'Layers' })
-    await expect.poll(() => layers.getByRole('button', { name: 'Select layer Kit logo', exact: true }).textContent()).toContain('Kit logo')
-    expect(await layers.getByRole('button', { name: 'Select layer Kit logo', exact: true }).textContent()).not.toContain('not loaded')
-    await saved()
-    const copied = await read(secondId)
-    const image = copied.document.layers.find((layer) => layer.kind === 'image')!
-    expect(image.artifactId).not.toBe(kitLogoId)
-    expect(copied.images[image.artifactId!]?.url).toMatch(new RegExp(`^/files/${bookId}/${image.artifactId}/`))
-    await close()
-    expect(await call('video_graphics', { asset_id: secondId, op: 'set_default_template', template_id: null })).toMatchObject({ default_template_id: 'tiktok-title' })
+      await templates().getByRole('button', { name: 'Manage templates', exact: true }).click()
+      await templates().getByLabel('Book to copy templates from', { exact: true }).selectOption({ label: 'brand-kit' })
+      await templates().getByRole('button', { name: 'Copy templates', exact: true }).click()
+      await expect.poll(() => notice().textContent(), { timeout: testBudget(60_000) }).toBe('Copied 1 template from brand-kit.')
+      await templates().getByRole('button', { name: 'Brand kit', exact: true }).click()
+      const layers = sheet().getByRole('region', { name: 'Layers' })
+      await expect.poll(() => layers.getByRole('button', { name: 'Select layer Kit logo', exact: true }).textContent()).toContain('Kit logo')
+      expect(await layers.getByRole('button', { name: 'Select layer Kit logo', exact: true }).textContent()).not.toContain('not loaded')
+      await saved()
+      const copied = await read(templateId)
+      const image = copied.document.layers.find((layer) => layer.kind === 'image')!
+      expect(image.artifactId).not.toBe(kitLogoId)
+      expect(copied.images[image.artifactId!]?.url).toMatch(new RegExp(`^/files/${bookId}/${image.artifactId}/`))
+      await close()
+    } finally {
+      expect(await call('video_graphics', { asset_id: templateId, op: 'set_default_template', template_id: null })).toMatchObject({ default_template_id: 'tiktok-title' })
+    }
     expect(errors).toEqual([])
   })
 

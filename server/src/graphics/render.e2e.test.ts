@@ -278,6 +278,14 @@ describe("graphics render", () => {
     expect(graphicsCells().all).toHaveLength(cellsBefore.length);
     expect(await sourceHash(inPlace)).not.toBe(reviewed.sourceHash);
     expect(await fileNames(inPlace)).toEqual(expect.arrayContaining(["original.mp4", "proxy.mp4", "graphics.json"]));
+    expect(await engine.status.get(inPlace)).toMatchObject({ ok: true, value: "ready" });
+    const listed = JSON.parse(((await client.callTool({ name: "list_assets", arguments: { book_id: bookId, limit: 200, include_referenced: true } })).content as TextContent)[0].text) as {
+      assets: Array<{ artifact_id: string; status: string; media_url: string | null }>;
+    };
+    expect(listed.assets.find((asset) => asset.artifact_id === inPlace)).toMatchObject({
+      status: "ready",
+      media_url: expect.stringContaining(`/files/${engine.book.get().bookId}/${inPlace}/proxy.mp4`),
+    });
     expect((await historyOf()).length).toBeGreaterThan(before.length);
     expect(engine.settings.get(`graphics.draft.${inPlace}`)).toBeNull();
     const after = await read(inPlace);
