@@ -1951,6 +1951,7 @@ describe('chat composer browser flow', () => {
     const ids: string[] = []
     const scroll = page.locator('.notebook-horizontal-scroll')
     const input = page.getByLabel('Videobook command input')
+    const settle = { timeout: testBudget(5_000) }
     const layout = (id: string) => scroll.evaluate((element, cellId) => {
       const cell = element.querySelector(`.react-flow__node[data-id="${cellId}"]`)!
       const tile = cell.getBoundingClientRect()
@@ -1999,10 +2000,10 @@ describe('chat composer browser flow', () => {
           const before = await layout(id)
           const body = notebookCellNode(page, id).locator('.cell-node-body')
           await body.click({ position: { x: (await body.boundingBox())!.width / 2, y: 8 } })
-          await expect.poll(async () => (await layout(id)).topGap).toBeGreaterThanOrEqual(0)
-          await expect.poll(async () => (await layout(id)).bottomGap).toBeGreaterThanOrEqual(8)
+          await expect.poll(async () => (await layout(id)).topGap, settle).toBeGreaterThanOrEqual(0)
+          await expect.poll(async () => (await layout(id)).bottomGap, settle).toBeGreaterThanOrEqual(8)
           if (id !== lastId) {
-            await expect.poll(async () => (await layout(id)).centerError, { message: `Selected ${id} at ${viewport.width}x${viewport.height}` })
+            await expect.poll(async () => (await layout(id)).centerError, { ...settle, message: `Selected ${id} at ${viewport.width}x${viewport.height}` })
               .toBeLessThanOrEqual(2)
           }
           expect(await layout(id)).toMatchObject({ left: before.left, zoom: before.zoom })
@@ -2011,10 +2012,10 @@ describe('chat composer browser flow', () => {
         }
       }
       await page.setViewportSize({ width: 2560, height: 1400 })
-      await expect.poll(async () => (await layout(imageId)).zoom).toBeGreaterThan(1)
+      await expect.poll(async () => (await layout(imageId)).zoom, settle).toBeGreaterThan(1)
       await positionForClick(imageId)
       await notebookCellNode(page, imageId).locator('.cell-node-body').click()
-      await expect.poll(async () => (await layout(imageId)).centerError).toBeLessThanOrEqual(2)
+      await expect.poll(async () => (await layout(imageId)).centerError, settle).toBeLessThanOrEqual(2)
       expect((await layout(imageId)).left).toBe(0)
       await page.keyboard.down('Shift')
       try {
@@ -2034,7 +2035,7 @@ describe('chat composer browser flow', () => {
       await input.click()
       await positionForClick(videoId)
       await notebookCellNode(page, videoId).locator('.cell-node-body').click()
-      await expect.poll(async () => (await layout(videoId)).centerError).toBeLessThanOrEqual(2)
+      await expect.poll(async () => (await layout(videoId)).centerError, settle).toBeLessThanOrEqual(2)
       if (process.env.VIDEOBOOK_E2E_SCREENSHOT) await page.screenshot({ path: process.env.VIDEOBOOK_E2E_SCREENSHOT })
     } catch (error) {
       if (process.env.VIDEOBOOK_E2E_SCREENSHOT) await page.screenshot({ path: process.env.VIDEOBOOK_E2E_SCREENSHOT })
@@ -2047,7 +2048,7 @@ describe('chat composer browser flow', () => {
       await input.fill('')
       notebookDirty = true
     }
-  }, 60_000)
+  }, testBudget(60_000))
 
   it('keeps refreshing after a same-slot drag without losing selection, scale, scroll, or drafts', async () => {
     const page = await openApp()
