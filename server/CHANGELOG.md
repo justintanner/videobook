@@ -8,6 +8,15 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Seedance 2.5 Flash on fal, WaveSpeed and MachGen, WaveSpeed MAI Image 2.7
+  generation and edits, MAI Image 2.7 Flash edits, and SkyReels V4 reference
+  video. The pickers use the November 25 frontier boards, including Hyperflow
+  H3 at rank 4 for reference-to-video.
+- With `@apicity/*@0.31.1`, fal FLUX 3 Max offers 2K and 4K at the promotional
+  rates through December 7. MachGen Seedance 2.5 offers 2160p and prices
+  reference video at its input-video rate. All three fal HeyGen Video modes
+  support 30 seconds, and fal Wan 3.0 and Prime accept 20,000-character prompts.
+
 - Adopted `@apicity/*@0.30.0`, adding three new direct media providers and new
   endpoints across existing providers:
   - **OpenAI** (`OPENAI_API_KEY`): GPT Image 2.6 Sunburst and Flare, GPT Image

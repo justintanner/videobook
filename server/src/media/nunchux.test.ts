@@ -212,8 +212,8 @@ describe("Nunchux catalog", () => {
     expect(boards("gpt-image-2.6-sunburst")).toEqual([["t2i", 1], ["i2i", 2]]);
     expect(boards("gpt-image-2.6-flare")).toEqual([["t2i", 3], ["i2i", 3]]);
     expect(boards("wan3.0-video")).toEqual([["t2v", 1], ["r2v", 1]]);
-    expect(boards("MiniMax-H3")).toEqual([["t2v", 3], ["i2v", 4], ["r2v", 3]]);
-    expect(boards("dreamina-seedance-2-0-260128")).toEqual([["i2v", 3]]);
+    expect(boards("MiniMax-H3")).toEqual([["t2v", 3], ["i2v", 5], ["r2v", 2]]);
+    expect(boards("dreamina-seedance-2-0-260128")).toEqual([["i2v", 4]]);
     expect(boards("wan2.7-videoedit")).toEqual([["v2v", 9]]);
     const preview = previewGeneration({ model: "nunchux:MiniMax-H3", prompt: "a boat", options: { aspect_ratio: "16:9" } });
     expect(preview.ok && preview.preview.providerPath).toBe("nunchux.v1.minimax.v2.videoGeneration(request)");

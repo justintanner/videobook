@@ -14,6 +14,8 @@ import {
   WaveSpeedBytedanceSeedance2p0ReferenceToVideoRequestSchema,
   WaveSpeedBytedanceSeedance2p0TextToVideoRequestSchema,
   WaveSpeedBytedanceSeedance2p0VideoEditRequestSchema,
+  WaveSpeedBytedanceSeedance2p5FlashImageToVideoRequestSchema,
+  WaveSpeedBytedanceSeedance2p5FlashReferenceToVideoRequestSchema,
   WaveSpeedBytedanceSeedance2p5ImageToVideoRequestSchema,
   WaveSpeedBytedanceSeedance2p5ReferenceToVideoRequestSchema,
   WaveSpeedBytedanceSeedance2p5TextToVideoRequestSchema,
@@ -34,6 +36,9 @@ import {
   WaveSpeedKwaivgiKlingImageV4p0EditRequestSchema,
   WaveSpeedKwaivgiKlingImageV4p0TextToImageRequestSchema,
   WaveSpeedKwaivgiKlingVideoO3ProVideoEditRequestSchema,
+  WaveSpeedMicrosoftMaiImage2p7TextToImageRequestSchema,
+  WaveSpeedMicrosoftMaiImage2p7EditRequestSchema,
+  WaveSpeedMicrosoftMaiImage2p7FlashEditRequestSchema,
   WaveSpeedMinimaxH3ImageToVideoRequestSchema,
   WaveSpeedMinimaxH3ReferenceToVideoRequestSchema,
   WaveSpeedMinimaxH3TextToVideoRequestSchema,
@@ -49,6 +54,7 @@ import {
   WaveSpeedPrunaAiPVideo2ProImageToVideoRequestSchema,
   WaveSpeedRunwaymlAleph2RequestSchema,
   WaveSpeedSkyworkAiSkyreelsV4ImageToVideoRequestSchema,
+  WaveSpeedSkyworkAiSkyreelsV4ReferenceToVideoRequestSchema,
   WaveSpeedSkyworkAiSkyreelsV4TextToVideoRequestSchema,
   WaveSpeedWavespeedAiMinimaxH3VideoEditRequestSchema,
   WaveSpeedXAiGrokImagineImageV2p0TextToImageRequestSchema,
@@ -70,7 +76,7 @@ interface WaveSpeedEndpoint {
   operation?: Operation;
   input?: AnyObject;
   wrap?: (input: Record<string, unknown>) => Record<string, unknown>;
-  entry?: Pick<ModelEntry, "itemParams" | "inputLimits" | "refs" | "modes">;
+  entry?: Pick<ModelEntry, "itemParams" | "inputLimits" | "refs" | "modes" | "rules">;
 }
 
 type EndpointExtras = Omit<WaveSpeedEndpoint, "family" | "dotPath" | "schema">;
@@ -166,6 +172,20 @@ function fastWithoutSound(schema: AnyObject): AnyObject {
   }) as unknown as AnyObject;
 }
 
+function flashVideoInput(schema: typeof WaveSpeedBytedanceSeedance2p5FlashImageToVideoRequestSchema | typeof WaveSpeedBytedanceSeedance2p5FlashReferenceToVideoRequestSchema): AnyObject {
+  return schema.superRefine((value, ctx) => {
+    if (value.output_format === "mov" && (value.resolution === "1080p" || value.resolution === "4k")) {
+      ctx.addIssue({ code: "custom", path: ["output_format"], message: "MOV requires 480p or 720p" });
+    }
+  }) as unknown as AnyObject;
+}
+
+const FLASH_REFERENCE_WINDOW = { minimum: 0, maximum: 30_000, maximumTotal: 30_000 };
+const SEEDANCE_FLASH_REFERENCES: EndpointExtras = {
+  input: flashVideoInput(WaveSpeedBytedanceSeedance2p5FlashReferenceToVideoRequestSchema),
+  entry: { rules: { refDurationMs: { video: FLASH_REFERENCE_WINDOW, audio: FLASH_REFERENCE_WINDOW } } },
+};
+
 const SKYREELS_V4: EndpointExtras = { input: fastWithoutSound(WaveSpeedSkyworkAiSkyreelsV4TextToVideoRequestSchema as unknown as AnyObject) };
 
 const SKYREELS_V4_IMAGE: EndpointExtras = {
@@ -193,6 +213,8 @@ const WAVESPEED_ENDPOINTS: Readonly<Record<string, WaveSpeedEndpoint>> = {
   "x-ai/grok-imagine-image-v2.0/text-to-image": endpoint("Grok Imagine Image 2.0", "xAi.grokImagineImageV2p0.textToImage", WaveSpeedXAiGrokImagineImageV2p0TextToImageRequestSchema),
   "bytedance/seedream-v5.5/edit": endpoint("Seedream 5.5", "bytedance.seedreamV5p5.edit", WaveSpeedBytedanceSeedreamV5p5EditRequestSchema),
   "bytedance/seedance-2.5/text-to-video": endpoint("Seedance 2.5", "bytedance.seedance2p5.textToVideo", WaveSpeedBytedanceSeedance2p5TextToVideoRequestSchema),
+  "bytedance/seedance-2.5-flash/image-to-video": endpoint("Seedance 2.5 Flash", "bytedance.seedance2p5Flash.imageToVideo", WaveSpeedBytedanceSeedance2p5FlashImageToVideoRequestSchema, { input: flashVideoInput(WaveSpeedBytedanceSeedance2p5FlashImageToVideoRequestSchema) }),
+  "bytedance/seedance-2.5-flash/reference-to-video": endpoint("Seedance 2.5 Flash", "bytedance.seedance2p5Flash.referenceToVideo", WaveSpeedBytedanceSeedance2p5FlashReferenceToVideoRequestSchema, SEEDANCE_FLASH_REFERENCES),
   "bytedance/seedance-2.5/image-to-video": endpoint("Seedance 2.5", "bytedance.seedance2p5.imageToVideo", WaveSpeedBytedanceSeedance2p5ImageToVideoRequestSchema),
   "bytedance/seedance-2.5/reference-to-video": endpoint("Seedance 2.5", "bytedance.seedance2p5.referenceToVideo", WaveSpeedBytedanceSeedance2p5ReferenceToVideoRequestSchema),
   "bytedance/seedance-2.5/video-edit": endpoint("Seedance 2.5", "bytedance.seedance2p5.videoEdit", WaveSpeedBytedanceSeedance2p5VideoEditRequestSchema),
@@ -201,6 +223,9 @@ const WAVESPEED_ENDPOINTS: Readonly<Record<string, WaveSpeedEndpoint>> = {
   "bytedance/seedance-2.0/reference-to-video": endpoint("Seedance 2.0", "bytedance.seedance2p0.referenceToVideo", WaveSpeedBytedanceSeedance2p0ReferenceToVideoRequestSchema),
   "bytedance/seedance-2.0/video-edit": endpoint("Seedance 2.0", "bytedance.seedance2p0.videoEdit", WaveSpeedBytedanceSeedance2p0VideoEditRequestSchema),
   "minimax/h3/text-to-video": endpoint("MiniMax H3", "minimax.h3.textToVideo", WaveSpeedMinimaxH3TextToVideoRequestSchema),
+  "microsoft/mai-image-2.7/text-to-image": endpoint("MAI Image 2.7", "microsoft.maiImage2p7.textToImage", WaveSpeedMicrosoftMaiImage2p7TextToImageRequestSchema),
+  "microsoft/mai-image-2.7/edit": endpoint("MAI Image 2.7", "microsoft.maiImage2p7.edit", WaveSpeedMicrosoftMaiImage2p7EditRequestSchema),
+  "microsoft/mai-image-2.7-flash/edit": endpoint("MAI Image 2.7 Flash", "microsoft.maiImage2p7Flash.edit", WaveSpeedMicrosoftMaiImage2p7FlashEditRequestSchema),
   "minimax/h3/image-to-video": endpoint("MiniMax H3", "minimax.h3.imageToVideo", WaveSpeedMinimaxH3ImageToVideoRequestSchema),
   "minimax/h3/reference-to-video": endpoint("MiniMax H3", "minimax.h3.referenceToVideo", WaveSpeedMinimaxH3ReferenceToVideoRequestSchema),
   "wavespeed-ai/minimax-h3/video-edit": endpoint("MiniMax H3", "wavespeedAi.minimaxH3.videoEdit", WaveSpeedWavespeedAiMinimaxH3VideoEditRequestSchema),
@@ -225,6 +250,7 @@ const WAVESPEED_ENDPOINTS: Readonly<Record<string, WaveSpeedEndpoint>> = {
   "heygen/video-1.0/image-to-video": endpoint("HeyGen Video", "heygen.video1p0.imageToVideo", WaveSpeedHeygenVideo1p0ImageToVideoRequestSchema),
   "heygen/video-1.0/reference-to-video": endpoint("HeyGen Video", "heygen.video1p0.referenceToVideo", WaveSpeedHeygenVideo1p0ReferenceToVideoRequestSchema),
   "skywork-ai/skyreels-v4/text-to-video": endpoint("SkyReels V4", "skyworkAi.skyreelsV4.textToVideo", WaveSpeedSkyworkAiSkyreelsV4TextToVideoRequestSchema, SKYREELS_V4),
+  "skywork-ai/skyreels-v4/reference-to-video": endpoint("SkyReels V4", "skyworkAi.skyreelsV4.referenceToVideo", WaveSpeedSkyworkAiSkyreelsV4ReferenceToVideoRequestSchema, { input: fastWithoutSound(WaveSpeedSkyworkAiSkyreelsV4ReferenceToVideoRequestSchema as unknown as AnyObject) }),
   "skywork-ai/skyreels-v4/image-to-video": endpoint("SkyReels V4", "skyworkAi.skyreelsV4.imageToVideo", WaveSpeedSkyworkAiSkyreelsV4ImageToVideoRequestSchema, SKYREELS_V4_IMAGE),
   "pruna-ai/p-video-2-pro/image-to-video": endpoint("P-Video 2 Pro", "prunaAi.pVideo2Pro.imageToVideo", WaveSpeedPrunaAiPVideo2ProImageToVideoRequestSchema),
   "x-ai/grok-imagine-video-v1.5/image-to-video": endpoint("Grok Imagine Video 1.5", "xAi.grokImagineVideoV1p5.imageToVideo", WaveSpeedXAiGrokImagineVideoV1p5ImageToVideoRequestSchema),
@@ -305,7 +331,7 @@ function refsFor(shape: ZodRawShape): Partial<Record<RefRole, string | null>> {
     first_frame: field(shape, "image") ?? field(shape, "first_frame"),
     last_frame: field(shape, "last_image") ?? field(shape, "last_frame"),
     image: field(shape, "reference_images") ?? field(shape, "images"),
-    video: field(shape, "video") ?? field(shape, "reference_videos"),
+    video: field(shape, "video") ?? field(shape, "reference_videos") ?? field(shape, "ref_videos"),
     audio: field(shape, "reference_audios"),
     loop: null,
     keyframe: field(shape, "keyframes"),
@@ -321,7 +347,7 @@ function guideFor(apiId: string): PromptGuide | undefined {
   if (apiId.startsWith("openai/gpt-image-")) return "gpt_image";
   if (apiId.startsWith("google/nano-banana-")) return "nano_banana";
   if (apiId.startsWith("x-ai/grok-imagine-image")) return "grok_image";
-  if (apiId.startsWith("bytedance/seedance-2.5/")) return "seedance25";
+  if (apiId.startsWith("bytedance/seedance-2.5/") || apiId.startsWith("bytedance/seedance-2.5-flash/")) return "seedance25";
   if (apiId.startsWith("bytedance/seedance-2.0/")) return "seedance2";
   if (apiId.startsWith("x-ai/grok-imagine-video")) return "grok_imagine";
   if (apiId.startsWith("kwaivgi/kling-video-o3")) return "kling30";
@@ -331,6 +357,7 @@ function guideFor(apiId: string): PromptGuide | undefined {
 function dialectFor(apiId: string, media: Media, refs: Partial<Record<RefRole, string | null>>): PromptDialect {
   if (apiId === "kwaivgi/kling-image-v4.0/edit") return "kling_omni";
   if (media === "image") return "natural";
+  if (apiId === "bytedance/seedance-2.5-flash/reference-to-video") return "seedance_spaced";
   if (apiId.startsWith("bytedance/")) return "seedance";
   if (apiId.startsWith("kwaivgi/kling-video-o3")) return "kling_omni";
   if (apiId.startsWith("google/gemini-omni-") && apiId.endsWith("/reference-to-video")) return "gemini_omni";

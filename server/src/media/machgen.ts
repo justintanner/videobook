@@ -89,6 +89,7 @@ const MACHGEN_MODEL_FACTS: Readonly<Record<string, MachGenModelFacts>> = {
   "MiniMax-H3": { ...H3, maxSecondsWithBothFrames: 15, maxSecondsAtHeight: { 1440: 15 } },
   "MiniMax-H3-Turbo": H3,
   "Seedance-2.5": { audioToggle: true, seed: false, promptRequiredFor: ["T2V", "R2V"], maxPromptChars: 25000, smartEditNeedsAdaptive: true },
+  "Seedance-2.5-Flash": { audioToggle: true, seed: false, promptRequiredFor: ["T2V", "R2V"] },
   "Seedance-2.0": { audioToggle: true, seed: true, promptRequiredFor: TEXT_TASK },
   "Seedance-2.0-Fast": SEEDANCE_20_TIER,
   "Seedance-2.0-Mini": SEEDANCE_20_TIER,

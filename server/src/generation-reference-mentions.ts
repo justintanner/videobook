@@ -84,18 +84,13 @@ type SeedanceMentionRefs = {
 export function rewriteSeedanceAssetMentions(
   prompt: string,
   refs: SeedanceMentionRefs,
+  separator = "",
 ): string {
-  const replacements: Array<{ reference: string; replacement: string }> = [];
-  for (const { ref, index } of refMentionEntries(refs.imageRefs ?? [])) {
-    replacements.push({ reference: ref, replacement: `@Image${index + 1}` });
-  }
-  for (const { ref, index } of refMentionEntries(refs.videoRefs ?? [])) {
-    replacements.push({ reference: ref, replacement: `@Video${index + 1}` });
-  }
-  for (const { ref, index } of refMentionEntries(refs.audioRefs ?? [])) {
-    replacements.push({ reference: ref, replacement: `@Audio${index + 1}` });
-  }
-  return replaceNotebookMentions(prompt, replacements);
+  return replaceNotebookMentions(prompt, [
+    ...indexedMentions(refs.imageRefs ?? [], (index) => `@Image${separator}${index + 1}`),
+    ...indexedMentions(refs.videoRefs ?? [], (index) => `@Video${separator}${index + 1}`),
+    ...indexedMentions(refs.audioRefs ?? [], (index) => `@Audio${separator}${index + 1}`),
+  ]);
 }
 
 function indexedMentions(

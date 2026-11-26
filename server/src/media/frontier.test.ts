@@ -25,16 +25,16 @@ describe("frontier catalog coverage", () => {
   it("keeps independent ranks for multi-operation models and never ranks a different model version", () => {
     expect(modelFrontierRankings("machgen:MiniMax-H3")).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "t2v", rank: 3 }),
-      expect.objectContaining({ type: "i2v", rank: 4 }),
-      expect.objectContaining({ type: "r2v", rank: 3 }),
+      expect.objectContaining({ type: "i2v", rank: 5 }),
+      expect.objectContaining({ type: "r2v", rank: 2 }),
     ]));
     expect(modelFrontierRankings("machgen:GPT-Image-2.5-Sunburst")).toEqual([
       expect.objectContaining({ type: "t2i", rank: 2 }),
       expect.objectContaining({ type: "i2i", rank: 4 }),
     ]);
     const boards = (id: string) => modelFrontierRankings(id).map(({ type, rank }) => [type, rank]);
-    expect(boards("machgen:MiniMax-H3-Turbo/hyperflow")).toEqual([["t2v", 5], ["i2v", 7], ["v2v", 3]]);
-    expect(boards("machgen:MiniMax-H3-Turbo/pika_h3_flex")).toEqual([["i2v", 10], ["v2v", 10]]);
+    expect(boards("machgen:MiniMax-H3-Turbo/hyperflow")).toEqual([["t2v", 5], ["i2v", 9], ["v2v", 3], ["r2v", 4]]);
+    expect(boards("machgen:MiniMax-H3-Turbo/pika_h3_flex")).toEqual([["v2v", 10]]);
     expect(boards("machgen:MiniMax-H3-Turbo")).toEqual([]);
     expect(modelFrontierRankings("machgen:GPT-Image-2")).toEqual([expect.objectContaining({ type: "t2i", rank: 6 })]);
     expect(modelFrontierRankings("xai:grok-imagine-video")).toEqual([]);

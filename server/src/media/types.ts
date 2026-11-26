@@ -40,6 +40,7 @@ export type PromptDialect =
   | "natural_source_video"
   | "natural_strip_frames"
   | "seedance"
+  | "seedance_spaced"
   | "strip_frames"
   | "brackets"
   | "vidu"

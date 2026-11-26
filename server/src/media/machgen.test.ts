@@ -196,7 +196,7 @@ describe("MachGen catalog", () => {
       }
     }
     expect(failures).toEqual([]);
-    expect(accepted).toBe(35_273);
+    expect(accepted).toBe(42_317);
     expect(refused).toEqual(EXPECTED_REFUSALS);
   });
 
@@ -211,7 +211,7 @@ describe("MachGen catalog", () => {
     }],
     ["machgen:Seedance-2.5", { prompt: "the cat turns", refUrls: { first_frame: [FRAME], last_frame: [LAST] }, options: { aspect_ratio: "16:9", generate_audio: false } }, {
       model: "Seedance-2.5", task_type: "I2V", src_image_urls: [FRAME, LAST],
-      video_config: { height: 1080, duration_secs: 12, aspect_ratio: "adaptive", audio: false },
+      video_config: { height: 2160, duration_secs: 12, aspect_ratio: "adaptive", audio: false },
     }],
     ["machgen:Seedance-2.0", { prompt: "dance", refUrls: { image: [FRAME], video: [CLIP], audio: [SONG] }, options: { duration: -1, resolution: "2160p" } }, {
       task_type: "R2V", src_image_urls: [FRAME], src_video_urls: [CLIP], src_audio_urls: [SONG],
@@ -384,7 +384,7 @@ describe("MachGen catalog", () => {
   });
 });
 
-const EXPECTED_REFUSALS: Record<string, number> = { "MiniMax-H3": 1620, "Seedance-2.5": 36, "Vidu-Q3-Pro": 128, "Gemini-Omni-1.2-Flash": 64 };
+const EXPECTED_REFUSALS: Record<string, number> = { "MiniMax-H3": 1620, "Seedance-2.5": 48, "Vidu-Q3-Pro": 128, "Gemini-Omni-1.2-Flash": 64 };
 
 type SweepVariant = { fields: Record<string, unknown>; hints: CostHints };
 
@@ -688,7 +688,7 @@ describe("MachGen provider tasks", () => {
   }
 
   function submitted(): Promise<string> {
-    return generated({ model: "machgen:Seedance-2.5", prompt: "the cat blinks", refs: { first_frame: [FRAME] } });
+    return generated({ model: "machgen:Seedance-2.5", prompt: "the cat blinks", refs: { first_frame: [FRAME] }, options: { resolution: "1080p" } });
   }
 
   async function completeTasks(output: "video" | "image" = "video"): Promise<void> {

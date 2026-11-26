@@ -192,7 +192,7 @@ describe("MachGen 0.29.0 catalog", () => {
     expect(MachGenGenerateRequestSchema.safeParse(request).success).toBe(true);
     expect(request).toMatchObject({ task_type: "R2V", src_video_urls: [VIDEO], reference_video_operation: "edit" });
     expect((await estimate(id, { prompt: "a boat", options: { resolution: "720p", duration: 5 } })).usd).toBeCloseTo(5 * 0.069504, 9);
-    expect(boards(id)).toEqual([["t2v", 7], ["v2v", 2], ["r2v", 4]]);
+    expect(boards(id)).toEqual([["t2v", 6], ["v2v", 2], ["r2v", 5]]);
   });
 
   it("sizes Seedream 5.5 within MachGen's pixel range and prices the tier and each source", async () => {
@@ -211,7 +211,7 @@ describe("MachGen 0.29.0 catalog", () => {
   });
 
   it("sends Hyperflow H3 and Pika H3 Flex as MiniMax H3 Turbo with MachGen's adapter", async () => {
-    for (const [adapter, title, ranks] of [["hyperflow", "Hyperflow H3 (MachGen)", [["t2v", 5], ["i2v", 7], ["v2v", 3]]], ["pika_h3_flex", "Pika H3 Flex (MachGen)", [["i2v", 10], ["v2v", 10]]]] as const) {
+    for (const [adapter, title, ranks] of [["hyperflow", "Hyperflow H3 (MachGen)", [["t2v", 5], ["i2v", 9], ["v2v", 3], ["r2v", 4]]], ["pika_h3_flex", "Pika H3 Flex (MachGen)", [["v2v", 10]]]] as const) {
       const id = `machgen:MiniMax-H3-Turbo/${adapter}`;
       expect(resolveModel(id).title).toBe(title);
       expect(optionsOf(id).resolution).toMatchObject({ enumValues: ["480p", "768p"] });
@@ -257,6 +257,6 @@ describe("WaveSpeed SkyReels V4 image-to-video", () => {
     const priced = await estimate(id, { prompt: "the fox leaps", refUrls: { first_frame: [IMAGE] }, options: { duration: 8 }, mode: "i2v" });
     expect(priced.warnings).toEqual([]);
     expect(priced.usd).toBeGreaterThan(0);
-    expect(boards(id)).toEqual([["i2v", 5]]);
+    expect(boards(id)).toEqual([["i2v", 8]]);
   });
 });

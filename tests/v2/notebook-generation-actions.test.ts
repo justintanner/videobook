@@ -370,6 +370,7 @@ describe('notebook generation actions', () => {
       'machgen:Seedance-2.0-Fast',
       'machgen:Seedance-2.0-Mini',
       'machgen:Seedance-2.5',
+      'machgen:Seedance-2.5-Flash',
       'machgen:Veo-3.1',
       'machgen:Veo-3.1-Fast',
     ]
@@ -407,13 +408,14 @@ describe('notebook generation actions', () => {
       'machgen:Seedance-2.0-Fast',
       'machgen:Seedance-2.0-Mini',
       'machgen:Seedance-2.5',
+      'machgen:Seedance-2.5-Flash',
       'machgen:Topaz-Video-Generative',
       'machgen:Topaz-Video-Generative-Fast',
       'machgen:Topaz-Video-Precision',
       'machgen:Topaz-Video-Precision-Animation',
     ])
     expect(machgen([{ kind: 'audio', target: 'audio' }]))
-      .toEqual(['machgen:Alibaba-Wan-3.0', 'machgen:MiniMax-H3', 'machgen:MiniMax-H3-Turbo', 'machgen:MiniMax-H3-Turbo/hyperflow', 'machgen:MiniMax-H3-Turbo/pika_h3_flex', 'machgen:Seedance-2.5'])
+      .toEqual(['machgen:Alibaba-Wan-3.0', 'machgen:MiniMax-H3', 'machgen:MiniMax-H3-Turbo', 'machgen:MiniMax-H3-Turbo/hyperflow', 'machgen:MiniMax-H3-Turbo/pika_h3_flex', 'machgen:Seedance-2.5', 'machgen:Seedance-2.5-Flash'])
 
     const h3 = catalog.find((action) => action.model === 'machgen:MiniMax-H3')!
     expect(generationActionLabel(h3)).toBe('MiniMax H3 (MachGen) · MachGen')

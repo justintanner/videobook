@@ -193,9 +193,9 @@ describe("WaveSpeed 0.28.1 catalog", () => {
     expect(boards("openai/gpt-image-2.6-sunburst/edit")).toEqual([["i2i", 2]]);
     expect(boards("openai/gpt-image-2.6-flare/edit")).toEqual([["i2i", 3]]);
     expect(boards("bytedance/seedream-v5.5/edit")).toEqual([["i2i", 8]]);
-    expect(boards("google/gemini-omni-1.2-flash/text-to-video")).toEqual([["t2v", 7]]);
+    expect(boards("google/gemini-omni-1.2-flash/text-to-video")).toEqual([["t2v", 6]]);
     expect(boards("skywork-ai/skyreels-v4/text-to-video")).toEqual([]);
-    expect(boards("pruna-ai/p-video-2-pro/image-to-video")).toEqual([["i2v", 8]]);
+    expect(boards("pruna-ai/p-video-2-pro/image-to-video")).toEqual([]);
     expect(boards("google/gemini-omni-1.2-flash/video-edit")).toEqual([["v2v", 2]]);
     expect(modelFrontierRankings("machgen:GPT-Image-2.6-Sunburst").map((ranking) => [ranking.type, ranking.rank])).toEqual([["t2i", 1], ["i2i", 2]]);
     expect(modelFrontierRankings("machgen:GPT-Image-2.6-Flare").map((ranking) => [ranking.type, ranking.rank])).toEqual([["t2i", 3], ["i2i", 3]]);

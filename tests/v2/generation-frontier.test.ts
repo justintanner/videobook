@@ -43,7 +43,7 @@ describe('frontier model picker', () => {
       .filter(action => action.cellTypes.includes('generate_video'))
       .map(action => ({ ...action, available: true }))
     const [ranked, other] = frontierPickerGroups(videoActions, 'i2v')
-    expect(ranked!.rows.find(row => row.action.model === 'kie:minimax-h3/image-to-video')?.ranking).toMatchObject({ type: 'i2v', rank: 4 })
+    expect(ranked!.rows.find(row => row.action.model === 'kie:minimax-h3/image-to-video')?.ranking).toMatchObject({ type: 'i2v', rank: 5 })
     for (const model of ['grok-imagine-video-1-5-preview', 'kling-4.0/reference-to-video', 'kling-4.0/keyframe-to-video', 'pixverse-v6-max/text-to-video', 'pixverse-v6-max/image-to-video', 'omnihuman-2-0']) {
       expect(other!.rows.some(row => row.action.model === `kie:${model}`), model).toBe(true)
     }
@@ -51,7 +51,7 @@ describe('frontier model picker', () => {
     for (const refs of [{ loop: ['@a1'] }, { keyframe: ['@a1', '@a2'] }]) {
       const picked = generationModelChoices(choices, 'video', { refs })
       expect(picked.find(choice => choice.value === 'kie:minimax-h3/image-to-video'))
-        .toMatchObject({ group: 'Frontier models', label: expect.stringMatching(/^#4 · /u) })
+        .toMatchObject({ group: 'Frontier models', label: expect.stringMatching(/^#5 · /u) })
       expect(picked.find(choice => choice.value === 'kie:grok-imagine-video-1-5-preview')).toMatchObject({ group: 'Other models' })
     }
   })
@@ -75,7 +75,7 @@ describe('frontier model picker', () => {
     const choices = actions.map(action => ({ value: action.model, label: action.title, available: action.model !== sunburst.model, frontier: action.frontier }))
     const text = generationModelChoices(choices, 'image', { operation: 'text_to_image' })
     const edit = generationModelChoices(choices, 'image', { operation: 'edit_image' })
-    expect(text.find(choice => choice.value === nano.model)?.detail).toContain('Elo 1176')
+    expect(text.find(choice => choice.value === nano.model)?.detail).toContain('Elo 1175')
     expect(edit.find(choice => choice.value === nano.model)?.detail).toContain('Elo 1152')
     const html = renderToStaticMarkup(createElement(WorkspaceActionField, {
       name: 'model', schema: { type: 'string' }, value: nano.model,
@@ -110,7 +110,7 @@ describe('frontier model picker', () => {
     expect(html).toContain('optgroup label="Other models"')
     expect(html).toContain('Unavailable · provider not configured')
     expect(html).toContain('Elo 1210')
-    expect(html).toContain(`<option value="${nano.family.id}" selected="">#8 · Nano Banana 2.1 · Elo 1176</option>`)
+    expect(html).toContain(`<option value="${nano.family.id}" selected="">#8 · Nano Banana 2.1 · Elo 1175</option>`)
     expect(html).toContain(`<select aria-label="Generation provider" disabled=""><option value="${nano.id}" selected="">Kie</option></select>`)
     expect(html).toContain(`value="${sunburst.family.id}" disabled=""`)
     expect(html.indexOf(`value="${flare.family.id}"`)).toBeLessThan(html.indexOf(`value="${nano.family.id}"`))

@@ -64,6 +64,18 @@ describe("estimate_cost tool", () => {
     expect(payload.per_call[1]!.estimate.warnings.join(" ")).toContain("unknown model");
   });
 
+  it("quotes MachGen Seedance 2.5 at the selected 2160p rate before generation", async () => {
+    const source = await videoWithDuration(createEngineForTest(tempDir), 4);
+    const input = { model: "machgen:Seedance-2.5", prompt: "pan", options: { resolution: "2160p", duration: 5 } };
+    const payload = await estimate([
+      { tool_name: "generate_video", input },
+      { tool_name: "generate_video", input: { ...input, refs: { video: [source] } } },
+    ]);
+    expect(payload.estimate.warnings).toEqual([]);
+    expect(payload.per_call[0]!.estimate.usd).toBeCloseTo(5 * 0.913680, 9);
+    expect(payload.per_call[1]!.estimate.usd).toBeCloseTo((5 + 4) * 0.563760, 9);
+  });
+
   it("validates edit source duration and bills source-length output", async () => {
     const engine = createEngineForTest(tempDir);
     for (const duration of [3.99, 4, 8, 30, 30.01]) {

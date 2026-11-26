@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.30.0 (2026-11-22). Image, video and audio
+Videobook now uses Apicity 0.31.1 (2026-11-26). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -949,6 +949,7 @@ packages moved version only.
 | **DECIDED**  | §54 Apicity 0.27.3 fal additions and frontier refresh               | raster-only GPT Image 2.6 output, markup or mask, 10 s Gemini Omni 1.2 end-frame cap |
 | **DECIDED**  | §56 Apicity 0.28.1 WaveSpeed and MachGen additions                  | WaveSpeed image entries, mask or markup, SkyReels fast mode without sound, MachGen 2.6 quality tiers |
 | **DECIDED**  | §57 Nunchux provider (apicity 0.28.1)                               | 7 priced models; 12 unpriced ids left out; inline Nano Banana images; Seedance frame-ratio hint |
+| **DECIDED**  | §60 Apicity 0.31.1 model coverage and pricing | Seedance Flash provider differences, dynamic frame pricing and higher resolution tiers |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |
@@ -1702,3 +1703,25 @@ Evidence is offline in `server/src/media/apicity-0300.test.ts`,
 `machgen.test.ts`, `frontier.test.ts`, `model-family.test.ts`,
 `image-edit-models.test.ts`, and `server/src/tools/image-subjects.test.ts` with
 local HTTP stubs; no paid provider was called.
+
+## 60. Apicity 0.31.1 model coverage and pricing (2026-11-26)
+
+The nine new endpoints have catalog entries. The November 25 frontier boards
+map to those entries and the existing eleven endpoint gaps. Hyperflow H3 ranks
+fourth for reference-to-video through the existing MachGen MiniMax-H3-Turbo
+adapter at 480p and 768p.
+
+| Model | Request and estimate |
+| --- | --- |
+| fal Seedance 2.5 Flash | Frame and reference modes offer 480p and 720p. An explicit reference output size can be priced per generated token. In frame mode the input image determines the output dimensions. The SDK cannot derive its token count locally. Section 41 describes the dynamic estimate. |
+| WaveSpeed Seedance 2.5 Flash | Frame and reference generation support upscaled 1080p and 4k in MP4. MOV requires 480p or 720p. Reference prompts use `@Image 1`, `@Video 1` and `@Audio 1`. Reference video duration contributes to the quote. |
+| MachGen Seedance 2.5 Flash | Text, frame and reference generation use the published 480p and 720p grids. The recorded four-second 480p frame request costs $0.269012. |
+| WaveSpeed MAI Image 2.7 and Flash | MAI Image 2.7 generates at 1k or 2k. Both edit endpoints accept one to five images and charge for each source. |
+| WaveSpeed SkyReels V4 | Reference mode accepts three images and one video. A video reference selects its own rate. Fast mode requires sound off. |
+| MachGen Seedance 2.5 | 2160p costs $0.913680 per output second. With a reference video the rate is $0.563760 per second of combined input and output. |
+| fal FLUX 3 Max | Text, frame and keyframe generation cost $0.26/s at 2K and $0.52/s at 4K during the promotion ending December 7. |
+
+The provider schemas also supply the 30-second fal HeyGen Video duration and
+the 20,000-character fal Wan 3.0 and Prime prompt limit. Offline checks live
+in `server/src/media/apicity-0311.test.ts`, `server/src/media/frontier.test.ts`
+and `server/src/tools/estimate-cost.test.ts`.

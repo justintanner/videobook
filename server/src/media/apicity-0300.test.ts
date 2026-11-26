@@ -204,7 +204,7 @@ describe("apicity 0.30.0 catalog additions and updates", () => {
     const omni12 = build("google:gemini-omni-1.2-flash", { prompt: "a fox leaps", options: { duration: 8 } });
     expect(GoogleInteractionCreateRequestSchema.safeParse(omni12).success).toBe(true);
     expect(omni12).toMatchObject({ model: "gemini-omni-1.2-flash", store: false, response_format: [{ duration: "8s", resolution: "720p" }] });
-    expect(boards("google:gemini-omni-1.2-flash")).toEqual([["t2v", 7], ["v2v", 2], ["r2v", 4]]);
+    expect(boards("google:gemini-omni-1.2-flash")).toEqual([["t2v", 6], ["v2v", 2], ["r2v", 5]]);
 
     const omni12Edit = build("google:gemini-omni-1.2-flash", { prompt: "add snow", refUrls: { video: [VIDEO] }, mode: "v2v" });
     expect(GoogleInteractionCreateRequestSchema.safeParse(omni12Edit).success).toBe(true);
@@ -246,7 +246,7 @@ describe("apicity 0.30.0 catalog additions and updates", () => {
     });
     expect(GoogleFlowVideosRequestSchema.safeParse(v12).success).toBe(true);
     expect(v12).toMatchObject({ model: "omni-flash-1.2", async: true, duration: 12, referenceImage_1: IMAGE, referenceAudio_1: AUDIO });
-    expect(boards("googleflow:omni-flash-1.2")).toEqual([["t2v", 7], ["v2v", 2], ["r2v", 4]]);
+    expect(boards("googleflow:omni-flash-1.2")).toEqual([["t2v", 6], ["v2v", 2], ["r2v", 5]]);
     expect(refusal("googleflow:omni-flash-1.2", {
       prompt: "x",
       refUrls: { first_frame: [IMAGE], last_frame: [IMAGE_2] },

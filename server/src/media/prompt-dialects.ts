@@ -56,12 +56,12 @@ function natural(prompt: string, refs: MediaRefs): string {
   });
 }
 
-function seedance(prompt: string, refs: MediaRefs): string {
+function seedance(prompt: string, refs: MediaRefs, separator: string): string {
   return rewriteSeedanceAssetMentions(prompt, {
     imageRefs: refsFor(refs, "image"),
     videoRefs: refsFor(refs, "video"),
     audioRefs: refsFor(refs, "audio"),
-  });
+  }, separator);
 }
 
 function rewrite(dialect: PromptDialect, prompt: string, refs: MediaRefs): string {
@@ -83,7 +83,8 @@ function rewrite(dialect: PromptDialect, prompt: string, refs: MediaRefs): strin
         sourceVideoRef: refsFor(refs, "video")[0] ?? null,
       });
     case "seedance":
-      return stripRefMentions(seedance(prompt, refs), frames(refs));
+    case "seedance_spaced":
+      return stripRefMentions(seedance(prompt, refs, dialect === "seedance_spaced" ? " " : ""), frames(refs));
     case "strip_frames":
       return stripRefMentions(prompt, [...frames(refs), ...refsFor(refs, "image")]);
     case "brackets":

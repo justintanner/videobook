@@ -240,7 +240,7 @@ describe("media request building", () => {
 
     expect(buildWireRequest(text, { prompt: "a red fox" })).toMatchObject({
       ok: true,
-      request: { prompt: "a red fox", duration: 12, resolution: "1080p", generate_audio: true, aspect_ratio: "9:16", reasoning_level: "high" },
+      request: { prompt: "a red fox", duration: 12, resolution: "4K", generate_audio: true, aspect_ratio: "9:16", reasoning_level: "high" },
     });
     expect(buildWireRequest(image, {
       prompt: "a red fox",
@@ -318,9 +318,9 @@ describe("media request building", () => {
       refUrls: { image: ["https://example.com/a.png"] },
     });
     expect(textCost.ok && hdCost.ok && silent.ok && fiboCost.ok && editCost.ok).toBe(true);
-    if (textCost.ok) expect(textCost.estimate.usd).toBeCloseTo(0.425);
-    if (hdCost.ok) expect(hdCost.estimate.usd).toBeCloseTo(1.45);
-    if (silent.ok) expect(silent.estimate.usd).toBeCloseTo(0.425);
+    if (textCost.ok) expect(textCost.estimate.usd).toBeCloseTo(5 * 0.1105);
+    if (hdCost.ok) expect(hdCost.estimate.usd).toBeCloseTo(10 * 0.1885);
+    if (silent.ok) expect(silent.estimate.usd).toBeCloseTo(5 * 0.1105);
     if (fiboCost.ok) expect(fiboCost.estimate.usd).toBeCloseTo(0.04);
     if (editCost.ok) expect(editCost.estimate.usd).toBeCloseTo(0.04);
   });
