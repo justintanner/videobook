@@ -1,21 +1,11 @@
 import type { CostEstimate } from "@apicity/cost";
 import { resolveModel } from "./media/descriptor.js";
+import { DUB_VIDEO_MAX_LANGUAGES, DUB_VIDEO_MODELS, DUB_VIDEO_RATES_USD_PER_SECOND, type DubQuality } from "./dub-video-contract.js";
 
-export type DubQuality = "speed" | "precision";
+export { DUB_VIDEO_MAX_LANGUAGES, DUB_VIDEO_MODELS, type DubQuality } from "./dub-video-contract.js";
 
 export const DUB_VIDEO_MAX_DURATION_SECONDS = 480;
-export const DUB_VIDEO_MAX_LANGUAGES = 5;
 const DUB_VIDEO_RATE_AS_OF = "2026-10-23";
-
-export const DUB_VIDEO_MODELS: Readonly<Record<DubQuality, string>> = {
-  speed: "fal:fal-ai/heygen/v2/translate/speed",
-  precision: "fal:fal-ai/heygen/v2/translate/precision",
-};
-
-const DUB_VIDEO_RATES_USD_PER_SECOND: Readonly<Record<DubQuality, number>> = {
-  speed: 0.05,
-  precision: 0.1,
-};
 
 export type DubLanguageResolution =
   | { ok: true; languages: string[] }

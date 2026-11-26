@@ -512,6 +512,7 @@ type NotebookCellInspectorProps = {
   onRun: (cellId: string) => Promise<unknown>
   onDelete: () => Promise<void>
   onTranscribeAsset?: (artifactId: string) => void
+  onDubsQueued?: () => Promise<unknown>
   onOpenGraphics?: (artifactId: string) => void
   onLoadTranscriptJson?: (
     artifactId: string,
@@ -1921,10 +1922,12 @@ function MediaCellInspector({
   onDelete,
   onOpenFullscreen,
   onTranscribeAsset,
+  onDubsQueued,
   onOpenGraphics,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
   bookId,
+  notebookId,
   assetTools,
   artifactAssets,
   onInspectGenerationRequest,
@@ -1953,6 +1956,8 @@ function MediaCellInspector({
   | 'onLoadTranscriptJson'
   | 'onDownloadTranscriptSrt'
   | 'bookId'
+  | 'notebookId'
+  | 'onDubsQueued'
   | 'assetTools'
   | 'onInspectGenerationRequest'
   | 'onDownloadGenerationHar'
@@ -2203,6 +2208,9 @@ function MediaCellInspector({
                     busy,
                     onTranscribeAsset,
                   )}
+                  dub={onDubsQueued && previewAsset.type === 'video' && previewAsset.artifactId === asset?.artifactId
+                    ? { notebookId, cellId: cell.id, onRefresh: onDubsQueued }
+                    : undefined}
                   graphics={mediaGraphicsAction(asset, address, busy || deleting, onOpenGraphics)}
                 />
               )}
@@ -4224,6 +4232,7 @@ export function NotebookCellInspector({
   onOpenSettings,
   onLoadCellGenerations,
   onTranscribeAsset,
+  onDubsQueued,
   onOpenGraphics,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
@@ -4349,6 +4358,8 @@ export function NotebookCellInspector({
         onFocusInput={onFocusInput}
         onDelete={onDelete}
         onOpenFullscreen={onOpenFullscreen}
+        notebookId={notebookId}
+        onDubsQueued={onDubsQueued}
         onTranscribeAsset={onTranscribeAsset}
         onOpenGraphics={onOpenGraphics}
         onLoadTranscriptJson={onLoadTranscriptJson}

@@ -1,6 +1,7 @@
 import { Captions, ClipboardCopy, Download, Layers, Maximize2 } from 'lucide-react'
 import type { MediaDockKind } from '@/videobook/media-dock'
 import { useMediaFileActions, type MediaFileToolCall } from '@/videobook/use-media-file-actions'
+import { DubVideoAction } from './DubVideoAction'
 
 type MediaDockFullscreenAction = {
   address: string
@@ -72,6 +73,7 @@ export function MediaDockActions({
   fullscreen,
   transcribe,
   graphics,
+  dub,
 }: {
   bookId: string
   artifactId: string
@@ -81,6 +83,7 @@ export function MediaDockActions({
   fullscreen?: MediaDockFullscreenAction
   transcribe?: MediaDockTranscribeAction
   graphics?: MediaDockGraphicsAction
+  dub?: { notebookId: string; cellId: string; onRefresh: () => Promise<unknown> }
 }) {
   const { state, available, run } = useMediaFileActions({ call, bookId, artifactId })
   const running = state.phase === 'running'
@@ -115,6 +118,7 @@ export function MediaDockActions({
           <span>{running && state.action === 'download' ? 'Downloading…' : 'Download'}</span>
         </button>
         {transcribe && <TranscribeAction {...transcribe} />}
+        {kind === 'video' && dub && <DubVideoAction {...dub} bookId={bookId} call={call} busy={busy} />}
         {graphics && <GraphicsAction {...graphics} />}
       </div>
       {state.phase === 'done' && <p role="status">{state.message}</p>}

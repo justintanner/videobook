@@ -8,6 +8,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Dub a notebook video into up to five languages from its cell. Choose Speed or
+  Precision, set lip sync and speaker count, and review the estimated total.
 - Seedance 2.5 Flash on fal, WaveSpeed and MachGen, WaveSpeed MAI Image 2.7
   generation and edits, MAI Image 2.7 Flash edits, and SkyReels V4 reference
   video. The pickers use the November 25 frontier boards, including Hyperflow

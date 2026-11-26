@@ -10896,6 +10896,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onLoadCellGenerations={loadCellGenerations}
           onOpenSettings={() => navigate('settings')}
           mediaInsightWork={mediaInsightWork}
+          onDubsQueued={() => refreshBookData(bookId, notebook?.id, () =>
+            watchScopeRef.current.bookId === bookId && watchScopeRef.current.notebookId === notebook?.id)}
           onTranscribeAsset={transcribeAsset}
           onOpenGraphics={openGraphicsFor}
           onLoadTranscriptJson={loadTranscriptJson}
