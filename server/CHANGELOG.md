@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-26
+
 ### Added
 
 - Dub a notebook video into up to five languages from its cell. Choose Speed or
