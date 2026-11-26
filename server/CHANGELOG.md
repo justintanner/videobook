@@ -96,6 +96,28 @@ and the package uses [Semantic Versioning](https://semver.org/).
   only 360p or 720p videos of at most 15 s, so a 1080p, 4k or longer source,
   or one still generating, is refused in the preview, the estimate and the
   run before anything is sent to KIE.
+- In the fullscreen video viewer, press **C** or choose **Crop** to frame a
+  16:9, 9:16 or square crop on the paused picture. Drag the box or a corner,
+  or use the arrow keys and `+`/`-`. Enter saves a new version of the video
+  in the same cell and opens it in the viewer. Escape cancels.
+- The fullscreen image editor adds WaveSpeed, MachGen and Nunchux for Nano
+  Banana 2.1 and GPT Image 2.6 Sunburst and Flare. MachGen also edits with
+  Nano Banana 2, GPT Image 2 and GPT Image 2.5 Sunburst and Flare. Pass the
+  provider-prefixed model id to `edit_image_subjects` for these edits.
+- In the graphics editor, choose a book image as the default logo and set its
+  corner, size and opacity (`video_graphics set_logo`, stored in
+  `graphics.logo.v1`). Videos without saved graphics start with that logo.
+  Applying a template keeps the video's logo, and saving a template leaves
+  the logo out so it can be reused on another video.
+- Add a **Box** layer to cover burned-in text anywhere in the picture. Drag
+  its edges or corners to fit, then set its colour, opacity and corner
+  rounding. Over MCP, `video_graphics` accepts a `box` layer and the
+  `set_box` edit.
+- An explicit `auto_edit` plan can set frame ranges, speed and audio for
+  each segment, zoom between two points and apply `crash`, `invert` or
+  `rgb_split`. Retrying the same render with its `request_id` reuses its
+  output. Analysis reuses the result for the same video and transcript
+  unless `force: true` is passed.
 
 ### Changed
 
@@ -104,16 +126,73 @@ and the package uses [Semantic Versioning](https://semver.org/).
   in its footer, where the model was usually cut off. While it generates or
   after it fails, the line under its status names them the same way. The
   model no longer repeats the provider, as in `kie · kie:minimax-h3/refer…`.
+- The notebook now puts that provider and compact model id on the take's top
+  edge beside its generator's address, replacing the chip on the picture and
+  the provider line under the clock. An extracted frame shows the time it
+  came from. Hover over a shortened model id for the full name. Generator
+  headers show the mode, such as **GEN VIDEO · I2V**. Progress, failures
+  and the running take count sit below the prompt.
+- The footer address replaces the drag grip. Hover over an address such as
+  `@b2` for the drag hint, then drop it into an input or a post's empty clip
+  slot. A closed hand lifts the address and a dashed line leads back to
+  the source. Drag the tile itself to move it.
+- Notebook tiles share a footer for the address, facts, status and menu.
+  Media versions are counted there, and a ready tile has no check mark.
+  Working tiles glow green (cyan for images), missing prompts are marked
+  in amber, and Analyze keeps its prompt visible above progress or errors.
+  Posts show the clip beside the caption, upload progress and the platform's
+  error if posting fails. Portrait previews fill their side bars with a
+  blurred copy of the picture.
+- **Clean** (`relayout_notebook`) replaces the media-type lanes with rounds.
+  Each generator has its inputs on the left and a column of takes for each
+  prompt, in run order. The generator heads its current column. Earlier
+  columns show what changed in the prompt, and takes carry their prompt
+  version. New cells follow the same layout, with renders and posts to the
+  right of their take. Unlinked cells follow the rounds, then Timeline rows.
+  Goal notebooks keep their goal layout.
+- Choose Wan 3.0 Prime, H3 Max Turbo, LTX 2.5 Fast or Pro, FLUX 3 Draft
+  and MiniMax H3 LoRA under **Model**. **Provider** lists each provider
+  once per variant, such as fal's US endpoint. In the cell editor and chat
+  generation review, **Type** lists that provider's compatible operations,
+  including ones served by a different endpoint.
+- When a video request omits the resolution, Videobook uses the highest the
+  model offers. The default rises from 1080p to 4K for fal FLUX 3 Max
+  text-to-video, image-to-video and keyframes-to-video, and from 1080p to
+  2160p for MachGen Seedance 2.5. An explicit resolution still takes
+  precedence. Choose 1080p to keep the earlier price.
+- Opening the graphics editor hides the chat log and gives the editor the
+  full width of the dock, with the preview beside the controls and the
+  layer timeline below. Templates show thumbnails. Use the text controls
+  to add a headline, second line or credit to a template that lacks one.
+- A text layer's **Text** and **Block** tabs both show its background colour
+  and opacity. Set opacity to 0% to clear the background or 100% to cover
+  text behind it. Picking a colour while the background is off turns it on
+  at 100%.
+- In narrow or short windows, composer **Actions** rows keep the selected
+  command in view. A short description sits below the command in a narrow
+  window and beside it in a short, wide one. Search matches the full text.
 
 ### Removed
 
 - Removed `machgen:MiniMax-H3-Omni`, retired upstream in `@apicity/machgen@0.30.0`.
+- Generation **Provider** menus no longer show prices beside provider names.
+- The pre-release built-in sound id `power_down` was renamed to `shutdown`.
 
 ### Fixed
 
 - A cold open whose highlight comes late in a clip no longer keeps the clip
   in memory up to that point while it renders. On a 30 s 1080x1920 clip with
   the highlight at 20 s, peak memory went from about 1.7 GB to 860 MB.
+- When auto-edit analysis picks a cold open, the body now starts again at
+  the beginning of the clip. Drag **Body start** to choose a different cut.
+- A successful download retry, or choosing a file to recover a failed
+  download, clears the error on the asset and its notebook tile.
+- Selecting a tile keeps it centred above the preview when the dock changes
+  size during the scroll.
+- The model and provider menus in the fullscreen image editor fit inside the
+  controls even in a narrow window.
+- Tile font weights now apply only inside notebook tiles, preserving the
+  lettering in action sheets, settings and sequence-preview captions.
 
 ## [0.8.3] - 2026-11-20
 
