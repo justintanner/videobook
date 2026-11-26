@@ -120,6 +120,7 @@ import { applyBuiltinSfxDef } from "./apply-builtin-sfx.js";
 import { applySfxDef } from "./apply-sfx.js";
 
 import { generateMediaDefs } from "./generate-media.js";
+import { dubVideoDef } from "./dub-video.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import { bookUsageDef } from "./book-usage.js";
 import { postRecordDefs } from "./post-record.js";
@@ -339,6 +340,7 @@ export function getAllToolDefs(
     ...imageSubjectDefs(engine),
 
     ...generateMediaDefs(engine),
+    dubVideoDef(engine),
     postDef(),
     ...postRecordDefs(engine),
     connectServiceDef(),

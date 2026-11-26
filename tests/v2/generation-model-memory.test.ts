@@ -169,6 +169,8 @@ describe("generation model memory", () => {
     });
     rememberGenerationModel(engine, cell("video", "fal:minimax/h3-max-turbo/extend-video", "generate_video"));
     rememberGenerationModel(engine, cell("video", "kie:topaz/video-upscale", "generate_video"));
+    rememberGenerationModel(engine, cell("video", "fal:fal-ai/heygen/v2/translate/speed", "generate_video"));
+    rememberGenerationModel(engine, cell("video", "fal:fal-ai/heygen/v2/translate/precision", "generate_video"));
     rememberGenerationModel(engine, cell("image", "nano-banana-2-1", "edit_image_subjects"));
     expect(readGenerationModelMemory(engine)).toEqual({});
   });

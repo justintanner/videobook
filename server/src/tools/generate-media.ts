@@ -102,7 +102,16 @@ function optionalString(raw: unknown): string | undefined {
   return typeof raw === "string" && raw.trim() !== "" ? raw : undefined;
 }
 
-async function validate(engine: Engine, model: ResolvedModel, args: Record<string, unknown>, refs: MediaRefs): Promise<string | null> {
+export interface MediaGenerationOverrides {
+  label?: string;
+  metadata?: Record<string, Record<string, unknown>>;
+}
+
+export type EnqueueMediaResult =
+  | { ok: true; assetId: string; jobId: string; model: string }
+  | { ok: false; error: string };
+
+export async function validateMediaGeneration(engine: Engine, model: ResolvedModel, args: Record<string, unknown>, refs: MediaRefs): Promise<string | null> {
   const envKey = PROVIDER_ENV_KEYS[model.provider];
   if (!process.env[envKey]) return `${envKey} environment variable is not set`;
   const operationError = checkOperation(model, args.operation);
@@ -127,11 +136,22 @@ async function validate(engine: Engine, model: ResolvedModel, args: Record<strin
     ?? checkRefDurations(engine, model, refs, fieldRefs);
 }
 
-async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Record<string, unknown>, refs: MediaRefs): Promise<ToolResult> {
+export async function enqueueMediaGeneration(
+  engine: Engine,
+  model: ResolvedModel,
+  args: Record<string, unknown>,
+  refs: MediaRefs,
+  overrides?: MediaGenerationOverrides,
+): Promise<EnqueueMediaResult> {
   const prompt = optionalString(args.prompt);
-  const created = await engine.artifacts.create(ARTIFACT_KIND[model.media], generationLabel(model.title, prompt));
-  if (!created.ok) return toolError(`Failed to create ${model.media} asset: ${created.error.message}`);
+  const label = overrides?.label ?? generationLabel(model.title, prompt);
+  const created = await engine.artifacts.create(ARTIFACT_KIND[model.media], label);
+  if (!created.ok) return { ok: false, error: `Failed to create ${model.media} asset: ${created.error.message}` };
   const { artifactId, path } = created.value;
+  for (const [key, value] of Object.entries(overrides?.metadata ?? {})) {
+    const written = await engine.metadata.artifacts.write(artifactId, key, value);
+    if (!written.ok) return { ok: false, error: `Failed to write ${key} metadata: ${written.error.message}` };
+  }
   const jobId = `generate-${model.media}-${artifactId}-${Date.now()}`;
   const refParams = normalizeRefParams(args.ref_params);
   const fieldRefs = normalizeFieldRefs(args.field_refs);
@@ -157,7 +177,23 @@ async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Rec
     ...(model.media === "video" && (args.transcribe === false || context?.goalOrigin?.transcribe === false && args.transcribe !== true) ? { transcribe: false as const } : {}),
   };
   await queue.enqueue(jobId, job);
-  return textResult({ asset_id: artifactId, job_id: jobId, model: model.id, status: "enqueued" });
+  return { ok: true, assetId: artifactId, jobId, model: model.id };
+}
+
+export async function runMediaGeneration(
+  engine: Engine,
+  media: Media,
+  args: Record<string, unknown>,
+  overrides?: MediaGenerationOverrides,
+): Promise<ToolResult> {
+  const model = resolveFor(media, args.model);
+  if (typeof model === "string") return toolError(model);
+  const refs = normalizeRefs(args.refs);
+  const invalid = await validateMediaGeneration(engine, model, args, refs);
+  if (invalid) return toolError(invalid);
+  const enqueued = await enqueueMediaGeneration(engine, model, args, refs, overrides);
+  if (!enqueued.ok) return toolError(enqueued.error);
+  return textResult({ asset_id: enqueued.assetId, job_id: enqueued.jobId, model: enqueued.model, status: "enqueued" });
 }
 
 function generateDef(engine: Engine, media: Media): ToolDef {
@@ -180,14 +216,7 @@ function generateDef(engine: Engine, media: Media): ToolDef {
         transcribe: z.boolean().optional().describe("false skips the automatic speech-to-text pass on the generated video, for footage with no speech"),
       } : {}),
     },
-    handler: async (args) => {
-      const model = resolveFor(media, args.model);
-      if (typeof model === "string") return toolError(model);
-      const refs = normalizeRefs(args.refs);
-      const invalid = await validate(engine, model, args, refs);
-      if (invalid) return toolError(invalid);
-      return enqueueGeneration(engine, model, args, refs);
-    },
+    handler: async (args) => runMediaGeneration(engine, media, args),
   };
 }
 

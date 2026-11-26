@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (219)
+## MCP endpoints (220)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
@@ -67,6 +67,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `doctor` — Report assets stuck in an error state or past their work deadline. fix with an asset_id restores that one asset, rebuilding missing video previews and analysis frames from existing media, clearing stale errors or leases, or restoring from history; fix alone only reports. clean deletes failed-generation husks and clears error badges on assets that kept their media. gc reclaims catalog storage for this book.
 - `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
 - `draft_post_copy` — Draft a Post's caption and hashtags from its clip's analysis, transcript and prompts (analyzing the clip first when needed) without saving. language defaults to Thai for TikTok and English otherwise; instruction, caption and tags rewrite an existing draft.
+- `dub_video` — Dub a book video into 1-5 target languages with HeyGen Translate (fal). Each language creates a new dubbed video artifact with automatic transcription enabled; the source video is untouched.
 - `duplicate_asset` — Duplicate a media asset and place its notebook cell at an optional destination or directly below the source
 - `edit_asset_tag` — Add, remove or restore one tag on an asset. add makes a manual tag that survives re-analysis; removing an automatic tag records a dismissal so re-analysis cannot bring it back; restore clears that dismissal.
 - `edit_cold_open` — Create the cold-open copy from a reviewed prepare_cold_open suggestion: the chosen range, a hard cut, then the full original clip. The source is kept; poll list_jobs for the new asset.
@@ -74,7 +75,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `enqueue_notebook_run` — Revalidate and enqueue a persisted aggregate workbook plan
 - `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
 - `ensure_notebook_workflow_scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists
-- `estimate_cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Rewrite, chat and analysis use text-call forecasts that exclude media, tools and history. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. MiniMax H3 Max models whose duration and resolution are known quote those seconds at the published per-second rate instead, as a lower bound with a warning, with or without the key. A MachGen Topaz upscale of a MachGen output uses MachGen's free quote when MACHGEN_API_KEY is set; a video MachGen must upload is quoted when its job submits. Without those keys, or without a published rate, the estimate is $0 with a warning.
+- `estimate_cost` — Estimate the USD cost of one or more generate_image, generate_video, generate_audio or dub_video calls, given as {tool_name, input}, before running them. Rewrite, chat and analysis use text-call forecasts that exclude media, tools and history. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. MiniMax H3 Max models whose duration and resolution are known, and dub_video calls with a known source video duration, quote those seconds at the published per-second rate instead, as a lower bound with a warning, with or without the key. A MachGen Topaz upscale of a MachGen output uses MachGen's free quote when MACHGEN_API_KEY is set; a video MachGen must upload is quoted when its job submits. Without those keys, or without a published rate, the estimate is $0 with a warning.
 - `export_asset_file` — Export an asset's original media file: downloads copies it to the server's Downloads folder and returns its path; browser returns an attachment URL and filename without copying. Clipboard and Finder use macOS. The browser UI chooses browser for non-loopback pages; direct tool calls to downloads keep copying.
 - `export_asset_to_project` — Export an asset from one project to a different project
 - `export_transcript_srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.
@@ -230,7 +231,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 - `zoom_video` — Zoom in on parts of a video toward a focus point, easing in, holding and returning, with an optional built-in sound. Local and free: one FFmpeg encode in place, with history.
 
-## Slash actions (270; 109 dedicated command routes)
+## Slash actions (271; 109 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
@@ -295,6 +296,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/disconnect-notebook-cells` — Delete a notebook edge; MCP: `disconnect_notebook_cells`
 - `/doctor` (aliases: `/recover`, `/clear-failed`) — Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore it to its last usable state, or 'clean' to clear failed generations.; MCP: `doctor`
 - `/download` — Download an asset in the browser on a hosted page, or copy it to Downloads locally; MCP: `export_asset_file`
+- `/dub-video` — Dub a book video into 1-5 target languages with HeyGen Translate (fal). Each language creates a new dubbed video artifact with automatic transcription enabled; the source video is untouched.; MCP: `dub_video`
 - `/duck` — Lower background audio beneath a narration clip; preview or workspace operation
 - `/duplicate` (aliases: `/export-to`) — Duplicate an asset into an optional notebook destination, or into another project with --project; MCP: `duplicate_asset`
 - `/edit-asset-tag` — Add, remove or restore one tag on an asset. add makes a manual tag that survives re-analysis; removing an automatic tag records a dismissal so re-analysis cannot bring it back; restore clears that dismissal.; MCP: `edit_asset_tag`
@@ -304,7 +306,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/enqueue-sequence-export` — Queue a confirmed canonical sequence export after revalidating its exact revision; MCP: `enqueue_sequence_export`
 - `/ensure-notebook-workflow-scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists; MCP: `ensure_notebook_workflow_scaffold`
 - `/entities` — Open the reusable entity library; UI: `open_entities`
-- `/estimate-cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Rewrite, chat and analysis use text-call forecasts that exclude media, tools and history. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. MiniMax H3 Max models whose duration and resolution are known quote those seconds at the published per-second rate instead, as a lower bound with a warning, with or without the key. A MachGen Topaz upscale of a MachGen output uses MachGen's free quote when MACHGEN_API_KEY is set; a video MachGen must upload is quoted when its job submits. Without those keys, or without a published rate, the estimate is $0 with a warning.; MCP: `estimate_cost`
+- `/estimate-cost` — Estimate the USD cost of one or more generate_image, generate_video, generate_audio or dub_video calls, given as {tool_name, input}, before running them. Rewrite, chat and analysis use text-call forecasts that exclude media, tools and history. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. MiniMax H3 Max models whose duration and resolution are known, and dub_video calls with a known source video duration, quote those seconds at the published per-second rate instead, as a lower bound with a warning, with or without the key. A MachGen Topaz upscale of a MachGen output uses MachGen's free quote when MACHGEN_API_KEY is set; a video MachGen must upload is quoted when its job submits. Without those keys, or without a published rate, the estimate is $0 with a warning.; MCP: `estimate_cost`
 - `/expand` — Open the project selector (left), chat controls (right), or both; UI: `sidebar_expand`
 - `/export` (aliases: `/export-sequence`, `/final`) — Review and export the current sequence; preview or workspace operation
 - `/export-asset-to-project` — Export an asset from one project to a different project; MCP: `export_asset_to_project`

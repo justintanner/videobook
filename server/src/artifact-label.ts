@@ -40,3 +40,8 @@ export function derivedLabel(operation: string, source: string | undefined): str
   const stem = (source ?? "").trim();
   return stem ? `${operation} — ${stem}` : operation;
 }
+
+export function dubLabel(source: string | undefined, language: string): string {
+  const stem = promptSummary(source);
+  return stem ? `${stem} · ${language} dub` : `${language} dub`;
+}

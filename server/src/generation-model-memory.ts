@@ -1,4 +1,5 @@
 import type { Engine, NotebookCell } from "videobook-engine";
+import { isDubVideoModel } from "./dub-video.js";
 import { logger } from "./logger.js";
 import { tryResolveModel } from "./media/descriptor.js";
 import type { Operation } from "./media/types.js";
@@ -34,7 +35,7 @@ function rememberedModelId(cell: NotebookCell): { media: GenerationModelMedia; m
   const media = generationModelMedia(cell.type);
   if (!media || !cell.model || (cell.tool && cell.tool !== `generate_${media}`)) return null;
   const model = tryResolveModel(cell.model);
-  if (!model || model.media !== media) return null;
+  if (!model || model.media !== media || isDubVideoModel(model.id)) return null;
   if (!model.entry.operations.some((operation) => REMEMBERED_OPERATIONS[media].has(operation))) return null;
   return { media, model: model.id };
 }

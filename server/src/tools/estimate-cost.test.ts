@@ -250,4 +250,33 @@ describe("estimate_cost tool", () => {
     expect(payload.per_call[3]!.estimate.usd).toBeGreaterThan(payload.per_call[2]!.estimate.usd);
     expect(payload.per_call[3]!.estimate.warnings.join(" ")).toContain("excludes image tokens");
   });
+
+  it("quotes dub_video at speed and precision tiers as a per-second lower bound", async () => {
+    const engine = createEngineForTest(tempDir);
+    const clip = await videoWithDuration(engine, 7.1);
+    const longClip = await videoWithDuration(engine, 481);
+    const bookId = engine.book.get().bookId;
+
+    const payload = await estimate([
+      { tool_name: "dub_video", input: { book_id: bookId, asset_id: clip, language: "thai, japanese" } },
+      { tool_name: "dub_video", input: { book_id: bookId, asset_id: clip, language: ["Spanish", "spanish"], quality: "precision", dynamic_duration: true } },
+      { tool_name: "dub_video", input: { book_id: bookId, asset_id: longClip, language: "thai" } },
+      { tool_name: "dub_video", input: { book_id: bookId, asset_id: clip, language: "klingon" } },
+    ]);
+
+    expect(payload.per_call[0]!.estimate.usd).toBeCloseTo(8 * 0.05 * 2, 6);
+    expect(payload.per_call[0]!.estimate.breakdown).toEqual({ units: 16, unit: "seconds", perUnitUsd: 0.05 });
+    expect(payload.per_call[0]!.estimate.warnings[0]).toContain("this estimate is a lower bound");
+
+    expect(payload.per_call[1]!.estimate.usd).toBeCloseTo(8 * 0.1 * 1, 6);
+    expect(payload.per_call[1]!.estimate.breakdown).toEqual({ units: 8, unit: "seconds", perUnitUsd: 0.1 });
+    expect(payload.per_call[1]!.estimate.warnings[0]).toContain("dynamic_duration");
+    expect(payload.per_call[1]!.estimate.warnings[0]).toContain("this estimate is a lower bound");
+
+    expect(payload.per_call[2]!.estimate.usd).toBe(0);
+    expect(payload.per_call[2]!.estimate.warnings.join(" ")).toContain("trim_video");
+
+    expect(payload.per_call[3]!.estimate.usd).toBe(0);
+    expect(payload.per_call[3]!.estimate.warnings.join(" ")).toContain("klingon");
+  });
 });

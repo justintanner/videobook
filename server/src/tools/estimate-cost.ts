@@ -19,6 +19,15 @@ import { kieTaskSourceCostHints } from "../media/kie-task-source.js";
 import { resolveGenerationSource } from "../media/generation-source.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
 import { ANALYZE_AUTO_EDIT_PROMPT, REFINE_AUTO_EDIT_PROMPT } from "../auto-edit/analysis.js";
+import { currentBookContext } from "../book-context.js";
+import {
+  DUB_VIDEO_MAX_DURATION_SECONDS,
+  dubLanguageCandidates,
+  estimateDubCost,
+  resolveDubLanguages,
+  type DubQuality,
+} from "../dub-video.js";
+import { readVideoDurationSeconds } from "./dub-video.js";
 import { resolveVideoAssetReference } from "./video-source-reference.js";
 
 const GENERATION_TOOLS = new Set(["generate_image", "generate_video", "generate_audio"]);
@@ -28,7 +37,7 @@ const AUTO_EDIT_ANALYZE_MAX_OUTPUT_TOKENS = 2000;
 const AUTO_EDIT_IMAGE_TOKEN_WARNING = "Text-only forecast; excludes image tokens for the sampled frames.";
 
 const callItem = z.object({
-  tool_name: z.string().describe("Tool whose cost to estimate: generate_image, generate_video, generate_audio, edit_image_subjects, rewrite_prompt, chat or analysis"),
+  tool_name: z.string().describe("Tool whose cost to estimate: generate_image, generate_video, generate_audio, dub_video, edit_image_subjects, rewrite_prompt, chat or analysis"),
   input: z.record(z.string(), z.unknown()).describe("Same arguments object you'd pass to the tool"),
 });
 
@@ -210,8 +219,66 @@ async function estimateAutoEdit(engine: Engine, input: Record<string, unknown>):
   };
 }
 
+async function estimateDubVideo(engine: Engine, input: Record<string, unknown>): Promise<CostEstimate> {
+  const rawQuality = input.quality;
+  if (rawQuality !== undefined && rawQuality !== "speed" && rawQuality !== "precision") {
+    return unavailable(`unknown dub_video quality '${String(rawQuality)}'`);
+  }
+  const quality: DubQuality = rawQuality ?? "speed";
+  const rawLanguage = input.language;
+  if (
+    typeof rawLanguage !== "string"
+    && !(Array.isArray(rawLanguage) && rawLanguage.every((entry) => typeof entry === "string"))
+  ) {
+    return unavailable("dub_video requires language");
+  }
+  const resolved = resolveDubLanguages(rawLanguage, dubLanguageCandidates(quality));
+  if (!resolved.ok) return unavailable(resolved.error);
+
+  const assetRef = text(input.asset_id);
+  let durationSeconds: number | undefined;
+  if (assetRef) {
+    let artifactId: string;
+    try {
+      artifactId = resolveVideoAssetReference(
+        engine,
+        assetRef,
+        text(input.notebook_id) ?? currentBookContext()?.notebookId,
+      );
+    } catch (cause) {
+      return unavailable(cause instanceof Error ? cause.message : String(cause));
+    }
+    const artifact = engine.artifacts.get(artifactId);
+    if (!artifact.ok) return unavailable(artifact.error.message);
+    if (artifact.value.kind !== "video") {
+      return unavailable(`dub_video requires video media; ${artifactId} is ${artifact.value.kind}`);
+    }
+    durationSeconds = await readVideoDurationSeconds(engine, artifactId);
+  } else if (typeof input.duration === "number" && Number.isFinite(input.duration) && input.duration > 0) {
+    durationSeconds = input.duration;
+  } else {
+    return unavailable("dub_video requires a video asset_id");
+  }
+
+  if (durationSeconds === undefined) {
+    return unavailable("Could not determine source video duration for dub_video");
+  }
+  if (durationSeconds > DUB_VIDEO_MAX_DURATION_SECONDS) {
+    return unavailable(
+      `Source video is ${Math.round(durationSeconds * 10) / 10}s long, which exceeds HeyGen Translate's ${DUB_VIDEO_MAX_DURATION_SECONDS}s (8-minute) limit. Use trim_video to shorten it first.`,
+    );
+  }
+  return estimateDubCost({
+    durationSeconds,
+    languageCount: resolved.languages.length,
+    quality,
+    dynamicDuration: input.dynamic_duration === true,
+  });
+}
+
 async function estimateOne(engine: Engine, toolName: string, input: Record<string, unknown>): Promise<CostEstimate> {
   if (GENERATION_TOOLS.has(toolName)) return estimateMedia(engine, input);
+  if (toolName === "dub_video") return estimateDubVideo(engine, input);
   if (toolName === "analyze_image_subjects") return estimateSubjectAnalysis(engine, input);
   if (toolName === "edit_image_subjects") return estimateImageEdit(input);
   if (toolName === "auto_edit") return estimateAutoEdit(engine, input);
@@ -258,7 +325,7 @@ export function estimateCostDef(engine: Engine, books?: BookManager): ToolDef {
   return {
     name: "estimate_cost",
     description:
-      "Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Rewrite, chat and analysis use text-call forecasts that exclude media, tools and history. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. MiniMax H3 Max models whose duration and resolution are known quote those seconds at the published per-second rate instead, as a lower bound with a warning, with or without the key. A MachGen Topaz upscale of a MachGen output uses MachGen's free quote when MACHGEN_API_KEY is set; a video MachGen must upload is quoted when its job submits. Without those keys, or without a published rate, the estimate is $0 with a warning.",
+      "Estimate the USD cost of one or more generate_image, generate_video, generate_audio or dub_video calls, given as {tool_name, input}, before running them. Rewrite, chat and analysis use text-call forecasts that exclude media, tools and history. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. MiniMax H3 Max models whose duration and resolution are known, and dub_video calls with a known source video duration, quote those seconds at the published per-second rate instead, as a lower bound with a warning, with or without the key. A MachGen Topaz upscale of a MachGen output uses MachGen's free quote when MACHGEN_API_KEY is set; a video MachGen must upload is quoted when its job submits. Without those keys, or without a published rate, the estimate is $0 with a warning.",
     schema,
     handler: async (args): Promise<ToolResult> => {
       const calls = args.calls as Array<{ tool_name: string; input: Record<string, unknown> }>;

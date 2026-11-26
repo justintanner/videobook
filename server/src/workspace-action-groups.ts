@@ -34,7 +34,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "extract_frame",
     "extract_notebook_frame", "splice_video", "preview_splice", "smooth_scene_concat",
     "analyze_video", "analyze_editing_moments", "get_editing_moments", "render_video", "get_render_settings", "create_watermark_card",
-    "apply_watermark", "get_watermark_config",
+    "apply_watermark", "get_watermark_config", "dub_video",
   ],
   Audio: [
     "trim_audio", "suggest_sfx", "apply_sfx", "apply_builtin_sfx", "sync_video_to_audio", "audio_boost",

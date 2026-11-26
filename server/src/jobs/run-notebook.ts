@@ -50,11 +50,12 @@ import { queue, registerJobHandler, waitForJob } from "../queue.js";
 import type { ToolDef, ToolResult } from "../tools/tool-def.js";
 import { smoothSceneConcatDef } from "../tools/smooth-scene-concat.js";
 import { spliceVideoDef } from "../tools/splice-video.js";
+import { runMediaGeneration, type MediaGenerationOverrides } from "../tools/generate-media.js";
 import { tryResolveModel } from "../media/descriptor.js";
 import { previewGeneration } from "../media/preview.js";
 import { sourcedGenerationInput } from "../media/generation-source.js";
 import { checkSeedanceEditSource, checkInsertVideoTiming, checkReframeVideoGeometry, normalizeRefs } from "../media/refs.js";
-import { REF_ROLES, type MediaRefs, type RefRole, type ResolvedModel } from "../media/types.js";
+import { REF_ROLES, type Media, type MediaRefs, type RefRole, type ResolvedModel } from "../media/types.js";
 import type { RefParams } from "../media/request.js";
 import { cellInputParams } from "../generation-input-params.js";
 import {
@@ -1379,9 +1380,15 @@ async function generationTool(
   document: NotebookDocument,
   cell: NotebookCell,
   bookId: string,
-  options: { runId?: string; outputCellId?: string } = {},
+  options: {
+    runId?: string;
+    outputCellId?: string;
+    artifactLabel?: string;
+    artifactMetadata?: Record<string, Record<string, unknown>>;
+  } = {},
 ): Promise<{
   artifactId: string;
+  jobId?: string;
   tool: string;
   provider: string;
   model: string;
@@ -1452,15 +1459,30 @@ async function generationTool(
         managedByNotebook: true,
         ...(generationId ? { generationId } : {}),
       });
-      response = { content: [{ type: "text", text: JSON.stringify({ image_asset_id: imageAssetId }) }] };
+      response = { content: [{ type: "text", text: JSON.stringify({ image_asset_id: imageAssetId, job_id: jobId }) }] };
     } else {
+      const overrides: MediaGenerationOverrides | undefined = options.artifactLabel || options.artifactMetadata
+        ? {
+            ...(options.artifactLabel ? { label: options.artifactLabel } : {}),
+            ...(options.artifactMetadata ? { metadata: options.artifactMetadata } : {}),
+          }
+        : undefined;
+      const mediaTool: Media | null = prepared.tool === "generate_image"
+        ? "image"
+        : prepared.tool === "generate_video"
+          ? "video"
+          : prepared.tool === "generate_audio"
+            ? "audio"
+            : null;
       response = await withBookContext({
         bookId, engine, operation: prepared.tool, notebookId: document.id, cellId: cell.id,
         ...(options.runId ? { runId: options.runId } : {}),
         ...(generationId ? { attemptId: generationId } : {}),
         model: prepared.model,
         goalOrigin: resolveCellGoalOrigin(engine, document.id, cell),
-      }, () => definition.handler(prepared.input));
+      }, () => mediaTool
+        ? runMediaGeneration(engine, mediaTool, prepared.input, overrides)
+        : definition.handler(prepared.input));
     }
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
@@ -1469,10 +1491,15 @@ async function generationTool(
   if (response.isError) {
     return fail(response.content[0]?.text ?? `${prepared.tool} failed`);
   }
-  const reference = artifactReference(textResult(response));
+  const parsed = textResult(response);
+  const reference = artifactReference(parsed);
   if (!reference) {
     return fail(`${prepared.tool} did not return an output artifact`);
   }
+  const jobId = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    && typeof (parsed as Record<string, unknown>).job_id === "string"
+    ? (parsed as Record<string, unknown>).job_id as string
+    : undefined;
   const artifact = engine.artifacts.get(reference);
   if (!artifact.ok) return fail(artifact.error.message);
   await patchGeneration(engine, generationId, {
@@ -1481,6 +1508,7 @@ async function generationTool(
   });
   return {
     artifactId: artifact.value.artifactId,
+    ...(jobId ? { jobId } : {}),
     tool: prepared.tool,
     provider: prepared.provider,
     model: prepared.model,
@@ -1823,9 +1851,16 @@ async function executeLocalOrGeneration(
   bookId: string,
   document: NotebookDocument,
   cell: NotebookCell,
-  options: { confirmPaid?: boolean; runId?: string; outputCellId?: string } = {},
+  options: {
+    confirmPaid?: boolean;
+    runId?: string;
+    outputCellId?: string;
+    artifactLabel?: string;
+    artifactMetadata?: Record<string, Record<string, unknown>>;
+  } = {},
 ): Promise<{
   artifactId: string;
+  jobId?: string;
   tool: string;
   provider?: string;
   model?: string;
@@ -2325,6 +2360,8 @@ async function executeLocalOrGeneration(
     const output = await generationTool(engine, document, cell, bookId, {
       ...(options.runId ? { runId: options.runId } : {}),
       ...(options.outputCellId ? { outputCellId: options.outputCellId } : {}),
+      ...(options.artifactLabel ? { artifactLabel: options.artifactLabel } : {}),
+      ...(options.artifactMetadata ? { artifactMetadata: options.artifactMetadata } : {}),
     });
     const surface = cell.type === "generate_image"
       ? "image_generate"
@@ -2348,6 +2385,7 @@ async function executeLocalOrGeneration(
     }
     return {
       artifactId: output.artifactId,
+      ...(output.jobId ? { jobId: output.jobId } : {}),
       tool: output.tool,
       provider: output.provider,
       model: output.model,
@@ -2376,11 +2414,19 @@ export async function runNotebookCell(
   notebookId: string,
   document: NotebookDocument,
   cell: NotebookCell,
-  options: { confirmPaid?: boolean; runId?: string; outputCellId?: string } = {},
+  options: {
+    confirmPaid?: boolean;
+    runId?: string;
+    outputCellId?: string;
+    artifactLabel?: string;
+    artifactMetadata?: Record<string, Record<string, unknown>>;
+  } = {},
 ): Promise<{
   document: NotebookDocument;
   outputArtifactId: string;
   status: "completed" | "awaiting-output";
+  jobId?: string;
+  outputCellId?: string;
 }> {
   let normalizedDocument = migrateStackedGenerationResults(
     engine,
@@ -2695,6 +2741,8 @@ export async function runNotebookCell(
       document: read.value,
       outputArtifactId: output.artifactId,
       status,
+      ...(output.jobId ? { jobId: output.jobId } : {}),
+      ...(options.outputCellId ? { outputCellId: options.outputCellId } : {}),
     };
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);

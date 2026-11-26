@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { derivedLabel, generationLabel, promptSummary } from "./artifact-label.js";
+import { derivedLabel, dubLabel, generationLabel, promptSummary } from "./artifact-label.js";
 
 describe("promptSummary", () => {
   it("collapses whitespace and trims", () => {
@@ -52,5 +52,16 @@ describe("derivedLabel", () => {
   it("falls back to the operation when the source is unlabeled", () => {
     expect(derivedLabel("upscaled", undefined)).toBe("upscaled");
     expect(derivedLabel("upscaled", "")).toBe("upscaled");
+  });
+});
+
+describe("dubLabel", () => {
+  it("formats source label and target language with a middle dot", () => {
+    expect(dubLabel("Opening hook", "Thai (Thailand)")).toBe("Opening hook · Thai (Thailand) dub");
+  });
+
+  it("falls back to the language dub when the source is unlabeled", () => {
+    expect(dubLabel(undefined, "Japanese")).toBe("Japanese dub");
+    expect(dubLabel("   ", "Spanish")).toBe("Spanish dub");
   });
 });

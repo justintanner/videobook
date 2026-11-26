@@ -10,7 +10,7 @@ export const BILLABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "retag_asset", "verify_x_mentions",
   "backfill_asset_tags", "retry_generation", "retry_job",
   "run_notebook", "run_notebook_cell", "enqueue_notebook_run", "continue_notebook_generation",
-  "generate_image", "generate_video", "generate_audio",
+  "generate_image", "generate_video", "generate_audio", "dub_video",
 ]);
 
 /**
