@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
@@ -17,7 +16,7 @@ import {
   resolveDubLanguages,
   type DubQuality,
 } from "../dub-video.js";
-import { probeVideo } from "../ffmpeg.js";
+import { referenceVideoDuration } from "../reference-video-duration.js";
 import { generationInputPort, generationInputTarget } from "../generation-input-targets.js";
 import { runNotebookCell } from "../jobs/run-notebook.js";
 import { resolveModel } from "../media/descriptor.js";
@@ -143,40 +142,6 @@ function resolveDubNotebookTarget(
     sourceCellId: sole.sourceCell.id,
     ...(sole.sourceCell.label ? { sourceCellLabel: sole.sourceCell.label } : {}),
   };
-}
-
-export async function readVideoDurationSeconds(
-  engine: Engine,
-  artifactId: string,
-): Promise<number | undefined> {
-  const original = await engine.metadata.artifacts.read<{ duration?: unknown }>(artifactId, "original");
-  if (original.ok && typeof original.value?.duration === "number" && Number.isFinite(original.value.duration) && original.value.duration > 0) {
-    return original.value.duration;
-  }
-  const manifest = await engine.files.manifest(artifactId);
-  const videoFile = manifest.ok
-    ? manifest.value.files.find((file) => file.name.toLowerCase() === "original.mp4")
-      ?? findVideoFile(manifest.value.files)
-    : null;
-  const streams = engine.streams.list(artifactId);
-  if (streams.ok) {
-    const matching = videoFile
-      ? streams.value.filter((stream) => stream.sourcePath === videoFile.name && stream.objectHash === videoFile.objectHash)
-      : streams.value;
-    const video = matching.find((stream) => stream.kind === "video" && stream.video);
-    if (video && video.timeBase.denominator > 0) {
-      const seconds = video.durationTicks * video.timeBase.numerator / video.timeBase.denominator;
-      if (Number.isFinite(seconds) && seconds > 0) return seconds;
-    }
-  }
-  if (!manifest.ok || !videoFile) return undefined;
-  try {
-    const probe = await probeVideo(join(manifest.value.path, videoFile.name));
-    const seconds = probe.videoDuration || probe.duration;
-    return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 async function upsertDubGeneratorCell(
@@ -386,7 +351,7 @@ export function dubVideoDef(engine: Engine): ToolDef {
         ?? findVideoFile(manifestResult.value.files);
       if (!videoFile) return toolError(`No video file found in asset ${artifactId}`);
 
-      const durationSeconds = await readVideoDurationSeconds(engine, artifactId);
+      const durationSeconds = await referenceVideoDuration(engine, [artifactId], { probeMissing: true });
       if (durationSeconds === undefined) {
         return toolError(`Could not determine duration of video asset ${artifactId}`);
       }

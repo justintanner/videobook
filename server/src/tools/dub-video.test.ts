@@ -18,7 +18,7 @@ import { runFfmpeg } from "../ffmpeg.js";
 import { readGenerationProviderMemory } from "../generation-memory.js";
 import { readGenerationModelMemory, rememberGenerationModel } from "../generation-model-memory.js";
 import { runGenerateMedia, type GenerateMediaJob } from "../jobs/generate-media.js";
-import { lowerBoundWarnings } from "../media/cost.js";
+import { installFalDynamicEstimator, lowerBoundWarnings } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
 import {
   pauseBookQueueForTests,
@@ -27,6 +27,7 @@ import {
   type JobHandlerContext,
   type LeaseToken,
 } from "../queue.js";
+import { createFal } from "../usage-providers.js";
 import { testBudget } from "../test-budget.js";
 import { createTestClient } from "../test-client.js";
 import { redirectFalStorage } from "../test-short-stub.js";
@@ -199,6 +200,7 @@ describe("dub_video MCP tool", () => {
   let client: Client;
   let restoreEndpoints: () => void;
   let restoreFetch: () => void;
+  let restorePricing: () => void;
   const originalFalKey = process.env.FAL_API_KEY;
   const originalHarMode = process.env.VIDEOBOOK_HAR_CAPTURE;
 
@@ -206,6 +208,10 @@ describe("dub_video MCP tool", () => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     const path = url.pathname;
     const method = request.method ?? "GET";
+    if (method === "POST" && path === "/v1/models/pricing/estimate") {
+      const pricing = JSON.parse(body.toString()) as { estimate_type: string };
+      return sendJson(response, { total_cost: pricing.estimate_type === "unit_price" ? 0.3 : 9, currency: "USD" });
+    }
     if (method === "POST" && path === "/rest.fal.ai/storage/upload/initiate") {
       const id = `upload-${++requestCounter}`;
       return sendJson(response, {
@@ -226,12 +232,12 @@ describe("dub_video MCP tool", () => {
       return sendJson(response, { status: "COMPLETED" });
     }
     if (/^\/fal-ai\/heygen\/requests\/[^/]+$/u.test(path)) {
+      response.setHeader("x-fal-billable-units", "6");
       return sendJson(response, { video: { url: `${baseURL}/files/dubbed.mp4` } });
     }
     if (path === "/files/dubbed.mp4") {
       return sendBytes(response, dubbedMp4, "video/mp4");
     }
-    void body;
     response.writeHead(404).end();
   }
 
@@ -285,11 +291,13 @@ describe("dub_video MCP tool", () => {
     await pauseBookQueueForTests(engine.book.get().bookId);
     process.env.FAL_API_KEY = "local-fal-dub-key";
     process.env.VIDEOBOOK_HAR_CAPTURE = "off";
+    restorePricing = installFalDynamicEstimator(createFal({ apiKey: "test", baseURL: `${baseURL}/v1` }).v1.models.pricing.estimate);
     restoreFetch = redirectFalStorage(baseURL);
     restoreEndpoints = configureProviderEndpoints({ falQueueBaseURL: baseURL });
   });
 
   afterEach(async () => {
+    restorePricing();
     restoreEndpoints();
     restoreFetch();
     await client.close();
@@ -407,7 +415,7 @@ describe("dub_video MCP tool", () => {
 
   it("dubs a video into two languages against the local fal stand-in without altering the source", async () => {
     const book_id = engine.book.get().bookId;
-    const sourceId = await createVideoArtifact("Product demo", 5.2);
+    const sourceId = await createVideoArtifact("Product demo", 4.63);
     const originalBytesBefore = await engine.files.read(sourceId, "original.mp4");
     expect(originalBytesBefore.ok).toBe(true);
 
@@ -425,7 +433,7 @@ describe("dub_video MCP tool", () => {
 
     expect(response.status).toBe("enqueued");
     expect(response.estimated_usd).toBeCloseTo(estimateDubCost({
-      durationSeconds: 5.2,
+      durationSeconds: 4.63,
       languageCount: 2,
       quality: "speed",
       dynamicDuration: true,
@@ -448,14 +456,15 @@ describe("dub_video MCP tool", () => {
       const job = queuedGenerateJob(entry.asset_id);
       expect(job.model).toBe(DUB_VIDEO_MODELS.speed);
       expect(job.transcribe).toBeUndefined();
-      await runGenerateMedia(engine, job, await ownerContext(entry.asset_id));
     }
+    await resumeBookQueueForTests(book_id);
+    await Promise.all(response.dubs.map((entry) => waitForJob(entry.job_id, testBudget(30_000))));
 
     const submissions = requests
       .filter((entry) => entry.path === "/fal-ai/heygen/v2/translate/speed")
       .map((entry) => JSON.parse(entry.body.toString()) as Record<string, unknown>);
     expect(submissions).toHaveLength(2);
-    expect(submissions).toEqual([
+    expect(submissions).toEqual(expect.arrayContaining([
       expect.objectContaining({
         output_language: "Thai (Thailand)",
         translate_audio_only: true,
@@ -468,16 +477,20 @@ describe("dub_video MCP tool", () => {
         speaker_num: 2,
         enable_dynamic_duration: true,
       }),
-    ]);
+    ]));
 
     const polled = await pollPendingProviderTasks(engine, book_id);
     expect(polled.failed).toEqual([]);
-    await resumeBookQueueForTests(book_id);
+    expect(polled.completed).toHaveLength(2);
     for (const completed of polled.completed) {
       await waitForJob(completed.jobId, testBudget(30_000));
     }
 
     for (const entry of response.dubs) {
+      const usage = engine.usage.recent().find((row) => row.artifactId === entry.asset_id && row.provider === "fal");
+      expect(usage).toMatchObject({
+        estimateUsd: 0.25, estimateSource: "lower-bound", costUsd: 0.3, units: 6, status: "completed",
+      });
       const manifest = await engine.files.manifest(entry.asset_id);
       expect(manifest.ok && manifest.value.files.map((file) => file.name)).toContain("original.mp4");
     }
@@ -502,6 +515,20 @@ describe("dub_video MCP tool", () => {
     }
     return response;
   }
+
+  it("records the precision quote for a notebook dub when the source needs a duration probe", async () => {
+    const sourceId = await createVideoArtifact();
+    expect((await engine.metadata.artifacts.write(sourceId, "original", { width: 64, height: 64 })).ok).toBe(true);
+    const { notebookId } = await createNotebookWithVideo("Dubbing", sourceId);
+    const response = await submitDub({
+      book_id: engine.book.get().bookId, notebook_id: notebookId, asset_id: "@a1", language: "thai", quality: "precision",
+    });
+    expect(response.estimated_usd).toBe(0.2);
+    const usage = engine.usage.recent().find((row) => row.artifactId === response.dubs[0]!.asset_id && row.provider === "fal");
+    expect(usage).toMatchObject({
+      estimateUsd: response.estimated_usd, estimateSource: "lower-bound", costUsd: 0.2, status: "pending",
+    });
+  });
 
   it("sends a fixed duration to HeyGen unless dynamic duration is asked for, on both tiers, without a notebook", async () => {
     const book_id = engine.book.get().bookId;

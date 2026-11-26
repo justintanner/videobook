@@ -9,8 +9,14 @@ export type { DubLanguageResolution } from "./dub-video-languages.js";
 export const DUB_VIDEO_MAX_DURATION_SECONDS = 480;
 const DUB_VIDEO_RATE_AS_OF = "2026-10-23";
 
+export function dubVideoQuality(modelId: string | undefined): DubQuality | undefined {
+  if (modelId === DUB_VIDEO_MODELS.speed) return "speed";
+  if (modelId === DUB_VIDEO_MODELS.precision) return "precision";
+  return undefined;
+}
+
 export function isDubVideoModel(modelId: string | undefined): boolean {
-  return modelId === DUB_VIDEO_MODELS.speed || modelId === DUB_VIDEO_MODELS.precision;
+  return dubVideoQuality(modelId) !== undefined;
 }
 
 export function dubLanguageCandidates(quality: DubQuality = "speed"): readonly string[] {

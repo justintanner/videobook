@@ -24,10 +24,10 @@ import {
   DUB_VIDEO_MAX_DURATION_SECONDS,
   dubLanguageCandidates,
   estimateDubCost,
+  isDubVideoModel,
   resolveDubLanguages,
   type DubQuality,
 } from "../dub-video.js";
-import { readVideoDurationSeconds } from "./dub-video.js";
 import { resolveVideoAssetReference } from "./video-source-reference.js";
 
 const GENERATION_TOOLS = new Set(["generate_image", "generate_video", "generate_audio"]);
@@ -89,7 +89,7 @@ async function mediaHints(engine: Engine, refs: MediaRefs, model: ResolvedModel)
     return seconds === undefined ? {} : { durationSeconds: seconds };
   }
   const videos = (refs.video ?? []).filter((ref) => !ref.startsWith("http"));
-  const videoSeconds = videos.length > 0 ? await referenceVideoDuration(engine, videos) : undefined;
+  const videoSeconds = await referenceVideoDuration(engine, videos, { probeMissing: isDubVideoModel(model.id) });
   if (videoSeconds !== undefined) return { inputDurationSeconds: videoSeconds };
   const seconds = await audioSeconds();
   return seconds === undefined ? {} : { inputDurationSeconds: seconds };
@@ -253,7 +253,7 @@ async function estimateDubVideo(engine: Engine, input: Record<string, unknown>):
     if (artifact.value.kind !== "video") {
       return unavailable(`dub_video requires video media; ${artifactId} is ${artifact.value.kind}`);
     }
-    durationSeconds = await readVideoDurationSeconds(engine, artifactId);
+    durationSeconds = await referenceVideoDuration(engine, [artifactId], { probeMissing: true });
   } else if (typeof input.duration === "number" && Number.isFinite(input.duration) && input.duration > 0) {
     durationSeconds = input.duration;
   } else {

@@ -8,6 +8,7 @@ import { registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { assertProviderPayload } from "../provider-prompt-transform.js";
 import { requireApiKey } from "../api-key.js";
 import { guardGoalSubmission } from "../goal-automation-guard.js";
+import { isDubVideoModel } from "../dub-video.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { resolveModel } from "../media/descriptor.js";
 import { buildWireRequest, modeSendsNoDuration, type RefParams } from "../media/request.js";
@@ -68,7 +69,7 @@ export async function generationSourceCostHints(engine: Engine, refs: ResolvedRe
     const seconds = await sourceAudioSeconds(engine, refs.sourceAudioIds);
     return seconds === undefined ? {} : { durationSeconds: seconds };
   }
-  const videoSeconds = await referenceVideoDuration(engine, refs.sourceVideoIds);
+  const videoSeconds = await referenceVideoDuration(engine, refs.sourceVideoIds, { probeMissing: isDubVideoModel(model.id) });
   if (videoSeconds !== undefined) {
     const followsVideo = model.entry.outputLength === "video" || isSeedanceEdit(job.model, job.mode) || modeSendsNoDuration(model, refs.urls, job.mode);
     return { inputDurationSeconds: videoSeconds, ...(followsVideo ? { durationSeconds: videoSeconds } : {}) };

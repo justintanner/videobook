@@ -1,4 +1,5 @@
 import { createFal } from "../usage-providers.js";
+import { dubVideoQuality, estimateDubCost } from "../dub-video.js";
 import { getApiKey } from "../api-key.js";
 import { quoteMachGenUpscale } from "./adapters/machgen.js";
 import {
@@ -90,6 +91,11 @@ export async function estimateFalRequest(
   hints?: CostHints,
   unitQuantity?: number,
 ): Promise<CostEstimate> {
+  const quality = dubVideoQuality(`fal:${endpoint}`);
+  const durationSeconds = hints?.inputDurationSeconds;
+  if (unitQuantity === undefined && quality && durationSeconds !== undefined && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+    return estimateDubCost({ durationSeconds, quality, languageCount: 1, dynamicDuration: payload.enable_dynamic_duration === true });
+  }
   const estimator = currentFalEstimator();
   if (!estimator && unitQuantity === undefined) {
     return computeEstimate({
