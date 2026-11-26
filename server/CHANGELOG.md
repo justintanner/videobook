@@ -10,6 +10,11 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 - Dub a notebook video into up to five languages from its cell. Choose Speed or
   Precision, set lip sync and speaker count, and review the estimated total.
+- The `/dub` review fits on one screen. Pick up to five of the 178 HeyGen
+  languages from a searchable dropdown, see the price of each, switch Speed or
+  Precision and lip sync, and run it with "Dub into N languages" beside the
+  total. Typed languages such as `thai, spanish (mexico)` resolve the same way
+  the server does, and unknown ones are flagged before you run.
 - Seedance 2.5 Flash on fal, WaveSpeed and MachGen, WaveSpeed MAI Image 2.7
   generation and edits, MAI Image 2.7 Flash edits, and SkyReels V4 reference
   video. The pickers use the November 25 frontier boards, including Hyperflow

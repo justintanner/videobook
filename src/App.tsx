@@ -991,6 +991,7 @@ type WorkspaceActionSheetState = {
   review?: WorkspaceActionReview
   result?: WorkspaceActionResult
   running?: boolean
+  reviewing?: boolean
 }
 type WorkspaceActionRun = WorkspaceActionResult & { close?: boolean }
 const nodeTypes = { cell: CellNode, timeline: TimelineNode, goal: GoalCellNode }
@@ -4240,17 +4241,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const action = workspaceActions.find((entry) => entry.id === current?.actionId)
       if (!current?.draft || !action) return current
       const draft = change(current.draft, action, workspaceActionSheetContext(current.resources))
-      return { ...current, draft, result: undefined }
+      const reviewing = action.confirmation === 'generation' || Boolean(action.confirmationRules)
+      return { ...current, draft, result: undefined, reviewing }
     })
     const sheet = currentActionSheet
     const action = workspaceActions.find((entry) => entry.id === sheet?.actionId)
     if (!sheet?.draft || !action || (action.confirmation !== 'generation' && !action.confirmationRules)) return
     const draft = change(sheet.draft, action, workspaceActionSheetContext(sheet.resources))
     const request = ++actionReviewRequestRef.current
-    void reviewWorkspaceAction(action, effectiveWorkspaceActionValues(action, draft)).then((review) => {
+    const settle = (review: WorkspaceActionReview | undefined) => {
       if (request !== actionReviewRequestRef.current) return
-      setActionSheet((current) => current?.key === sheet.key ? { ...current, review } : current)
-    }, () => undefined)
+      setActionSheet((current) => current?.key === sheet.key ? { ...current, review, reviewing: false } : current)
+    }
+    void reviewWorkspaceAction(action, effectiveWorkspaceActionValues(action, draft)).then(settle, () => settle(undefined))
   }
 
   const refreshChatModels = useCallback(async () => {
@@ -10523,6 +10526,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       loading={actionCatalogStatus.loading}
       error={actionCatalogStatus.error}
       busy={Boolean(currentActionSheet.running)}
+      reviewing={Boolean(currentActionSheet.reviewing)}
       applyFormId={COMMAND_COMPOSER_FORM_ID}
       providerMemory={(notebook as NotebookSnapshot | null)?.generationProviderMemory}
       onChange={(name, value) => updateActionSheetDraft((draft, action, context) => patchWorkspaceActionDraft(action, context, draft, name, value))}

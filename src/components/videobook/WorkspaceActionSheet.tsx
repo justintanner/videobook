@@ -36,6 +36,8 @@ import { WorkspaceGenerationModelField } from './WorkspaceGenerationModelField'
 import { WorkspaceActionResultLinks } from './WorkspaceActionResultLinks'
 import { WorkspaceCropPreview } from './WorkspaceCropPreview'
 import { WorkspaceZoomPreview } from './WorkspaceZoomPreview'
+import { DubVideoActionForm } from './DubVideoActionForm'
+import { dubRunLabel, dubSheetEffect, dubSheetState, dubValidation, isDubVideoAction, type DubSheetState } from '@/videobook/dub-video-form'
 import './workspace-actions.css'
 
 const graphicsBatchResultSchema = z.object({ results: z.array(z.object({
@@ -69,6 +71,7 @@ type WorkspaceActionSheetProps = {
   loading: boolean
   error: string | null
   busy: boolean
+  reviewing?: boolean
   applyFormId: string
   providerMemory?: Readonly<Record<string, string>>
   onChange: (name: string, value: unknown) => void
@@ -184,6 +187,15 @@ function WorkspaceEntityPicker({ context, entityId, busy, onPatch }: {
   </select></label>
 }
 
+function DubVideoActionBody({ action, dub, draft, result, busy, onChange, onBack, onOpenAction }: WorkspaceActionBodyProps & { dub: DubSheetState }) {
+  return <form id={WORKSPACE_ACTION_FORM_ID} className="dub-form" data-action-id={action.id} noValidate
+    onSubmit={(event) => event.preventDefault()}>
+    <DubVideoActionForm {...dub} busy={busy} onChange={onChange} onBack={onBack} />
+    {result && <WorkspaceActionResultSection action={action} result={result}
+      values={effectiveWorkspaceActionValues(action, draft)} onOpenAction={onOpenAction} />}
+  </form>
+}
+
 function WorkspaceActionBody({ action, variants, context, draft, review, result, busy, providerMemory, onChange, onRememberProvider, onPatch, onBack, onOpenAction }: WorkspaceActionBodyProps) {
   const formRef = useRef<HTMLFormElement>(null)
   const values = effectiveWorkspaceActionValues(action, draft)
@@ -239,25 +251,33 @@ function WorkspaceActionBody({ action, variants, context, draft, review, result,
   </form>
 }
 
+function dubBlocking(validation: ReturnType<typeof workspaceActionValidation>, dub: DubSheetState | null, result: WorkspaceActionResult | null) {
+  if (!dub || result || validation.blocking) return validation
+  const blocking = dubValidation(dub.draft)
+  return blocking ? { blocking, notice: null } : validation
+}
+
 export function WorkspaceActionSheet(props: WorkspaceActionSheetProps) {
-  const { action, draft, result, loading, error, busy, applyFormId, context, onCancel } = props
-  const validation = workspaceActionValidation({ action, context, loading, error, ready: Boolean(draft) })
+  const { action, draft, review, result, loading, error, busy, reviewing = false, applyFormId, context, onCancel } = props
+  const dub = action && draft && isDubVideoAction(action) ? dubSheetState(action, context, draft, review, reviewing) : null
+  const validation = dubBlocking(workspaceActionValidation({ action, context, loading, error, ready: Boolean(draft) }), dub, result)
   return <ConfirmSheet
-    kind="workspace-action"
+    kind={dub ? 'dub-video' : 'workspace-action'}
+    hints={dub ? <span><kbd>⌘↵</kbd> dub from any field · <kbd>Esc</kbd> cancel</span> : undefined}
     ariaLabel="Workspace action review"
     tag={action ? `ACTION · ${action.group.toUpperCase()}` : 'ACTION'}
     title={action?.title ?? 'Action'}
-    effect={workspaceActionEffect(action, draft)}
+    effect={dub ? dubSheetEffect(dub) : workspaceActionEffect(action, draft)}
     validation={validation}
     busy={busy}
-    applyLabel="Run action"
+    applyLabel={dub ? dubRunLabel(dub.draft.languages.length) : 'Run action'}
     busyLabel="Running…"
     cancelLabel={result ? 'Close' : 'Cancel'}
     applyFormId={applyFormId}
     onCancel={onCancel}
   >
     {action && draft && !loading
-      ? <WorkspaceActionBody {...props} action={action} draft={draft} />
+      ? dub ? <DubVideoActionBody {...props} action={action} draft={draft} dub={dub} /> : <WorkspaceActionBody {...props} action={action} draft={draft} />
       : !loading && <div className="workspace-action-heading">
         <button type="button" className="workspace-actions-back" onClick={props.onBack}><ArrowLeft size={13} />All actions</button>
       </div>}

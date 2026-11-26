@@ -2,6 +2,7 @@ import { graphicsTemplateChoices, parseGraphicsRead } from './graphics-model'
 import { parseFrontierRankings } from './generation-frontier'
 import type { WorkspaceAction } from '../../server/src/workspace-action-contract'
 import type { ActionChoice } from './workspace-actions'
+import { dubCatalogLanguages } from './useDubVideo'
 
 export type WorkspaceActionResources = {
   choices: Record<string, readonly ActionChoice[]>
@@ -142,6 +143,10 @@ export async function loadWorkspaceActionResources(
   if (fields.model && action.generation) requests.push((async () => {
     const models = rows(await call('list_generation_models', { media: action.generation?.mediaType }), 'models')
     result.choices.model = models.flatMap(model => generationModelChoice(model) ?? [])
+  })())
+  if (tool === 'dub_video') requests.push((async () => {
+    const languages = dubCatalogLanguages(await call('list_generation_models', { media: 'video', operation: 'edit_video' }))
+    result.choices.language = languages.speed.map((language) => ({ value: language, label: language }))
   })())
   if (fields.voice_id) requests.push((async () => {
     result.choices.voice_id = choices(rows(await call('list_elevenlabs_voices', {}), 'voices'), ['voice_id', 'id'], ['name'])

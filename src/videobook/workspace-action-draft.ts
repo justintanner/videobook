@@ -13,7 +13,7 @@ import {
 } from './workspace-actions'
 
 export type WorkspaceActionResult = { message: string; value?: unknown }
-export type WorkspaceActionReview = { message: string; cost?: string }
+export type WorkspaceActionReview = { message: string; cost?: string; usd?: number | null; warnings?: string[] }
 export type WorkspaceActionDraft = Record<string, unknown>
 type WorkspaceActionMedia = NonNullable<WorkspaceActionContext['media']>[string]
 
@@ -133,6 +133,8 @@ export function workspaceActionReview(action: WorkspaceAction, confirmation: Act
   return {
     cost: workspaceEstimateCost(usd, warnings),
     message: [GENERATION_REVIEW, ...warnings.filter((warning) => !MISSING_COST_ADAPTER.test(warning))].join(' '),
+    usd,
+    warnings,
   }
 }
 

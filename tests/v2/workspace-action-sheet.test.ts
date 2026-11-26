@@ -253,6 +253,8 @@ describe('workspace action sheet', () => {
     expect(paid).toEqual({
       cost: 'Cost estimate unavailable',
       message: 'Running this sends your prompt and selected media to a generation provider and may incur charges.',
+      usd: 0,
+      warnings: ["no cost adapter registered for tool 'video_graphics'"],
     })
     const html = renderActionSheet(graphics, { draft: { book_id: 'book-1', asset_id: 'video-1', op: 'suggest' }, review: paid })
     expect(html).toContain('<strong>Cost estimate unavailable</strong>')
@@ -265,7 +267,7 @@ describe('workspace action sheet', () => {
     })?.message).toBe('Running this sends your prompt and selected media to a generation provider and may incur charges.')
     const source = 'The Seedance edit source must be at most 15 seconds long.'
     expect(workspaceActionReview(catalogAction('tool.generate_video'), 'generation', { usd: 0, warnings: [source] }))
-      .toEqual({ cost: 'Cost estimate unavailable', message: `Running this sends your prompt and selected media to a generation provider and may incur charges. ${source}` })
+      .toEqual({ cost: 'Cost estimate unavailable', message: `Running this sends your prompt and selected media to a generation provider and may incur charges. ${source}`, usd: 0, warnings: [source] })
     expect(workspaceActionReview(catalogAction('tool.post'), 'external'))
       .toEqual({ message: `${catalogAction('tool.post').title} sends the selected content outside this workspace.` })
   })
