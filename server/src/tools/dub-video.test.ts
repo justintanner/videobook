@@ -486,7 +486,64 @@ describe("dub_video MCP tool", () => {
       && originalBytesAfter.value.equals(originalBytesBefore.value)).toBe(true);
   });
 
-  it("accepts a 480s boundary video with default speed and lip_sync and omits unset optional fields", async () => {
+  function submittedDurations(): Array<[string | undefined, unknown]> {
+    return requests
+      .filter((entry) => entry.method === "POST" && /^\/fal-ai\/heygen\/v2\/translate\/(?:speed|precision)$/u.test(entry.path))
+      .map((entry) => [
+        entry.path.split("/").at(-1),
+        (JSON.parse(entry.body.toString()) as Record<string, unknown>).enable_dynamic_duration,
+      ]);
+  }
+
+  async function submitDub(args: Record<string, unknown>): Promise<DubToolResponse> {
+    const response = toolJson<DubToolResponse>(await client.callTool({ name: "dub_video", arguments: args }));
+    for (const entry of response.dubs) {
+      await runGenerateMedia(engine, queuedGenerateJob(entry.asset_id), await ownerContext(entry.asset_id));
+    }
+    return response;
+  }
+
+  it("sends a fixed duration to HeyGen unless dynamic duration is asked for, on both tiers, without a notebook", async () => {
+    const book_id = engine.book.get().bookId;
+    const asset_id = await createVideoArtifact("Wire clip", 3);
+    await submitDub({ book_id, asset_id, language: "thai" });
+    await submitDub({ book_id, asset_id, language: "thai", quality: "precision" });
+    await submitDub({ book_id, asset_id, language: "thai", dynamic_duration: true });
+    await submitDub({ book_id, asset_id, language: "thai", quality: "precision", dynamic_duration: true });
+    expect(submittedDurations()).toEqual([
+      ["speed", false],
+      ["precision", false],
+      ["speed", true],
+      ["precision", true],
+    ]);
+  });
+
+  it("sends a fixed duration from notebook generators, including a reused one, unless dynamic duration is asked for", async () => {
+    const book_id = engine.book.get().bookId;
+    const sourceId = await createVideoArtifact("Wire clip", 3);
+    const { notebookId } = await createNotebookWithVideo("Dubbing", sourceId);
+    const dub = (args: Record<string, unknown>) => submitDub({ book_id, notebook_id: notebookId, asset_id: "@a1", ...args });
+    await dub({ language: "thai" });
+    await dub({ language: "thai", quality: "precision", dynamic_duration: true });
+    await dub({ language: "thai", quality: "precision" });
+    await dub({ language: "japanese", dynamic_duration: true });
+    expect(submittedDurations()).toEqual([
+      ["speed", false],
+      ["precision", true],
+      ["precision", false],
+      ["speed", true],
+    ]);
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    expect(notebook.value.cells
+      .filter((cell) => cell.type === "generate_video")
+      .map((cell) => cell.inputs?.generationSettings)).toEqual([
+      { output_language: "Thai (Thailand)", translate_audio_only: false, enable_dynamic_duration: false },
+      { output_language: "Japanese", translate_audio_only: false, enable_dynamic_duration: true },
+    ]);
+  });
+
+  it("accepts a 480s boundary video with default speed, lip_sync and fixed duration, and omits unset speakers", async () => {
     const book_id = engine.book.get().bookId;
     const sourceId = await createVideoArtifact("Eight minute clip", 480);
 
@@ -502,9 +559,9 @@ describe("dub_video MCP tool", () => {
     expect(job.options).toEqual({
       output_language: "Spanish",
       translate_audio_only: false,
+      enable_dynamic_duration: false,
     });
     expect("speaker_num" in job.options).toBe(false);
-    expect("enable_dynamic_duration" in job.options).toBe(false);
   });
 
   it("creates one generator per language in a notebook, reuses it on repeat dubs, and leaves generation memory unchanged", async () => {
@@ -549,6 +606,7 @@ describe("dub_video MCP tool", () => {
     expect(thaiGenerator.inputs?.generationSettings).toEqual({
       output_language: "Thai (Thailand)",
       translate_audio_only: false,
+      enable_dynamic_duration: false,
     });
 
     const firstThaiTake = afterFirst.value.cells.find((cell) => cell.id === first.dubs[0]!.cell_id);
@@ -580,6 +638,7 @@ describe("dub_video MCP tool", () => {
     expect(updatedThaiGenerator.inputs?.generationSettings).toEqual({
       output_language: "Thai (Thailand)",
       translate_audio_only: true,
+      enable_dynamic_duration: false,
     });
 
     const thaiTakes = afterSecond.value.cells.filter((cell) =>
@@ -703,7 +762,11 @@ describe("dub_video MCP tool", () => {
     const spanish = notebook.value.cells.find((cell) =>
       (cell.inputs?.generationSettings as Record<string, unknown> | undefined)?.output_language === "Spanish");
     expect(spanish).toMatchObject({ model: DUB_VIDEO_MODELS.speed });
-    expect(spanish?.inputs?.generationSettings).toEqual({ output_language: "Spanish", translate_audio_only: true });
+    expect(spanish?.inputs?.generationSettings).toEqual({
+      output_language: "Spanish",
+      translate_audio_only: true,
+      enable_dynamic_duration: false,
+    });
   });
 
   it("plans a chat dub with its price and runs dub_video only once the plan is approved", async () => {

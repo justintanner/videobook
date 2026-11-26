@@ -335,7 +335,7 @@ export function dubVideoDef(engine: Engine): ToolDef {
       quality: z.enum(["speed", "precision"]).optional().describe("HeyGen Translate tier: 'speed' ($0.05/s, default) or 'precision' ($0.10/s, better lip sync)"),
       lip_sync: z.boolean().optional().describe("Re-sync the speaker's lips to the translated speech (default true; false translates audio only)"),
       speakers: z.number().int().min(1).max(10).optional().describe("Optional number of speakers (1-10) sent as speaker_num"),
-      dynamic_duration: z.boolean().optional().describe("Optional HeyGen enable_dynamic_duration; omit when unset"),
+      dynamic_duration: z.boolean().optional().describe("Let HeyGen change the dubbed video's length to fit the translated speech (enable_dynamic_duration); default false keeps the source duration"),
       notebook_id: z.string().uuid().optional().describe("Optional notebook UUID; defaults to the active or sole notebook containing the source video"),
     },
     handler: async (rawArgs) => {

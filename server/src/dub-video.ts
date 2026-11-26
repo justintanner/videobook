@@ -271,7 +271,7 @@ export function dubGenerationOptions(input: {
     output_language: input.language,
     translate_audio_only: !input.lipSync,
     ...(input.speakers !== undefined ? { speaker_num: input.speakers } : {}),
-    ...(input.dynamicDuration !== undefined ? { enable_dynamic_duration: input.dynamicDuration } : {}),
+    enable_dynamic_duration: input.dynamicDuration ?? false,
   };
 }
 
