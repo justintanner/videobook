@@ -133,6 +133,12 @@ and the package uses [Semantic Versioning](https://semver.org/).
   before anything is spent, and each language becomes a new video beside the
   source, which stays unchanged. Asking to translate subtitles or captions
   still translates the subtitles.
+- Over MCP and the CLI (`videobook run dub_video`), `dub_video` dubs a book
+  video into one to five HeyGen Translate languages with `speed` or
+  `precision` quality, optional lip sync, speaker count and dynamic duration,
+  creating a new auto-transcribed video beside the untouched source.
+  `estimate_cost` quotes a `dub_video` call before it runs from the source
+  length, language count and tier.
 
 ### Changed
 

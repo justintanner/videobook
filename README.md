@@ -323,6 +323,35 @@ you press Render: into a new connected cell by default, or in place.
 `render_video` draws no overlay image and no graphics: put graphics on a video
 with the editor or the watermark burn.
 
+## Dubbing videos
+
+Dub a book video of up to 8 minutes into one to five other languages with
+HeyGen Translate on fal (`FAL_API_KEY`). HeyGen translates the speech,
+re-voices it in the speaker's voice, and re-syncs the lips by default. The
+source video stays untouched; each target language becomes a new video cell
+connected to the source, and dubbing the same language again adds a take
+under the same generator.
+
+- **Slash command:** `/dub @a1 thai` (or `/translate-video`), `/dub @a1 thai, japanese precision`,
+  or `/dub @b3 Spanish voice-only`. Trailing `precision` or `speed` picks the
+  tier and `voice-only` keeps the original lips.
+- **Chat:** ask directly, such as "dub @a1 into Thai" or "translate this
+  video to Spanish and Japanese". Requests to translate subtitles or captions
+  stay on subtitle translation.
+- **Video cell:** open a video cell and choose **Dub** to search HeyGen's
+  languages (up to 5), choose **Speed** ($0.05/s) or **Precision** ($0.10/s),
+  toggle **Lip sync**, optionally set **Speakers**, and review the estimated
+  total before confirming.
+- **MCP and CLI:** call `dub_video` (or `videobook run dub_video asset_id=@a1 language=thai`)
+  and quote it first with `estimate_cost`.
+
+Every path shows a lower-bound price from the source video's length before
+anything is spent (HeyGen bills whole seconds of output video). Fixed
+duration is the default (`dynamic_duration` is off unless requested). Dubbed
+outputs keep automatic transcription enabled in the new language so `/subs`
+and `caption_video` can subtitle them, and dubbing leaves generation model
+and provider memory unchanged.
+
 ## Generation models
 
 New image editing sessions also default to **Nano Banana 2.1 Edit**. Explicit
