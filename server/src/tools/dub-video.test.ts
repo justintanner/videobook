@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -14,7 +14,8 @@ import {
   resolveDubLanguages,
 } from "../dub-video.js";
 import { createEngineForTest } from "../engine.js";
-import { runFfmpeg } from "../ffmpeg.js";
+import { probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { processVideoFiles } from "../jobs/process-video.js";
 import { readGenerationProviderMemory } from "../generation-memory.js";
 import { readGenerationModelMemory, rememberGenerationModel } from "../generation-model-memory.js";
 import { runGenerateMedia, type GenerateMediaJob } from "../jobs/generate-media.js";
@@ -233,7 +234,10 @@ describe("dub_video MCP tool", () => {
     }
     if (/^\/fal-ai\/heygen\/requests\/[^/]+$/u.test(path)) {
       response.setHeader("x-fal-billable-units", "6");
-      return sendJson(response, { video: { url: `${baseURL}/files/dubbed.mp4` } });
+      return sendJson(response, {
+        video: { url: `${baseURL}/files/dubbed.mp4` },
+        caption_file: { url: `${baseURL}/files/captions.srt` },
+      });
     }
     if (path === "/files/dubbed.mp4") {
       return sendBytes(response, dubbedMp4, "video/mp4");
@@ -246,6 +250,8 @@ describe("dub_video MCP tool", () => {
     const sourcePath = join(fixtures, "source.mp4");
     const dubbedPath = join(fixtures, "dubbed.mp4");
     const pngPath = join(fixtures, "frame.png");
+    const captions = join(fixtures, "partial.srt");
+    await writeFile(captions, "1\n00:00:00,000 --> 00:00:00,500\nสวัสดี\n");
     await runFfmpeg([
       "-y",
       "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=2:r=12",
@@ -258,10 +264,12 @@ describe("dub_video MCP tool", () => {
       "-y",
       "-f", "lavfi", "-i", "color=c=green:s=64x64:d=2:r=12",
       "-f", "lavfi", "-i", "sine=frequency=520:duration=2",
+      "-i", captions, "-map", "0:v", "-map", "2:s", "-map", "1:a",
       "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-      "-c:a", "aac", "-shortest",
+      "-c:a", "aac", "-c:s", "mov_text",
       dubbedPath,
     ]);
+    expect(await probeVideo(dubbedPath)).toMatchObject({ hasSubtitles: true, videoDuration: 2, audioDuration: 2 });
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=red:s=32x32", "-frames:v", "1", pngPath]);
     sourceMp4 = await readFile(sourcePath);
     dubbedMp4 = await readFile(dubbedPath);
@@ -492,11 +500,38 @@ describe("dub_video MCP tool", () => {
         estimateUsd: 0.25, estimateSource: "lower-bound", costUsd: 0.3, units: 6, status: "completed",
       });
       const manifest = await engine.files.manifest(entry.asset_id);
-      expect(manifest.ok && manifest.value.files.map((file) => file.name)).toContain("original.mp4");
+      if (!manifest.ok) throw new Error(manifest.error.message);
+      await expect.poll(() => engine.jobs.queue.list({ type: "process_video", artifactId: entry.asset_id })[0]?.state,
+        { timeout: testBudget(30_000) }).toBe("done");
+      const profile = await probeVideo(join(manifest.value.path, "original.mp4"));
+      expect(profile).toMatchObject({
+        hasSubtitles: false, videoCodec: "h264", videoDuration: 2, audioCodec: "aac", audioDuration: 2,
+      });
+      const streams = engine.streams.list(entry.asset_id);
+      expect(streams.ok && streams.value.find((stream) => stream.kind === "audio")?.streamIndex).toBe(1);
     }
+    expect(requests.some((entry) => entry.path === "/files/captions.srt")).toBe(false);
     const originalBytesAfter = await engine.files.read(sourceId, "original.mp4");
     expect(originalBytesAfter.ok && originalBytesBefore.ok
       && originalBytesAfter.value.equals(originalBytesBefore.value)).toBe(true);
+  });
+
+  it.each(["captions enabled", "upload"])("preserves the embedded subtitle for %s", async (kind) => {
+    const created = await engine.artifacts.create("video", kind);
+    if (!created.ok) throw new Error(created.error.message);
+    const { artifactId: assetId, path: assetDir } = created.value;
+    const original = await engine.files.write(assetId, "original.mp4", dubbedMp4);
+    if (!original.ok) throw new Error(original.error.message);
+    if (kind === "captions enabled") {
+      expect((await engine.metadata.artifacts.write(assetId, "generation-payload", { input: { enable_caption: true } })).ok).toBe(true);
+    }
+    await processVideoFiles(engine, {
+      type: "process_video", assetId, assetDir, bookId: engine.book.get().bookId, videoPath: original.value,
+      provenance: kind === "upload" ? { origin: "upload" } : { model: DUB_VIDEO_MODELS.precision },
+      skipDownstreamJobs: true,
+    });
+    const stored = await engine.files.read(assetId, "original.mp4");
+    expect(stored.ok && stored.value.equals(dubbedMp4)).toBe(true);
   });
 
   function submittedDurations(): Array<[string | undefined, unknown]> {

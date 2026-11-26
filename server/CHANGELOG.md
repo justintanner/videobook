@@ -6,6 +6,11 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- New HeyGen dubs made with captions off no longer include a partial subtitle
+  track when you play or download the original MP4.
+
 ## [0.9.0] - 2026-11-26
 
 ### Added

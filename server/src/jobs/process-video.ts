@@ -5,11 +5,13 @@ import {
   mkdir,
   mkdtemp,
   readFile as fsReadFile,
+  rename,
   rm,
   writeFile as fsWriteFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { enqueueAssetTagging } from "./tag-asset.js";
+import { isDubVideoModel } from "../dub-video.js";
 import { logger } from "../logger.js";
 import { registerJobHandler, queue } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
@@ -311,6 +313,20 @@ async function retainedSourceFields(engine: Engine, assetId: string): Promise<Re
   return Object.fromEntries(RETAINED_SOURCE_FIELDS.flatMap((field) => (value[field] === undefined ? [] : [[field, value[field]]])));
 }
 
+async function prepareVideoSnapshot(engine: Engine, payload: ProcessVideoPayload, signal?: AbortSignal): Promise<ProbeResult> {
+  const { videoPath, assetId, provenance } = payload;
+  const probe = await probeVideo(videoPath, { signal });
+  if (!probe.hasSubtitles || extname(videoPath).toLowerCase() !== ".mp4"
+    || typeof provenance.model !== "string" || !isDubVideoModel(provenance.model)) return probe;
+  const request = await engine.metadata.artifacts.read<{ input?: { enable_caption?: boolean } }>(assetId, "generation-payload");
+  if (!request.ok || request.value?.input?.enable_caption !== false) return probe;
+
+  const output = join(dirname(videoPath), "without-subtitles.mp4");
+  await runFfmpeg(["-y", "-i", videoPath, "-map", "0", "-map", "-0:s", "-c", "copy", "-movflags", "+faststart", output], { signal });
+  await rename(output, videoPath);
+  return probeVideo(videoPath, { signal });
+}
+
 async function processVideoSnapshot(
   engine: Engine,
   payload: ProcessVideoPayload,
@@ -322,7 +338,7 @@ async function processVideoSnapshot(
     } = payload;
 
     signal?.throwIfAborted();
-    const probe = await probeVideo(videoPath, { signal });
+    const probe = await prepareVideoSnapshot(engine, payload, signal);
     if (probe.videoCodec === null || probe.width <= 0 || probe.height <= 0) {
       throw new Error(`process_video requires a video stream: ${assetId}`);
     }

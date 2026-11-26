@@ -21,6 +21,7 @@ const SOURCE_VIDEO = ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "12", "
 function source(probe: Partial<ProbeResult>): ProbeResult {
   return {
     width: WIDTH, height: HEIGHT, duration: SECONDS, videoDuration: SECONDS, audioDuration: null,
+    hasSubtitles: false,
     fps: FPS, avgFps: FPS, hasAudio: false, videoCodec: "h264", audioCodec: null, videoStream: null, audioStream: null,
     ...probe,
   };

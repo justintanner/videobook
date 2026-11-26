@@ -40,6 +40,7 @@ function probe(overrides: Partial<ProbeResult> = {}): ProbeResult {
     fps: 30,
     avgFps: 30,
     hasAudio: true,
+    hasSubtitles: false,
     videoCodec: "h264",
     audioCodec: "aac",
     videoStream: null,

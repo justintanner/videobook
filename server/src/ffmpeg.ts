@@ -36,6 +36,7 @@ export interface ProbeResult {
    * ffprobe reports no measurable rate (e.g. "0/0"). */
   avgFps: number | null;
   hasAudio: boolean;
+  hasSubtitles: boolean;
   videoCodec: string | null;
   audioCodec: string | null;
   videoStream: ProbeStream | null;
@@ -238,7 +239,8 @@ export async function probeVideo(
     );
   }
   const data = JSON.parse(stdout);
-  const videoStream = (data.streams as Array<Record<string, unknown>>)?.find(
+  const streams = (data.streams ?? []) as Array<Record<string, unknown>>;
+  const videoStream = streams.find(
     (s) => s.codec_type === "video",
   );
   const width = Number(videoStream?.width ?? 0);
@@ -254,7 +256,7 @@ export async function probeVideo(
   }
   const avgFps = rationalValue(videoStream?.avg_frame_rate);
 
-  const audioStream = (data.streams as Array<Record<string, unknown>>)?.find(
+  const audioStream = streams.find(
     (s) => s.codec_type === "audio",
   );
   const hasAudio = audioStream !== undefined;
@@ -272,6 +274,7 @@ export async function probeVideo(
     fps,
     avgFps,
     hasAudio,
+    hasSubtitles: streams.some((stream) => stream.codec_type === "subtitle"),
     videoCodec,
     audioCodec,
     videoStream: videoProbeStream(videoStream, videoDuration),
