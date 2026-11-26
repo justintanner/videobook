@@ -221,6 +221,46 @@ export function resolveDubLanguages(
   return { ok: true, languages: unique };
 }
 
+type LanguageMention = { start: number; end: number; name: string };
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function languageSearchNames(candidates: readonly string[]): Array<{ folded: string; name: string }> {
+  const names = new Map<string, string>();
+  for (const candidate of candidates) {
+    for (const name of [candidate, bareName(candidate)]) {
+      const folded = name ? normalizeSearch(name) : "";
+      if (folded && !names.has(folded)) names.set(folded, name!);
+    }
+  }
+  return [...names]
+    .map(([folded, name]) => ({ folded, name }))
+    .sort((left, right) => right.folded.length - left.folded.length);
+}
+
+export function dubLanguageMentions(
+  text: string,
+  candidates: readonly string[] = dubLanguageCandidates(),
+): string[] {
+  const haystack = normalizeSearch(text);
+  const mentions: LanguageMention[] = [];
+  for (const { folded, name } of languageSearchNames(candidates)) {
+    const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(folded)}(?![\\p{L}\\p{N}])`, "gu");
+    for (const match of haystack.matchAll(pattern)) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (/\bfrom\s+$/u.test(haystack.slice(0, start))) continue;
+      if (mentions.some((mention) => start < mention.end && mention.start < end)) continue;
+      mentions.push({ start, end, name });
+    }
+  }
+  return [...new Set(mentions
+    .sort((left, right) => left.start - right.start)
+    .map((mention) => mention.name))];
+}
+
 export function dubGenerationOptions(input: {
   language: string;
   lipSync: boolean;

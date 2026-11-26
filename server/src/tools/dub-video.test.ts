@@ -31,8 +31,25 @@ import { testBudget } from "../test-budget.js";
 import { createTestClient } from "../test-client.js";
 import { redirectFalStorage } from "../test-short-stub.js";
 import { pollPendingProviderTasks } from "./reconcile-project-work.js";
+import {
+  adaptCommandArgs,
+  parseSlashCommandArgs,
+  selectCommandForInput,
+  type ServerCommand,
+} from "../../../src/lib/command-registry.js";
+import { prepareVoiceChatAction } from "./chat.js";
+import { getCanonicalCommands } from "./commands.js";
 
 type RecordedRequest = { method: string; path: string; body: Buffer };
+
+type DubChatPlan = {
+  kind: string;
+  routedTool: string;
+  tool: string;
+  params: Record<string, unknown>;
+  confirmation: { required: boolean; reason: string };
+  estimate?: { usd: number | null; warnings: string[] };
+};
 
 type DubToolResponse = {
   dubs: Array<{ language: string; asset_id: string; job_id: string; cell_id?: string }>;
@@ -632,5 +649,132 @@ describe("dub_video MCP tool", () => {
     expect(precision.warnings[0]).toContain("dynamic_duration");
 
     expect(payload.estimate.usd).toBeCloseTo(speed.usd + precision.usd, 6);
+  });
+
+  function generatorSettings(notebookId: string): Array<[string | undefined, unknown]> {
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    return notebook.value.cells
+      .filter((cell) => cell.type === "generate_video")
+      .map((cell) => [cell.model, (cell.inputs?.generationSettings as Record<string, unknown> | undefined)?.output_language]);
+  }
+
+  it("runs what /dub and /translate-video build once their review is applied", async () => {
+    const book_id = engine.book.get().bookId;
+    const sourceId = await createVideoArtifact("Launch clip", 3);
+    const { notebookId } = await createNotebookWithVideo("Dubbing", sourceId);
+    const commands = getCanonicalCommands() as ServerCommand[];
+    const slash = (input: string): Record<string, unknown> => {
+      const [token = "", ...words] = input.split(/\s+/u);
+      const rest = words.join(" ");
+      const command = selectCommandForInput(commands, token, rest);
+      if (!command?.mcpTool) throw new Error(`${token} has no tool`);
+      expect(command.mcpTool.tool).toBe("dub_video");
+      return {
+        book_id,
+        notebook_id: notebookId,
+        ...adaptCommandArgs(command.mcpTool.adapter, parseSlashCommandArgs(command, rest)),
+      };
+    };
+
+    const thai = toolJson<DubToolResponse>(await client.callTool({ name: "dub_video", arguments: slash("/dub @a1 thai") }));
+    expect(thai.dubs.map((entry) => entry.language)).toEqual(["Thai (Thailand)"]);
+    expect(thai.estimated_usd).toBeCloseTo(3 * 0.05, 6);
+    expect(generatorSettings(notebookId)).toEqual([[DUB_VIDEO_MODELS.speed, "Thai (Thailand)"]]);
+
+    const pair = toolJson<DubToolResponse>(await client.callTool({
+      name: "dub_video",
+      arguments: slash("/dub @a1 thai, japanese precision"),
+    }));
+    expect(pair.dubs.map((entry) => entry.language)).toEqual(["Thai (Thailand)", "Japanese"]);
+    expect(pair.estimated_usd).toBeCloseTo(2 * 3 * 0.1, 6);
+    expect(generatorSettings(notebookId)).toEqual([
+      [DUB_VIDEO_MODELS.precision, "Thai (Thailand)"],
+      [DUB_VIDEO_MODELS.precision, "Japanese"],
+    ]);
+
+    const alias = toolJson<DubToolResponse>(await client.callTool({
+      name: "dub_video",
+      arguments: slash("/translate-video @a1 Spanish voice-only"),
+    }));
+    expect(alias.dubs.map((entry) => entry.language)).toEqual(["Spanish"]);
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const spanish = notebook.value.cells.find((cell) =>
+      (cell.inputs?.generationSettings as Record<string, unknown> | undefined)?.output_language === "Spanish");
+    expect(spanish).toMatchObject({ model: DUB_VIDEO_MODELS.speed });
+    expect(spanish?.inputs?.generationSettings).toEqual({ output_language: "Spanish", translate_audio_only: true });
+  });
+
+  it("plans a chat dub with its price and runs dub_video only once the plan is approved", async () => {
+    const book_id = engine.book.get().bookId;
+    const sourceId = await createVideoArtifact("Launch clip", 4.2);
+    const { notebookId } = await createNotebookWithVideo("Dubbing", sourceId);
+    const jobsBefore = engine.jobs.queue.list().length;
+    const artifactsBefore = engine.artifacts.list().length;
+
+    const plan = toolJson<DubChatPlan>(await client.callTool({
+      name: "chat",
+      arguments: { book_id, notebook_id: notebookId, prompt: "dub @a1 into Thai" },
+    }));
+    expect(plan).toMatchObject({
+      kind: "chat-action-plan",
+      routedTool: "dub_video",
+      tool: "dub_video",
+      params: { asset_id: sourceId, language: ["Thai (Thailand)"], notebook_id: notebookId },
+      confirmation: { required: true },
+    });
+    expect(plan.confirmation.reason).toContain("spends provider money");
+    expect(plan.estimate?.usd).toBeCloseTo(5 * 0.05, 6);
+    expect(lowerBoundWarnings(plan.estimate?.warnings ?? [])).toBe(true);
+    expect(engine.jobs.queue.list()).toHaveLength(jobsBefore);
+    expect(engine.artifacts.list()).toHaveLength(artifactsBefore);
+
+    const applied = toolJson<DubToolResponse>(await client.callTool({
+      name: "chat",
+      arguments: { book_id, action_plan: plan },
+    }));
+    expect(applied.status).toBe("enqueued");
+    expect(applied.dubs.map((entry) => entry.language)).toEqual(["Thai (Thailand)"]);
+    expect(generatorSettings(notebookId)).toEqual([[DUB_VIDEO_MODELS.speed, "Thai (Thailand)"]]);
+
+    const precise = toolJson<DubChatPlan>(await client.callTool({
+      name: "chat",
+      arguments: { book_id, notebook_id: notebookId, prompt: "make a Japanese and Korean version of @a1 with the best lip sync" },
+    }));
+    expect(precise.params).toMatchObject({ language: ["Japanese", "Korean"], quality: "precision" });
+    expect(precise.estimate?.usd).toBeCloseTo(2 * 5 * 0.1, 6);
+  });
+
+  it("resolves a routed dub's languages at plan time and refuses one that does not resolve", async () => {
+    const book_id = engine.book.get().bookId;
+    const sourceId = await createVideoArtifact("Launch clip", 4);
+    const { notebookId } = await createNotebookWithVideo("Dubbing", sourceId);
+    const jobsBefore = engine.jobs.queue.list().length;
+    const routed = await prepareVoiceChatAction(engine, {
+      book_id,
+      notebook_id: notebookId,
+      prompt: "put this clip into thai and japanese, voice only",
+    }, {
+      tool: "dub_video",
+      params: { asset_id: sourceId, language: "thai and japanese" },
+      message: "Dubbing video.",
+    });
+    const plan = toolJson<DubChatPlan>(routed as Awaited<ReturnType<Client["callTool"]>>);
+    expect(plan.params).toMatchObject({ language: ["Thai (Thailand)", "Japanese"], lip_sync: false });
+    expect(plan.estimate?.usd).toBeCloseTo(2 * 4 * 0.05, 6);
+
+    const refused = await prepareVoiceChatAction(engine, {
+      book_id,
+      notebook_id: notebookId,
+      prompt: "dub @a1 into Swahili",
+    }, {
+      tool: "dub_video",
+      params: { asset_id: sourceId, language: "Swahili" },
+      message: "Dubbing video.",
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.content[0]?.text).toContain("Swahili (Kenya), Swahili (Tanzania)");
+    expect(engine.jobs.queue.list()).toHaveLength(jobsBefore);
   });
 });

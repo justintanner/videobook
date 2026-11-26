@@ -514,6 +514,52 @@ const ORIENTATIONS = new Set(['landscape', 'portrait', 'square']);
 const POST_ASSET_PREFIX = /^(?:vid|img|aud|asset|final|script)-[a-z0-9-]+$/i;
 const POST_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+interface DubCommandArgs {
+  asset_id?: string
+  language?: string
+  quality?: 'speed' | 'precision'
+  lip_sync?: false
+}
+
+const DUB_QUALITIES = new Set(['speed', 'precision'])
+
+function isDubAssetToken(token: string): boolean {
+  const bare = stripAt(token)
+  return isNotebookGridAddress(bare) || POST_UUID.test(bare)
+}
+
+function normalizeDubCommandArgs(args: Readonly<Record<string, unknown>>): DubCommandArgs {
+  const assetValue = typeof args.asset_id === 'string' ? args.asset_id.trim() : ''
+  const languageValue = typeof args.language === 'string' ? args.language.trim() : ''
+  const assetId = assetValue && isDubAssetToken(assetValue) ? stripAt(assetValue) : ''
+  const words = [assetId ? '' : assetValue, languageValue].join(' ').split(/\s+/).filter(Boolean)
+  let quality: DubCommandArgs['quality']
+  let voiceOnly = false
+  while (words.length > 0) {
+    const last = words[words.length - 1]!.toLowerCase().replace(/^,+|,+$/g, '')
+    const previous = words[words.length - 2]?.toLowerCase()
+    if (DUB_QUALITIES.has(last)) {
+      quality ??= last as DubCommandArgs['quality']
+      words.pop()
+    } else if (last === 'voice-only') {
+      voiceOnly = true
+      words.pop()
+    } else if (last === 'only' && previous === 'voice') {
+      voiceOnly = true
+      words.splice(-2)
+    } else {
+      break
+    }
+  }
+  const language = words.join(' ').replace(/[\s,]+$/u, '')
+  return {
+    ...(assetId ? { asset_id: assetId } : {}),
+    ...(language ? { language } : {}),
+    ...(quality ? { quality } : {}),
+    ...(voiceOnly ? { lip_sync: false as const } : {}),
+  }
+}
+
 function normalizeRewriteScriptCommandArgs(
   args: Readonly<Record<string, unknown>>,
 ): CommandToolArgs {
@@ -693,6 +739,12 @@ export const COMMAND_ADAPTERS = {
     delete result.start;
     delete result.end;
     return { ...result, ...(normalized as CommandToolArgs) };
+  },
+  dub: (args) => {
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) }
+    delete result.asset_id
+    delete result.language
+    return { ...result, ...normalizeDubCommandArgs(args) }
   },
   translate_subtitles: (args) => {
     const normalized = normalizeTranslateSubtitlesCommandArgs(args);

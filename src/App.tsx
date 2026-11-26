@@ -616,6 +616,7 @@ import {
   asNotebook,
   asNotebooks,
   asSequence,
+  dubStartedMessage,
   isDownloadVideoResult,
   messageFor,
   parseResult,
@@ -1304,6 +1305,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         params: pendingChatAction.plan.params,
         tool: pendingChatAction.plan.routedTool,
         sourceDurationSeconds: pendingChangeSpeedPreview?.sourceDurationSeconds ?? null,
+        estimate: pendingChatAction.plan.estimate ?? null,
       })
     : null
   const pendingXPostPreview = useMemo(() => {
@@ -8283,6 +8285,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         presentChat(chat, () => setNoticeState({ text: message, tone: 'info', action: { label: 'Undo', onRun: () => void undoAssetDelete(restoreBookId, artifactId, revision) } }))
       }
       return { ok: true, message }
+    }
+    if (tool === 'dub_video') {
+      return { ok: true, message: dubStartedMessage(result) ?? `${title} started` }
     }
     if (tool === 'rename_asset') {
       const renamed = recordValue(result)

@@ -43,6 +43,13 @@ describe("workspace action exposure contract", () => {
         generation: { provider: "catalog", operation: tool, mediaType: media },
       });
     }
+    expect(catalog.actions.find((action) => action.id === "tool.dub_video")).toMatchObject({
+      command: "/dub",
+      aliases: ["/translate-video"],
+      interaction: "preview",
+      confirmation: "generation",
+      target: { kind: "asset", argument: "asset_id" },
+    });
     expect(catalog.actions.find((action) => action.id === "tool.list_generation_models")).toMatchObject({ group: "Generation" });
     expect(catalog.actions.find((action) => action.id === "tool.list_generation_models")).not.toHaveProperty("generation");
   });

@@ -120,6 +120,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
   `rgb_split`. Retrying the same render with its `request_id` reuses its
   output. Analysis reuses the result for the same video and transcript
   unless `force: true` is passed.
+- Dub a video into up to five other languages with HeyGen Translate: type
+  `/dub @a1 thai, japanese` (or `/translate-video`), or ask in chat, such as
+  "dub @a1 into Thai" or "make a Japanese version of @b2". End the command
+  with `precision` for better lip sync or `voice-only` to leave the lips as
+  they are. The review shows the languages, quality, lip sync and price
+  before anything is spent, and each language becomes a new video beside the
+  source, which stays unchanged. Asking to translate subtitles or captions
+  still translates the subtitles.
 
 ### Changed
 

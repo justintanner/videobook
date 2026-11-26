@@ -12,6 +12,8 @@ import { z } from "zod";
 import {
   applyBackgroundAudioRoute,
   planBackgroundAudioFromQuery,
+  applyDubRoute,
+  planDubFromQuery,
   applyBytedanceNamedModelRoute,
   applyStackedChainRoute,
   applyVideoJoinRoute,
@@ -37,6 +39,8 @@ import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
 import { applyGenerationRoutingDefaults } from "../chat-generation-routing.js";
 import { readGenerationModelMemory } from "../generation-model-memory.js";
+import { dubLanguageCandidates, resolveDubLanguages, type DubQuality } from "../dub-video.js";
+import { assessToolCallEstimate } from "../jobs/cost-estimate-assessment.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getApiKey } from "../api-key.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
@@ -91,6 +95,12 @@ type ChatActionPlan = {
     required: boolean;
     reason: string;
   };
+  estimate?: ChatPlanEstimate;
+};
+
+type ChatPlanEstimate = {
+  usd: number | null;
+  warnings: string[];
 };
 
 const chatActionPlanSchema = z.object({
@@ -108,6 +118,10 @@ const chatActionPlanSchema = z.object({
     required: z.boolean(),
     reason: z.string().min(1),
   }),
+  estimate: z.object({
+    usd: z.number().nullable(),
+    warnings: z.array(z.string()),
+  }).optional(),
 });
 
 const CHAT_ROUTING_MAX_OUTPUT_TOKENS = 2048;
@@ -485,6 +499,24 @@ function appendChatHistory(
     .catch(() => {});
 }
 
+async function priceDubPlan(
+  engine: Engine,
+  params: Record<string, unknown>,
+): Promise<{ ok: true; languages: string[]; estimate: ChatPlanEstimate } | { ok: false; error: string }> {
+  const quality: DubQuality = params.quality === "precision" ? "precision" : "speed";
+  const resolved = resolveDubLanguages(params.language as string | string[], dubLanguageCandidates(quality));
+  if (!resolved.ok) return { ok: false, error: resolved.error };
+  const assessment = await assessToolCallEstimate(engine, "dub_video", { ...params, language: resolved.languages });
+  return {
+    ok: true,
+    languages: resolved.languages,
+    estimate: {
+      usd: assessment.available ? assessment.usd : null,
+      warnings: assessment.warnings,
+    },
+  };
+}
+
 function autoApplyReason(tool: string, chainPausesPerStep = false): string {
   return tool === "download_video"
     ? "Downloads start immediately and keep the whole source clip"
@@ -737,6 +769,8 @@ async function handleChatRequest(
 
   const initialDecision = proposedDecision ?? planBackgroundAudioFromQuery({
     query: expandedPrompt, assetContext, notebookContext,
+  }) ?? planDubFromQuery({
+    query: expandedPrompt, assetContext, notebookContext,
   });
   const apiKey = getApiKey("OPENAI_API_KEY");
   if (!apiKey && !initialDecision) {
@@ -838,12 +872,20 @@ async function handleChatRequest(
       assetContext,
       notebookContext,
     });
-  decision = {
+  const dubRoute = applyDubRoute({
+    query: expandedPrompt,
     tool: audioRoute.tool,
     params: audioRoute.params,
+    message: audioRoute.message,
+    assetContext,
+    notebookContext,
+  });
+  decision = {
+    tool: dubRoute.tool,
+    params: dubRoute.params,
     // The voice path routes the spoken sentence here, so the sheet's title
     // reads in the same vocabulary as the prompt beneath it.
-    message: tagNotebookGridAddresses(audioRoute.message, notebookAddresses),
+    message: tagNotebookGridAddresses(dubRoute.message, notebookAddresses),
   };
 
   // 6. Validate tool exists in routable registry
@@ -973,6 +1015,14 @@ async function handleChatRequest(
     );
   }
 
+  let estimate: ChatPlanEstimate | undefined;
+  if (targetDef.name === "dub_video") {
+    const dubPlan = await priceDubPlan(engine, validated.data);
+    if (!dubPlan.ok) return error(dubPlan.error);
+    validated.data.language = dubPlan.languages;
+    estimate = dubPlan.estimate;
+  }
+
   if (routableTool.effect !== "read") {
     const effect = routableTool.effect;
     const summary = decision.message.trim()
@@ -1017,10 +1067,13 @@ async function handleChatRequest(
         required: !autoApply,
         reason: autoApply
           ? autoApplyReason(targetDef.name, chainPausesPerStep)
+          : targetDef.name === "dub_video"
+          ? "Dubbing spends provider money and adds a new video per language; the source stays unchanged"
           : effect === "generation"
           ? "This request creates generated media and may incur provider spend"
           : "This request changes the current book",
       },
+      ...(estimate ? { estimate } : {}),
     } satisfies ChatActionPlan);
   }
 

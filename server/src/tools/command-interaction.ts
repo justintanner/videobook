@@ -6,7 +6,7 @@ export const PREVIEW_COMMANDS: readonly string[] = [
   "/trim", "/trim-audio", "/overlay", "/translate-subs", "/post", "/crop", "/describe", "/suggest-cuts",
   "/analyze-jokes", "/sfx", "/goal", "/run", "/rename-all",
   "/edit-cold-open", "/auto-edit", "/watermark", "/rewrite", "/make-cover-song", "/archive",
-  "/extend-audio", "/remove-sound", "/clean-audio", "/vocals", "/transcribe", "/subs", "/settings",
+  "/extend-audio", "/remove-sound", "/clean-audio", "/dub", "/vocals", "/transcribe", "/subs", "/settings",
   "/speed", "/timewarp", "/zoom",
   "/sync-audio", "/splice", "/split", "/skeleton", "/speak", "/caption", "/duck", "/fit",
   "/gap", "/insert", "/move", "/overwrite", "/clip-audio", "/rough-cut", "/export",

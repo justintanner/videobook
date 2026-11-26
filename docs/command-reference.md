@@ -231,7 +231,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 - `zoom_video` — Zoom in on parts of a video toward a focus point, easing in, holding and returning, with an optional built-in sound. Local and free: one FFmpeg encode in place, with history.
 
-## Slash actions (271; 109 dedicated command routes)
+## Slash actions (271; 110 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
@@ -296,7 +296,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/disconnect-notebook-cells` — Delete a notebook edge; MCP: `disconnect_notebook_cells`
 - `/doctor` (aliases: `/recover`, `/clear-failed`) — Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore it to its last usable state, or 'clean' to clear failed generations.; MCP: `doctor`
 - `/download` — Download an asset in the browser on a hosted page, or copy it to Downloads locally; MCP: `export_asset_file`
-- `/dub-video` — Dub a book video into 1-5 target languages with HeyGen Translate (fal). Each language creates a new dubbed video artifact with automatic transcription enabled; the source video is untouched.; MCP: `dub_video`
+- `/dub` (aliases: `/translate-video`) — Dub a video into up to 5 other languages with HeyGen Translate: each language becomes a new video beside the source, which stays unchanged. End with precision for better lip sync, or voice-only to leave the lips as they are; MCP: `dub_video`
 - `/duck` — Lower background audio beneath a narration clip; preview or workspace operation
 - `/duplicate` (aliases: `/export-to`) — Duplicate an asset into an optional notebook destination, or into another project with --project; MCP: `duplicate_asset`
 - `/edit-asset-tag` — Add, remove or restore one tag on an asset. add makes a manual tag that survives re-analysis; removing an automatic tag records a dismissal so re-analysis cannot bring it back; restore clears that dismissal.; MCP: `edit_asset_tag`

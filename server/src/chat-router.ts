@@ -3,6 +3,7 @@ import { LIGHTNING_VIDEO_MODEL } from "./lightning-defaults.js";
 import type { ToolDef } from "./tools/tool-def.js";
 import { CHAIN_TOOL_CATALOG, planStackedChainFromQuery } from "./chain-plan.js";
 import { CHAT_VIEW_ACTIONS } from "./chat-view-actions.js";
+import { dubLanguageMentions, resolveDubLanguages } from "./dub-video.js";
 import {
   zodEnumOptionsOrNull,
   zodIsRequired,
@@ -591,6 +592,59 @@ function applyBackgroundAudioRoute(input: VideoJoinRouteInput): BytedanceRouteRe
   return planBackgroundAudioFromQuery(input) ?? unchanged;
 }
 
+const DUB_SUBTITLE_PATTERN = /\b(?:sub(?:title)?s?|captions?|captioned|cc|srt|transcripts?)\b/iu;
+const DUB_QUESTION_PATTERN = /^\s*(?:how|what|why|when|which|who|is|are|does|did|do)\b/iu;
+const DUB_VERB_PATTERN = /\b(?:dub(?:s|bed|bing)?|re-?voic(?:e|es|ed|ing))\b/iu;
+const DUB_TRANSLATE_PATTERN = /\btranslat(?:e|es|ed|ing|ion)\b/iu;
+const DUB_VERSION_PATTERN = /\bversions?\b/iu;
+const DUB_VOICE_ONLY_PATTERN = /\b(?:voice[\s-]?only|audio[\s-]?only|(?:without|no|not|don'?t|never)\s+(?:\w+\s+){0,3}(?:lips?|lip[\s-]?sync(?:ing|ed)?|mouths?)|keep(?:ing)?\s+(?:the\s+)?(?:original\s+)?(?:lips?|mouths?))\b/iu;
+const DUB_PRECISION_PATTERN = /\b(?:precision|precise|best(?:\s+quality)?|highest[\s-]quality|high[\s-]quality|better\s+lip[\s-]?sync)\b/iu;
+
+function dubQueryOptions(query: string): Record<string, unknown> {
+  return {
+    ...(DUB_PRECISION_PATTERN.test(query) ? { quality: "precision" } : {}),
+    ...(DUB_VOICE_ONLY_PATTERN.test(query) ? { lip_sync: false } : {}),
+  };
+}
+
+function dubMessage(languages: readonly string[]): string {
+  return `Dubbing into ${languages.join(", ")}.`;
+}
+
+function planDubFromQuery(
+  input: Pick<VideoJoinRouteInput, "query" | "assetContext" | "notebookContext">,
+): BytedanceRouteResult | null {
+  const query = input.query.trim();
+  if (!query || DUB_QUESTION_PATTERN.test(query) || DUB_SUBTITLE_PATTERN.test(query)) return null;
+  if (!DUB_VERB_PATTERN.test(query) && !DUB_TRANSLATE_PATTERN.test(query) && !DUB_VERSION_PATTERN.test(query)) return null;
+  const mentions = uniqueMentions(queryMentions(query));
+  if (mentions.length !== 1) return null;
+  const target = resolveVideoAssetId(mentions[0]!, input);
+  if (!target) return null;
+  const spoken = dubLanguageMentions(query.replace(MENTION_PATTERN, " "));
+  if (spoken.length === 0) return null;
+  const resolved = resolveDubLanguages(spoken);
+  if (!resolved.ok) return null;
+  return {
+    tool: "dub_video",
+    params: { asset_id: target, language: resolved.languages, ...dubQueryOptions(query) },
+    message: dubMessage(resolved.languages),
+    substituted: true,
+  };
+}
+
+function applyDubRoute(input: VideoJoinRouteInput): BytedanceRouteResult {
+  if (input.tool !== "dub_video") {
+    return { tool: input.tool, params: input.params, message: input.message, substituted: false };
+  }
+  return {
+    tool: "dub_video",
+    params: { ...dubQueryOptions(input.query), ...input.params },
+    message: input.message.trim() || "Dubbing video.",
+    substituted: false,
+  };
+}
+
 function applyStackedChainRoute(input: VideoJoinRouteInput): BytedanceRouteResult {
   const planned = planStackedChainFromQuery(input.query);
   if (!planned) {
@@ -735,6 +789,8 @@ Parameter guidelines:
 - Background ambience should cover the target clip. A generate_audio step consumed by audio_mix or replace_video_audio automatically inherits the target duration when omitted; do not add a metadata lookup or invent duration references. Use options.duration_seconds or options.music_length_ms only for an explicitly requested length, preserving shorter cues
 - For show_media_fullscreen: use when the user asks to show, open, view, or enlarge one cell's image or video (full screen, fullscreen, bigger). Pass that cell's resolved asset ID as asset_id
 - For show_subtitles: use when the user asks to add, edit, fix, style, move or render subtitles or captions on one video (TikTok captions, karaoke words). It opens the subtitle editor, where the user reviews and renders. Pass that video's resolved asset ID as asset_id
+- For dub_video: use when the user asks to dub a video, re-voice it, translate its speech or make another-language version of it. Pass that video's resolved asset ID as asset_id and the target language names exactly as the user gives them in language (an array of up to 5, such as ["Thai", "Japanese"]). Set quality "precision" only when the user asks for the best quality or better lip sync, and lip_sync false only when the user wants the voice only or the lips left untouched. Each language becomes a new video beside the source, which stays unchanged
+- Subtitles and captions are not dubbing: to translate a video's subtitles use translate_subtitles, and to add or style captions in another language use show_subtitles. Never use dub_video for a subtitle, caption or transcript request
 - For show_graphics: use when the user asks to add, edit, style or move on-screen graphics (osg) on one video: a headline or title, a second line, a source credit, a logo or text drawn over the picture. It opens the graphics editor, where the user reviews and renders. Pass that video's resolved asset ID as asset_id; put the words the user gives for the title in headline, for a line under it in secondary and for a source credit in credit, exactly as given, and omit any the user did not give
 - For show_video_cleanup: use when the user asks to remove or erase burned-in titles, subtitles, OSG, text or logos from a video. It opens local detection and region review before making a cleaned copy.
 - For show_auto_edit: to auto-edit a clip, or to add a cold open with a replay and slow-motion effect, use show_auto_edit. Never generate a new video for it
@@ -788,6 +844,8 @@ export {
   NESTED_TIMESTAMP_PARAMS,
   applyBackgroundAudioRoute,
   planBackgroundAudioFromQuery,
+  applyDubRoute,
+  planDubFromQuery,
   applyBytedanceNamedModelRoute,
   applyStackedChainRoute,
   applyVideoJoinRoute,

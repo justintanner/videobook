@@ -70,6 +70,48 @@ describe("slash command parse/normalize/dispatch", () => {
     });
   });
 
+  describe("/dub", () => {
+    function dubArgs(command: string, rest: string): Record<string, unknown> {
+      const cmd = findCommand(command, rest);
+      expect(cmd.mcpTool?.tool).toBe("dub_video");
+      return adaptCommandArgs(cmd.mcpTool?.adapter, parseCommandArgs(rest, cmd.params));
+    }
+
+    it("passes the language text through and reads trailing tier and voice-only keywords", () => {
+      expect(dubArgs("/dub", "@a1 thai")).toEqual({ asset_id: "a1", language: "thai" });
+      expect(dubArgs("/dub", "@a1 thai, japanese precision")).toEqual({
+        asset_id: "a1",
+        language: "thai, japanese",
+        quality: "precision",
+      });
+      expect(dubArgs("/dub", "@b3 Spanish voice-only")).toEqual({
+        asset_id: "b3",
+        language: "Spanish",
+        lip_sync: false,
+      });
+      expect(dubArgs("/dub", "@a1 Chinese (Mandarin, Simplified), thai, speed voice only")).toEqual({
+        asset_id: "a1",
+        language: "Chinese (Mandarin, Simplified), thai",
+        quality: "speed",
+        lip_sync: false,
+      });
+      expect(dubArgs("/dub", "@019fcc00-0000-7000-8000-0000000000a1 German")).toEqual({
+        asset_id: "019fcc00-0000-7000-8000-0000000000a1",
+        language: "German",
+      });
+    });
+
+    it("works as /translate-video and leaves a missing video or language to the review sheet", () => {
+      expect(dubArgs("/translate-video", "@a1 thai, japanese precision")).toEqual({
+        asset_id: "a1",
+        language: "thai, japanese",
+        quality: "precision",
+      });
+      expect(dubArgs("/dub", "thai and korean")).toEqual({ language: "thai and korean" });
+      expect(dubArgs("/dub", "@a1 precision")).toEqual({ asset_id: "a1", quality: "precision" });
+    });
+  });
+
   describe("/zoom", () => {
     function zoomArgs(rest: string): Record<string, unknown> {
       const cmd = findCommand("/zoom", rest);

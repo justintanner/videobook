@@ -176,6 +176,19 @@ export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
     gridFields: ["asset_id"],
     inputTypes: { asset_id: "artifact", frame: "string", timestamp: "number" },
   },
+  dub_video: {
+    outputs: { dubs: "json", status: "string", estimated_usd: "number" },
+    completion: "sync",
+    gridFields: ["asset_id"],
+    inputTypes: {
+      asset_id: "artifact",
+      language: "json",
+      quality: "string",
+      lip_sync: "boolean",
+      speakers: "number",
+      dynamic_duration: "boolean",
+    },
+  },
   asset_manifest: {
     outputs: {
       artifactId: "artifact",

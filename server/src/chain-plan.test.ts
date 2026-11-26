@@ -314,6 +314,43 @@ describe("preflightChainPlan", () => {
     expect(result.plan.autoApply).toBe(true);
   });
 
+  it("pins a dub's source and stops the dub for its own priced review", async () => {
+    const ctx = await context();
+    await seedVideos(ctx);
+    const result = await preflightChainPlan({
+      action: "run",
+      version: 1,
+      book_id: ctx.bookId,
+      notebook_id: ctx.notebookId,
+      steps: [
+        { id: "trim", tool: "trim_video", params: { asset_id: "@b2", trim_start: 0, trim_end: 4, output: "new" } },
+        {
+          id: "dub",
+          tool: "dub_video",
+          params: { asset_id: { $ref: { step_id: "trim", output: "asset_id" } }, language: ["Thai (Thailand)"] },
+        },
+      ],
+    }, ctx);
+    expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.plan.steps.map((step) => [step.tool, step.requiresApproval])).toEqual([
+      ["trim_video", false],
+      ["dub_video", true],
+    ]);
+    const direct = await preflightChainPlan({
+      action: "run",
+      version: 1,
+      book_id: ctx.bookId,
+      notebook_id: ctx.notebookId,
+      steps: [{ id: "dub", tool: "dub_video", params: { asset_id: "@c4", language: "thai, japanese", quality: "precision" } }],
+    }, ctx);
+    expect(direct.ok, direct.ok ? "" : direct.error).toBe(true);
+    if (!direct.ok) return;
+    expect(direct.plan.steps[0]?.requiresApproval).toBe(true);
+    expect(direct.plan.steps[0]?.pins.map((pin) => [pin.field, pin.address.replace(/^@/, "")])).toEqual([["asset_id", "c4"]]);
+    expect(direct.plan.autoApply).toBe(true);
+  });
+
   it("still shows one combined sheet when a free in-place mutation is in the chain", async () => {
     const ctx = await context();
     await seedVideos(ctx);

@@ -135,7 +135,7 @@ Review is what the action sheet asks before Run action. A tool billed per operat
 | `tool.disconnect_notebook_cells` | `/disconnect-notebook-cells` |  | notebook | notebook: notebook_id | `disconnect_notebook_cells` | slash, launcher | dialog | none |
 | `tool.doctor` | `/doctor` | /recover, /clear-failed | book | asset: asset_id | `doctor` | slash, launcher, cell-menu | dialog | none |
 | `tool.download_video` | `/import` |  | book | none | `download_video` | slash, launcher | dialog | none |
-| `tool.dub_video` | `/dub-video` |  | book | asset: asset_id | `dub_video` | slash, launcher, cell-menu | dialog | generation |
+| `tool.dub_video` | `/dub` | /translate-video | book | asset: asset_id | `dub_video` | slash, launcher, cell-menu | dialog | generation |
 | `tool.duplicate_asset` | `/duplicate` | /export-to | book | asset: asset_id | `duplicate_asset` | slash, launcher, cell-menu | dialog | none |
 | `tool.edit_asset_tag` | `/edit-asset-tag` |  | book | asset: asset_id | `edit_asset_tag` | slash, launcher, cell-menu | dialog | none |
 | `tool.edit_image_subjects` | `/edit-image-subjects` |  | notebook | cell: source_cell_id | `edit_image_subjects` | slash, launcher, cell-menu | dialog | generation |

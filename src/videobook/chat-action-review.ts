@@ -1,5 +1,5 @@
 import { formatMediaTime } from './notebook-cell-presentation'
-import { historicalAverageEstimate, lowerBoundEstimate } from './provider-payload-preview'
+import { historicalAverageEstimate, lowerBoundCaption, lowerBoundEstimate } from './provider-payload-preview'
 import { scanNotebookMentions } from 'videobook-engine/notebook-mentions'
 import { speedChangeDraftFromParams, speedChangeOutcome } from './speed-change-draft'
 
@@ -30,11 +30,17 @@ const IN_PLACE_EFFECT: RoutedActionEffect = {
   tone: 'warning',
 }
 
+interface RoutedActionEstimate {
+  usd: number | null
+  warnings: readonly string[]
+}
+
 interface RoutedActionReviewInput {
   input: string
   params: Record<string, unknown>
   tool: string
   sourceDurationSeconds?: number | null
+  estimate?: RoutedActionEstimate | null
 }
 
 function finiteNumber(value: unknown): number | null {
@@ -328,9 +334,59 @@ function genericReview(input: RoutedActionReviewInput): RoutedActionReview {
   }
 }
 
+function dubLanguages(value: unknown): string[] {
+  const entries = Array.isArray(value) ? value : [value]
+  return entries.flatMap((entry) => textValue(entry) ?? [])
+}
+
+function dubCost(estimate: RoutedActionEstimate | null | undefined): { value: string; effect: string; detail: RoutedActionSetting | null } {
+  if (!estimate || estimate.usd === null || estimate.usd <= 0) {
+    const reason = estimate?.warnings.join(' ').trim()
+    return {
+      value: 'Unknown',
+      effect: 'Spends provider money',
+      detail: reason ? setting('Note', reason, 'warning', true) : null,
+    }
+  }
+  const amount = formatEstimatedCost(estimate.usd)
+  if (lowerBoundEstimate(estimate.warnings)) {
+    return {
+      value: `At least ${amount}`,
+      effect: `Spends at least ${amount}`,
+      detail: setting('Pricing', lowerBoundCaption(estimate.warnings), 'default', true),
+    }
+  }
+  return { value: amount, effect: `Spends about ${amount}`, detail: null }
+}
+
+function dubVideoReview(input: RoutedActionReviewInput): RoutedActionReview {
+  const languages = dubLanguages(input.params.language)
+  const cost = dubCost(input.estimate)
+  const outputs = Math.max(1, languages.length)
+  return {
+    title: languages.length === 1 ? `Dub into ${languages[0]}` : `Dub into ${languages.length} languages`,
+    settings: [
+      setting('Source', sourceValue(input.input, input.params)),
+      setting(
+        languages.length === 1 ? 'Language' : 'Languages',
+        languages.length > 0 ? languages.join(', ') : 'Not provided',
+        languages.length > 0 ? 'default' : 'warning',
+        languages.length > 2,
+      ),
+      setting('Quality', input.params.quality === 'precision' ? 'Precision · better lip sync' : 'Speed'),
+      setting('Lip sync', input.params.lip_sync === false ? 'Off · voice only' : 'On · lips follow the new speech'),
+      setting('Estimated cost', cost.value, 'warning'),
+      setting('Output', `${outputs} new video${outputs === 1 ? '' : 's'} · source unchanged`),
+      ...(cost.detail ? [cost.detail] : []),
+    ],
+    effect: { label: `${cost.effect} · source unchanged`, tone: 'warning' },
+  }
+}
+
 export function routedActionReview(
   input: RoutedActionReviewInput,
 ): RoutedActionReview {
+  if (input.tool === 'dub_video') return dubVideoReview(input)
   if (input.tool === 'change_video_speed') return changeVideoSpeedReview(input)
   if (input.tool === 'post') return postToXReview(input)
   if (input.tool === 'chain') return chainReview(input)

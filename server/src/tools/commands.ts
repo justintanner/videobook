@@ -941,6 +941,22 @@ const CANONICAL_COMMANDS: Command[] = [
     mcpTool: { tool: "clean_video_audio", autoInject: ["book_id"] },
   },
   {
+    command: "/dub",
+    description: "Dub a video into up to 5 other languages with HeyGen Translate: each language becomes a new video beside the source, which stays unchanged. End with precision for better lip sync, or voice-only to leave the lips as they are",
+    example: "/dub @a1 thai   ·   /dub @a1 thai, japanese precision   ·   /dub @b3 Spanish voice-only",
+    category: "action",
+    icon: "Languages",
+    size: "default",
+    variant: "emerald",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video to dub" },
+      { name: "language", type: "string", required: true, description: "Target languages, such as thai or thai, japanese; add precision or speed for the tier and voice-only to keep the lips unchanged" },
+    ],
+    mcpTool: { tool: "dub_video", adapter: "dub", autoInject: ["book_id"] },
+    aliases: ["/translate-video"],
+  },
+  {
     command: "/vocals",
     description: "Isolate vocals from audio",
     example: "/vocals @voiceover-main",

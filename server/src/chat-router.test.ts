@@ -10,6 +10,7 @@ import {
   TIMESTAMP_PARAMS,
   applyBackgroundAudioRoute,
   applyBytedanceNamedModelRoute,
+  applyDubRoute,
   applyStackedChainRoute,
   applyVideoJoinRoute,
   buildChatRoutingPrompt,
@@ -17,6 +18,7 @@ import {
   buildRoutableTools,
   effectForTool,
   getRoutableTool,
+  planDubFromQuery,
 } from "./chat-router.js";
 import { CHAT_VIEW_ACTIONS } from "./chat-view-actions.js";
 import { closeEngineForTest, createEngineForTest } from "./engine.js";
@@ -225,6 +227,20 @@ describe("chat routing catalog", () => {
     });
     expect(getRoutableTool(tools, "generate_video")?.autoApply).toBe(false);
     expect(getRoutableTool(tools, "chain")?.autoApply).toBe(false);
+  });
+
+  it("routes dubbing to a reviewed dub_video that chains can use, and keeps subtitles on the subtitle tools", () => {
+    const tools = buildRoutableTools(definitions);
+    expect(getRoutableTool(tools, "dub_video")).toMatchObject({
+      category: "action",
+      effect: "mutation",
+      autoApply: false,
+    });
+    const prompt = buildChatRoutingPrompt("my-book", tools);
+    expect(prompt).toContain("- For dub_video: use when the user asks to dub a video");
+    expect(prompt).toContain("to translate a video's subtitles use translate_subtitles");
+    expect(prompt).toContain("Never use dub_video for a subtitle, caption or transcript request");
+    expect(prompt).toContain("dub_video -> dubs, status, estimated_usd");
   });
 
   it("rewrites stacked extract-then-replace requests onto chain", () => {
@@ -512,6 +528,107 @@ describe("ByteDance named-model routing", () => {
     expect(routed.tool).toBe("generate_image");
     expect(routed.params.model).toBe("kie:seedream/5-lite-image-to-image");
     expect(routed.params.refs).toEqual({ image: ["@e2", "@d1"] });
+  });
+});
+
+describe("dub routing", () => {
+  const assetContext = [
+    { asset_id: "video-a1", type: "video", notebook_references: ["@a1"] },
+    { asset_id: "video-b2", type: "video", notebook_references: ["@b2"] },
+    { asset_id: "video-a3", type: "video", notebook_references: ["@a3"] },
+    { asset_id: "image-c1", type: "image", notebook_references: ["@c1"] },
+  ];
+
+  function plan(query: string) {
+    return planDubFromQuery({ query, assetContext, notebookContext: null });
+  }
+
+  it("plans a reviewable dub of the one mentioned video with resolved languages", () => {
+    expect(plan("dub @a1 into Thai")).toEqual({
+      tool: "dub_video",
+      params: { asset_id: "video-a1", language: ["Thai (Thailand)"] },
+      message: "Dubbing into Thai (Thailand).",
+      substituted: true,
+    });
+    expect(plan("translate @a1 to Spanish and Japanese")?.params).toEqual({
+      asset_id: "video-a1",
+      language: ["Spanish", "Japanese"],
+    });
+    expect(plan("make a Japanese version of @b2")?.params).toEqual({
+      asset_id: "video-b2",
+      language: ["Japanese"],
+    });
+    expect(plan("dub @a1 from English into Spanish")?.params.language).toEqual(["Spanish"]);
+    expect(plan("dub @a1 into Chinese (Mandarin, Simplified) and thai")?.params.language)
+      .toEqual(["Chinese (Mandarin, Simplified)", "Thai (Thailand)"]);
+  });
+
+  it("reads lip sync and quality from the request", () => {
+    expect(plan("re-voice @a3 in German without touching the lips")?.params).toEqual({
+      asset_id: "video-a3",
+      language: ["German"],
+      lip_sync: false,
+    });
+    expect(plan("dub @a1 into Korean, voice only")?.params.lip_sync).toBe(false);
+    expect(plan("dub @a1 into French with the best lip sync")?.params).toEqual({
+      asset_id: "video-a1",
+      language: ["French"],
+      quality: "precision",
+    });
+    expect(plan("dub @a1 into French")?.params).not.toHaveProperty("quality");
+  });
+
+  it.each([
+    "translate @a1's subtitles to Thai",
+    "add Thai captions to @a1",
+    "translate the transcript of @a1 into Japanese",
+    "how do I dub @a1 into Thai?",
+    "dub @a1",
+    "make a Spanish version of @c1",
+    "dub @a1 and @b2 into Thai",
+    "dub @a1 into Klingon",
+    "dub @a1 into Swahili",
+    "trim @a1 to the Thai section",
+  ])("leaves subtitle, ambiguous and non-dub requests to the router: %s", (query) => {
+    expect(plan(query)).toBeNull();
+  });
+
+  it("fills the lip sync and quality a routed dub left out, keeping what the model chose", () => {
+    expect(applyDubRoute({
+      query: "translate this video into thai and japanese, voice only",
+      tool: "dub_video",
+      params: { asset_id: "video-a1", language: "thai and japanese" },
+      message: "",
+      assetContext,
+    })).toEqual({
+      tool: "dub_video",
+      params: { asset_id: "video-a1", language: "thai and japanese", lip_sync: false },
+      message: "Dubbing video.",
+      substituted: false,
+    });
+    expect(applyDubRoute({
+      query: "dub it into thai with the best lip sync",
+      tool: "dub_video",
+      params: { asset_id: "video-a1", language: ["thai"], quality: "speed" },
+      message: "Dubbing into Thai.",
+      assetContext,
+    })).toMatchObject({
+      params: { asset_id: "video-a1", language: ["thai"], quality: "speed" },
+      message: "Dubbing into Thai.",
+    });
+    const subtitles = {
+      query: "translate @a1's subtitles to Thai",
+      tool: "translate_subtitles",
+      params: { asset_id: "video-a1", language: "th" },
+      message: "Translating subtitles.",
+      assetContext,
+    };
+    expect(applyDubRoute(subtitles)).toEqual({
+      tool: subtitles.tool,
+      params: subtitles.params,
+      message: subtitles.message,
+      substituted: false,
+    });
   });
 });
 

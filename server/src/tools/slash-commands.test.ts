@@ -214,6 +214,15 @@ describe("slash_commands tool", () => {
       "add_light_music",
     ]);
 
+    const dub = commands.find((c) => c.command === "/dub")!;
+    expect(dub).toMatchObject({
+      category: "action",
+      icon: "Languages",
+      aliases: ["/translate-video"],
+      mcpTool: { tool: "dub_video", adapter: "dub", autoInject: ["book_id"] },
+    });
+    expect(dub.params.map((p) => p.name)).toEqual(["asset_id", "language"]);
+
     const sfx = commands.find((c) => c.command === "/sfx")!;
     expect(sfx.mcpTool?.tool).toBe("suggest_sfx");
     expect(sfx.aliases).toEqual(["/suggest-sfx", "/apply-sfx", "/sound-effects"]);

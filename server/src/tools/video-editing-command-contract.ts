@@ -14,6 +14,7 @@ export const COMMAND_ADAPTER_NAMES = [
   "apply_sfx",
   "apply_builtin_sfx",
   "change_speed",
+  "dub",
   "duplicate",
   "keywords",
   "qr_outro",

@@ -1,9 +1,13 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { RoutedBody } from '../../src/components/videobook/confirm/bodies/RoutedBody'
 import {
   chainStepReview,
   routedActionReview,
   type ChainStepReviewValue,
 } from '../../src/videobook/chat-action-review'
+import { asChatActionPlan, dubStartedMessage } from '../../src/videobook/workspace-responses'
 
 function values(
   tool: string,
@@ -260,5 +264,90 @@ describe('chainStepReview', () => {
     expect(
       review.settings.find((setting) => setting.label === 'Remaining steps')?.value,
     ).toBe('None')
+  })
+})
+
+describe('dub review', () => {
+  const lowerBound = "fal 'fal-ai/heygen/v2/translate/precision': prices the source video's 5s across 2 languages at $0.10/s; HeyGen bills whole seconds of output video, which can differ from the source (more so with dynamic_duration), so this estimate is a lower bound"
+
+  function dubReview(params: Record<string, unknown>, estimate: { usd: number | null; warnings: string[] } | null) {
+    return routedActionReview({
+      tool: 'dub_video',
+      params: { asset_id: '019fcc00-0000-7000-8000-0000000000a1', notebook_id: '019fcc00-0000-7000-8000-0000000000aa', ...params },
+      input: 'make a Thai and Japanese version of @a1 with the best lip sync',
+      estimate,
+    })
+  }
+
+  it('shows the resolved languages, tier, lip sync and the lower-bound price', () => {
+    const review = dubReview(
+      { language: ['Thai (Thailand)', 'Japanese'], quality: 'precision' },
+      { usd: 1, warnings: [lowerBound] },
+    )
+    expect(review.title).toBe('Dub into 2 languages')
+    expect(Object.fromEntries(review.settings.map((entry) => [entry.label, entry.value]))).toEqual({
+      Source: '@a1',
+      Languages: 'Thai (Thailand), Japanese',
+      Quality: 'Precision · better lip sync',
+      'Lip sync': 'On · lips follow the new speech',
+      'Estimated cost': 'At least $1.00',
+      Output: '2 new videos · source unchanged',
+      Pricing: "Prices the source video's 5s across 2 languages at $0.10/s; HeyGen bills whole seconds of output video, which can differ from the source (more so with dynamic_duration)",
+    })
+    expect(review.effect).toEqual({ label: 'Spends at least $1.00 · source unchanged', tone: 'warning' })
+    expect(review.settings.some((entry) => entry.value.includes('019fcc00-0000-7000-8000-0000000000aa'))).toBe(false)
+
+    const html = renderToStaticMarkup(createElement(RoutedBody, { prompt: 'make a Thai and Japanese version of @a1', settings: review.settings }))
+    for (const text of ['Thai (Thailand), Japanese', 'Precision · better lip sync', 'On · lips follow the new speech', 'At least $1.00']) {
+      expect(html).toContain(text)
+    }
+  })
+
+  it('names a single voice-only speed dub and an unknown price plainly', () => {
+    const review = dubReview({ language: ['Spanish'], lip_sync: false }, null)
+    expect(review.title).toBe('Dub into Spanish')
+    expect(Object.fromEntries(review.settings.map((entry) => [entry.label, entry.value]))).toMatchObject({
+      Language: 'Spanish',
+      Quality: 'Speed',
+      'Lip sync': 'Off · voice only',
+      'Estimated cost': 'Unknown',
+      Output: '1 new video · source unchanged',
+    })
+    expect(review.effect?.label).toBe('Spends provider money · source unchanged')
+    expect(review.settings.some((entry) => entry.label === 'Note')).toBe(false)
+
+    const tooLong = dubReview({ language: ['Spanish'] }, {
+      usd: null,
+      warnings: ["Source video is 481s long, which exceeds HeyGen Translate's 480s (8-minute) limit. Use trim_video to shorten it first."],
+    })
+    expect(tooLong.settings.find((entry) => entry.label === 'Note')).toEqual({
+      label: 'Note',
+      value: "Source video is 481s long, which exceeds HeyGen Translate's 480s (8-minute) limit. Use trim_video to shorten it first.",
+      tone: 'warning',
+      wide: true,
+    })
+  })
+
+  it('keeps the plan price through parsing and words the started dubs', () => {
+    const plan = asChatActionPlan({
+      kind: 'chat-action-plan',
+      planId: '019fcc00-0000-7000-8000-000000000001',
+      bookId: '019fcc00-0000-7000-8000-000000000002',
+      prompt: 'dub @a1 into Thai',
+      routedTool: 'dub_video',
+      tool: 'dub_video',
+      params: { asset_id: 'video-1', language: ['Thai (Thailand)'] },
+      message: 'Dubbing into Thai (Thailand).',
+      summary: 'Dubbing into Thai (Thailand).',
+      effect: 'mutation',
+      confirmation: { required: true, reason: 'Dubbing spends provider money' },
+      estimate: { usd: 0.25, warnings: [lowerBound, 7] },
+    })
+    expect(plan.estimate).toEqual({ usd: 0.25, warnings: [lowerBound] })
+    expect(dubStartedMessage({
+      dubs: [{ language: 'Thai (Thailand)', asset_id: 'a' }, { language: 'Japanese', asset_id: 'b' }],
+      status: 'enqueued',
+    })).toBe('Dubbing into Thai (Thailand), Japanese')
+    expect(dubStartedMessage({ status: 'enqueued' })).toBeNull()
   })
 })

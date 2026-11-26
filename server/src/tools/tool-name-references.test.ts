@@ -48,4 +48,13 @@ describe("tool name references", () => {
 
     expect(unknown).toEqual({});
   });
+
+  it("keeps dub_video reviewed and priced in chat, chains and slash commands", () => {
+    expect(AUTO_APPLY_TOOL_NAMES.has("dub_video")).toBe(false);
+    expect(READ_ONLY_TOOL_NAMES.has("dub_video")).toBe(false);
+    expect(EDITOR_ONLY_TOOL_NAMES.has("dub_video")).toBe(false);
+    expect(BILLABLE_TOOL_NAMES.has("dub_video")).toBe(true);
+    expect(CHAIN_TOOL_CATALOG.dub_video).toMatchObject({ completion: "sync", gridFields: ["asset_id"] });
+    expect(Object.values(WORKSPACE_TOOL_GROUPS).flat()).toContain("dub_video");
+  });
 });

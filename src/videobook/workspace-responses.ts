@@ -99,6 +99,10 @@ export type ChatActionPlan = {
     required: boolean
     reason: string
   }
+  estimate?: {
+    usd: number | null
+    warnings: string[]
+  }
 }
 
 export type JobRecord = {
@@ -207,6 +211,14 @@ export function parseResult(result: unknown): unknown {
   }
 }
 
+export function dubStartedMessage(value: unknown): string | null {
+  const dubs = recordValue(value)?.dubs
+  const languages = Array.isArray(dubs)
+    ? dubs.flatMap((entry) => asString(recordValue(entry)?.language) ?? [])
+    : []
+  return languages.length > 0 ? `Dubbing into ${languages.join(', ')}` : null
+}
+
 export function messageFor(value: unknown, fallback: string): string {
   if (typeof value === 'string') return value
   const item = recordValue(value)
@@ -308,6 +320,7 @@ export function asChatActionPlan(value: unknown): ChatActionPlan {
     || typeof required !== 'boolean'
     || !reason
   ) throw new Error('The server returned an invalid chat action plan')
+  const estimate = recordValue(item?.estimate)
   return {
     kind,
     planId,
@@ -320,6 +333,14 @@ export function asChatActionPlan(value: unknown): ChatActionPlan {
     summary,
     effect,
     confirmation: { required, reason },
+    ...(estimate ? {
+      estimate: {
+        usd: typeof estimate.usd === 'number' && Number.isFinite(estimate.usd) ? estimate.usd : null,
+        warnings: Array.isArray(estimate.warnings)
+          ? estimate.warnings.filter((warning): warning is string => typeof warning === 'string')
+          : [],
+      },
+    } : {}),
   }
 }
 
