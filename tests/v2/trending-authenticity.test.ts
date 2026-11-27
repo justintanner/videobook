@@ -23,7 +23,7 @@ describe("trending authenticity", () => {
         minViews: 100_000,
         maxAgeDays: 30,
         maxDurationSeconds: 60,
-        judgeLimit: 120,
+        judgeLimit: 40,
       });
       expect(defaultBrief("TH")).toContain("in Thailand where");
       expect(defaultBrief("TH")).toContain("filmed outside Thailand.");
@@ -36,7 +36,7 @@ describe("trending authenticity", () => {
         criteria: {
           brief: "Only street food carts in Bangkok.",
           minViews: 250_000,
-          judgeLimit: 40,
+          judgeLimit: 25,
         },
       });
       expect(custom).toEqual({
@@ -44,7 +44,7 @@ describe("trending authenticity", () => {
         minViews: 250_000,
         maxAgeDays: 30,
         maxDurationSeconds: 60,
-        judgeLimit: 40,
+        judgeLimit: 25,
       });
     });
   });

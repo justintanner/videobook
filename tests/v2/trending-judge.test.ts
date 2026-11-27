@@ -307,6 +307,7 @@ describe("research judge", () => {
     expect(capturedRequests).toHaveLength(1);
 
     const req = capturedRequests[0];
+    expect(RESEARCH_JUDGE_MODEL).toBe("gpt-5.6-sol");
     expect(req.model).toBe(RESEARCH_JUDGE_MODEL);
     expect(req.reasoning).toEqual({ effort: "low" });
     expect(req.store).toBe(false);

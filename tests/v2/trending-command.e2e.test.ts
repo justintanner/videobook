@@ -48,7 +48,7 @@ describe("trending_research over HTTP", () => {
     expect(status.schedules).toHaveLength(1);
     expect(status.schedules[0]?.schedule.country).toBe("TH");
     expect(status.schedules[0]?.criteria).toEqual({
-      brief: expect.stringContaining("Thailand"), minViews: 100_000, maxAgeDays: 30, maxDurationSeconds: 60, judgeLimit: 120,
+      brief: expect.stringContaining("Thailand"), minViews: 100_000, maxAgeDays: 30, maxDurationSeconds: 60, judgeLimit: 40,
     });
     await callTool(client, "trending_research", {
       op: "schedule", ranking: "authentic", criteria: { minViews: 10_000, maxAgeDays: 7 },

@@ -29,7 +29,7 @@ const DEFAULT_CRITERIA = {
   minViews: 100_000,
   maxAgeDays: 30,
   maxDurationSeconds: 60,
-  judgeLimit: 120,
+  judgeLimit: 40,
 } as const;
 
 const SCREEN_CONSTANTS = {
