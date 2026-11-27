@@ -97,6 +97,14 @@ import {
   Undo2,
 } from 'lucide-react'
 import { v7 as uuidv7 } from 'uuid'
+import {
+  generationPlaceholderKind,
+  generationTakePlaceholderSlot,
+  nodesWithPendingPlaceholders,
+  pendingDownloadUrl,
+  pendingPlaceholderId,
+  type PendingPlaceholder,
+} from '@/videobook/notebook-pending-placeholders'
 import type {
   EditPreview,
   NotebookCell,
@@ -1089,6 +1097,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [queuedCellIds, setQueuedCellIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
+  const [pendingPlaceholders, setPendingPlaceholders] = useState<readonly PendingPlaceholder[]>([])
   const [revealingCellIds, setRevealingCellIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
@@ -2411,6 +2420,36 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     presentChat(chat, () => setComposerDockOpen(false))
   }, [bookId, notebook?.id, revealNotebookCanvasCells])
 
+  const showPendingPlaceholder = useCallback((
+    input: Pick<PendingPlaceholder, 'kind' | 'notebookId' | 'slot' | 'status'>,
+    chat?: ChatExecution,
+  ): () => void => {
+    const placeholder: PendingPlaceholder = {
+      ...input,
+      id: pendingPlaceholderId(uuidv7()),
+      startedAt: new Date().toISOString(),
+    }
+    setPendingPlaceholders((current) => [...current, placeholder])
+    presentChat(chat, () => revealNotebookCanvasCells([placeholder.id]))
+    return () => setPendingPlaceholders((current) =>
+      current.filter((candidate) => candidate.id !== placeholder.id))
+  }, [revealNotebookCanvasCells])
+
+  const showGenerationTakePlaceholder = useCallback((
+    document: NotebookSnapshot,
+    generator: NotebookCell,
+    chat?: ChatExecution,
+  ): () => void => {
+    const kind = generationPlaceholderKind(generator.type)
+    if (!kind) return () => undefined
+    return showPendingPlaceholder({
+      kind,
+      notebookId: document.id,
+      slot: generationTakePlaceholderSlot(document, generator),
+      status: 'queued',
+    }, chat)
+  }, [showPendingPlaceholder])
+
   const runCell = useCallback(async (
     cellId: string,
     providedNotebook?: NotebookSnapshot,
@@ -2421,6 +2460,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     let generationWatchStarted = false
     setBusy(true)
     setCellRunError(cellId, null)
+    const knownNotebook = providedNotebook ?? notebook
+    const knownCell = knownNotebook.cells.find((candidate) => candidate.id === cellId)
+    const hidePlaceholder = knownCell && !retryFailedCellId
+      && isRunnableCell(knownCell)
+      && notebookCellRequiresCloudGenerationConsent(knownCell)
+      && notebookCellSupportsGenerateCellCommand(knownCell)
+      ? showGenerationTakePlaceholder(knownNotebook, knownCell, chat)
+      : () => undefined
     try {
       const currentNotebook = providedNotebook ?? asNotebook(await call(
         'get_notebook',
@@ -2574,6 +2621,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       presentChat(chat, () => setNotice(message, 'error'))
       return { ok: false, message }
     } finally {
+      hidePlaceholder()
       if (!generationWatchStarted) setCellQueued(cellId, false)
       setBusy(false)
     }
@@ -2594,12 +2642,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setCellQueued,
     setCellRunError,
     setNotice,
+    showGenerationTakePlaceholder,
     watchGenerationRun,
     watchNotebookRun,
   ])
 
   const presentedNodes = useMemo(() => {
-    let next = nodes
+    let next = nodesWithPendingPlaceholders(nodes, pendingPlaceholders, notebook?.id ?? null)
     for (const cellId of queuedCellIds) {
       next = notebookNodesWithCellStatus(next, cellId, 'queued')
     }
@@ -2627,7 +2676,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         },
       }
     })
-  }, [cellRunErrors, highlightedCellIds, nodes, queuedCellIds, revealingCellIds])
+  }, [cellRunErrors, highlightedCellIds, nodes, notebook?.id, pendingPlaceholders, queuedCellIds, revealingCellIds])
   const lineageCellIds = useMemo(
     () => notebookLineageCellIds(edges, selectedCellId),
     [edges, selectedCellId],
@@ -6300,14 +6349,42 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const showDownloadPlaceholder = (chat?: ChatExecution, slot?: NotebookGridSlot): () => void => {
+    if (!notebook) return () => undefined
+    return showPendingPlaceholder({
+      kind: 'video',
+      notebookId: notebook.id,
+      slot: slot ?? notebookCreationPlacement('video', notebook).slot,
+      status: 'downloading',
+    }, chat)
+  }
+
+  const runWorkspaceTool = async (
+    tool: string,
+    args: Record<string, unknown>,
+    title: string,
+    chat?: ChatExecution,
+  ): Promise<{ value: unknown; outcome: ComposerOutcome }> => {
+    const hidePlaceholder = tool === 'download_video' ? showDownloadPlaceholder(chat) : () => undefined
+    try {
+      const value = await call(tool, args, { chat })
+      return { value, outcome: await completeWorkspaceToolResult(tool, value, args, title, chat) }
+    } finally {
+      hidePlaceholder()
+    }
+  }
+
   const downloadClipToSlot = async (url: string, slot: NotebookGridSlot) => {
     if (!bookId || !notebook) return
+    const hidePlaceholder = showDownloadPlaceholder(undefined, slot)
     try {
       const result = await call('download_video', { book_id: bookId, url })
       const outcome = await completeVideoDownload(result, url, undefined, undefined, slot)
       setNotice(outcome.message, outcome.ok ? 'info' : 'error')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
+    } finally {
+      hidePlaceholder()
     }
   }
 
@@ -7742,6 +7819,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     rememberLastWorkSlot(preparedAction.draft.cell.slot)
     selectCanvasCell(cellId, chat, validatedPreview)
     if (!preparedAction.existingCell) showOptimisticGeneration(preparedAction.draft, currentNotebook)
+    const hideTakePlaceholder = showGenerationTakePlaceholder(currentNotebook, preparedAction.draft.cell, chat)
     try {
       if (preparedAction.existingCell) {
         await updateExistingGenerationCell(preparedAction.draft, currentNotebook, chat)
@@ -7841,6 +7919,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         selectInput: false,
       }
     } finally {
+      hideTakePlaceholder()
       setBusy(false)
     }
   }
@@ -8498,8 +8577,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await openWorkspaceActions(`tool.${route.tool}`, args, undefined, undefined, chat)
       return { ok: true, message: `${command.slice(1)} preview ready` }
     }
-    const result = await call(route.tool, args, { chat })
-    return await completeWorkspaceToolResult(route.tool, result, args, command, chat)
+    return (await runWorkspaceTool(route.tool, args, command, chat)).outcome
   }
 
   const executeCommand = async (
@@ -8544,28 +8622,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       if (!bookId && !input.startsWith('/')) return { ok: false, message: 'Load or create a book first.' }
       if (!input.startsWith('/')) {
-        const routed = await call('chat', {
-          book_id: bookId,
-          ...(notebook ? { notebook_id: notebook.id } : {}),
-          prompt: input,
-          model: chatModel,
-        }, { chat })
-        const routedRecord = recordValue(routed)
-        if (routedRecord?.kind === 'chat-action-plan') {
-          return await previewRoutedChatAction(
-            asChatActionPlan(routed),
-            input, undefined, chat,
-          )
-        }
-        reviewChat(chat, false, () => setPendingChatAction(null))
-        reviewChat(chat, false, () => setPendingCommandPlan(null))
-        if (isDownloadVideoResult(routed)) {
-          return await completeVideoDownload(routed, urlFromText(input), undefined, chat)
-        }
-        await refreshBookData(bookId, notebook?.id, undefined, chat)
-        return {
-          ok: true,
-          message: messageFor(routed, 'Command complete'),
+        const hidePlaceholder = pendingDownloadUrl(input) ? showDownloadPlaceholder(chat) : () => undefined
+        try {
+          const routed = await call('chat', {
+            book_id: bookId,
+            ...(notebook ? { notebook_id: notebook.id } : {}),
+            prompt: input,
+            model: chatModel,
+          }, { chat })
+          const routedRecord = recordValue(routed)
+          if (routedRecord?.kind === 'chat-action-plan') {
+            return await previewRoutedChatAction(
+              asChatActionPlan(routed),
+              input, undefined, chat,
+            )
+          }
+          reviewChat(chat, false, () => setPendingChatAction(null))
+          reviewChat(chat, false, () => setPendingCommandPlan(null))
+          if (isDownloadVideoResult(routed)) {
+            return await completeVideoDownload(routed, urlFromText(input), undefined, chat)
+          }
+          await refreshBookData(bookId, notebook?.id, undefined, chat)
+          return {
+            ok: true,
+            message: messageFor(routed, 'Command complete'),
+          }
+        } finally {
+          hidePlaceholder()
         }
       }
       const [rawCommandToken, ...restParts] = rewriteRetiredCommand(input).trim().split(/\s+/)
@@ -8851,8 +8934,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       const downloadMessage = await performBrowserFileAction((tool, values, options) => call(tool, values, { ...options, chat }), command.mcpTool.tool, args)
       if (downloadMessage) return { ok: true, message: downloadMessage }
-      const result = await call(command.mcpTool.tool, args, { chat })
-      return await completeWorkspaceToolResult(command.mcpTool.tool, result, args, command.command, chat)
+      return (await runWorkspaceTool(command.mcpTool.tool, args, command.command, chat)).outcome
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }
@@ -8898,6 +8980,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     const downloadMessage = await performBrowserFileAction((name, args, options) => call(name, args, { ...options, chat }), tool, values)
     if (downloadMessage) return { message: downloadMessage, close: true }
+    if (tool === 'download_video') {
+      const { value, outcome } = await runWorkspaceTool(tool, values, action.title, chat)
+      if (!outcome.ok) throw new Error(outcome.message)
+      return { message: outcome.message, value }
+    }
     const value = await call(tool, values, { chat })
     if (recordValue(value)?.kind === 'chat-action-plan') {
       const result = await previewRoutedChatAction(asChatActionPlan(value), String(values.prompt ?? ''), undefined, chat)
@@ -11249,7 +11336,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                               reviewRoles={pendingReviewRoles}
                               roundHeaders={notebookRoundHeaderList}
                             />
-                            {nodes.length === 0 && (
+                            {nodes.length === 0 && pendingPlaceholders.length === 0 && (
                               <NotebookStartTiles
                                 busy={busy || mcp.state !== 'ready'}
                                 compact={notebookGridDetailScale(notebookZoom) > 1.8}

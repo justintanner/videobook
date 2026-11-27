@@ -26,6 +26,7 @@ export interface CanvasCellData extends NotebookCellData {
   postSource?: PostSourcePreview
   asset?: AssetRecord
   deleting?: boolean
+  pending?: boolean
   revealing?: boolean
   highlighted?: boolean
   videoAspectRatio?: string

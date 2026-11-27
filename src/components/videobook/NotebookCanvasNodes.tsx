@@ -690,7 +690,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const targetConnectionCount = data.targetConnectionCount ?? 0
   const targetInputConnectionCounts = data.targetInputConnectionCounts ?? {}
   const slotKind = passiveMediaKind(data.kind)
-  const emptyMediaSlot = slotKind !== null && isEmptyPassiveMediaSlot(
+  const emptyMediaSlot = !data.pending && slotKind !== null && isEmptyPassiveMediaSlot(
     data.kind,
     data.outputArtifactId,
     targetConnectionCount,
@@ -867,6 +867,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     y: number,
     returnFocus: HTMLElement | null,
   ) => {
+    if (data.pending) return
     contextMenu.open(id, { x, y }, returnFocus)
   }
 
@@ -883,6 +884,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         failed ? 'cell-node-error' : '',
         versionedOutput ? 'cell-node-version-stack' : '',
         data.deleting ? 'cell-node-deleting' : '',
+        data.pending ? 'cell-node-pending' : '',
         data.revealing ? 'cell-node-created' : '',
         data.highlighted ? 'cell-node-highlight' : '',
         mediaTile ? 'cell-node-media-tile' : '',
@@ -897,6 +899,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
       data-highlight={data.highlighted ? 'generated' : undefined}
       data-version-count={outputVersions.length}
       data-cell-status={data.status}
+      data-pending={data.pending ? 'true' : undefined}
       data-context-menu-open={contextMenu.openCellId === id ? 'true' : undefined}
       onContextMenu={(event) => {
         event.preventDefault()
@@ -1121,6 +1124,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             <CellFlag flag={flag} />
             <button
               type="button"
+              hidden={data.pending}
               className="cell-context-menu-trigger nodrag"
               aria-label={`Open ${address} cell menu`}
               aria-haspopup="menu"

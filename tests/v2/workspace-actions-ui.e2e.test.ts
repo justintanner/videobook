@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { chromium } from 'playwright'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Page, Route } from 'playwright'
 import sharp from 'sharp'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { availablePort, record, resultValue, startProcess, stopProcess, waitForHttp } from './e2e-harness.js'
@@ -280,10 +280,27 @@ describe('workspace action launcher with real endpoints', () => {
       await scroll.evaluate((element) => { element.scrollTop = element.scrollHeight })
       expect(await scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
 
-      await sendCommand(`/download http://127.0.0.1:${address.port}/second.mp4`)
+      const pendingTile = page.locator('.cell-node[data-pending="true"][data-cell-status="downloading"]')
+      let pendingAddress: string | null = null
+      const watchDownload = async (route: Route) => {
+        if ((route.request().postData() ?? '').includes('"download_video"')) {
+          await pendingTile.waitFor({ state: 'visible', timeout: testBudget(MCP_ROUNDTRIP_MS) })
+          pendingAddress = await pendingTile.locator('.cell-node-footer strong').textContent()
+        }
+        await route.fallback()
+      }
+      await page.route('**/mcp', watchDownload)
+      try {
+        await sendCommand(`/download http://127.0.0.1:${address.port}/second.mp4`)
+      } finally {
+        await page.unroute('**/mcp', watchDownload)
+      }
       await expect.poll(async () => (await cellIds()).length, { timeout: testBudget(MCP_ROUNDTRIP_MS) }).toBe(2)
       const secondId = (await cellIds()).find(id => id !== firstId)!
       await expectInView(secondId)
+      expect(pendingAddress).toBe('@a2')
+      expect(await page.locator(`[data-id="${secondId}"] .cell-node-footer strong`).textContent()).toBe(pendingAddress)
+      expect(await page.locator('.cell-node[data-pending="true"]').count()).toBe(0)
     } finally {
       await new Promise<void>(resolve => source.close(() => resolve()))
     }
