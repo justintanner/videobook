@@ -1,3 +1,11 @@
+export interface TrendingCriteria {
+  brief?: string;
+  minViews: number;
+  maxAgeDays: number;
+  maxDurationSeconds: number;
+  judgeLimit: number;
+}
+
 export interface TrendingSchedule {
   scheduleId: string;
   platform: "tiktok";
@@ -10,6 +18,7 @@ export interface TrendingSchedule {
   window: "trending" | "posted";
   excludePromoted: boolean;
   ranking: "views" | "consensus";
+  criteria?: Partial<TrendingCriteria>;
   sources: { id: string; options?: Record<string, unknown> }[];
   downstream: { transcribe: boolean; translateTo: string[]; analyze: boolean };
   substituteFailures: boolean;

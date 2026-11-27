@@ -1,3 +1,4 @@
+import type { TrendingCandidate } from "../../server/src/trending/authenticity.js";
 import type { Sighting, TrendingSchedule } from "../../server/src/trending/types.js";
 
 export const cutAt = "2026-10-28T00:00:00.000Z";
@@ -16,5 +17,21 @@ export function sighting(videoId: string, patch: Partial<Sighting> = {}): Sighti
     author: { handle: "author" }, caption: "A video", createdAt: "2026-10-26T00:00:00.000Z",
     metrics: { views: 100, likes: 10 }, source: "endless", sourceRank: 1,
     observedAt: "2026-10-27T12:00:00.000Z", ...patch,
+  };
+}
+
+export function candidate(videoId: string, patch: Partial<TrendingCandidate> = {}): TrendingCandidate {
+  const base = sighting(videoId, {
+    originRegion: "TH",
+    durationSeconds: 20,
+    kind: "video",
+    aiGenerated: false,
+    isAd: false,
+    metrics: { views: 500_000, likes: 50_000, shares: 10_000, saves: 2_000, comments: 250 },
+  });
+  return {
+    ...base,
+    sources: [patch.source ?? base.source],
+    ...patch,
   };
 }
