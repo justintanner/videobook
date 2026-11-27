@@ -98,9 +98,11 @@ describe("trending scheduler", () => {
       return { success: true };
     } });
     runner.start();
+    const cutWaits: Array<number | undefined> = [];
     const options = {
       engines: async () => [engine], now: () => now, enqueue,
-      enqueueAndWait: async <T>(id: string, payload: Record<string, unknown>): Promise<T> => {
+      enqueueAndWait: async <T>(id: string, payload: Record<string, unknown>, timeoutMs?: number): Promise<T> => {
+        if (payload.type === "trending_cut") cutWaits.push(timeoutMs);
         const job = await enqueue(id, payload);
         return await runner.waitFor(job.id, testBudget(60_000)) as T;
       },
@@ -117,6 +119,7 @@ describe("trending scheduler", () => {
     expect(readLedger(engine, date).completedSlots).toHaveLength(4);
     expect(engine.jobs.queue.list({ type: "trending_sample" })).toHaveLength(4);
     expect(engine.jobs.queue.list({ type: "trending_cut" })).toHaveLength(1);
+    expect(cutWaits).toEqual([20 * 60_000]);
     const cutJob = engine.jobs.queue.list({ type: "trending_cut" })[0];
     expect(cutJob.payload.bookId).toBe(control.bookId);
     await restarted.tick();

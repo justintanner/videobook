@@ -5,6 +5,8 @@ import { BOOK_AUTOMATION_PAUSED_KEY } from "videobook-engine";
 import { localDate, readLedger, readRetention, readRuns, readSchedule, retentionStart } from "./ledger.js";
 import type { TrendingRunRecord, TrendingSchedule } from "./types.js";
 
+const CUT_WAIT_MS = 20 * 60_000;
+
 function unsettled(download: TrendingRunRecord["downloads"][number], today: boolean): boolean {
   return download.status === "pending"
     || (download.status === "completed" && download.error !== undefined)
@@ -84,7 +86,7 @@ export function createTrendingScheduler(options: {
             await wait(`trending-sample:${schedule.scheduleId}:${event.at}`, { type: "trending_sample", bookId, slot: event.at });
           }
           if (event.type === "cut" && !readRuns(engine).some((run) => run.date === event.date && run.completed)) {
-            await wait(`trending-cut:${schedule.scheduleId}:${event.date}`, { type: "trending_cut", bookId, date: event.date, cutAt: event.at });
+            await wait(`trending-cut:${schedule.scheduleId}:${event.date}`, { type: "trending_cut", bookId, date: event.date, cutAt: event.at }, CUT_WAIT_MS);
           }
           if (event.type === "cut") retentionDate = event.date;
         }

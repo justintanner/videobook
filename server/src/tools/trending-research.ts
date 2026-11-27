@@ -1,5 +1,6 @@
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
+import { getApiKey } from "../api-key.js";
 import type { BookManager, ManagedBook } from "../book-manager.js";
 import { queue } from "../queue.js";
 import { resolveCriteria } from "../trending/authenticity.js";
@@ -82,8 +83,10 @@ function status(book: ManagedBook, schedule: TrendingSchedule, date: string | un
   const counts: Record<string, number> = Object.fromEntries(schedule.sources.map(({ id }) => [id, 0]));
   for (const sighting of ledger.sightings) counts[sighting.source] = (counts[sighting.source] ?? 0) + 1;
   const nextRuns = schedule.enabled ? nextTrendingEvents(schedule, now) : { sample: null, cut: null };
+  const criteria = resolveCriteria(schedule);
   return {
-    bookId: book.bookId, schedule, criteria: resolveCriteria(schedule), ledgerDate, ledgerCounts: counts, sourceHealth,
+    bookId: book.bookId, schedule, criteria, ledgerDate, ledgerCounts: counts, sourceHealth,
+    judge: { available: Boolean(getApiKey("OPENAI_API_KEY")), limit: criteria.judgeLimit },
     optionalSources: { omkar: omkarSourceAvailability() },
     lastSample: [...ledger.completedSlots, ...Object.values(sourceHealth).flatMap((health) => health.lastOk ? [health.lastOk] : [])].sort().at(-1) ?? null,
     lastRun: [...runs].sort((a, b) => b.cutAt.localeCompare(a.cutAt))[0] ?? null,
@@ -124,8 +127,8 @@ export function trendingResearchDef(books: BookManager, options: {
 } = {}): ToolDef {
   return {
     name: "trending_research",
-    description: "Schedule, unschedule, list, run or inspect country TikTok research. New schedules rank by views. Set ranking=authentic to skip clips picked on earlier days and screen out likely paid reach, photo posts, posts flagged as AI-generated, and clips outside the view, age or duration limits. It ranks the rest by earned engagement. "
-      + "The optional criteria object sets minViews (minimum views), maxAgeDays (maximum days since posting), maxDurationSeconds (maximum clip length), brief (what the researcher wants to find) and judgeLimit (budget for new candidate checks per cut, default 40; one gpt-5.6-sol check measured about $0.0053). The brief and check budget are saved for future use. Status shows the effective criteria, including country-specific defaults. "
+    description: "Schedule, unschedule, list, run or inspect country TikTok research. New schedules rank by views. Set ranking=authentic to skip clips picked on earlier days and screen out likely paid reach, photo posts, posts flagged as AI-generated, and clips outside the view, age or duration limits. At the cut, a vision model checks screened candidates against the brief using the post and its cover when available. Clips scoring at least 6/10 for fit are ranked by fit and earned engagement. "
+      + "The optional criteria object sets minViews (minimum views), maxAgeDays (maximum days since posting), maxDurationSeconds (maximum clip length), brief (what the researcher wants to find) and judgeLimit (maximum new checks per cut, default 40). Each gpt-5.6-sol check records usage on the control book and measured about $0.0053 in Thailand research. The cut reuses cached verdicts for the same brief. With judgeLimit=0, a missing OPENAI_API_KEY, or no usable verdicts, the cut ranks on earned engagement alone. Status shows the effective criteria and the judge's availability and limit. "
       + "The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. After each cutoff, day books older than retention_days are deleted once their rank list, sources and download outcomes are copied into the control book; archive_top_clips archives their completed clips first, and the archiving's provider usage is copied into the control book too. Sighting ledgers older than both retention_days and the cut's 8-day read window are pruned. Omitted arguments default to Thailand: platform tiktok, country TH, timezone Asia/Bangkok, cutoff 00:30, four samples a day, top 10, a trending window, promoted videos excluded, 30-day retention, Endless and TikTok Creative Center, and transcription off. Omkar is an optional source included only when OMKAR_API_KEY is set and @apicity/omkar is installed. Status reports omkar as not configured when that key is unset. Set options.categories on the omkar source to an array of Explore category names (defaults: comedy, daily-life, animals, cars). A sample requests trending first, then each category in order. options.explore=true adds all before the listed categories. Each distinct feed is requested once. Successful feeds contribute clips even if another fails, with failures and unknown categories reported in source health. Monthly request budget = samples per day × (1 + number of distinct Explore categories) × 31, or 620 of 1,000 free requests at the defaults. list, run, and status use the only existing schedule when there is exactly one; otherwise they use TH. Other countries require a timezone when first scheduled.",
     scope: "global",
     schema,

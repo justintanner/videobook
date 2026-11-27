@@ -1,6 +1,5 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import type { Server } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
-import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,29 +13,7 @@ import { judgeCandidates, RESEARCH_JUDGE_MODEL } from "../../server/src/trending
 import { readVerdicts, updateVerdicts, verdictCacheKey } from "../../server/src/trending/ledger.js";
 import type { TrendingSchedule } from "../../server/src/trending/types.js";
 import { candidate, cutAt, schedule } from "./trending-fixtures.js";
-
-interface CapturedContentPart {
-  type: string;
-  text?: string;
-  image_url?: string;
-  detail?: string;
-}
-
-interface CapturedRequest {
-  model: string;
-  instructions: string;
-  reasoning?: { effort?: string };
-  store?: boolean;
-  input: Array<{ role: string; content: CapturedContentPart[] }>;
-  text?: {
-    format?: {
-      type: string;
-      name: string;
-      strict: boolean;
-      schema: Record<string, unknown>;
-    };
-  };
-}
+import { closeServer, completedResponse, imagePartOf, postTextOf, startServer, type CapturedRequest } from "./trending-judge-fixtures.js";
 
 type OpenAiReply = {
   status?: number;
@@ -51,38 +28,6 @@ const authenticSchedule: TrendingSchedule = {
 };
 
 const SAMPLE_WEBP = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x10, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
-
-function completedResponse(text: string, model = RESEARCH_JUDGE_MODEL): Record<string, unknown> {
-  return {
-    id: `resp_${Math.random().toString(36).slice(2, 10)}`,
-    object: "response",
-    created_at: 0,
-    status: "completed",
-    model,
-    output: [
-      {
-        type: "message",
-        id: "msg_1",
-        role: "assistant",
-        status: "completed",
-        content: [{ type: "output_text", text, annotations: [] }],
-      },
-    ],
-    instructions: null,
-    previous_response_id: null,
-    temperature: null,
-    top_p: null,
-    max_output_tokens: null,
-    store: false,
-    tools: [],
-    reasoning: { effort: "low" },
-    text: { format: { type: "text" } },
-    usage: { input_tokens: 900, output_tokens: 80, total_tokens: 980 },
-    error: null,
-    incomplete_details: null,
-    metadata: {},
-  };
-}
 
 function refusalResponse(reason: string, model = RESEARCH_JUDGE_MODEL): Record<string, unknown> {
   return {
@@ -114,32 +59,6 @@ function refusalResponse(reason: string, model = RESEARCH_JUDGE_MODEL): Record<s
     incomplete_details: null,
     metadata: {},
   };
-}
-
-function postTextOf(request: CapturedRequest): string {
-  const part = request.input[0]?.content.find((entry) => entry.type === "input_text");
-  return part?.text ?? "";
-}
-
-function imagePartOf(request: CapturedRequest): CapturedContentPart | undefined {
-  return request.input[0]?.content.find((entry) => entry.type === "input_image");
-}
-
-function startServer(handler: (request: IncomingMessage, response: ServerResponse) => void): Promise<{ server: Server; baseURL: string }> {
-  return new Promise((resolve, reject) => {
-    const server = createServer(handler);
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address() as AddressInfo;
-      resolve({ server, baseURL: `http://127.0.0.1:${address.port}` });
-    });
-  });
-}
-
-async function closeServer(server: Server | undefined): Promise<void> {
-  if (!server) return;
-  server.closeAllConnections();
-  await new Promise<void>((resolve) => server.close(() => resolve()));
 }
 
 let root: string | undefined;

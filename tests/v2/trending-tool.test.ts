@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { BookManager } from "../../server/src/book-manager.js";
 import { enqueueOptions } from "../../server/src/queue.js";
@@ -41,6 +41,22 @@ function control() {
 }
 
 describe("trending_research", () => {
+  it("reports a usable judge key independently of the effective check budget", async () => {
+    const tool = await setup();
+    await tool.handler({ op: "schedule" });
+    const judge = async () => JSON.parse((await tool.handler({ op: "status" })).content[0].text).schedules[0].judge;
+    expect(await judge()).toEqual({ available: false, limit: 40 });
+    try {
+      vi.stubEnv("OPENAI_API_KEY", "test-placeholder");
+      expect(await judge()).toEqual({ available: false, limit: 40 });
+      vi.stubEnv("OPENAI_API_KEY", "offline-openai-key");
+      await tool.handler({ op: "schedule", criteria: { judgeLimit: 0 } });
+      expect(await judge()).toEqual({ available: true, limit: 0 });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("creates, updates, lists and disables schedules without losing identity or history", async () => {
     const tool = await setup();
     expect(tool.scope).toBe("global");

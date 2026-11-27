@@ -1,16 +1,20 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Engine } from "videobook-engine";
+import { withBookContext } from "../../server/src/book-context.js";
 import { BookManager } from "../../server/src/book-manager.js";
-import { cutTrending } from "../../server/src/jobs/trending-cut.js";
-import { enqueueOptions } from "../../server/src/queue.js";
+import { cutTrending, registerTrendingCutJob } from "../../server/src/jobs/trending-cut.js";
+import { configureProviderEndpoints } from "../../server/src/media/endpoints.js";
+import { enqueueOptions, queue, setEngineRoot } from "../../server/src/queue.js";
 import { testBudget } from "../../server/src/test-budget.js";
 import { ensureControlBook } from "../../server/src/trending/control-book.js";
-import { readRuns, updateLedger, writeHistory } from "../../server/src/trending/ledger.js";
+import { readRuns, updateLedger, writeHistory, writeSchedule } from "../../server/src/trending/ledger.js";
 import type { Sighting, TrendingRunRecord, TrendingSchedule } from "../../server/src/trending/types.js";
 import { cutAt, schedule, sighting } from "./trending-fixtures.js";
+import { closeServer, completedResponse, postTextOf, startServer, type CapturedRequest } from "./trending-judge-fixtures.js";
 
 let root: string;
 let books: BookManager;
@@ -274,5 +278,156 @@ describe("authentic trending research cut jobs", () => {
       .rejects.toThrow("topN must be between 1 and 63");
     expect(readRuns(control.engine)).toEqual([]);
     expect(books.list()).toHaveLength(1);
+  }, testBudget(60_000));
+});
+
+describe("AI checks during authentic cuts", () => {
+  let server: Server;
+  let baseURL: string;
+  let restoreEndpoints: () => void;
+  let holdResponses: boolean;
+  const requests: string[] = [];
+  const fits = new Map<string, number>();
+  const options = { enqueue, coverPolicy: { allowHttp: true, allowPrivateHosts: true } };
+  const date = "2026-10-28";
+  const nextDate = "2026-10-29";
+  const nextCut = "2026-10-29T00:00:00.000Z";
+
+  beforeEach(async () => {
+    vi.stubEnv("OPENAI_API_KEY", "offline-openai-key");
+    fits.clear();
+    requests.length = 0;
+    holdResponses = false;
+    const local = await startServer(async (request, response) => {
+      if (request.url === "/cover.png") {
+        response.writeHead(200, { "content-type": "image/png" }).end(Buffer.from([137, 80, 78, 71]));
+        return;
+      }
+      if (request.method !== "POST" || request.url !== "/v1/responses") {
+        response.writeHead(404).end();
+        return;
+      }
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      const post: CapturedRequest = JSON.parse(Buffer.concat(chunks).toString());
+      const id = /^caption: (.+)$/m.exec(postTextOf(post))?.[1] ?? "";
+      requests.push(id);
+      if (holdResponses) return;
+      const fit = fits.get(id);
+      const text = fit === undefined ? "invalid JSON" : JSON.stringify({ kind: "candid", fit, why: id });
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(completedResponse(text)));
+    });
+    server = local.server;
+    baseURL = local.baseURL;
+    restoreEndpoints = configureProviderEndpoints({ openaiBaseURL: baseURL + "/v1" });
+  });
+
+  afterEach(async () => {
+    restoreEndpoints();
+    vi.unstubAllEnvs();
+    await closeServer(server);
+  });
+
+  async function seed(engine: Engine, ids: string[]) {
+    await updateLedger(engine, "2026-10-27", (ledger) => ({
+      ...ledger,
+      sightings: ids.map((id) => authenticSighting(id, { caption: id, coverUrl: baseURL + "/cover.png" })),
+    }));
+  }
+
+  it("freezes a fit-led selection and usage before downloads, including partial check failures", async () => {
+    const control = await setup({ criteria: { judgeLimit: 4 } });
+    await seed(control.engine, ["a-good", "b-low", "c-best", "d-fails", "e-unchecked"]);
+    fits.set("a-good", 7);
+    fits.set("b-low", 5);
+    fits.set("c-best", 10);
+    const interrupted = { ...options, enqueue: async () => { throw new Error("Interrupted download"); } };
+    await expect(withBookContext(control, () => cutTrending(control.engine, books, date, cutAt, interrupted)))
+      .rejects.toThrow("Interrupted download");
+    const [frozen] = readRuns(control.engine);
+    expect(frozen.completed).toBeUndefined();
+    expect(frozen.videos.map((video) => video.videoId)).toEqual(["c-best", "a-good"]);
+    expect(frozen.videos[0].authentic?.verdict).toMatchObject({ cover: true, fit: 10 });
+    expect(frozen.funnel).toMatchObject({ seen: 5, candidates: 5, checked: 4, fit: 2 });
+    expect([...requests].sort()).toEqual(["a-good", "b-low", "c-best", "d-fails"]);
+    expect(control.engine.usage.recent(10).filter((row) => row.provider === "openai")).toHaveLength(4);
+
+    const run = (await cutTrending(control.engine, books, date, cutAt, options))!;
+    expect(run.completed).toBe(true);
+    expect(run.videos).toEqual(frozen.videos);
+    expect(run.downloads.map((download) => download.videoId)).toEqual(["c-best", "a-good"]);
+    expect(dayEngine(run).jobs.queue.list({ type: "download_video" })).toHaveLength(2);
+    await cutTrending(control.engine, books, date, cutAt, options);
+    expect(requests).toHaveLength(4);
+  }, testBudget(60_000));
+
+  it("selects a previously checked runner-up on the next day without a new request", async () => {
+    const control = await setup({ topN: 1 });
+    await seed(control.engine, ["winner", "runner-up"]);
+    fits.set("winner", 10);
+    fits.set("runner-up", 8);
+    const first = (await cutTrending(control.engine, books, date, cutAt, options))!;
+    expect(first.videos[0].videoId).toBe("winner");
+    expect(requests).toHaveLength(2);
+    const second = (await cutTrending(control.engine, books, nextDate, nextCut, options))!;
+    expect(second.videos[0]).toMatchObject({ videoId: "runner-up", authentic: { verdict: { fit: 8 } } });
+    expect(second.funnel).toMatchObject({ checked: 0, fit: 1 });
+    expect(requests).toHaveLength(2);
+  }, testBudget(60_000));
+
+  it.each(["missing key", "zero limit"])("ranks by numbers even with cached verdicts for %s", async (disabled) => {
+    const control = await setup({ topN: 1 });
+    await seed(control.engine, ["first", "second"]);
+    fits.set("first", 10);
+    fits.set("second", 2);
+    await cutTrending(control.engine, books, date, cutAt, options);
+    expect(requests).toHaveLength(2);
+    if (disabled === "missing key") vi.stubEnv("OPENAI_API_KEY", "");
+    else await writeSchedule(control.engine, { ...authenticSchedule, criteria: { judgeLimit: 0 } });
+    const next = (await cutTrending(control.engine, books, nextDate, nextCut, options))!;
+    expect(next.videos.map((video) => video.videoId)).toEqual(["second"]);
+    expect(next.videos[0].authentic?.verdict).toBeUndefined();
+    expect(next.videos[0].authentic?.score).toBe(next.videos[0].authentic?.organic);
+    expect(next.funnel?.checked).toBe(0);
+    expect(requests).toHaveLength(2);
+  }, testBudget(60_000));
+
+  it("completes on numbers and explains the fallback when every check fails", async () => {
+    const control = await setup();
+    await seed(control.engine, ["first", "second"]);
+    const run = (await cutTrending(control.engine, books, date, cutAt, options))!;
+    expect(run).toMatchObject({ completed: true, funnel: { checked: 2, fit: 0 } });
+    expect(run.videos.map((video) => video.videoId)).toEqual(["first", "second"]);
+    expect(run.videos.every((video) => video.authentic?.score === video.authentic?.organic)).toBe(true);
+    const notebook = dayEngine(run).notebooks.read(run.notebookId!);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    expect(notebook.value.cells.find((cell) => cell.inputs?.workflowRole === "trending-summary")?.prompt)
+      .toContain("AI check did not run; ranked on numbers");
+  }, testBudget(60_000));
+
+  it("validates the schedule before requesting checks", async () => {
+    const control = await setup({ topN: 0 });
+    await seed(control.engine, ["candidate"]);
+    await expect(cutTrending(control.engine, books, date, cutAt, options)).rejects.toThrow("topN");
+    expect(requests).toEqual([]);
+    expect(readRuns(control.engine)).toEqual([]);
+  });
+
+  it("cancels in-flight checks when the cut job stops and leaves the run unfrozen", async () => {
+    const control = await setup();
+    await seed(control.engine, ["a", "b", "c", "d", "e"]);
+    await setEngineRoot(control.rootDir, control.engine);
+    registerTrendingCutJob(books);
+    holdResponses = true;
+    try {
+      const job = await queue.enqueue("abort-cut", { type: "trending_cut", bookId: control.bookId, date, cutAt });
+      await expect.poll(() => requests.length, { timeout: testBudget(10_000) }).toBe(4);
+      await queue.stop();
+      expect(control.engine.jobs.queue.get(job.id)?.state).toBe("aborted");
+      expect(readRuns(control.engine)).toEqual([]);
+      expect(requests).toHaveLength(4);
+    } finally {
+      await queue.stop();
+    }
   }, testBudget(60_000));
 });

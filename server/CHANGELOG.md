@@ -8,9 +8,12 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- TikTok research schedules can opt into `ranking=authentic` to find new clips
-  by earned engagement. Set screening criteria per schedule and inspect their
-  effective values with `trending_research op=status`.
+- TikTok research schedules can opt into `ranking=authentic` to screen new clips
+  and check their fit to a brief with a vision model. Each cut reuses cached
+  verdicts and records usage for up to `criteria.judgeLimit` new checks on the
+  control book (default 40). A zero limit, missing OpenAI key, or lack of usable
+  verdicts selects ranking by earned engagement. `trending_research op=status`
+  shows the effective criteria, judge availability and limit.
 
 - Leave out a storyboard frame that neither clean-up model will clean (or that
   did not run) so it stops blocking the rest of the short. The Storyboard tab

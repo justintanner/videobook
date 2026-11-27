@@ -1,15 +1,24 @@
 import type { Engine, Job } from "videobook-engine";
+import { getApiKey } from "../api-key.js";
 import type { BookManager } from "../book-manager.js";
 import { activeBookEngine } from "../book-context.js";
 import { appendDiagnostic } from "../diagnostics.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, registerJobHandler } from "../queue.js";
+import { resolveCriteria } from "../trending/authenticity.js";
+import type { CoverFetchPolicy } from "../trending/cover.js";
 import { buildDayBook, syncDayBookDownloads } from "../trending/day-book.js";
+import { judgeCandidates } from "../trending/judge.js";
 import { cutLedgerDates, readHistory, readLedger, readRuns, readSchedule, writeRun } from "../trending/ledger.js";
 import { prepareAuthenticCandidates, rankAuthentic, rankVideos, validateRanking } from "../trending/ranking.js";
 import type { RankedVideo, TrendingFunnel, TrendingRunRecord, TrendingSchedule } from "../trending/types.js";
 
 const cuts = new WeakMap<Engine, Promise<unknown>>();
+
+interface CutOptions {
+  enqueue?: typeof queue.enqueue;
+  coverPolicy?: CoverFetchPolicy;
+}
 
 function researchProvenance(schedule: TrendingSchedule, run: TrendingRunRecord, video: RankedVideo) {
   return {
@@ -75,7 +84,7 @@ function excludedVideoIds(engine: Engine, date: string): Set<string> {
 }
 
 async function cut(
-  engine: Engine, books: BookManager, date: string, cutAt: string, enqueue: typeof queue.enqueue,
+  engine: Engine, books: BookManager, date: string, cutAt: string, options: CutOptions, signal?: AbortSignal,
 ): Promise<TrendingRunRecord | undefined> {
   const schedule = readSchedule(engine);
   if (!schedule?.enabled) return;
@@ -87,14 +96,19 @@ async function cut(
     let videos: RankedVideo[];
     let funnel: TrendingFunnel | undefined;
     if (schedule.ranking === "authentic") {
+      signal?.throwIfAborted();
       const prepared = prepareAuthenticCandidates(sightings, schedule, {
         cutAt,
         exclude: excludedVideoIds(engine, date),
       });
-      const ranked = rankAuthentic(prepared.candidates, schedule, new Map(), {
+      const judge = getApiKey("OPENAI_API_KEY") && resolveCriteria(schedule).judgeLimit > 0
+        ? await judgeCandidates(engine, schedule, prepared.candidates, { cutAt, signal, coverPolicy: options.coverPolicy })
+        : undefined;
+      signal?.throwIfAborted();
+      const ranked = rankAuthentic(prepared.candidates, schedule, judge?.verdicts, {
         seen: prepared.seen,
         screened: prepared.screened,
-        checked: 0,
+        checked: judge?.checked ?? 0,
       });
       videos = ranked.videos;
       funnel = ranked.funnel;
@@ -140,7 +154,7 @@ async function cut(
   for (const rank of result.ranks) {
     const download = record.downloads.find((entry) => entry.videoId === rank.videoId)!;
     download.artifactId = rank.artifactId;
-    await enqueueResearchDownload(selected.value.engine, schedule, record, download, enqueue);
+    await enqueueResearchDownload(selected.value.engine, schedule, record, download, options.enqueue);
     await writeRun(engine, record);
   }
   await syncDayBookDownloads(selected.value.engine, schedule, record);
@@ -152,9 +166,10 @@ async function cut(
 
 export async function cutTrending(
   engine: Engine, books: BookManager, date: string, cutAt: string,
-  enqueue: typeof queue.enqueue = queue.enqueue,
+  options: CutOptions | typeof queue.enqueue = {}, signal?: AbortSignal,
 ): Promise<TrendingRunRecord | undefined> {
-  const next = (cuts.get(engine) ?? Promise.resolve()).then(() => cut(engine, books, date, cutAt, enqueue));
+  const config = typeof options === "function" ? { enqueue: options } : options;
+  const next = (cuts.get(engine) ?? Promise.resolve()).then(() => cut(engine, books, date, cutAt, config, signal));
   cuts.set(engine, next.catch(() => {}));
   try {
     return await next;
@@ -170,8 +185,8 @@ export async function cutTrending(
 }
 
 export function registerTrendingCutJob(books: BookManager): void {
-  registerJobHandler("trending_cut", async (payload) => {
-    await cutTrending(activeBookEngine(), books, String(payload.date), String(payload.cutAt));
+  registerJobHandler("trending_cut", async (payload, context) => {
+    await cutTrending(activeBookEngine(), books, String(payload.date), String(payload.cutAt), undefined, context.signal);
     return { success: true };
   });
 }
