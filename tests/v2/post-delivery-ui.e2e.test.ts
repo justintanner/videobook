@@ -310,7 +310,13 @@ describe('Post delivery review in the chat composer', () => {
     const tile = page.locator(`.react-flow__node[data-id="${empty.id}"]`)
     const slot = tile.locator('.post-tile-slot')
     await slot.waitFor({ state: 'visible', timeout: testBudget(30_000) })
+    const collapse = page.getByLabel('Collapse chat', { exact: true })
+    if (await collapse.isVisible()) await collapse.click()
     await tile.scrollIntoViewIfNeeded()
+    await expect.poll(() => slot.evaluate(element => {
+      const box = element.getBoundingClientRect()
+      return element.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2))
+    })).toBe(true)
     const address = page.locator(`.react-flow__node[data-id="${sourceCellId}"] .cell-ref-address`)
     await address.hover()
     const target = (await slot.boundingBox())!
