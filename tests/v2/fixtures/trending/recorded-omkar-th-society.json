@@ -1,0 +1,4504 @@
+{
+  "category": "society",
+  "country": "TH",
+  "video_count": 25,
+  "videos": [
+    {
+      "id": "7709818902133361940",
+      "link": "https://www.tiktok.com/@offchainon/video/7709818902133361940",
+      "type": "video",
+      "description": "น้ำเผยปมทะเลาะอินฟลูฯ เช็กเกลียวด้วยมือเปล่า! ไม่เกี่ยวกับยูทูบพรีเมียม อีกฝ่ายถ่ายคลิปไม่หยุด ตัวเองบอกเมียว่านอนแล้ว #ข่าว #อ๊อฟชัยนนท์ #น้ํารภีพัทร #ซองดูฮี #อินฟลูเอนเซอร์",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-19T09:55:02Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": "7480950500465150727",
+      "stats": {
+        "play_count": 1400000,
+        "like_count": 71200,
+        "comment_count": 1049,
+        "share_count": 616,
+        "save_count": 1856,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6618206721930346497",
+        "sec_uid": "MS4wLjABAAAAEJaOnA93GFHAI2nLmzfiPuPm9D77MuOAcLwKk2MJv3CA8PiJ_J4kK2LaUXYPnypu",
+        "username": "offchainon",
+        "nickname": "OFF CHAINON (อ๊อฟ ชัยนนท์)",
+        "link": "https://www.tiktok.com/@offchainon",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/d711a52f8a5a34ff8587d87fc1d580c4~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=d81218ca&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "ONE31 / THE STANDARD\nIG : offchainon\nTel/Line id : 0808304452 / 0955425446\n@chainoncover"
+      },
+      "author_stats": {
+        "follower_count": 1400000,
+        "following_count": 606,
+        "like_count": 78000000,
+        "video_count": 3867,
+        "friend_count": 0,
+        "liked_video_count": 6455
+      },
+      "music": {
+        "id": "7709818927618067208",
+        "title": "original sound - OFF CHAINON (อ๊อฟ ชัยนนท์)",
+        "link": "https://www.tiktok.com/music/original-sound-OFF-CHAINON-%E0%B8%AD-%E0%B8%AD%E0%B8%9F-%E0%B8%8A-%E0%B8%A2%E0%B8%99%E0%B8%99%E0%B8%97-7709818927618067208",
+        "author_name": "OFF CHAINON (อ๊อฟ ชัยนนท์)",
+        "album": null,
+        "duration_seconds": 83,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/d711a52f8a5a34ff8587d87fc1d580c4~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=d81218ca&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 83,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 269445,
+        "size_bytes": 2807853,
+        "cover": "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/ooFzRAeIGwVe27HgxAAYQQAfIAerEhGDYp3GLJ~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o8O3CeRgGGHrLoQRxeIxY7Q3fFwQamFAfqGW6A~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ooFzRAeIGwVe27HgxAAYQQAfIAerEhGDYp3GLJ~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 278653,
+            "fps": 29,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 2904403,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 213237,
+            "fps": 29,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 2223451,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 269445,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 2807853,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 152827,
+            "fps": 29,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 1593549,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 4391,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd425/video/tos/alisg/tos-alisg-pv-0037/1f225e7c54bf4bfcb26cc717b87085e3/?a=1988&bti=ODszNWYuMDE6&&bt=840&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=ajszbnk5cnBmZTMzODczNEBpajszbnk5cnBmZTMzODczNEBtMi5qMmQ0YnNhLS1kMWBzYSNtMi5qMmQ0YnNhLS1kMWBzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:28:37Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/ooFzRAeIGwVe27HgxAAYQQAfIAerEhGDYp3GLJ~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1598983049200641",
+          "name": "ข่าว",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7"
+        },
+        {
+          "id": "1666214890629122",
+          "name": "อ๊อฟชัยนนท์",
+          "link": "https://www.tiktok.com/tag/%E0%B8%AD%E0%B9%8A%E0%B8%AD%E0%B8%9F%E0%B8%8A%E0%B8%B1%E0%B8%A2%E0%B8%99%E0%B8%99%E0%B8%97%E0%B9%8C"
+        },
+        {
+          "id": "1683960205280257",
+          "name": "น้ํารภีพัทร",
+          "link": "https://www.tiktok.com/tag/%E0%B8%99%E0%B9%89%E0%B9%8D%E0%B8%B2%E0%B8%A3%E0%B8%A0%E0%B8%B5%E0%B8%9E%E0%B8%B1%E0%B8%97%E0%B8%A3"
+        },
+        {
+          "id": "1637855994863622",
+          "name": "ซองดูฮี",
+          "link": "https://www.tiktok.com/tag/%E0%B8%8B%E0%B8%AD%E0%B8%87%E0%B8%94%E0%B8%B9%E0%B8%AE%E0%B8%B5"
+        },
+        {
+          "id": "1676185286278146",
+          "name": "อินฟลูเอนเซอร์",
+          "link": "https://www.tiktok.com/tag/%E0%B8%AD%E0%B8%B4%E0%B8%99%E0%B8%9F%E0%B8%A5%E0%B8%B9%E0%B9%80%E0%B8%AD%E0%B8%99%E0%B9%80%E0%B8%8B%E0%B8%AD%E0%B8%A3%E0%B9%8C"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [
+        "19 พ.ย. 69",
+        "น้ำเผยปมทะเลาะอินฟลูฯ\nเช็กเกลียวด้วยมือเปล่า!\nไม่เกี่ยวกับยูทูบพรีเมียม\nอีกฝ่ายถ่ายคลิปไม่หยุด\nตัวเองบอกเมียว่านอนแล้ว"
+      ],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7710999149323291925",
+      "link": "https://www.tiktok.com/@flukesanti1/video/7710999149323291925",
+      "type": "video",
+      "description": "น้องลียา 17 ปีหัดขับรถ!ชาวเน็ตเสียงแตก #น้องลียา #เป๊กสัณณ์ชัย #หัดขับรถ #ดราม่าดารา #ชาวเน็ตถกเดือด",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-22T14:15:02Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 505200,
+        "like_count": 3159,
+        "comment_count": 194,
+        "share_count": 60,
+        "save_count": 194,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6801546011266794498",
+        "sec_uid": "MS4wLjABAAAAk6l3FJq1cLBfTO0NHZpYAqm3OqzMMPFsGZBhoYTEviCYTonzAcmsuS-OCCCF7rxd",
+        "username": "flukesanti1",
+        "nickname": "FlukeSanti",
+        "link": "https://www.tiktok.com/@flukesanti1",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/3a5d089eb497e9296bb1d4b77ca8ba0d~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=e5325837&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "ไม่พลาดที่ข่าวสาร‼️ รันทุกวงการ กดติดตามได้เลย✅"
+      },
+      "author_stats": {
+        "follower_count": 48400,
+        "following_count": 7,
+        "like_count": 1400000,
+        "video_count": 1705,
+        "friend_count": 0,
+        "liked_video_count": 1730
+      },
+      "music": {
+        "id": "7704293802208365364",
+        "title": "March of the Iron Will",
+        "link": "https://www.tiktok.com/music/March-of-the-Iron-Will-7704293802208365364",
+        "author_name": "NEXUS 808",
+        "album": null,
+        "duration_seconds": 51,
+        "play_link": "",
+        "cover": "https://lf16-rmx-music-sign.tiktokcdn.com/obj/tos-alisg-o-51690-sg/o4xxQ2yYcEAAniRkruSFq6vinJODBJaAAkAEM?x-expires=1796369234",
+        "is_original_sound": false,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 6,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 296321,
+        "size_bytes": 222723,
+        "cover": "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/o4QiFuYe8KnfMKYrQ4CA3gOAgJe5qFffBQZANO~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oQCFqKAQgfYAFgmu8CK5IYeZfneMNiFNQ4Of4B~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oIyhfogQQMAYfaF45eugFOQBqOZKhiAeYK8NJf~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 304340,
+            "fps": 24,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 228750,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 246684,
+            "fps": 24,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 185445,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 296321,
+            "fps": 24,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 222723,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 187372,
+            "fps": 24,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 140857,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": []
+      },
+      "images": [],
+      "cover": "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/o4QiFuYe8KnfMKYrQ4CA3gOAgJe5qFffBQZANO~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1632486755728385",
+          "name": "น้องลียา",
+          "link": "https://www.tiktok.com/tag/%E0%B8%99%E0%B9%89%E0%B8%AD%E0%B8%87%E0%B8%A5%E0%B8%B5%E0%B8%A2%E0%B8%B2"
+        },
+        {
+          "id": "1685686982675457",
+          "name": "เป๊กสัณณ์ชัย",
+          "link": "https://www.tiktok.com/tag/%E0%B9%80%E0%B8%9B%E0%B9%8A%E0%B8%81%E0%B8%AA%E0%B8%B1%E0%B8%93%E0%B8%93%E0%B9%8C%E0%B8%8A%E0%B8%B1%E0%B8%A2"
+        },
+        {
+          "id": "1599085090836497",
+          "name": "หัดขับรถ",
+          "link": "https://www.tiktok.com/tag/%E0%B8%AB%E0%B8%B1%E0%B8%94%E0%B8%82%E0%B8%B1%E0%B8%9A%E0%B8%A3%E0%B8%96"
+        },
+        {
+          "id": "1662334498578433",
+          "name": "ดราม่าดารา",
+          "link": "https://www.tiktok.com/tag/%E0%B8%94%E0%B8%A3%E0%B8%B2%E0%B8%A1%E0%B9%88%E0%B8%B2%E0%B8%94%E0%B8%B2%E0%B8%A3%E0%B8%B2"
+        },
+        {
+          "id": "7710998525965762566",
+          "name": "ชาวเน็ตถกเดือด",
+          "link": "https://www.tiktok.com/tag/%E0%B8%8A%E0%B8%B2%E0%B8%A7%E0%B9%80%E0%B8%99%E0%B9%87%E0%B8%95%E0%B8%96%E0%B8%81%E0%B9%80%E0%B8%94%E0%B8%B7%E0%B8%AD%E0%B8%94"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7709918512646507797",
+      "link": "https://www.tiktok.com/@31302205905/video/7709918512646507797",
+      "type": "video",
+      "description": "ก่อนที่ผมจะถ่ายคลิป ผมโทรแจ้ง เช็คประตู หน้าต่าง ก่อนที่ไฟฟ้าจะดับ หลังจากดูคลิปจบ ผมให้เวลาเพื่อนๆ 30 วินาที เพื่อนๆพี่ๆเจอแบบนี้จะทัำอะไรต่อ แล้วเพื่อนๆพี่ๆมีอะไรจะถามผมผมให้คนล่ะ 1 ข้อ     ##กลับสู่จุดเริ่มต้น##ฝันร้ายป่าตอง##ไฟใหม้ป่าตอง##นาทีชีวิต##ป่าตองภูเก็ต",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-19T16:21:34Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 657400,
+        "like_count": 56200,
+        "comment_count": 318,
+        "share_count": 4325,
+        "save_count": 1656,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6642661182870437890",
+        "sec_uid": "MS4wLjABAAAArCuH7qYnQRwT18-sEgEP5QQYmYtnI6V63n0gZJxkSnExgV5uV2_wJRfEpwCkxlvJ",
+        "username": "31302205905",
+        "nickname": "เลิ๊กลั๊ก",
+        "link": "https://www.tiktok.com/@31302205905",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-useast2a-avt-0068-giso/6d40317f7a528c27df13bc162efda992~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=aad2180c&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "คุณอาฉุย"
+      },
+      "author_stats": {
+        "follower_count": 1595,
+        "following_count": 773,
+        "like_count": 81900,
+        "video_count": 448,
+        "friend_count": 0,
+        "liked_video_count": 5514
+      },
+      "music": {
+        "id": "7422155654342642433",
+        "title": "เสียงต้นฉบับ - แตงโม แตงโม",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-%E0%B9%81%E0%B8%95%E0%B8%87%E0%B9%82%E0%B8%A1-%E0%B9%81%E0%B8%95%E0%B8%87%E0%B9%82%E0%B8%A1-7422155654342642433",
+        "author_name": "แตงโม แตงโม",
+        "album": null,
+        "duration_seconds": 55,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-useast2a-avt-0068-giso/08201372f8f377528f94c3d828a57cdb~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=21c2c262&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": true,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": [
+          {
+            "platform": "apple_music",
+            "song_id": "1871451531",
+            "link": "https://music.apple.com/song/1871451531"
+          },
+          {
+            "platform": "spotify",
+            "song_id": "53yb47XyoByhts8BPbffZ4",
+            "link": "https://open.spotify.com/track/53yb47XyoByhts8BPbffZ4"
+          }
+        ]
+      },
+      "video": {
+        "duration_seconds": 9,
+        "width": 540,
+        "height": 960,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 280404,
+        "size_bytes": 348298,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/owGFOLGeB5nePqfxBrbaA4we0mgRgZMwGkRmIA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ocfVRGjHIHDf4fxE8IFHTQzgDcs8QAC1yTA4YA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oIHfDf1TIEd4QgITYAVAFC8fQcjyABGc3D9543~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": null,
+        "qualities": [
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 311912,
+            "fps": 23,
+            "width": 540,
+            "height": 960,
+            "size_bytes": 387434,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 280404,
+            "fps": 23,
+            "width": 540,
+            "height": 960,
+            "size_bytes": 348298,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": []
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/owGFOLGeB5nePqfxBrbaA4we0mgRgZMwGkRmIA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1652058300555265",
+          "name": "กลับสู่จุดเริ่มต้น",
+          "link": "https://www.tiktok.com/tag/%E0%B8%81%E0%B8%A5%E0%B8%B1%E0%B8%9A%E0%B8%AA%E0%B8%B9%E0%B9%88%E0%B8%88%E0%B8%B8%E0%B8%94%E0%B9%80%E0%B8%A3%E0%B8%B4%E0%B9%88%E0%B8%A1%E0%B8%95%E0%B9%89%E0%B8%99"
+        },
+        {
+          "id": "7493179621534334977",
+          "name": "ฝันร้ายป่าตอง",
+          "link": "https://www.tiktok.com/tag/%E0%B8%9D%E0%B8%B1%E0%B8%99%E0%B8%A3%E0%B9%89%E0%B8%B2%E0%B8%A2%E0%B8%9B%E0%B9%88%E0%B8%B2%E0%B8%95%E0%B8%AD%E0%B8%87"
+        },
+        {
+          "id": "7708513927885225992",
+          "name": "ไฟใหม้ป่าตอง",
+          "link": "https://www.tiktok.com/tag/%E0%B9%84%E0%B8%9F%E0%B9%83%E0%B8%AB%E0%B8%A1%E0%B9%89%E0%B8%9B%E0%B9%88%E0%B8%B2%E0%B8%95%E0%B8%AD%E0%B8%87"
+        },
+        {
+          "id": "1598000364687362",
+          "name": "นาทีชีวิต",
+          "link": "https://www.tiktok.com/tag/%E0%B8%99%E0%B8%B2%E0%B8%97%E0%B8%B5%E0%B8%8A%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%95"
+        },
+        {
+          "id": "1607140552650753",
+          "name": "ป่าตองภูเก็ต",
+          "link": "https://www.tiktok.com/tag/%E0%B8%9B%E0%B9%88%E0%B8%B2%E0%B8%95%E0%B8%AD%E0%B8%87%E0%B8%A0%E0%B8%B9%E0%B9%80%E0%B8%81%E0%B9%87%E0%B8%95"
+        }
+      ],
+      "mentions": [],
+      "location": {
+        "id": "22535865206670411",
+        "name": "Phuket Island",
+        "link": "https://www.tiktok.com/place/Phuket-Island-22535865206670411",
+        "address": "Wichit, Mueang Phuket District, Phuket, 83000, Thailand",
+        "city": "Mueang Phuket District",
+        "province": null,
+        "country": null,
+        "category": "Outdoors and Attractions",
+        "category_path": [
+          "Outdoors and Attractions",
+          "Natural Landmark",
+          "Island"
+        ],
+        "parent": {
+          "id": null,
+          "name": "Mueang Phuket District"
+        }
+      },
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7709859312050408756",
+      "link": "https://www.tiktok.com/@mikeysent/video/7709859312050408756",
+      "type": "video",
+      "description": "แท็กซี่กรุงเทพฯ อย่าให้มีครั้งที่ 100 😤  #แท็กซี่ #คาราโอเกะ #ร้องเพลง",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-19T12:31:51Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 2200000,
+        "like_count": 365900,
+        "comment_count": 1610,
+        "share_count": 231000,
+        "save_count": 8728,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6803316233762948102",
+        "sec_uid": "MS4wLjABAAAA-ASqXSBvPa0HJPkB8dzbEczbJPkn57TjFbJYx3ESyRnaRiobYjMW97UQEgEzTLkK",
+        "username": "mikeysent",
+        "nickname": "mikeysouth",
+        "link": "https://www.tiktok.com/@mikeysent",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/e51e37c7b86528ccd6a7170fcb91b38a~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=57cb5b9e&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "เด็กใต้มันไม่ swag อ๋อ?"
+      },
+      "author_stats": {
+        "follower_count": 536,
+        "following_count": 65,
+        "like_count": 369000,
+        "video_count": 1,
+        "friend_count": 0,
+        "liked_video_count": 168
+      },
+      "music": {
+        "id": "7709859331470805768",
+        "title": "original sound - mikeysouth",
+        "link": "https://www.tiktok.com/music/original-sound-mikeysouth-7709859331470805768",
+        "author_name": "mikeysouth",
+        "album": null,
+        "duration_seconds": 26,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/e51e37c7b86528ccd6a7170fcb91b38a~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=57cb5b9e&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 26,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 323736,
+        "size_bytes": 1053318,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ogr7DAAQVHDBwygeE6FEAwD1IfAjBVAQIgfXou~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/owzC3MeI5AeDXfcg3gKCNIAziTglLniUG5f77e~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ogr7DAAQVHDBwygeE6FEAwD1IfAjBVAQIgfXou~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 428920,
+            "fps": 29,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 1395548,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 315912,
+            "fps": 29,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 1027899,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 323736,
+            "fps": 29,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 1053318,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 260027,
+            "fps": 29,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 846065,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": []
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ogr7DAAQVHDBwygeE6FEAwD1IfAjBVAQIgfXou~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1602985718836230",
+          "name": "แท็กซี่",
+          "link": "https://www.tiktok.com/tag/%E0%B9%81%E0%B8%97%E0%B9%87%E0%B8%81%E0%B8%8B%E0%B8%B5%E0%B9%88"
+        },
+        {
+          "id": "1596923295179777",
+          "name": "คาราโอเกะ",
+          "link": "https://www.tiktok.com/tag/%E0%B8%84%E0%B8%B2%E0%B8%A3%E0%B8%B2%E0%B9%82%E0%B8%AD%E0%B9%80%E0%B8%81%E0%B8%B0"
+        },
+        {
+          "id": "21933625",
+          "name": "ร้องเพลง",
+          "link": "https://www.tiktok.com/tag/%E0%B8%A3%E0%B9%89%E0%B8%AD%E0%B8%87%E0%B9%80%E0%B8%9E%E0%B8%A5%E0%B8%87"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [
+        "เตือนภัย ! แท็กซี่เปิดไมค์ร้องคาราโอเกะ\nไม่เก็ทอ่าาา ไม่ชอบเลย 😡"
+      ],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7711530322571169032",
+      "link": "https://www.tiktok.com/@taodeksiam/video/7711530322571169032",
+      "type": "video",
+      "description": "จัสมินสยามแฟนการ์ตูน #จัสมินสยาม #จัสมินดาราสยาม #การ์ตูน #แฟน #ความรัก สัมภาษณ์เด็กสยาม",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-24T00:36:43Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 1200000,
+        "like_count": 58600,
+        "comment_count": 931,
+        "share_count": 35200,
+        "save_count": 3662,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7444911835646084117",
+        "sec_uid": "MS4wLjABAAAADllFcTUR4SGiXuOFhfk3TwsANI7RYCW2chdBkDDXaTDpbAg8IDOWeoUGXavnUFEl",
+        "username": "taodeksiam",
+        "nickname": "เด็กสยามเต่า",
+        "link": "https://www.tiktok.com/@taodeksiam",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/adfa0af9ccfccb74fc8e6115c8664cf4~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=4fa49c3e&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "สัมภาษณ์เด็กสยาม\nig taodeksiam\nblekubblekub@gmail.com"
+      },
+      "author_stats": {
+        "follower_count": 675200,
+        "following_count": 108,
+        "like_count": 14900000,
+        "video_count": 705,
+        "friend_count": 0,
+        "liked_video_count": 8923
+      },
+      "music": {
+        "id": "7711530467299773191",
+        "title": "เสียงต้นฉบับ - เด็กสยามเต่า",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-%E0%B9%80%E0%B8%94-%E0%B8%81%E0%B8%AA%E0%B8%A2%E0%B8%B2%E0%B8%A1%E0%B9%80%E0%B8%95-%E0%B8%B2-7711530467299773191",
+        "author_name": "เด็กสยามเต่า",
+        "album": null,
+        "duration_seconds": 19,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/adfa0af9ccfccb74fc8e6115c8664cf4~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=4fa49c3e&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 19,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 1000348,
+        "size_bytes": 2492618,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oEIB1gAxcsMmCBMW5n4AvrAAiAOBEZAEWwfiI3~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ocA3IiDjVwY3B3BAcX3aEBECHMmTAF7wFIivB~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oEIB1gAxcsMmCBMW5n4AvrAAiAOBEZAEWwfiI3~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": null,
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 1245571,
+            "fps": 30,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 3103654,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 811507,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 2022073,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 1000348,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 2492618,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 589306,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 1468404,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 991,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd3e5/video/tos/alisg/tos-alisg-pv-0037/e5f14725324e482eaf81f490994a5a2e/?a=1988&bti=ODszNWYuMDE6&&bt=3443&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=amp3anE5cjhnZjMzODczNEBpamp3anE5cjhnZjMzODczNEBxX3ItMmRrbC9hLS1kMWBzYSNxX3ItMmRrbC9hLS1kMWBzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00078000",
+            "expires_at": "2026-11-29T07:27:33Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oEIB1gAxcsMmCBMW5n4AvrAAiAOBEZAEWwfiI3~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "7498708988389916673",
+          "name": "จัสมินสยาม",
+          "link": "https://www.tiktok.com/tag/%E0%B8%88%E0%B8%B1%E0%B8%AA%E0%B8%A1%E0%B8%B4%E0%B8%99%E0%B8%AA%E0%B8%A2%E0%B8%B2%E0%B8%A1"
+        },
+        {
+          "id": "7524609236060504065",
+          "name": "จัสมินดาราสยาม",
+          "link": "https://www.tiktok.com/tag/%E0%B8%88%E0%B8%B1%E0%B8%AA%E0%B8%A1%E0%B8%B4%E0%B8%99%E0%B8%94%E0%B8%B2%E0%B8%A3%E0%B8%B2%E0%B8%AA%E0%B8%A2%E0%B8%B2%E0%B8%A1"
+        },
+        {
+          "id": "78312274",
+          "name": "การ์ตูน",
+          "link": "https://www.tiktok.com/tag/%E0%B8%81%E0%B8%B2%E0%B8%A3%E0%B9%8C%E0%B8%95%E0%B8%B9%E0%B8%99"
+        },
+        {
+          "id": "70114922",
+          "name": "แฟน",
+          "link": "https://www.tiktok.com/tag/%E0%B9%81%E0%B8%9F%E0%B8%99"
+        },
+        {
+          "id": "41025769",
+          "name": "ความรัก",
+          "link": "https://www.tiktok.com/tag/%E0%B8%84%E0%B8%A7%E0%B8%B2%E0%B8%A1%E0%B8%A3%E0%B8%B1%E0%B8%81"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7710209151196122369",
+      "link": "https://www.tiktok.com/@pptv.thailand/video/7710209151196122369",
+      "type": "video",
+      "description": "ม็อบเจน Z ปิดถนน เรียบร้อย!  #ม็อบเจนซี #PPTVNews #PPTVHD36 #ขวัญเรียมแก้วสุวรรณ",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-20T11:09:36Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 4200000,
+        "like_count": 353600,
+        "comment_count": 9557,
+        "share_count": 34400,
+        "save_count": 12517,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6546931054320664577",
+        "sec_uid": "MS4wLjABAAAArAs8pGM71kiRWk-Unj0HjFVsqdxWMpTnd8HU6WzT8WoegxKjmAZThcrg-BWQerRv",
+        "username": "pptv.thailand",
+        "nickname": "PPTVHD36",
+        "link": "https://www.tiktok.com/@pptv.thailand",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/abaefb42cf144824257c9d8124a81157~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=aeb7e78c&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": true,
+        "is_private": false,
+        "biography": "เปิดรับข่าวสาร ที่เข้าใจง่าย เชื่อถือได้ ไปกับทีมข่าวคุณภาพ อัดแน่น ตลอดทั้งวัน"
+      },
+      "author_stats": {
+        "follower_count": 4900000,
+        "following_count": 3,
+        "like_count": 215500000,
+        "video_count": 22200,
+        "friend_count": 0,
+        "liked_video_count": 46
+      },
+      "music": {
+        "id": "7710209251313978130",
+        "title": "เสียงต้นฉบับ - PPTVHD36",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-PPTVHD36-7710209251313978130",
+        "author_name": "PPTVHD36",
+        "album": null,
+        "duration_seconds": 53,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/abaefb42cf144824257c9d8124a81157~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=aeb7e78c&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 53,
+        "width": 1080,
+        "height": 1920,
+        "quality": "1080p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 1918487,
+        "size_bytes": 12779763,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ogUAGBfEegALrY8cvQCpVlAjAiIFF0CADgACVA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ocSveAev4AQCuVrYEhAdQFLIfWANCWAOGhDFCS~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ogUAGBfEegALrY8cvQCpVlAjAiIFF0CADgACVA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 1041623,
+            "fps": 25,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 6941639,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 717341,
+            "fps": 25,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 4780540,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 714851,
+            "fps": 25,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 4761896,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 557195,
+            "fps": 25,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 3713290,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 1318,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd407/video/tos/alisg/tos-alisg-pv-0037/6305a3a42e664178baa7f14e959b54e2/?a=1988&bti=ODszNWYuMDE6&&bt=2193&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=ajl0d3k5cm41ZjMzODgzNEBpajl0d3k5cm41ZjMzODgzNEBvMnFfMmQ0aC1hLS1kL2BzYSNvMnFfMmQ0aC1hLS1kL2Bzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00048000",
+            "expires_at": "2026-11-29T07:28:07Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ogUAGBfEegALrY8cvQCpVlAjAiIFF0CADgACVA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "7548727598570962945",
+          "name": "ม็อบเจนซี",
+          "link": "https://www.tiktok.com/tag/%E0%B8%A1%E0%B9%87%E0%B8%AD%E0%B8%9A%E0%B9%80%E0%B8%88%E0%B8%99%E0%B8%8B%E0%B8%B5"
+        },
+        {
+          "id": "1679951751008257",
+          "name": "pptvnews",
+          "link": "https://www.tiktok.com/tag/pptvnews"
+        },
+        {
+          "id": "1589117780814850",
+          "name": "pptvhd36",
+          "link": "https://www.tiktok.com/tag/pptvhd36"
+        },
+        {
+          "id": "7689034720738279432",
+          "name": "ขวัญเรียมแก้วสุวรรณ",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B8%A7%E0%B8%B1%E0%B8%8D%E0%B9%80%E0%B8%A3%E0%B8%B5%E0%B8%A2%E0%B8%A1%E0%B9%81%E0%B8%81%E0%B9%89%E0%B8%A7%E0%B8%AA%E0%B8%B8%E0%B8%A7%E0%B8%A3%E0%B8%A3%E0%B8%93"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        },
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7709827694287998229",
+      "link": "https://www.tiktok.com/@workpointnews23/video/7709827694287998229",
+      "type": "video",
+      "description": "นาทีสลด! จยย.เฉี่ยวเก๋ง เสยกระบะซ้ำ คนขี่กระเด็นดับ . กรุงเทพมหานคร - ภาพนาทีอุบัติเหตุรถจักรยานยนต์ขี่มาด้วยความเร็ว ก่อนเฉี่ยวชนรถเก๋งสีแดง จนเสียหลักพุ่งชนท้ายรถกระบะอย่างแรง ทำให้คนขี่กระเด็นตกจากรถ หมวกกันน็อกหลุดคนขับเก๋งคู่กรณีรีบจอดรถลงมาช่วยเหลือแต่สุดท้ายคนขี่เสียชีวิต  . #รถจักรยานยนต์ชนรถเก๋ง #จยยเฉี่ยวชนเก๋งแดง #มอเตอร์ไซค์  #ช่วยคนไทยไขความจริง #ข่าวเวิร์คพอยท์ #ข่าวเวิร์คพอยท์ออนไลน์",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-19T12:40:00Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": null,
+      "is_stitch_enabled": null,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 6100000,
+        "like_count": 259000,
+        "comment_count": 6876,
+        "share_count": 48800,
+        "save_count": 11251,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7075902033525474310",
+        "sec_uid": "MS4wLjABAAAAxa4fcZMnPCf2P7Rwl6vQkhdd7J04BnrZv5vkl0qQ7whH8baSmIZL0t3JDXV1j5Gv",
+        "username": "workpointnews23",
+        "nickname": "ข่าวเวิร์คพอยท์",
+        "link": "https://www.tiktok.com/@workpointnews23",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/4f58bf080d929bf6926843aec377b3a4~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=18c8bd64&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "'ช่วยคนไทย ไขความจริง'\n🔹️facebook https://www.facebook.com/NewsWorkpoint"
+      },
+      "author_stats": {
+        "follower_count": 2700000,
+        "following_count": 1,
+        "like_count": 141600000,
+        "video_count": 11800,
+        "friend_count": 0,
+        "liked_video_count": 114
+      },
+      "music": {
+        "id": "7709827764049824533",
+        "title": "เสียงต้นฉบับ - ข่าวเวิร์คพอยท์",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-%E0%B8%82-%E0%B8%B2%E0%B8%A7%E0%B9%80%E0%B8%A7-%E0%B8%A3-%E0%B8%84%E0%B8%9E%E0%B8%AD%E0%B8%A2%E0%B8%97-7709827764049824533",
+        "author_name": "ข่าวเวิร์คพอยท์",
+        "album": null,
+        "duration_seconds": 94,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/4f58bf080d929bf6926843aec377b3a4~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=18c8bd64&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": [
+          {
+            "platform": "apple_music",
+            "song_id": "1495543529",
+            "link": "https://music.apple.com/song/1495543529"
+          },
+          {
+            "platform": "spotify",
+            "song_id": "2t7rE94UD295vvS8nOLB7e",
+            "link": "https://open.spotify.com/track/2t7rE94UD295vvS8nOLB7e"
+          }
+        ]
+      },
+      "video": {
+        "duration_seconds": 94,
+        "width": 1080,
+        "height": 1920,
+        "quality": "1080p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 1461135,
+        "size_bytes": 17315548,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o0AADE2V4EnAAroQ9MefEFzfHDxcgsIgb19y4A~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oIQeQCDorzYfAEDVvFvofPXoU90EbEgA4Ls4CN~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/o0AADE2V4EnAAroQ9MefEFzfHDxcgsIgb19y4A~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 519277,
+            "fps": 25,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 6153831,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 374115,
+            "fps": 25,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 4433553,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 499427,
+            "fps": 25,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 5918592,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 274901,
+            "fps": 25,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 3257789,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "eng-US",
+            "source": "mt",
+            "is_auto_generated": false,
+            "is_translation": true,
+            "format": "webvtt",
+            "size_bytes": 190,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd430/video/tos/alisg/tos-alisg-pv-0037/09d682207b034b38bd5479a3a7e2af17/?a=1988&bti=ODszNWYuMDE6&&bt=1460&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=Mzpqd3Q5cnBmZTMzODgzNEBpMzpqd3Q5cnBmZTMzODgzNEBpXy5fMmRzcnNhLS1kL2BzYSNpXy5fMmRzcnNhLS1kL2Bzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:28:48Z"
+          },
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 282,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd430/video/tos/alisg/tos-alisg-pv-0037/e3cf957194c944a8b99bd82e7183e1f5/?a=1988&bti=ODszNWYuMDE6&&bt=1460&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=Mzpqd3Q5cnBmZTMzODgzNEBpMzpqd3Q5cnBmZTMzODgzNEBpXy5fMmRzcnNhLS1kL2BzYSNpXy5fMmRzcnNhLS1kL2Bzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:28:48Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o0AADE2V4EnAAroQ9MefEFzfHDxcgsIgb19y4A~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7702641859834711317",
+      "link": "https://www.tiktok.com/@lopburipatrol/video/7702641859834711317",
+      "type": "video",
+      "description": "อุบัติเหตุเกิดได้ทุกเมื่อ #ตํารวจ #สายตรวจ #ลพบุรี",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-10-31T01:44:29Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 1200000,
+        "like_count": 72700,
+        "comment_count": 369,
+        "share_count": 18800,
+        "save_count": 3176,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7655751724308628501",
+        "sec_uid": "MS4wLjABAAAAfZprQdP512YEoE8LOGcTMVWvpIbo2pZFULoQ6XEkZW2PB7AtO2bMGajJlfkSqBZV",
+        "username": "lopburipatrol",
+        "nickname": "ตำรวจธรรมดา",
+        "link": "https://www.tiktok.com/@lopburipatrol",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/6b03ac30f4955f3e5652c66658196bcb~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=cedbf241&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "เพื่อให้เห็นถึงการทำงานและสิ่งที่ต้องเจอของตำรวจสายตรวจธรรมดาคนหนึ่ง\nไม่อนุญาตให้นำคลิปไป เผยแพร่ที่อื่นโดยได้รับอนุญาต \nฝากบ้านฟ้าด้วย ตำรวจธรรมดา"
+      },
+      "author_stats": {
+        "follower_count": 39600,
+        "following_count": 10,
+        "like_count": 628100,
+        "video_count": 67,
+        "friend_count": 0,
+        "liked_video_count": 315
+      },
+      "music": {
+        "id": "7702641891598191367",
+        "title": "เสียงต้นฉบับ - ตำรวจธรรมดา",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-%E0%B8%95%E0%B8%B3%E0%B8%A3%E0%B8%A7%E0%B8%88%E0%B8%98%E0%B8%A3%E0%B8%A3%E0%B8%A1%E0%B8%94%E0%B8%B2-7702641891598191367",
+        "author_name": "ตำรวจธรรมดา",
+        "album": null,
+        "duration_seconds": 18,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/6b03ac30f4955f3e5652c66658196bcb~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=cedbf241&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": [
+          {
+            "platform": "apple_music",
+            "song_id": "1886668874",
+            "link": "https://music.apple.com/song/1886668874"
+          },
+          {
+            "platform": "spotify",
+            "song_id": "6UspFBmho7VcoR1TK44bDe",
+            "link": "https://open.spotify.com/track/6UspFBmho7VcoR1TK44bDe"
+          }
+        ]
+      },
+      "video": {
+        "duration_seconds": 18,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 590496,
+        "size_bytes": 1348325,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o8SIQOwGqR8RqPGeGxALplfVQejsrtIFrDeiKA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o05GFlQfZfVa9KwfRXetj7ABM8AZXGFk6FBrRA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o0K5FXFGwMrXlZRejAfXA2f6B8ktV9GQKJAeRI~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 1093771,
+            "fps": 30,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 2497490,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 637211,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 1454993,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 590496,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 1348325,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 464105,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 1059727,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": []
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o8SIQOwGqR8RqPGeGxALplfVQejsrtIFrDeiKA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1599026746166274",
+          "name": "ตํารวจ",
+          "link": "https://www.tiktok.com/tag/%E0%B8%95%E0%B9%8D%E0%B8%B2%E0%B8%A3%E0%B8%A7%E0%B8%88"
+        },
+        {
+          "id": "1620214036042753",
+          "name": "สายตรวจ",
+          "link": "https://www.tiktok.com/tag/%E0%B8%AA%E0%B8%B2%E0%B8%A2%E0%B8%95%E0%B8%A3%E0%B8%A7%E0%B8%88"
+        },
+        {
+          "id": "82731731",
+          "name": "ลพบุรี",
+          "link": "https://www.tiktok.com/tag/%E0%B8%A5%E0%B8%9E%E0%B8%9A%E0%B8%B8%E0%B8%A3%E0%B8%B5"
+        }
+      ],
+      "mentions": [],
+      "location": {
+        "id": "22535796481427417",
+        "name": "Mueang Lop Buri District",
+        "link": "https://www.tiktok.com/place/Mueang-Lop-Buri-District-22535796481427417",
+        "address": "Lopburi, Thailand",
+        "city": null,
+        "province": null,
+        "country": null,
+        "category": "Place and Address",
+        "category_path": [
+          "Place and Address",
+          "Places",
+          "City"
+        ],
+        "parent": null
+      },
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7709885407076388097",
+      "link": "https://www.tiktok.com/@paehasastory/video/7709885407076388097",
+      "type": "video",
+      "description": "โหนกระแสเดือด! ย้อนรอย “จอมโจรทิวลี่” ชื่อนี้มีที่มา เปิดวีรกรรมในอดีต ทั้งปมหลอกขายของออนไลน์และคดีเช่ารถหรู ก่อนกลายเป็นประเด็นร้อนในรายการโหนกระแส! #จอมโจรทิวลี่ #ทิวลี่ #หนุ่มกรรชัย #โหนกระแส #ข่าวดัง",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-19T14:13:20Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 635200,
+        "like_count": 7780,
+        "comment_count": 167,
+        "share_count": 538,
+        "save_count": 442,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7554749939059508236",
+        "sec_uid": "MS4wLjABAAAAgR46SJqpV8UEFR-3Y7I6rJfb2WYiF4fuRFQ9o_XYjpWb2Cyb01ggdaVbFukPwOgn",
+        "username": "paehasastory",
+        "nickname": "มีเรื่องกับเป้",
+        "link": "https://www.tiktok.com/@paehasastory",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/d58ed07c47a1b866b37f771ae5e06d3b~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=31e4ed0d&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "🗣️ เป้ไม่ได้ชอบมีเรื่อง แต่ชอบเล่าเรื่อง!"
+      },
+      "author_stats": {
+        "follower_count": 3575,
+        "following_count": 1,
+        "like_count": 62100,
+        "video_count": 86,
+        "friend_count": 0,
+        "liked_video_count": 5
+      },
+      "music": {
+        "id": "7709885485850200852",
+        "title": "เสียงต้นฉบับ - มีเรื่องกับเป้",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-%E0%B8%A1-%E0%B9%80%E0%B8%A3-%E0%B8%AD%E0%B8%87%E0%B8%81-%E0%B8%9A%E0%B9%80%E0%B8%9B-7709885485850200852",
+        "author_name": "มีเรื่องกับเป้",
+        "album": null,
+        "duration_seconds": 22,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/d58ed07c47a1b866b37f771ae5e06d3b~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=31e4ed0d&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 22,
+        "width": 576,
+        "height": 1022,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 279296,
+        "size_bytes": 794844,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oQ9fY4qnigvggABfLHXAvLBfQdNAAff8XMDhyt~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/o8Ai84AffAFNYMFgIyqgAnLgBMfvgpXBXf9L5f~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/okXfgQnQYyH9ALBfAg4AALGgfvLBiXMi0qeN5f~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 325912,
+            "fps": 30,
+            "width": 1080,
+            "height": 1918,
+            "size_bytes": 927506,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 234735,
+            "fps": 30,
+            "width": 720,
+            "height": 1278,
+            "size_bytes": 668028,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 279296,
+            "fps": 30,
+            "width": 576,
+            "height": 1022,
+            "size_bytes": 794844,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 166431,
+            "fps": 30,
+            "width": 576,
+            "height": 1022,
+            "size_bytes": 473644,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 963,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd3e8/video/tos/alisg/tos-alisg-pv-0037/ef7236e389ea4318a46098185c3d6cf1/?a=1988&bti=ODszNWYuMDE6&&bt=1849&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=anl2ZXg5cnBqZTMzODczNEBpanl2ZXg5cnBqZTMzODczNEBzay1oMmRjNHNhLS1kMWBzYSNzay1oMmRjNHNhLS1kMWBzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00078000",
+            "expires_at": "2026-11-29T07:27:36Z"
+          },
+          {
+            "language": "eng-US",
+            "source": "mt",
+            "is_auto_generated": false,
+            "is_translation": true,
+            "format": "webvtt",
+            "size_bytes": 644,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd3e8/video/tos/alisg/tos-alisg-pv-0037/3f1f46da519c463fa479c21f8e852d66/?a=1988&bti=ODszNWYuMDE6&&bt=1849&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=anl2ZXg5cnBqZTMzODczNEBpanl2ZXg5cnBqZTMzODczNEBzay1oMmRjNHNhLS1kMWBzYSNzay1oMmRjNHNhLS1kMWBzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00078000",
+            "expires_at": "2026-11-29T07:27:36Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oQ9fY4qnigvggABfLHXAvLBfQdNAAff8XMDhyt~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "7401013895094173697",
+          "name": "จอมโจรทิวลี่",
+          "link": "https://www.tiktok.com/tag/%E0%B8%88%E0%B8%AD%E0%B8%A1%E0%B9%82%E0%B8%88%E0%B8%A3%E0%B8%97%E0%B8%B4%E0%B8%A7%E0%B8%A5%E0%B8%B5%E0%B9%88"
+        },
+        {
+          "id": "1603691994238978",
+          "name": "ทิวลี่",
+          "link": "https://www.tiktok.com/tag/%E0%B8%97%E0%B8%B4%E0%B8%A7%E0%B8%A5%E0%B8%B5%E0%B9%88"
+        },
+        {
+          "id": "1603528057930754",
+          "name": "หนุ่มกรรชัย",
+          "link": "https://www.tiktok.com/tag/%E0%B8%AB%E0%B8%99%E0%B8%B8%E0%B9%88%E0%B8%A1%E0%B8%81%E0%B8%A3%E0%B8%A3%E0%B8%8A%E0%B8%B1%E0%B8%A2"
+        },
+        {
+          "id": "1601600003855361",
+          "name": "โหนกระแส",
+          "link": "https://www.tiktok.com/tag/%E0%B9%82%E0%B8%AB%E0%B8%99%E0%B8%81%E0%B8%A3%E0%B8%B0%E0%B9%81%E0%B8%AA"
+        },
+        {
+          "id": "1604339828980737",
+          "name": "ข่าวดัง",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7%E0%B8%94%E0%B8%B1%E0%B8%87"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7711420064280399156",
+      "link": "https://www.tiktok.com/@payom705/video/7711420064280399156",
+      "type": "video",
+      "description": "#องค์การสืบสวนปราบปรามการทุจริตaco #",
+      "title": null,
+      "language": "un",
+      "created_at": "2026-11-23T17:28:23Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 651600,
+        "like_count": 27400,
+        "comment_count": 724,
+        "share_count": 2504,
+        "save_count": 1341,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7055222766865892354",
+        "sec_uid": "MS4wLjABAAAAvPIhVsBdWKRZIueMDnQH8w_9vtXvYwe3aWixauGuToIP80vklc79BlaPAjex-pqZ",
+        "username": "payom705",
+        "nickname": "พยอม 705",
+        "link": "https://www.tiktok.com/@payom705",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/a2b0851b9e631532c79bcda01ac90dd5~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=9da23335&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "รับปรึกษาทุกเรื่อง  แก้ไขทุกปัญหา\n089  2002929"
+      },
+      "author_stats": {
+        "follower_count": 95800,
+        "following_count": 9357,
+        "like_count": 925400,
+        "video_count": 391,
+        "friend_count": 0,
+        "liked_video_count": 180900
+      },
+      "music": {
+        "id": "7711420094865345288",
+        "title": "เสียงต้นฉบับ - พยอม 705",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-%E0%B8%9E%E0%B8%A2%E0%B8%AD%E0%B8%A1-705-7711420094865345288",
+        "author_name": "พยอม 705",
+        "album": null,
+        "duration_seconds": 108,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/a2b0851b9e631532c79bcda01ac90dd5~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=9da23335&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 108,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 451181,
+        "size_bytes": 6111642,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oM7EVfHEighRDOyICi6EAhBcdBBFIsrTrldfC4~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ooDErcghIBiBiIEY7fRdEi6BndAVHglTBfALFr~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oY5DKDeIVAC3WDq4eQC7jFAfZnQJLFIwG1gO7I~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": null,
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 426476,
+            "fps": 30,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 5776993,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 309257,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 4189159,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 451181,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 6111642,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 227898,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 3087080,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 3315,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd43e/video/tos/alisg/tos-alisg-pv-0037/f77b91cf233b4b41930adfc46206cf6f/?a=1988&bti=ODszNWYuMDE6&&bt=2075&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=ajhkbnc5cnI6ZjMzODczNEBpajhkbnc5cnI6ZjMzODczNEBeMnBjMmRjYi9hLS1kMWBzYSNeMnBjMmRjYi9hLS1kMWBzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:29:02Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oM7EVfHEighRDOyICi6EAhBcdBBFIsrTrldfC4~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "7303455503438086150",
+          "name": "องค์การสืบสวนปราบปรามการทุจริตaco",
+          "link": "https://www.tiktok.com/tag/%E0%B8%AD%E0%B8%87%E0%B8%84%E0%B9%8C%E0%B8%81%E0%B8%B2%E0%B8%A3%E0%B8%AA%E0%B8%B7%E0%B8%9A%E0%B8%AA%E0%B8%A7%E0%B8%99%E0%B8%9B%E0%B8%A3%E0%B8%B2%E0%B8%9A%E0%B8%9B%E0%B8%A3%E0%B8%B2%E0%B8%A1%E0%B8%81%E0%B8%B2%E0%B8%A3%E0%B8%97%E0%B8%B8%E0%B8%88%E0%B8%A3%E0%B8%B4%E0%B8%95aco"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        },
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7711610125252857109",
+      "link": "https://www.tiktok.com/@nationonlineth/video/7711610125252857109",
+      "type": "video",
+      "description": "เปิดนาทีชายปริศนาปาปลาร้าใส่หน้า \"ทนายตั้ม\" . ชายปริศนาชาวคลองเตยบุกปาปลาร้าใส่หน้า \"ทนายตั้ม\" ระหว่างพา \"เอก\" เจ้าของตึกฝั่งกัมพูชาที่ถูก \"กัน จอมพลัง\" แจ้งจับฐานกรรโชกทรัพย์มาให้สัมภาษณ์สื่อมวลชน . #ทนายตั้ม #กันจอมพลัง #สนสุทธิสาร #ข่าวด่วน #ข่าววันนี้ #NationOnline #ข่าวเนชั่น #ข่าวTikTok",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-24T05:45:57Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": null,
+      "is_stitch_enabled": null,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 4600000,
+        "like_count": 129500,
+        "comment_count": 2237,
+        "share_count": 18700,
+        "save_count": 7449,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6778430533979571202",
+        "sec_uid": "MS4wLjABAAAAKDZbfsTpioDP2-DvQbnfd282ch-Zv5pJeQqJrWU2bEqaEViXIVMvoIG0HcJgU_hd",
+        "username": "nationonlineth",
+        "nickname": "Nation Online",
+        "link": "https://www.tiktok.com/@nationonlineth",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/4a465390beb39fec0e49be1dcbec19c9~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=9d894f1f&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "ผู้นำข่าวสาร เพื่อการตัดสินใจ"
+      },
+      "author_stats": {
+        "follower_count": 3100000,
+        "following_count": 9,
+        "like_count": 97700000,
+        "video_count": 17000,
+        "friend_count": 0,
+        "liked_video_count": 2587
+      },
+      "music": {
+        "id": "7711610212578298630",
+        "title": "original sound - Nation Online",
+        "link": "https://www.tiktok.com/music/original-sound-Nation-Online-7711610212578298630",
+        "author_name": "Nation Online",
+        "album": null,
+        "duration_seconds": 131,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/4a465390beb39fec0e49be1dcbec19c9~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=9d894f1f&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 130,
+        "width": 1080,
+        "height": 1920,
+        "quality": "1080p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 2552589,
+        "size_bytes": 41778877,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oYfVKJRABACEA9gI7eDUcrQSBIAS6SVgSFQCAK~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oMZJFAqgScBiqiIrABifBBg1wJYDOQI0VyB5Cf~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oYfVKJRABACEA9gI7eDUcrQSBIAS6SVgSFQCAK~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 854799,
+            "fps": 25,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 13990720,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 632722,
+            "fps": 25,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 10355924,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 888665,
+            "fps": 25,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 14545013,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 472522,
+            "fps": 25,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 7733901,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 4424,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd454/video/tos/alisg/tos-alisg-pv-0037/50ff21180b564af0ab59222783fe6276/?a=1988&bti=ODszNWYuMDE6&&bt=2854&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=M2pkOXM5cmlsZjMzODgzNEBpM2pkOXM5cmlsZjMzODgzNEA1aWFuMmRzNC9hLS1kL2BzYSM1aWFuMmRzNC9hLS1kL2Bzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:29:24Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oYfVKJRABACEA9gI7eDUcrQSBIAS6SVgSFQCAK~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1663215169017858",
+          "name": "ข่าวtiktok",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7tiktok"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [
+        {
+          "id": "0",
+          "type": 54,
+          "title": "CapCut · Editing made easy",
+          "description": "CapCut · Video Editor",
+          "link": "https://www.capcut.com/tools/desktop-video-editor?channel=capcutpc_ttweb_anchor_edit1&download_channel=capcutpc_ttweb_anchor_edit1&enter_from=capcutpc_ttweb_anchor_edit1&force_dp=1&from_page=capcutpc_ttweb_anchor_edit1&type=tools",
+          "icon": "https://p19-common-sign.tiktokcdn.com/tiktok-obj/capcut_logo_64px_bk.png~tplv-tiktokx-origin.image?dr=14566&x-expires=1795784400&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=9b759fb9&idc=my"
+        }
+      ],
+      "suggested_searches": []
+    },
+    {
+      "id": "7710194949739810069",
+      "link": "https://www.tiktok.com/@jim_jum.lv2/video/7710194949739810069",
+      "type": "video",
+      "description": "#เทรนด์วันนี้้ #ขออนุญาตเจ้าของคลิปและภาพ #ซองดูฮี #น้ำรพีภัทร  (จากเพจ อ้ายเอ็กคนโก้)",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-20T10:14:18Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 319100,
+        "like_count": 10400,
+        "comment_count": 125,
+        "share_count": 193,
+        "save_count": 428,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7375175063148184596",
+        "sec_uid": "MS4wLjABAAAASGV5_ftXcJoR9vdl3smvMVRTwesRleHGEHtAb7VcS3Su6uOJR8jTbe74GPY1nfNY",
+        "username": "jim_jum.lv2",
+        "nickname": "jim_jum.lv2",
+        "link": "https://www.tiktok.com/@jim_jum.lv2",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/676642ceb4d95658ee6208c71bae347c~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=051f7fa8&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "\"ช่วยกันแชร์เป็นกำลังใจให้แอดหน่อยคร้าฟฟ\"🙏🙏🙏"
+      },
+      "author_stats": {
+        "follower_count": 15600,
+        "following_count": 108,
+        "like_count": 405800,
+        "video_count": 1566,
+        "friend_count": 0,
+        "liked_video_count": 2693
+      },
+      "music": {
+        "id": "7710194971474774802",
+        "title": "เสียงต้นฉบับ - jim_jum.lv2",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-jim_jum-lv2-7710194971474774802",
+        "author_name": "jim_jum.lv2",
+        "album": null,
+        "duration_seconds": 23,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/676642ceb4d95658ee6208c71bae347c~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=051f7fa8&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 23,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 509023,
+        "size_bytes": 1508174,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/osAErHWXEHxEccACeAbDfB0R12AFAABgAjErIW~tplv-tiktokx-dmt-logom:tos-alisg-i-0068/osQYAEABvAHAqwxIAa6AdERniAAdiiwZIABXw.image?dr=14573&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/osBuevZfRrETIcBpBMDA7yFBJXxAgA1IKwHOIE~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/osAErHWXEHxEccACeAbDfB0R12AFAABgAjErIW~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 413992,
+            "fps": 29,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 1227643,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 509023,
+            "fps": 29,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 1508174,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 312117,
+            "fps": 29,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 925546,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 1046,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd3e9/video/tos/alisg/tos-alisg-pv-0037/c2c501b24e4d4c338a16d2b5efbb533d/?a=1988&bti=ODszNWYuMDE6&&bt=1148&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=amhtcXQ5cmU0ZjMzODczNEBpamhtcXQ5cmU0ZjMzODczNEBga2VmMmRzbS1hLS1kMWBzYSNga2VmMmRzbS1hLS1kMWBzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00078000",
+            "expires_at": "2026-11-29T07:27:37Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/osAErHWXEHxEccACeAbDfB0R12AFAABgAjErIW~tplv-tiktokx-dmt-logom:tos-alisg-i-0068/osQYAEABvAHAqwxIAa6AdERniAAdiiwZIABXw.image?dr=14573&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "7293551824408150021",
+          "name": "เทรนด์วันนี้้",
+          "link": "https://www.tiktok.com/tag/%E0%B9%80%E0%B8%97%E0%B8%A3%E0%B8%99%E0%B8%94%E0%B9%8C%E0%B8%A7%E0%B8%B1%E0%B8%99%E0%B8%99%E0%B8%B5%E0%B9%89%E0%B9%89"
+        },
+        {
+          "id": "1683878741722113",
+          "name": "ขออนุญาตเจ้าของคลิปและภาพ",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B8%AD%E0%B8%AD%E0%B8%99%E0%B8%B8%E0%B8%8D%E0%B8%B2%E0%B8%95%E0%B9%80%E0%B8%88%E0%B9%89%E0%B8%B2%E0%B8%82%E0%B8%AD%E0%B8%87%E0%B8%84%E0%B8%A5%E0%B8%B4%E0%B8%9B%E0%B9%81%E0%B8%A5%E0%B8%B0%E0%B8%A0%E0%B8%B2%E0%B8%9E"
+        },
+        {
+          "id": "1637855994863622",
+          "name": "ซองดูฮี",
+          "link": "https://www.tiktok.com/tag/%E0%B8%8B%E0%B8%AD%E0%B8%87%E0%B8%94%E0%B8%B9%E0%B8%AE%E0%B8%B5"
+        },
+        {
+          "id": "1649157371319297",
+          "name": "น้ํารพีภัทร",
+          "link": "https://www.tiktok.com/tag/%E0%B8%99%E0%B9%89%E0%B9%8D%E0%B8%B2%E0%B8%A3%E0%B8%9E%E0%B8%B5%E0%B8%A0%E0%B8%B1%E0%B8%97%E0%B8%A3"
+        },
+        {
+          "id": null,
+          "name": "น้ำรพีภัทร",
+          "link": "https://www.tiktok.com/tag/%E0%B8%99%E0%B9%89%E0%B8%B3%E0%B8%A3%E0%B8%9E%E0%B8%B5%E0%B8%A0%E0%B8%B1%E0%B8%97%E0%B8%A3"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [
+        "อีก1จุดสะสมทำให้\n         น้ำระเบิd!"
+      ],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7709543337644100884",
+      "link": "https://www.tiktok.com/@suhatlawisor/video/7709543337644100884",
+      "type": "video",
+      "description": "เอาออกจากระบบราชการ แล้วพวกกูจะเอาอะไรแดก#ประชาชน #ประกันสังคม #สภา #พรรคประชาชน",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-18T16:05:48Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 259700,
+        "like_count": 31100,
+        "comment_count": 219,
+        "share_count": 1365,
+        "save_count": 737,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6833718741860156418",
+        "sec_uid": "MS4wLjABAAAArg_-hChjnDBmW590DAU54yETTTgqJqPuX8kLhcSzMDe7nXm6yHVMNqNhgFjv1CIZ",
+        "username": "suhatlawisor",
+        "nickname": "🤞บอลเตอร์👾",
+        "link": "https://www.tiktok.com/@suhatlawisor",
+        "profile_picture": "https://p19-common-sign.tiktokcdn.com/tos-alisg-avt-0068/cb5c4675532ffe903c02ec805f5ea0eb~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=fb7cf250&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "ติดตามสถานการณ์บ้านเมือง เรา🇹🇭🪽\nบ.เขียว babyball1996\nอจ.ball_suchat_1996"
+      },
+      "author_stats": {
+        "follower_count": 962,
+        "following_count": 403,
+        "like_count": 152100,
+        "video_count": 251,
+        "friend_count": 0,
+        "liked_video_count": 4491
+      },
+      "music": {
+        "id": "7542522037023574806",
+        "title": "оригинальный звук",
+        "link": "https://www.tiktok.com/music/%D0%BE%D1%80%D0%B8%D0%B3%D0%B8%D0%BD%D0%B0%D0%BB%D1%8C%D0%BD%D1%8B%D0%B9-%D0%B7%D0%B2%D1%83%D0%BA-7542522037023574806",
+        "author_name": "dneprovskiy_america",
+        "album": null,
+        "duration_seconds": 11,
+        "play_link": "",
+        "cover": "https://p19-common-sign.tiktokcdn.com/tos-maliva-avt-0068/6730adeced0ddb642f15d55de5fa756a~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=33ca7e83&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": [
+          {
+            "platform": "spotify",
+            "song_id": "5wCvhKARPfgpQaAnvCNrAa",
+            "link": "https://open.spotify.com/track/5wCvhKARPfgpQaAnvCNrAa"
+          }
+        ]
+      },
+      "video": {
+        "duration_seconds": 11,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 497865,
+        "size_bytes": 703670,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oEglF4efYGHrve6Rn9gzzRQN9FQQem6Aw3GdCA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oUmRuHLevIGvTeBAhTlAevIHr9I5GFeGQ9N5zF~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oMQF9LfA7z6YcewGGveGNn4CReGv9zgrAQmQ62~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 326449,
+            "fps": 29,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 461477,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 497865,
+            "fps": 29,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 703670,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 236096,
+            "fps": 29,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 333752,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": []
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oEglF4efYGHrve6Rn9gzzRQN9FQQem6Aw3GdCA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1608859910932481",
+          "name": "ประชาชน",
+          "link": "https://www.tiktok.com/tag/%E0%B8%9B%E0%B8%A3%E0%B8%B0%E0%B8%8A%E0%B8%B2%E0%B8%8A%E0%B8%99"
+        },
+        {
+          "id": "1645853118230529",
+          "name": "ประกันสังคม",
+          "link": "https://www.tiktok.com/tag/%E0%B8%9B%E0%B8%A3%E0%B8%B0%E0%B8%81%E0%B8%B1%E0%B8%99%E0%B8%AA%E0%B8%B1%E0%B8%87%E0%B8%84%E0%B8%A1"
+        },
+        {
+          "id": "1596883126589441",
+          "name": "สภา",
+          "link": "https://www.tiktok.com/tag/%E0%B8%AA%E0%B8%A0%E0%B8%B2"
+        },
+        {
+          "id": "1706458457759753",
+          "name": "พรรคประชาชน",
+          "link": "https://www.tiktok.com/tag/%E0%B8%9E%E0%B8%A3%E0%B8%A3%E0%B8%84%E0%B8%9B%E0%B8%A3%E0%B8%B0%E0%B8%8A%E0%B8%B2%E0%B8%8A%E0%B8%99"
+        }
+      ],
+      "mentions": [],
+      "location": {
+        "id": "23661696390978142",
+        "name": "Bang Bang Bangkok",
+        "link": "https://www.tiktok.com/place/Bang-Bang-Bangkok-23661696390978142",
+        "address": "29/82 Soi RCA, Khwaeng Bang Kapi, Khet Huai Khwang, Krung Thep Maha Nakhon 10310, Thailand",
+        "city": "Bangkok",
+        "province": null,
+        "country": null,
+        "category": "Leisure",
+        "category_path": [
+          "Leisure",
+          "Entertainment",
+          "Bars and Clubs"
+        ],
+        "parent": {
+          "id": null,
+          "name": "Bangkok"
+        }
+      },
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [
+        "เอาออกจากระบบราชการ\nแล้วพวกกูจะเอาอะไรแดก"
+      ],
+      "anchors": [
+        {
+          "id": "4330363307",
+          "type": 28,
+          "title": "natural",
+          "description": "Effects",
+          "link": "https://www.capcut.com/",
+          "icon": "https://p16-common-sign.tiktokcdn.com/tiktok-obj/capcut_logo_64px_bk.png~tplv-tiktokx-origin.image?dr=14566&x-expires=1795784400&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=9b759fb9&idc=my"
+        }
+      ],
+      "suggested_searches": []
+    },
+    {
+      "id": "7707917583663631624",
+      "link": "https://www.tiktok.com/@greencivil.gc/video/7707917583663631624",
+      "type": "video",
+      "description": "แม่น้ำสายตอนนี้วิกฤตหนักมาก..🥺 เจอสารพิษปนเปื้อนจนไม่สามารถเอาไปผลิตเป็นน้ำประปาได้แล้ว.. #แม่น้ําสาย #ข่าวtiktok #เรื่องนี้ต้องดู #เทรนด์วันนี้ #สาระความรู้",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-14T06:57:04Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": "7430377583499283218",
+      "stats": {
+        "play_count": 2300000,
+        "like_count": 317200,
+        "comment_count": 1566,
+        "share_count": 59700,
+        "save_count": 14722,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7148453618428920858",
+        "sec_uid": "MS4wLjABAAAAgWxiKez9LyRJvc1yiYYDFuIwI7riuKZjomiW0iqv4k6NbXjhYzZlCCgAOwKZ2kzO",
+        "username": "greencivil.gc",
+        "nickname": "Pim Green Civil",
+        "link": "https://www.tiktok.com/@greencivil.gc",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/6cabe99942c0c326caf09173f0c6c546~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=10ab1248&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "💚 มาทำให้โลกนี้น่าอยู่ขึ้นกันมั้ย? \n💌 greencivil.gc@gmail.com"
+      },
+      "author_stats": {
+        "follower_count": 228300,
+        "following_count": 20,
+        "like_count": 16900000,
+        "video_count": 336,
+        "friend_count": 0,
+        "liked_video_count": 749
+      },
+      "music": {
+        "id": "7707917657531009813",
+        "title": "เสียงต้นฉบับ - Pim Green Civil",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-Pim-Green-Civil-7707917657531009813",
+        "author_name": "Pim Green Civil",
+        "album": null,
+        "duration_seconds": 69,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/6cabe99942c0c326caf09173f0c6c546~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=10ab1248&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 70,
+        "width": 720,
+        "height": 1280,
+        "quality": "720p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 1421153,
+        "size_bytes": 12435092,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oIAEKAEvYEAlGyAgBD4lEIy3A7vBYPijH6Bia~tplv-tiktokx-dmt-logom:tos-alisg-i-0068/osB4AUDdICcf3EiLjfRBEtxBDMlWAgtBAEAAiq.image?dr=14573&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/o0QjYoVAAdfD1lSwDDQ9VeFPTMDC8AfjEDIDgI~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/oIAEKAEvYEAlGyAgBD4lEIy3A7vBYPijH6Bia~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 1108410,
+            "fps": 60,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 9691668,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 1421153,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 12435092,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 624160,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 5461405,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 402924,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 3525589,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "eng-US",
+            "source": "mt",
+            "is_auto_generated": false,
+            "is_translation": true,
+            "format": "webvtt",
+            "size_bytes": 2353,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd417/video/tos/alisg/tos-alisg-pv-0037/c7fe89e999d1499cb6f8c48685a2dec7/?a=1988&bti=ODszNWYuMDE6&&bt=2567&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=amRzdms5cjwzZTMzODczNEBpamRzdms5cjwzZTMzODczNEBocTBkMmRjYHBhLS1kMTFzYSNocTBkMmRjYHBhLS1kMTFzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:28:23Z"
+          },
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 3360,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd417/video/tos/alisg/tos-alisg-pv-0037/2bdd0da0238840c6b9befbe8cdbcfda3/?a=1988&bti=ODszNWYuMDE6&&bt=2567&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=amRzdms5cjwzZTMzODczNEBpamRzdms5cjwzZTMzODczNEBocTBkMmRjYHBhLS1kMTFzYSNocTBkMmRjYHBhLS1kMTFzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:28:23Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oIAEKAEvYEAlGyAgBD4lEIy3A7vBYPijH6Bia~tplv-tiktokx-dmt-logom:tos-alisg-i-0068/osB4AUDdICcf3EiLjfRBEtxBDMlWAgtBAEAAiq.image?dr=14573&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1693563273038850",
+          "name": "แม่น้ําสาย",
+          "link": "https://www.tiktok.com/tag/%E0%B9%81%E0%B8%A1%E0%B9%88%E0%B8%99%E0%B9%89%E0%B9%8D%E0%B8%B2%E0%B8%AA%E0%B8%B2%E0%B8%A2"
+        },
+        {
+          "id": "1663215169017858",
+          "name": "ข่าวtiktok",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7tiktok"
+        },
+        {
+          "id": "1666480654611457",
+          "name": "เรื่องนี้ต้องดู",
+          "link": "https://www.tiktok.com/tag/%E0%B9%80%E0%B8%A3%E0%B8%B7%E0%B9%88%E0%B8%AD%E0%B8%87%E0%B8%99%E0%B8%B5%E0%B9%89%E0%B8%95%E0%B9%89%E0%B8%AD%E0%B8%87%E0%B8%94%E0%B8%B9"
+        },
+        {
+          "id": "1704348307143690",
+          "name": "เทรนด์วันนี้",
+          "link": "https://www.tiktok.com/tag/%E0%B9%80%E0%B8%97%E0%B8%A3%E0%B8%99%E0%B8%94%E0%B9%8C%E0%B8%A7%E0%B8%B1%E0%B8%99%E0%B8%99%E0%B8%B5%E0%B9%89"
+        },
+        {
+          "id": "1601522286900225",
+          "name": "สาระความรู้",
+          "link": "https://www.tiktok.com/tag/%E0%B8%AA%E0%B8%B2%E0%B8%A3%E0%B8%B0%E0%B8%84%E0%B8%A7%E0%B8%B2%E0%B8%A1%E0%B8%A3%E0%B8%B9%E0%B9%89"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7709460812884086036",
+      "link": "https://www.tiktok.com/@danai.3006/video/7709460812884086036",
+      "type": "video",
+      "description": "บันเทิงล่ะ งานนี้ #ข่าววันนี้ #ข่าวด่วน",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-18T10:45:30Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 479700,
+        "like_count": 19700,
+        "comment_count": 209,
+        "share_count": 339,
+        "save_count": 463,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7326887625149744133",
+        "sec_uid": "MS4wLjABAAAAucD_wpfCuByMOxPAO1cpEjAUYTDumlR4aaPSH95JwU7mUyxtaeNMGg9opVDMGLwp",
+        "username": "danai.3006",
+        "nickname": "danai3006",
+        "link": "https://www.tiktok.com/@danai.3006",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/828f9c4e43599eb73379a6f05fceadc0~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=a8c7cbbe&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "Facebook:ดนัย แดงนาค\nช่อง เล่าข่าว\nติดต่องาน line : kantoon1669"
+      },
+      "author_stats": {
+        "follower_count": 480800,
+        "following_count": 184,
+        "like_count": 30500000,
+        "video_count": 1269,
+        "friend_count": 0,
+        "liked_video_count": 2269
+      },
+      "music": {
+        "id": "7709460839039830836",
+        "title": "เสียงต้นฉบับ - danai3006",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-danai3006-7709460839039830836",
+        "author_name": "danai3006",
+        "album": null,
+        "duration_seconds": 17,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/828f9c4e43599eb73379a6f05fceadc0~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=a8c7cbbe&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 17,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 400650,
+        "size_bytes": 874770,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oYeI8fY7RAUjDlvQEMxEAFCoADfFQuXvVBFc7X~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o03NBfBvDDfVFGMIF9EgYFQcfCoQc8RAxyjSFA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o8zEMgRcIcxIopfCB90DfDejFFAFBNYAPx6VIv~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 601434,
+            "fps": 30,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 1313158,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 357896,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 781423,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 400650,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 874770,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 246331,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 537833,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 469,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd3e3/video/tos/alisg/tos-alisg-pv-0037/4549699e206b4908b62d8e0609b65300/?a=1988&bti=ODszNWYuMDE6&&bt=1732&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=MzNyOHI5cmtyZTMzODczNEBpMzNyOHI5cmtyZTMzODczNEBzZXBrMmRjL3JhLS1kMTFzYSNzZXBrMmRjL3JhLS1kMTFzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00078000",
+            "expires_at": "2026-11-29T07:27:31Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oYeI8fY7RAUjDlvQEMxEAFCoADfFQuXvVBFc7X~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1633051373339650",
+          "name": "ข่าววันนี้",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7%E0%B8%A7%E0%B8%B1%E0%B8%99%E0%B8%99%E0%B8%B5%E0%B9%89"
+        },
+        {
+          "id": "1592611217803265",
+          "name": "ข่าวด่วน",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7%E0%B8%94%E0%B9%88%E0%B8%A7%E0%B8%99"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [
+        "CP ก็ฟ้อง",
+        "CJ ก็ฟ้อง"
+      ],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7709538924326030612",
+      "link": "https://www.tiktok.com/@nnornannnn/video/7709538924326030612",
+      "type": "video",
+      "description": "แอร์มีนา #แอร์มีนา #การบินไทย #แอร์สาว #ข่าววันนี้ #โหนกระแส",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-18T15:48:35Z",
+      "location_created": null,
+      "is_ad": true,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 455000,
+        "like_count": 11500,
+        "comment_count": 204,
+        "share_count": 865,
+        "save_count": 469,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6603291278401945601",
+        "sec_uid": "MS4wLjABAAAAQ6icQwnRWeDbE1WAijBzRf29S2ozFJzDRxgT-NhKCm17rMSosBRM9mUNPeCUJQWg",
+        "username": "nnornannnn",
+        "nickname": "ชื่อแนนไม่ชอบอยู่บ้าน",
+        "link": "https://www.tiktok.com/@nnornannnn",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/570eae9f312843c703cdd8645d35a715~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=40c124fc&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "ดูโหนกระแสที่คาเฟ่"
+      },
+      "author_stats": {
+        "follower_count": 2394,
+        "following_count": 119,
+        "like_count": 128200,
+        "video_count": 43,
+        "friend_count": 0,
+        "liked_video_count": 1075
+      },
+      "music": {
+        "id": "7709544117916551957",
+        "title": "original sound - ชื่อแนนไม่ชอบอยู่บ้าน",
+        "link": "https://www.tiktok.com/music/original-sound-%E0%B8%8A-%E0%B8%AD%E0%B9%81%E0%B8%99%E0%B8%99%E0%B9%84%E0%B8%A1-%E0%B8%8A%E0%B8%AD%E0%B8%9A%E0%B8%AD%E0%B8%A2-%E0%B8%9A-%E0%B8%B2%E0%B8%99-7709544117916551957",
+        "author_name": "ชื่อแนนไม่ชอบอยู่บ้าน",
+        "album": null,
+        "duration_seconds": 20,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/570eae9f312843c703cdd8645d35a715~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=40c124fc&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 20,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 453996,
+        "size_bytes": 1150314,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ocGSQIYIGgkedL4RyQeevgma0BeoFGAR7rg5AG~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o0I23qNivoITU9APDVAEIcBABywEYAUzF5iva~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oEBidUaBi9A2aqTIzYvQcIBALYEI3vAyEVnNo~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 808733,
+            "fps": 30,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 2049331,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 540801,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 1370391,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 453996,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 1150314,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 441441,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 1118612,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "eng-US",
+            "source": "mt",
+            "is_auto_generated": false,
+            "is_translation": true,
+            "format": "webvtt",
+            "size_bytes": 603,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd3e6/video/tos/alisg/tos-alisg-pv-0037/53712175bf4646d2be2f2f0675953be0/?a=1988&bti=ODszNWYuMDE6&&bt=2395&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=M3YzOHA5cm12ZTMzODczNEBpM3YzOHA5cm12ZTMzODczNEBpLTIvMmRrZXJhLS1kMTFzYSNpLTIvMmRrZXJhLS1kMTFzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00078000",
+            "expires_at": "2026-11-29T07:27:34Z"
+          },
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 606,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd3e6/video/tos/alisg/tos-alisg-pv-0037/3e01837d399f436abd5cd26b7a408311/?a=1988&bti=ODszNWYuMDE6&&bt=2395&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=M3YzOHA5cm12ZTMzODczNEBpM3YzOHA5cm12ZTMzODczNEBpLTIvMmRrZXJhLS1kMTFzYSNpLTIvMmRrZXJhLS1kMTFzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00078000",
+            "expires_at": "2026-11-29T07:27:34Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ocGSQIYIGgkedL4RyQeevgma0BeoFGAR7rg5AG~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "7657332038592102418",
+          "name": "แอร์มีนา",
+          "link": "https://www.tiktok.com/tag/%E0%B9%81%E0%B8%AD%E0%B8%A3%E0%B9%8C%E0%B8%A1%E0%B8%B5%E0%B8%99%E0%B8%B2"
+        },
+        {
+          "id": "1607217623110657",
+          "name": "การบินไทย",
+          "link": "https://www.tiktok.com/tag/%E0%B8%81%E0%B8%B2%E0%B8%A3%E0%B8%9A%E0%B8%B4%E0%B8%99%E0%B9%84%E0%B8%97%E0%B8%A2"
+        },
+        {
+          "id": "1664935746866178",
+          "name": "แอร์สาว",
+          "link": "https://www.tiktok.com/tag/%E0%B9%81%E0%B8%AD%E0%B8%A3%E0%B9%8C%E0%B8%AA%E0%B8%B2%E0%B8%A7"
+        },
+        {
+          "id": "1633051373339650",
+          "name": "ข่าววันนี้",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7%E0%B8%A7%E0%B8%B1%E0%B8%99%E0%B8%99%E0%B8%B5%E0%B9%89"
+        },
+        {
+          "id": "1601600003855361",
+          "name": "โหนกระแส",
+          "link": "https://www.tiktok.com/tag/%E0%B9%82%E0%B8%AB%E0%B8%99%E0%B8%81%E0%B8%A3%E0%B8%B0%E0%B9%81%E0%B8%AA"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [
+        "แอร์มีนา\nสนามบินเชียงใหม่"
+      ],
+      "anchors": [
+        {
+          "id": "4420798490",
+          "type": 28,
+          "title": "Angelic Light I",
+          "description": "Effects",
+          "link": "https://www.capcut.com/",
+          "icon": "https://p16-common-sign.tiktokcdn.com/tiktok-obj/capcut_logo_64px_bk.png~tplv-tiktokx-origin.image?dr=14566&x-expires=1795784400&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=9b759fb9&idc=my"
+        }
+      ],
+      "suggested_searches": []
+    },
+    {
+      "id": "7710831245986385170",
+      "link": "https://www.tiktok.com/@anongwadee_tik/video/7710831245986385170",
+      "type": "video",
+      "description": "#ข่าวสาร  #ข่าวน่ารู้  #ข่าวชาวบ้าน  #ข่าว  #ติ๊กอนงค์วดี",
+      "title": null,
+      "language": "un",
+      "created_at": "2026-11-22T03:23:32Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": true,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 270600,
+        "like_count": 11000,
+        "comment_count": 795,
+        "share_count": 1894,
+        "save_count": 696,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6893766132307706885",
+        "sec_uid": "MS4wLjABAAAA9JKg6H9R0nTy1drXK1fw1uRa8M1AoPiARG68ZuMlz-H2iGqIoNRu1v-OEHl-DiJM",
+        "username": "anongwadee_tik",
+        "nickname": "ติ๊ก อนงค์วดี",
+        "link": "https://www.tiktok.com/@anongwadee_tik",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/44e6b450f9db1695a93e107016538c5a~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=0038469d&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "แบ่งปันความรู้ดูแลสุขภาพ \nแจ้งข่าว ข่าวสั้น ทันเหตุการณ\nฝากกดติดตามด้วยนะคะ🥰"
+      },
+      "author_stats": {
+        "follower_count": 22800,
+        "following_count": 1245,
+        "like_count": 249000,
+        "video_count": 867,
+        "friend_count": 0,
+        "liked_video_count": 36500
+      },
+      "music": {
+        "id": "7710831293349219079",
+        "title": "เสียงต้นฉบับ - ติ๊ก อนงค์วดี",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-%E0%B8%95-%E0%B8%81-%E0%B8%AD%E0%B8%99%E0%B8%87%E0%B8%84-%E0%B8%A7%E0%B8%94-7710831293349219079",
+        "author_name": "ติ๊ก อนงค์วดี",
+        "album": null,
+        "duration_seconds": 22,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/44e6b450f9db1695a93e107016538c5a~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=0038469d&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 22,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 314284,
+        "size_bytes": 893982,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oUfrP4R8E3DADC3EVYFANIpDBxm2IgBemNDUhA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ocECNBfEZgADrNxUhIBAR4Apg2IUFDE4De0mYC~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o4IbsNifRrENAUBxBHDCwAFmfDaAgA9QDUYhQE~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 246997,
+            "fps": 24,
+            "width": 704,
+            "height": 1252,
+            "size_bytes": 702583,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 314284,
+            "fps": 24,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 893982,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 193354,
+            "fps": 24,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 549997,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 1146,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd3e8/video/tos/alisg/tos-alisg-pv-0037/301ca79af0c24a7c962cb9a52e2c7b31/?a=1988&bti=ODszNWYuMDE6&&bt=752&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=amdpd3g5cjY5ZjMzODczNEBpamdpd3g5cjY5ZjMzODczNEBsZGRkMmRjLS5hLS1kMTFzYSNsZGRkMmRjLS5hLS1kMTFzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00078000",
+            "expires_at": "2026-11-29T07:27:36Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oUfrP4R8E3DADC3EVYFANIpDBxm2IgBemNDUhA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1616381055575042",
+          "name": "ข่าวสาร",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7%E0%B8%AA%E0%B8%B2%E0%B8%A3"
+        },
+        {
+          "id": "1683694253555713",
+          "name": "ข่าวน่ารู้",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7%E0%B8%99%E0%B9%88%E0%B8%B2%E0%B8%A3%E0%B8%B9%E0%B9%89"
+        },
+        {
+          "id": "1662019486682114",
+          "name": "ข่าวชาวบ้าน",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7%E0%B8%8A%E0%B8%B2%E0%B8%A7%E0%B8%9A%E0%B9%89%E0%B8%B2%E0%B8%99"
+        },
+        {
+          "id": "1598983049200641",
+          "name": "ข่าว",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7"
+        },
+        {
+          "id": "7116772599808327707",
+          "name": "ติ๊กอนงค์วดี",
+          "link": "https://www.tiktok.com/tag/%E0%B8%95%E0%B8%B4%E0%B9%8A%E0%B8%81%E0%B8%AD%E0%B8%99%E0%B8%87%E0%B8%84%E0%B9%8C%E0%B8%A7%E0%B8%94%E0%B8%B5"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7710615790818479380",
+      "link": "https://www.tiktok.com/@alice.bonus/video/7710615790818479380",
+      "type": "video",
+      "description": "อันไหนสีน้ำเงินผิด เป็นข่าวปลอม #เภอลิส #ระบอบสีน้ําเงิน #พ่อสลิ่มลูกสามกีบ #เภออิสกับเตี่ย #วัยรุ่นท็อปนิวส์",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-22T01:53:00Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": "7604146191522630420",
+      "stats": {
+        "play_count": 207200,
+        "like_count": 24100,
+        "comment_count": 424,
+        "share_count": 1357,
+        "save_count": 609,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6778272885675262978",
+        "sec_uid": "MS4wLjABAAAA5eWPWufrhNVI7bUkDRx4myACYwCdNilbanf6wLb1um65PgbjYr-DwrhorqqZT1ug",
+        "username": "alice.bonus",
+        "nickname": "เภอลิส",
+        "link": "https://www.tiktok.com/@alice.bonus",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/f5c708a5015267986bd0a769001d0479~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=ab6f481e&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "💚bonus2\nช่องสำรอง 6 @เภอลิสคนดีย์"
+      },
+      "author_stats": {
+        "follower_count": 459500,
+        "following_count": 1501,
+        "like_count": 12200000,
+        "video_count": 2269,
+        "friend_count": 0,
+        "liked_video_count": 19100
+      },
+      "music": {
+        "id": "7710615817683110663",
+        "title": "เสียงต้นฉบับ - เภอลิส",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-%E0%B9%80%E0%B8%A0%E0%B8%AD%E0%B8%A5-%E0%B8%AA-7710615817683110663",
+        "author_name": "เภอลิส",
+        "album": null,
+        "duration_seconds": 16,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/f5c708a5015267986bd0a769001d0479~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=ab6f481e&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 16,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 525893,
+        "size_bytes": 1100038,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oMYBUGxi3BDXhDaIAMTOVIgcPniBE53NAZw8Y~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oIYXPxOIAD1iMcG5EnLNwPagiUvhBUA4BIVBB~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oAA1BEHrcE0EFRfQwADfBFOAgD3zcZQyjhDrog~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 811102,
+            "fps": 30,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 1696623,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 517406,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 1082285,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 525893,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 1100038,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 403177,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 843346,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": []
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oMYBUGxi3BDXhDaIAMTOVIgcPniBE53NAZw8Y~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "7508737511041007617",
+          "name": "เภอลิส",
+          "link": "https://www.tiktok.com/tag/%E0%B9%80%E0%B8%A0%E0%B8%AD%E0%B8%A5%E0%B8%B4%E0%B8%AA"
+        },
+        {
+          "id": "7632881644801949717",
+          "name": "ระบอบสีน้ําเงิน",
+          "link": "https://www.tiktok.com/tag/%E0%B8%A3%E0%B8%B0%E0%B8%9A%E0%B8%AD%E0%B8%9A%E0%B8%AA%E0%B8%B5%E0%B8%99%E0%B9%89%E0%B9%8D%E0%B8%B2%E0%B9%80%E0%B8%87%E0%B8%B4%E0%B8%99"
+        },
+        {
+          "id": "7604089701637324821",
+          "name": "พ่อสลิ่มลูกสามกีบ",
+          "link": "https://www.tiktok.com/tag/%E0%B8%9E%E0%B9%88%E0%B8%AD%E0%B8%AA%E0%B8%A5%E0%B8%B4%E0%B9%88%E0%B8%A1%E0%B8%A5%E0%B8%B9%E0%B8%81%E0%B8%AA%E0%B8%B2%E0%B8%A1%E0%B8%81%E0%B8%B5%E0%B8%9A"
+        },
+        {
+          "id": "7710479793359323137",
+          "name": "เภออิสกับเตี่ย",
+          "link": "https://www.tiktok.com/tag/%E0%B9%80%E0%B8%A0%E0%B8%AD%E0%B8%AD%E0%B8%B4%E0%B8%AA%E0%B8%81%E0%B8%B1%E0%B8%9A%E0%B9%80%E0%B8%95%E0%B8%B5%E0%B9%88%E0%B8%A2"
+        },
+        {
+          "id": "7232168955376238598",
+          "name": "วัยรุ่นท็อปนิวส์",
+          "link": "https://www.tiktok.com/tag/%E0%B8%A7%E0%B8%B1%E0%B8%A2%E0%B8%A3%E0%B8%B8%E0%B9%88%E0%B8%99%E0%B8%97%E0%B9%87%E0%B8%AD%E0%B8%9B%E0%B8%99%E0%B8%B4%E0%B8%A7%E0%B8%AA%E0%B9%8C"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        },
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7712029913473125652",
+      "link": "https://www.tiktok.com/@wonlok168/video/7712029913473125652",
+      "type": "video",
+      "description": "ยกเลิกเซเว่นในกัมพูชา #ข่าวด่วน #ข่าว #ความรู้รอบตัว #เรื่องนี้ต้องดู #เทรนด์วันนี้",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-25T10:10:00Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": null,
+      "is_stitch_enabled": null,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 1000000,
+        "like_count": 80300,
+        "comment_count": 451,
+        "share_count": 8875,
+        "save_count": 3936,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7694127644169798676",
+        "sec_uid": "MS4wLjABAAAAVvV54YKq7C9immpXCNCY2c4mol7OFKUUJ0MR7P1bvWJq1ydNfwScAXQhDBP_lTCW",
+        "username": "wonlok168",
+        "nickname": "วนโลก - Facts",
+        "link": "https://www.tiktok.com/@wonlok168",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/99de6a72f925b2fc34737a1616c3b4b7~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=c36e2d9f&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "วนโลก - Facts 🌍\nเรื่องราวรอบโลกที่คุณอาจไม่เคยรู้ เล่าผ่านแผนที่แบบเข้าใจง่ายและกระชับ"
+      },
+      "author_stats": {
+        "follower_count": 78700,
+        "following_count": 0,
+        "like_count": 2900000,
+        "video_count": 69,
+        "friend_count": 0,
+        "liked_video_count": 7
+      },
+      "music": {
+        "id": "7712029978329713429",
+        "title": "เสียงต้นฉบับ - วนโลก - Facts",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-%E0%B8%A7%E0%B8%99%E0%B9%82%E0%B8%A5%E0%B8%81-Facts-7712029978329713429",
+        "author_name": "วนโลก - Facts",
+        "album": null,
+        "duration_seconds": 84,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/99de6a72f925b2fc34737a1616c3b4b7~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=c36e2d9f&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 84,
+        "width": 1080,
+        "height": 1920,
+        "quality": "1080p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 3502543,
+        "size_bytes": 36937388,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oICnwNEgcSAFqEqoA1VewBfpAJDABCAIKAkr5G~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o8vyfABgwogAmiKM1OBYECuBwIIGAPEILE21ir~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oICnwNEgcSAFqEqoA1VewBfpAJDABCAIKAkr5G~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": null,
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 1209040,
+            "fps": 60,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 12744950,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 589495,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 6216748,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 818225,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 8628900,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 428910,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 4523234,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 341736,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 3603914,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 243164,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 2564380,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 3520,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd426/video/tos/alisg/tos-alisg-pv-0037/8180c4bc73844e3882acdb81862c1358/?a=1988&bti=ODszNWYuMDE6&&bt=26474&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=MzRsNnA5cmZkZjMzODgzNEBpMzRsNnA5cmZkZjMzODgzNEBsam00MmRjMTBhLS1kL2BzYSNsam00MmRjMTBhLS1kL2Bzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:28:38Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oICnwNEgcSAFqEqoA1VewBfpAJDABCAIKAkr5G~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1704348307143690",
+          "name": "เทรนด์วันนี้",
+          "link": "https://www.tiktok.com/tag/%E0%B9%80%E0%B8%97%E0%B8%A3%E0%B8%99%E0%B8%94%E0%B9%8C%E0%B8%A7%E0%B8%B1%E0%B8%99%E0%B8%99%E0%B8%B5%E0%B9%89"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        },
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7710617675906534676",
+      "link": "https://www.tiktok.com/@pup.news/video/7710617675906534676",
+      "type": "video",
+      "description": "สาวจำนำทองไว้ 3 บาท พอราคาทองตกร้านขาดทุน ขอให้มาลดต้นเท่าราคาปัจจุบัน เลยจงใจไม่ไถ่ปล่อยขาด ล่าสุดร้านทองขู่แจ้งความ #ราคาทอง #จำนำทอง #ทองคำ #ร้านทอง #ข่าววันนี้",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-21T13:34:44Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": null,
+      "is_stitch_enabled": null,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 827200,
+        "like_count": 20600,
+        "comment_count": 1404,
+        "share_count": 2805,
+        "save_count": 1112,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7628528013614138388",
+        "sec_uid": "MS4wLjABAAAARzAMAlgl7bwjL4w73Y2zYYUXVaEw2wrYp6qkmdbFaAhL6jT3BL6Vfk_y596BHVXz",
+        "username": "pup.news",
+        "nickname": "Pup News",
+        "link": "https://www.tiktok.com/@pup.news",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/04614fd90dd6720a43b57becbcad7560~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=acb17f72&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "Pup News ฟังปุ๊บ รู้ปั๊บ\nติดต่องาน LineID : PUPNEWS"
+      },
+      "author_stats": {
+        "follower_count": 144700,
+        "following_count": 31,
+        "like_count": 5500000,
+        "video_count": 655,
+        "friend_count": 0,
+        "liked_video_count": 12000
+      },
+      "music": {
+        "id": "7710617753027169042",
+        "title": "เสียงต้นฉบับ - Pup News",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-Pup-News-7710617753027169042",
+        "author_name": "Pup News",
+        "album": null,
+        "duration_seconds": 96,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/04614fd90dd6720a43b57becbcad7560~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=acb17f72&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 96,
+        "width": 1080,
+        "height": 1920,
+        "quality": "1080p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 820424,
+        "size_bytes": 9873603,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oUeEeezDzAOrG8AQAz0IAHE4ODALIYUCWbv6AA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/okzx4LGZrEDw7gNrfGIgBrCAdEoAeqchAWeQTw~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oUeEeezDzAOrG8AQAz0IAHE4ODALIYUCWbv6AA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 307889,
+            "fps": 29,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 3705376,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 266359,
+            "fps": 29,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 3205565,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 297527,
+            "fps": 29,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 3580664,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 200701,
+            "fps": 29,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 2415389,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "eng-US",
+            "source": "mt",
+            "is_auto_generated": false,
+            "is_translation": true,
+            "format": "webvtt",
+            "size_bytes": 2971,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd432/video/tos/alisg/tos-alisg-pv-0037/d6a4bf1a7df748ab8ce856a99dc9d728/?a=1988&bti=ODszNWYuMDE6&&bt=1066&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=Mzc0N3Q5cndzZjMzODgzNEBpMzc0N3Q5cndzZjMzODgzNEBuaDBqMmRjbi1hLS1kL2BzYSNuaDBqMmRjbi1hLS1kL2Bzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:28:50Z"
+          },
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 4668,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd432/video/tos/alisg/tos-alisg-pv-0037/f185492b595e496f806ce2d3b7be64ab/?a=1988&bti=ODszNWYuMDE6&&bt=1066&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=Mzc0N3Q5cndzZjMzODgzNEBpMzc0N3Q5cndzZjMzODgzNEBuaDBqMmRjbi1hLS1kL2BzYSNuaDBqMmRjbi1hLS1kL2Bzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:28:50Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oUeEeezDzAOrG8AQAz0IAHE4ODALIYUCWbv6AA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7711268932593749255",
+      "link": "https://www.tiktok.com/@thestandardth/video/7711268932593749255",
+      "type": "video",
+      "description": "ไอซ์ รักชนก เปิดใจหลังศาลอุทธรณ์อนุญาตประกันตัวเพื่อสู้คดี ม.112 ต่อในชั้นศาลฎีกา ย้ำชีวิตนี้ไม่มีอะไรต้องห่วง . #TheStandardNewsMoments",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-23T07:42:05Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 485700,
+        "like_count": 63300,
+        "comment_count": 2619,
+        "share_count": 1264,
+        "save_count": 1274,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6823953612016763905",
+        "sec_uid": "MS4wLjABAAAAdKmBuuOxq60IHplO-tDskiZyhrpMSIejEeVwfh9OrsIH2eSbwYlNlr7WHALye1Qo",
+        "username": "thestandardth",
+        "nickname": "THE STANDARD TH",
+        "link": "https://www.tiktok.com/@thestandardth",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/f016373dd33ea390116bb42c2f910d85~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=706d394c&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": true,
+        "is_private": false,
+        "biography": "🎟️ RERUN TICKET Economic Forum 2026"
+      },
+      "author_stats": {
+        "follower_count": 2500000,
+        "following_count": 8,
+        "like_count": 96400000,
+        "video_count": 9119,
+        "friend_count": 0,
+        "liked_video_count": 2532
+      },
+      "music": {
+        "id": "7711269010159012614",
+        "title": "original sound - THE STANDARD TH",
+        "link": "https://www.tiktok.com/music/original-sound-THE-STANDARD-TH-7711269010159012614",
+        "author_name": "THE STANDARD TH",
+        "album": null,
+        "duration_seconds": 97,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/f016373dd33ea390116bb42c2f910d85~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=706d394c&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 97,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 536042,
+        "size_bytes": 6501788,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oQIiIoAe9kcIYqIjL7BW9BLyd94GekADAeP4DC~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/owyBGePLIIKoIl7c9BWALCeDIHj9ABedIDHJYw~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oQ8Ae47LA9yI9PoWjS6CD8YykIQAQDLD44eBeG~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 493402,
+            "fps": 29,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 5984603,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 536042,
+            "fps": 29,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 6501788,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 341167,
+            "fps": 29,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 4138107,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 3696,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd433/video/tos/alisg/tos-alisg-pv-0037/4de108813526422e93a3303c56a00284/?a=1988&bti=ODszNWYuMDE6&&bt=1094&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=anZrcW05cmt4ZjMzODczNEBpanZrcW05cmt4ZjMzODczNEBicG1zMmRjcC5hLS1kMTFzYSNicG1zMmRjcC5hLS1kMTFzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:28:51Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oQIiIoAe9kcIYqIjL7BW9BLyd94GekADAeP4DC~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "7658581646676852753",
+          "name": "thestandardnewsmoments",
+          "link": "https://www.tiktok.com/tag/thestandardnewsmoments"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7709487167415897352",
+      "link": "https://www.tiktok.com/@champsarunpat/video/7709487167415897352",
+      "type": "video",
+      "description": "ผลพิสูจน์เบื้องต้น \"พีธ พีระ\" พบร่องรอยบริเวณลำคอและเจอเน็กไทที่จุดเกิดเหตุ #ข่าว #แชมป์รายงาน #พีธพีระ #peacemaker #ผ่านมาให้แค่จำ",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-18T12:27:45Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": "7477224509168225031",
+      "stats": {
+        "play_count": 1400000,
+        "like_count": 32400,
+        "comment_count": 240,
+        "share_count": 893,
+        "save_count": 1337,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "6914983070518526977",
+        "sec_uid": "MS4wLjABAAAAU3uHeh7T_Wq6pXnD-nL5jSyDHjuEMGBldx8zCVYq53Y8rAIuNye9qsQ0rmOjXMBZ",
+        "username": "champsarunpat",
+        "nickname": "Champ Sarunpat",
+        "link": "https://www.tiktok.com/@champsarunpat",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/2e8d1ee9e9f5f55a01ee755c73278839~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=a5403b4e&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "ผู้ประกาศข่าว ช่อง7HD\nติดต่องาน line : champ_nat\nLine OA : @031fdrco"
+      },
+      "author_stats": {
+        "follower_count": 583100,
+        "following_count": 142,
+        "like_count": 26600000,
+        "video_count": 3343,
+        "friend_count": 0,
+        "liked_video_count": 211
+      },
+      "music": {
+        "id": "7709487199542692615",
+        "title": "เสียงต้นฉบับ - Champ Sarunpat",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-Champ-Sarunpat-7709487199542692615",
+        "author_name": "Champ Sarunpat",
+        "album": null,
+        "duration_seconds": 54,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/2e8d1ee9e9f5f55a01ee755c73278839~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=a5403b4e&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 54,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 482315,
+        "size_bytes": 3293977,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oA8iDSfBoE11jOVIKmC7Df1Z9EbASimAiAAfIA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oUZVC7f9E04FDvMAEA9QfGonjmsqDDDqIfTQ4o~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/oA8iDSfBoE11jOVIKmC7Df1Z9EbASimAiAAfIA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 435856,
+            "fps": 30,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 2976734,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 270058,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 1844367,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 482315,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 3293977,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 203100,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 1387075,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 2312,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd408/video/tos/alisg/tos-alisg-pv-0037/65114ca2c7e745d088f30acae02eb6c8/?a=1988&bti=ODszNWYuMDE6&&bt=1793&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=anZuOG85cmdzZTMzODczNEBpanZuOG85cmdzZTMzODczNEAuMGZeMmQ0Z3JhLS1kMTFzYSMuMGZeMmQ0Z3JhLS1kMTFzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00048000",
+            "expires_at": "2026-11-29T07:28:08Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oA8iDSfBoE11jOVIKmC7Df1Z9EbASimAiAAfIA~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1598983049200641",
+          "name": "ข่าว",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7"
+        },
+        {
+          "id": "7550269444744806420",
+          "name": "แชมป์รายงาน",
+          "link": "https://www.tiktok.com/tag/%E0%B9%81%E0%B8%8A%E0%B8%A1%E0%B8%9B%E0%B9%8C%E0%B8%A3%E0%B8%B2%E0%B8%A2%E0%B8%87%E0%B8%B2%E0%B8%99"
+        },
+        {
+          "id": "1641729555982338",
+          "name": "พีธพีระ",
+          "link": "https://www.tiktok.com/tag/%E0%B8%9E%E0%B8%B5%E0%B8%98%E0%B8%9E%E0%B8%B5%E0%B8%A3%E0%B8%B0"
+        },
+        {
+          "id": "770395",
+          "name": "peacemaker",
+          "link": "https://www.tiktok.com/tag/peacemaker"
+        },
+        {
+          "id": "1606028408382466",
+          "name": "ผ่านมาให้แค่จํา",
+          "link": "https://www.tiktok.com/tag/%E0%B8%9C%E0%B9%88%E0%B8%B2%E0%B8%99%E0%B8%A1%E0%B8%B2%E0%B9%83%E0%B8%AB%E0%B9%89%E0%B9%81%E0%B8%84%E0%B9%88%E0%B8%88%E0%B9%8D%E0%B8%B2"
+        },
+        {
+          "id": null,
+          "name": "ผ่านมาให้แค่จำ",
+          "link": "https://www.tiktok.com/tag/%E0%B8%9C%E0%B9%88%E0%B8%B2%E0%B8%99%E0%B8%A1%E0%B8%B2%E0%B9%83%E0%B8%AB%E0%B9%89%E0%B9%81%E0%B8%84%E0%B9%88%E0%B8%88%E0%B8%B3"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        },
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        }
+      ],
+      "text_stickers": [
+        "18 พ.ย. 69",
+        "ผลพิสูจน์เบื้องต้น \"พีธ พีระ\"\nพบร่องรอยบริเวณลำคอ\nและเจอเน็กไทที่จุดเกิดเหตุ"
+      ],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7710449734057561365",
+      "link": "https://www.tiktok.com/@negan1095/video/7710449734057561365",
+      "type": "video",
+      "description": "เตือนภัย เจอแบบนี้ อย่าลงรถเด็ดขาด ! #เตือนภัย #มิจฉาชีพ #ข่าวtiktok #รถยนต์",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-21T02:43:02Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 1200000,
+        "like_count": 40400,
+        "comment_count": 770,
+        "share_count": 45500,
+        "save_count": 8134,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7702628799205098517",
+        "sec_uid": "MS4wLjABAAAAf9Rcj8TYW5NXMjUwGja4Uam5kz_cbse1ldhIcPPKGsCkQDw-HGSwOx5oYsDoqhKL",
+        "username": "negan1095",
+        "nickname": "แสบลองแล้ว",
+        "link": "https://www.tiktok.com/@negan1095",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/f847ca6554bf3a39ea8a9f54babcb440~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=c5f432e8&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": null
+      },
+      "author_stats": {
+        "follower_count": 3915,
+        "following_count": 3,
+        "like_count": 54700,
+        "video_count": 6,
+        "friend_count": 0,
+        "liked_video_count": 28
+      },
+      "music": {
+        "id": "7710449767860226837",
+        "title": "เสียงต้นฉบับ - แสบลองแล้ว",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-%E0%B9%81%E0%B8%AA%E0%B8%9A%E0%B8%A5%E0%B8%AD%E0%B8%87%E0%B9%81%E0%B8%A5-%E0%B8%A7-7710449767860226837",
+        "author_name": "แสบลองแล้ว",
+        "album": null,
+        "duration_seconds": 46,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/f847ca6554bf3a39ea8a9f54babcb440~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=c5f432e8&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 46,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 354608,
+        "size_bytes": 2074460,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oUTEBA0cFIAQnAzr8CBUBfASHgEfMCDArEVRAF~tplv-tiktokx-dmt-logom:tos-alisg-i-0068/ooAIwi3AIKiE1ABfBAlgAITjN3WBCBiZOjMAW4.image?dr=14573&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/o4JQmEgjxEXfFQbrAUC2QCQCfREQOBBcjD8RAF~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oUTEBA0cFIAQnAzr8CBUBfASHgEfMCDArEVRAF~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 449052,
+            "fps": 30,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 2626959,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 326513,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 1910102,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 354608,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 2074460,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 252111,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 1474854,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 2021,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd400/video/tos/alisg/tos-alisg-pv-0037/d6d82ff59b254b4497305c16807f4317/?a=1988&bti=ODszNWYuMDE6&&bt=1360&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=M2s1ZXg5cmxqZjMzODczNEBpM2s1ZXg5cmxqZjMzODczNEBpMWMuMmRjNS1hLS1kMWBzYSNpMWMuMmRjNS1hLS1kMWBzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00048000",
+            "expires_at": "2026-11-29T07:28:00Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oUTEBA0cFIAQnAzr8CBUBfASHgEfMCDArEVRAF~tplv-tiktokx-dmt-logom:tos-alisg-i-0068/ooAIwi3AIKiE1ABfBAlgAITjN3WBCBiZOjMAW4.image?dr=14573&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1603717845020673",
+          "name": "เตือนภัย",
+          "link": "https://www.tiktok.com/tag/%E0%B9%80%E0%B8%95%E0%B8%B7%E0%B8%AD%E0%B8%99%E0%B8%A0%E0%B8%B1%E0%B8%A2"
+        },
+        {
+          "id": "1622608784260097",
+          "name": "มิจฉาชีพ",
+          "link": "https://www.tiktok.com/tag/%E0%B8%A1%E0%B8%B4%E0%B8%88%E0%B8%89%E0%B8%B2%E0%B8%8A%E0%B8%B5%E0%B8%9E"
+        },
+        {
+          "id": "1663215169017858",
+          "name": "ข่าวtiktok",
+          "link": "https://www.tiktok.com/tag/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7tiktok"
+        },
+        {
+          "id": "1609678007793666",
+          "name": "รถยนต์",
+          "link": "https://www.tiktok.com/tag/%E0%B8%A3%E0%B8%96%E0%B8%A2%E0%B8%99%E0%B8%95%E0%B9%8C"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [
+        "อย่าลงรถ เด็ดขาด !"
+      ],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7710901298677239046",
+      "link": "https://www.tiktok.com/@user3286930569844/video/7710901298677239046",
+      "type": "video",
+      "description": "คนกรุงเทพฯ เช็กก่อนนะคะ เสาร์–อาทิตย์นี้ ปิดถนนกลางเมืองหลายสาย เพราะมีงานวิ่งมาราธอนใหญ่ค่ะ 🏃‍♀️🚧👇 ✅ Amazing Thailand Marathon Bangkok 2569 · ผู้ร่วมวิ่งราว 71,000 คน ✅ ห้ามรถทุกชนิด ตั้งแต่ 00.01 น. ถึง 06.30–09.30 น. แล้วแต่สายทาง ✅ เสาร์ 28 พ.ย. 69 (ฮาล์ฟมาราธอน): พญาไท · พระราม 4 · ราชดำริ · วิทยุ · สารสิน · พระราม 1 · เพชรบุรี · ราชดำเนินนอก · ราชดำเนินกลาง · ราชินี ฯลฯ ✅ อาทิตย์ 29 พ.ย. 69 (มาราธอนเต็ม / 10 กม. / วิ่งครอบครัว): สะพานพระราม 8 · ทางยกระดับบรมราชชนนี · สีลม · สาทร · สะพานพระปิ่นเกล้า · สนามไชย ฯลฯ ✅ ห้ามเลี้ยวขวาที่แยกพญาไท เข้าถนนศรีอยุธยา ✅ BTS ขยายเวลาให้บริการ 28–29 พ.ย. ใครต้องออกจากบ้านเช้า เลี่ยงเส้นทางไว้ก่อน หรือใช้รถไฟฟ้าแทนนะคะ ที่มา: ประกาศหัวหน้าเจ้าพนักงานจราจร กทม. (ลงนาม 13 พ.ย. 69 · ลงราชกิจจานุเบกษา 20 พ.ย. 69) · tnews · Pattaya Mail · Time Out Bangkok · ข้อมูล ณ 22 พ.ย. 69 บ้านใครอยู่แถวเส้นทางวิ่งบ้าง เมนต์บอกกันหน่อยค่ะ #ปิดถนน #มาราธอน #กรุงเทพฯ #ข่าววันนี้ #รู้ไว้ใช่ว่า #StickyDog",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-22T07:55:18Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": true,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 304500,
+        "like_count": 6459,
+        "comment_count": 267,
+        "share_count": 10100,
+        "save_count": 1093,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7641680224262751240",
+        "sec_uid": "MS4wLjABAAAAS9l95XpfK__EXJbyzNJ-gnQ5-h3j-SpXFfL9UGVjpHa1k9btT5fvDmXKYu6pC-4-",
+        "username": "user3286930569844",
+        "nickname": "บอกต่อ",
+        "link": "https://www.tiktok.com/@user3286930569844",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/92543c10d1f974d3bee9caaeb072427c~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=16354d6e&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": "มาเปลี่ยนจาก \"ความโกรธ\" เป็น \"ความเข้าใจลูกเรากันเถอะ"
+      },
+      "author_stats": {
+        "follower_count": 570,
+        "following_count": 0,
+        "like_count": 9506,
+        "video_count": 99,
+        "friend_count": 0,
+        "liked_video_count": 1
+      },
+      "music": {
+        "id": "7710901351093488436",
+        "title": "เสียงต้นฉบับ - บอกต่อ",
+        "link": "https://www.tiktok.com/music/%E0%B9%80%E0%B8%AA-%E0%B8%A2%E0%B8%87%E0%B8%95-%E0%B8%99%E0%B8%89%E0%B8%9A-%E0%B8%9A-%E0%B8%9A%E0%B8%AD%E0%B8%81%E0%B8%95-%E0%B8%AD-7710901351093488436",
+        "author_name": "บอกต่อ",
+        "album": null,
+        "duration_seconds": 23,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/92543c10d1f974d3bee9caaeb072427c~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=16354d6e&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 23,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 279147,
+        "size_bytes": 813016,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ossAw0FtvJ1InALWfGCQt6eAACJLAYeA8ePGIU~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/o8YQeqwtDDPBp4sFgiFYAfQErAthEHVfEiCWWT~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ossAw0FtvJ1InALWfGCQt6eAACJLAYeA8ePGIU~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": null,
+        "qualities": [
+          {
+            "quality": "1080p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 311657,
+            "fps": 30,
+            "width": 1080,
+            "height": 1920,
+            "size_bytes": 907703,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 237299,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 691136,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 279147,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 813016,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 164417,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 478867,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 957,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd3e9/video/tos/alisg/tos-alisg-pv-0037/c2b88b6d6849480d87ff9b102d4809d0/?a=1988&bti=ODszNWYuMDE6&&bt=1175&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=anJtOHA5cm88ZjMzODgzNEBpanJtOHA5cm88ZjMzODgzNEA1YGpqMmRjcy5hLS1kL2BzYSM1YGpqMmRjcy5hLS1kL2Bzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00078000",
+            "expires_at": "2026-11-29T07:27:37Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ossAw0FtvJ1InALWfGCQt6eAACJLAYeA8ePGIU~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        },
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    },
+    {
+      "id": "7709218754449820935",
+      "link": "https://www.tiktok.com/@krwr2766grn/video/7709218754449820935",
+      "type": "video",
+      "description": "คำถามบางคำก็ไม่ควรถามเนาะ! #นางบี #หนูเจส #อนันดา",
+      "title": null,
+      "language": "th",
+      "created_at": "2026-11-17T19:06:11Z",
+      "location_created": null,
+      "is_ad": false,
+      "is_pinned": false,
+      "is_private": false,
+      "is_ai_generated": null,
+      "is_original": false,
+      "is_official": false,
+      "is_duet_enabled": true,
+      "is_stitch_enabled": true,
+      "is_share_enabled": true,
+      "playlist_id": null,
+      "stats": {
+        "play_count": 1500000,
+        "like_count": 53200,
+        "comment_count": 208,
+        "share_count": 388,
+        "save_count": 988,
+        "repost_count": 0
+      },
+      "author": {
+        "id": "7709144073143583752",
+        "sec_uid": "MS4wLjABAAAA2er_BLkveXIBRrr9SbzVljskv2QY5uLJicTO94qb21DOr9Qlpx8rCQ61EQeaoc2E",
+        "username": "krwr2766grn",
+        "nickname": "ติดตามบ้านบี",
+        "link": "https://www.tiktok.com/@krwr2766grn",
+        "profile_picture": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/359259ddaa209b5d0a6eae9ffb992ad3~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=b6be963d&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_verified": false,
+        "is_private": false,
+        "biography": null
+      },
+      "author_stats": {
+        "follower_count": 708,
+        "following_count": 11,
+        "like_count": 53900,
+        "video_count": 9,
+        "friend_count": 0,
+        "liked_video_count": 19
+      },
+      "music": {
+        "id": "7709218787164490517",
+        "title": "original sound - ติดตามบ้านบี",
+        "link": "https://www.tiktok.com/music/original-sound-%E0%B8%95-%E0%B8%94%E0%B8%95%E0%B8%B2%E0%B8%A1%E0%B8%9A-%E0%B8%B2%E0%B8%99%E0%B8%9A-7709218787164490517",
+        "author_name": "ติดตามบ้านบี",
+        "album": null,
+        "duration_seconds": 68,
+        "play_link": "",
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/359259ddaa209b5d0a6eae9ffb992ad3~tplv-tiktokx-cropcenter:1080:1080.jpeg?dr=14579&refresh_token=b6be963d&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=81f88b70&idc=my",
+        "is_original_sound": true,
+        "is_copyrighted": false,
+        "is_commercial_use_allowed": true,
+        "is_unlimited_music": false,
+        "is_private": false,
+        "streaming_links": []
+      },
+      "video": {
+        "duration_seconds": 68,
+        "width": 576,
+        "height": 1024,
+        "quality": "540p",
+        "format": "mp4",
+        "codec": "h264",
+        "bitrate": 483499,
+        "size_bytes": 4116094,
+        "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ooO8JyWE16j1BIQI8CFVApnDAfoW1DCafKfIKp~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "origin_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/owIB8VKIWCKVqAj6p1IATFEDWpDCOfBQyffJao~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "animated_cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oAJKaKAr1EuRyE6VAfCkIpI8fWILXCDoODpjfF~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+        "play_link": "",
+        "download_link": "",
+        "qualities": [
+          {
+            "quality": "720p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 371334,
+            "fps": 30,
+            "width": 720,
+            "height": 1280,
+            "size_bytes": 3161217,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h264",
+            "format": "mp4",
+            "bitrate": 483499,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 4116094,
+            "play_link": "",
+            "play_links": []
+          },
+          {
+            "quality": "540p",
+            "codec": "h265_hvc1",
+            "format": "mp4",
+            "bitrate": 277819,
+            "fps": 30,
+            "width": 576,
+            "height": 1024,
+            "size_bytes": 2365110,
+            "play_link": "",
+            "play_links": []
+          }
+        ],
+        "subtitles": [
+          {
+            "language": "tha-TH",
+            "source": "asr",
+            "is_auto_generated": true,
+            "is_translation": false,
+            "format": "webvtt",
+            "size_bytes": 3380,
+            "link": "https://v16-webapp.tiktok.com/unsigned/6b0bd416/video/tos/alisg/tos-alisg-pv-0037/61037668969d4c5182bbae71a1174e37/?a=1988&bti=ODszNWYuMDE6&&bt=1219&ft=-ElcomXLPD12NQheVY-Ux9GvXY6e3wv25zcAp&mime_type=video_mp4&rc=ajpkcW45cjVkZTMzODczNEBpajpkcW45cjVkZTMzODczNEBjXl9wMmRjX3JhLS1kMTFzYSNjXl9wMmRjX3JhLS1kMTFzcw%3D%3D&l=202611271527142449A5DC4F527D94A34D&btag=e00050000",
+            "expires_at": "2026-11-29T07:28:22Z"
+          }
+        ]
+      },
+      "images": [],
+      "cover": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ooO8JyWE16j1BIQI8CFVApnDAfoW1DCafKfIKp~tplv-tiktokx-origin.image?dr=14575&x-expires=1795935600&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=my",
+      "hashtags": [
+        {
+          "id": "1619382718348290",
+          "name": "นางบี",
+          "link": "https://www.tiktok.com/tag/%E0%B8%99%E0%B8%B2%E0%B8%87%E0%B8%9A%E0%B8%B5"
+        },
+        {
+          "id": "1652169681424386",
+          "name": "หนูเจส",
+          "link": "https://www.tiktok.com/tag/%E0%B8%AB%E0%B8%99%E0%B8%B9%E0%B9%80%E0%B8%88%E0%B8%AA"
+        },
+        {
+          "id": "1589185037307906",
+          "name": "อนันดา",
+          "link": "https://www.tiktok.com/tag/%E0%B8%AD%E0%B8%99%E0%B8%B1%E0%B8%99%E0%B8%94%E0%B8%B2"
+        }
+      ],
+      "mentions": [],
+      "location": null,
+      "effects": [
+        {
+          "id": "4330363307",
+          "name": "natural",
+          "link": "https://www.tiktok.com/sticker/natural-4330363307"
+        },
+        {
+          "id": "4420798490",
+          "name": "Angelic Light I",
+          "link": "https://www.tiktok.com/sticker/Angelic-Light-I-4420798490"
+        }
+      ],
+      "text_stickers": [],
+      "anchors": [],
+      "suggested_searches": []
+    }
+  ]
+}
