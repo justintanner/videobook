@@ -1,4 +1,4 @@
-import type { OmkarOptions } from "@apicity/omkar";
+import { OmkarExploreCategorySchema, type OmkarExploreCategory, type OmkarOptions } from "@apicity/omkar";
 import { z } from "zod";
 import { getApiKey, isPlaceholderApiKey } from "../../api-key.js";
 import { createOmkar } from "../../usage-providers.js";
@@ -82,8 +82,21 @@ function configuredKey(explicit: string | null | undefined): string | null {
   return value;
 }
 
-function exploreRequested(options: Record<string, unknown> | undefined): boolean {
-  return options?.explore === true;
+function requestedFeeds(options: Record<string, unknown> | undefined) {
+  const feeds = new Set<"trending" | OmkarExploreCategory>(["trending"]);
+  const errors: string[] = [];
+  if (options?.explore === true) feeds.add("all");
+  const categories = options?.categories;
+  if (Array.isArray(categories)) {
+    for (const name of categories) {
+      const category = OmkarExploreCategorySchema.safeParse(name);
+      if (category.success) feeds.add(category.data);
+      else errors.push(`Unknown Omkar Explore category ${JSON.stringify(name)}`);
+    }
+  } else if (categories !== undefined) {
+    errors.push("Omkar categories must be an array of Explore category names");
+  }
+  return { feeds, errors };
 }
 
 function toSighting(video: FeedVideo, index: number, capturedAt: string, country: string, feed: string): Sighting {
@@ -150,31 +163,39 @@ export function omkarSource(options: Omit<OmkarOptions, "apiKey"> & { now?: () =
         return;
       }
       const provider = createOmkar({ apiKey, baseURL: options.baseURL, timeout: options.timeout, fetch: options.fetch });
-      try {
-        const country = input.country.toUpperCase();
-        const trending = feedSchema.safeParse(await provider.feed.trending({ country }, context.signal));
-        if (!trending.success) throw new Error(`Omkar response schema mismatch: ${trending.error.message}`);
-        const rows: Array<{ video: FeedVideo; feed: string }> = trending.data.videos.map((video) => ({
-          video,
-          feed: "trending",
-        }));
-        if (exploreRequested(input.options)) {
-          const explored = feedSchema.safeParse(await provider.feed.explore({ country, category: "all" }, context.signal));
-          if (!explored.success) throw new Error(`Omkar response schema mismatch: ${explored.error.message}`);
-          rows.push(...explored.data.videos.map((video) => ({ video, feed: "explore:all" })));
-        }
-        const capturedAt = new Date(now()).toISOString();
-        const region = trending.data.country ?? country;
-        health = { lastOk: capturedAt, lastCapturedAt: capturedAt };
-        return {
-          capturedAt,
-          sightings: rows.map((entry, index) => toSighting(entry.video, index, capturedAt, region, entry.feed)),
-        };
-      } catch (error) {
+      const country = input.country.toUpperCase();
+      const { feeds, errors } = requestedFeeds(input.options);
+      const results: Array<{ feed: string; data: z.infer<typeof feedSchema> }> = [];
+      for (const category of feeds) {
         context.signal.throwIfAborted();
-        health = { ...previous, lastError: error instanceof Error ? error.message : String(error) };
+        const feed = category === "trending" ? "trending" : `explore:${category}`;
+        try {
+          const response = category === "trending"
+            ? await provider.feed.trending({ country }, context.signal)
+            : await provider.feed.explore({ country, category }, context.signal);
+          const parsed = feedSchema.safeParse(response);
+          if (parsed.success) results.push({ feed, data: parsed.data });
+          else errors.push(`${feed}: Omkar response schema mismatch: ${parsed.error.message}`);
+        } catch (error) {
+          context.signal.throwIfAborted();
+          errors.push(`${feed}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      const lastError = errors.join("; ");
+      if (results.length === 0) {
+        health = { ...previous, lastError };
         return;
       }
+      const capturedAt = new Date(now()).toISOString();
+      const sightings = new Map<string, Sighting>();
+      for (const { feed, data } of results) {
+        for (const video of data.videos) {
+          if (sightings.has(video.id)) continue;
+          sightings.set(video.id, toSighting(video, sightings.size, capturedAt, data.country ?? country, feed));
+        }
+      }
+      health = { lastOk: capturedAt, lastCapturedAt: capturedAt, ...(lastError && { lastError }) };
+      return { capturedAt, sightings: [...sightings.values()] };
     },
   };
 }

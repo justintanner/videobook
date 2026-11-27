@@ -36,5 +36,5 @@ export function defaultTrendingSources(probe: {
   packageInstalled?: boolean;
 } = {}): TrendingSchedule["sources"] {
   if (omkarSourceAvailability(probe) !== "configured") return freeSources;
-  return [...freeSources, { id: "omkar" }];
+  return [...freeSources, { id: "omkar", options: { categories: ["comedy", "daily-life", "animals", "cars"] } }];
 }

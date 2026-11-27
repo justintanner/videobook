@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -21,6 +21,7 @@ let body: string;
 let exploreBody: string;
 let home: string | undefined;
 let requests: URL[];
+const feedResponses = new Map<string, { status?: number; body?: string }>();
 const signal = new AbortController().signal;
 const input = { country: "TH", window: "trending" as const, limit: 10 };
 const capturedAt = cutAt;
@@ -54,15 +55,19 @@ beforeEach(async () => {
   body = healthy;
   exploreBody = explored;
   requests = [];
+  feedResponses.clear();
   server = createServer((request, response) => {
     const url = new URL(request.url!, "http://127.0.0.1");
     requests.push(url);
-    response.writeHead(status, { "content-type": "application/json" });
-    if (status !== 200) {
+    const feed = url.searchParams.get("category") ?? "trending";
+    const override = feedResponses.get(feed);
+    const code = override?.status ?? status;
+    response.writeHead(code, { "content-type": "application/json" });
+    if (code !== 200) {
       response.end('{"code":"rate_limited","message":"slow down"}');
       return;
     }
-    response.end(url.pathname === "/feed/explore" ? exploreBody : body);
+    response.end(override?.body ?? (url.pathname === "/feed/explore" ? exploreBody : body));
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -149,6 +154,65 @@ describe("omkar trending source", () => {
       ["7569000000000000003", 3, false],
     ]);
     expect(snapshot?.sightings.map((row) => row.feed)).toEqual(["trending", "trending", "explore:all"]);
+  });
+
+  it("requests the configured categories in order and ranks each video at its first occurrence", async () => {
+    feedResponses.set("animals", { body: JSON.stringify({ videos: [
+      video("7569000000000000001", false, 50000), video("4", false, 400),
+    ] }) });
+    const adapter = source();
+    const snapshot = await adapter.sample({ ...input, options: { categories: ["comedy", "animals"] } }, { signal });
+    expect(requests.map((url) => [url.pathname, url.searchParams.get("category"), url.searchParams.get("country")])).toEqual([
+      ["/feed/trending", null, "TH"], ["/feed/explore", "comedy", "TH"], ["/feed/explore", "animals", "TH"],
+    ]);
+    expect(snapshot?.sightings.map((row) => [row.videoId, row.feed, row.sourceRank, row.metrics.views])).toEqual([
+      ["7569000000000000001", "trending", 1, 12000], ["7569000000000000002", "trending", 2, 999999],
+      ["7569000000000000003", "explore:comedy", 3, 800], ["4", "explore:animals", 4, 400],
+    ]);
+    expect(adapter.health().lastError).toBeUndefined();
+  });
+
+  it("keeps successful feeds and reports failed and unknown categories", async () => {
+    feedResponses.set("comedy", { status: 500 });
+    exploreBody = JSON.stringify({ videos: [] });
+    feedResponses.set("animals", { body: explored });
+    const adapter = source();
+    const snapshot = await adapter.sample({
+      ...input, options: { explore: true, categories: ["comedy", "missing-category", "all", "animals"] },
+    }, { signal });
+    expect(requests.map((url) => url.searchParams.get("category"))).toEqual([null, "all", "comedy", "animals"]);
+    expect(snapshot?.sightings.map((row) => row.feed)).toEqual(["trending", "trending", "explore:animals"]);
+    expect(adapter.health()).toMatchObject({ lastOk: capturedAt, lastCapturedAt: capturedAt });
+    expect(adapter.health().lastError).toContain("explore:comedy: Omkar API error 500");
+    expect(adapter.health().lastError).toContain("missing-category");
+  });
+
+  it("returns an empty successful Explore feed after trending fails and retains previous health if every feed fails", async () => {
+    body = "{}";
+    exploreBody = JSON.stringify({ videos: [] });
+    const adapter = source();
+    const withExplore = { ...input, options: { categories: ["cars"] } };
+    await expect(adapter.sample(withExplore, { signal })).resolves.toEqual({ capturedAt, sightings: [] });
+    expect(adapter.health()).toMatchObject({ lastOk: capturedAt, lastError: expect.stringContaining("trending: Omkar response schema mismatch") });
+    const previousHealth = adapter.health();
+    feedResponses.set("cars", { status: 429 });
+    await expect(adapter.sample(withExplore, { signal, previousHealth })).resolves.toBeUndefined();
+    expect(adapter.health()).toMatchObject({ lastCapturedAt: capturedAt, lastOk: capturedAt });
+    expect(adapter.health().lastError).toContain("trending:");
+    expect(adapter.health().lastError).toContain("explore:cars: Omkar API error 429");
+  });
+
+  it.each(["trending", "comedy", "daily-life", "animals", "cars", "society"])("parses the recorded Thailand %s feed", async (feed) => {
+    const recording = await readFile(new URL(`./fixtures/trending/recorded-omkar-th-${feed}.json`, import.meta.url), "utf8");
+    body = JSON.stringify({ videos: [] });
+    feedResponses.set(feed, { body: recording });
+    const adapter = source();
+    const categories = feed === "trending" ? [] : [feed];
+    const snapshot = await adapter.sample({ ...input, options: { categories } }, { signal });
+    expect(adapter.health().lastError).toBeUndefined();
+    const videos: Array<{ id: string }> = JSON.parse(recording).videos;
+    expect(snapshot?.sightings.map((row) => row.videoId)).toEqual(videos.map((row) => row.id));
+    expect(new Set(snapshot?.sightings.map((row) => row.feed))).toEqual(new Set([feed === "trending" ? feed : `explore:${feed}`]));
   });
 
   it("maps research fields, photo posts, tolerant bad fields, ledger persistence, and keeps views/consensus ranking unchanged", async () => {

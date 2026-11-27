@@ -194,12 +194,14 @@ describe("trending_research", () => {
   }, testBudget(60_000));
 
   it("adds omkar only when its key and package are both available", () => {
-    const free = ["endless", "tiktok-creative-center"];
-    expect(defaultTrendingSources({ apiKey: null, packageInstalled: true }).map((source) => source.id)).toEqual(free);
-    expect(defaultTrendingSources({ apiKey: "test-omkar", packageInstalled: true }).map((source) => source.id)).toEqual(free);
-    expect(defaultTrendingSources({ apiKey: "omkar-live", packageInstalled: false }).map((source) => source.id)).toEqual(free);
-    expect(defaultTrendingSources({ apiKey: "omkar-live", packageInstalled: true }).map((source) => source.id)).toEqual([...free, "omkar"]);
-    expect(defaultTrendingSources().some((source) => source.id === "omkar")).toBe(false);
+    const free = [{ id: "endless" }, { id: "tiktok-creative-center" }];
+    expect(defaultTrendingSources({ apiKey: null, packageInstalled: true })).toEqual(free);
+    expect(defaultTrendingSources({ apiKey: "test-omkar", packageInstalled: true })).toEqual(free);
+    expect(defaultTrendingSources({ apiKey: "omkar-live", packageInstalled: false })).toEqual(free);
+    expect(defaultTrendingSources({ apiKey: "omkar-live", packageInstalled: true })).toEqual([
+      ...free, { id: "omkar", options: { categories: ["comedy", "daily-life", "animals", "cars"] } },
+    ]);
+    expect(defaultTrendingSources()).toEqual(free);
     expect(omkarSourceAvailability({ apiKey: null, packageInstalled: true })).toBe("not configured");
     expect(omkarSourceAvailability({ apiKey: "test-omkar", packageInstalled: true })).toBe("not configured");
     expect(omkarSourceAvailability({ apiKey: "omkar-live", packageInstalled: false })).toBe("not installed");
