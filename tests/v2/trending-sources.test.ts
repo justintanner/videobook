@@ -26,6 +26,7 @@ let status: number;
 let headers: Record<string, string>;
 let invalid: string;
 let recorded: boolean;
+let endlessOverride: string | undefined;
 let now: number;
 let requests: URL[];
 let home: string | undefined;
@@ -43,15 +44,23 @@ beforeEach(async () => {
   headers = {};
   invalid = "";
   recorded = false;
+  endlessOverride = undefined;
   now = Date.parse(cutAt);
   requests = [];
-  const data = Object.fromEntries(await Promise.all(["endless-th", "creative-overview", "creative-th", "creative-th-organic"].flatMap((name) => [name, `recorded-${name}`]).map(async (name) => [name, await readFile(new URL(`${name}.json`, fixtures), "utf8")])));
+  const data = Object.fromEntries(await Promise.all([
+    ...["endless-th", "creative-overview", "creative-th", "creative-th-organic"].flatMap((name) => [name, `recorded-${name}`]),
+    "recorded-endless-th-covers",
+  ].map(async (name) => [name, await readFile(new URL(`${name}.json`, fixtures), "utf8")])));
   server = createServer((request, response) => {
     const url = new URL(request.url!, "http://localhost");
     requests.push(url);
     response.writeHead(status, { "content-type": "application/json", ...headers });
     if (status !== 200) { response.end('{"message":"try later"}'); return; }
     if (invalid && url.pathname.includes(invalid)) { response.end('{"BaseResp":{"StatusCode":0},"entityInfos":[{}]}'); return; }
+    if (endlessOverride && url.pathname.includes("/social/")) {
+      response.end(data[endlessOverride] ?? endlessOverride);
+      return;
+    }
     const name = url.pathname.includes("/social/") ? "endless-th" : url.pathname.endsWith("Overview") ? "creative-overview"
       : url.searchParams.get("organicOnly") === "true" ? "creative-th-organic" : "creative-th";
     response.end(data[recorded ? `recorded-${name}` : name]);
@@ -196,4 +205,81 @@ describe("public trending source adapters", () => {
     expect(readSourceHealth(control.engine)["tiktok-creative-center"].lastError).toContain("schema mismatch");
     expect(readSourceHealth(control.engine).endless.lastError).toBeUndefined();
   }, testBudget(90_000));
+
+  it("maps Endless durationSeconds, coverUrl and feed from the recorded cover fixture without music.original", async () => {
+    endlessOverride = "recorded-endless-th-covers";
+    const registry = sources();
+    const endless = await registry.get("endless")!.sample(input, { signal });
+    expect(endless?.sightings).toHaveLength(30);
+    for (const row of endless?.sightings ?? []) {
+      expect(typeof row.durationSeconds).toBe("number");
+      expect(row.durationSeconds).toBeGreaterThanOrEqual(0);
+      expect(row.coverUrl).toMatch(/^https:\/\/cdn\.endless\.software\/public-trends\/tiktok\/.+\.webp$/);
+      expect(row.feed).toBe("trending");
+      expect(row.music && "original" in row.music).toBe(false);
+    }
+
+    endlessOverride = JSON.stringify({
+      region: "thailand",
+      captured_at: "2026-10-27T23:00:00.000Z",
+      videos: [
+        {
+          id: "7569000000000000010",
+          url: "https://www.tiktok.com/@thai/video/7569000000000000010",
+          created_at: "2026-10-20T00:00:00Z",
+          play_count: 5000,
+          duration_seconds: "not-a-number",
+          cover_url: "not-a-url",
+          music: { id: "1", title: "Track", original: false },
+        },
+        {
+          id: "7569000000000000011",
+          url: "https://www.tiktok.com/@thai/video/7569000000000000011",
+          created_at: "2026-10-20T00:00:00Z",
+          play_count: 4000,
+          duration_seconds: null,
+          cover_url: null,
+        },
+        {
+          id: "7569000000000000012",
+          url: "https://www.tiktok.com/@thai/video/7569000000000000012",
+          created_at: "2026-10-20T00:00:00Z",
+          play_count: 3000,
+          duration_seconds: 0,
+          cover_url: "https://cdn.endless.software/public-trends/tiktok/7569000000000000012.webp",
+        },
+      ],
+      longest: [],
+      sounds: [],
+      hashtags: [],
+    });
+    const tolerant = await registry.get("endless")!.sample(input, { signal });
+    expect(tolerant?.sightings).toHaveLength(3);
+    expect(tolerant?.sightings[0].durationSeconds).toBeUndefined();
+    expect(tolerant?.sightings[0].coverUrl).toBeUndefined();
+    expect(tolerant?.sightings[0].music && "original" in tolerant.sightings[0].music).toBe(false);
+    expect(tolerant?.sightings[1].durationSeconds).toBeUndefined();
+    expect(tolerant?.sightings[1].coverUrl).toBeUndefined();
+    expect(tolerant?.sightings[2]).toMatchObject({
+      durationSeconds: 0,
+      coverUrl: "https://cdn.endless.software/public-trends/tiktok/7569000000000000012.webp",
+      feed: "trending",
+    });
+
+    books = new BookManager({ libraryDir: join(root, "books") });
+    endlessOverride = "recorded-endless-th-covers";
+    const control = await ensureControlBook(books, {
+      ...schedule,
+      sources: [{ id: "endless" }],
+    });
+    await sampleTrending(control.engine, "2026-11-27T07:00:00.000Z", signal, registry);
+    const ledger = readLedger(control.engine, "2026-11-27");
+    expect(ledger.sightings).toHaveLength(30);
+    expect(ledger.sightings[0]).toMatchObject({
+      durationSeconds: expect.any(Number),
+      coverUrl: expect.stringMatching(/^https:\/\/cdn\.endless\.software\//),
+      feed: "trending",
+    });
+    expect(ledger.sightings.every((row) => !(row.music && "original" in row.music))).toBe(true);
+  }, testBudget(60_000));
 });

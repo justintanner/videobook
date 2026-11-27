@@ -3,6 +3,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { BookManager } from "../../server/src/book-manager.js";
+import { sampleTrending } from "../../server/src/jobs/trending-sample.js";
+import { ensureControlBook } from "../../server/src/trending/control-book.js";
+import { readLedger } from "../../server/src/trending/ledger.js";
+import { testBudget } from "../../server/src/test-budget.js";
 import { omkarSource } from "../../server/src/trending/sources/omkar.js";
 import { rankVideos } from "../../server/src/trending/ranking.js";
 import { cutAt, schedule } from "./trending-fixtures.js";
@@ -10,15 +15,17 @@ import { cutAt, schedule } from "./trending-fixtures.js";
 let server: Server;
 let baseURL: string;
 let root: string;
+let books: BookManager | undefined;
 let status: number;
 let body: string;
+let exploreBody: string;
 let home: string | undefined;
 let requests: URL[];
 const signal = new AbortController().signal;
 const input = { country: "TH", window: "trending" as const, limit: 10 };
 const capturedAt = cutAt;
 
-function video(id: string, isAd: boolean, views: number) {
+function video(id: string, isAd: boolean, views: number, patch: Record<string, unknown> = {}) {
   return {
     id, link: `https://www.tiktok.com/@thai/video/${id}`, description: `caption ${id}`, title: null,
     language: "th", created_at: "2026-10-27T00:00:00.000Z", location_created: "TH", is_ad: isAd,
@@ -26,6 +33,7 @@ function video(id: string, isAd: boolean, views: number) {
     author: { id: "author-1", username: "thai", nickname: "Thai" },
     author_stats: { follower_count: 1000 },
     music: { id: "sound-1", title: "song", author_name: "artist" },
+    ...patch,
   };
 }
 
@@ -44,6 +52,7 @@ beforeEach(async () => {
   delete process.env.OMKAR_API_KEY;
   status = 200;
   body = healthy;
+  exploreBody = explored;
   requests = [];
   server = createServer((request, response) => {
     const url = new URL(request.url!, "http://127.0.0.1");
@@ -53,7 +62,7 @@ beforeEach(async () => {
       response.end('{"code":"rate_limited","message":"slow down"}');
       return;
     }
-    response.end(url.pathname === "/feed/explore" ? explored : body);
+    response.end(url.pathname === "/feed/explore" ? exploreBody : body);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -62,6 +71,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await books?.close();
+  books = undefined;
   server.closeAllConnections();
   await new Promise<void>((resolve) => server.close(() => resolve()));
   if (home === undefined) delete process.env.VIDEOBOOK_HOME;
@@ -137,5 +148,160 @@ describe("omkar trending source", () => {
       ["7569000000000000002", 2, true],
       ["7569000000000000003", 3, false],
     ]);
+    expect(snapshot?.sightings.map((row) => row.feed)).toEqual(["trending", "trending", "explore:all"]);
   });
+
+  it("maps research fields, photo posts, tolerant bad fields, ledger persistence, and keeps views/consensus ranking unchanged", async () => {
+    body = JSON.stringify({
+      country: "TH",
+      video_count: 4,
+      videos: [
+        video("7569000000000000101", false, 20000, {
+          type: "video",
+          is_ai_generated: true,
+          cover: "https://cdn.example/fallback-101.jpg",
+          video: { duration_seconds: 18, cover: "https://cdn.example/video-101.jpg" },
+          author: { id: "author-1", username: "verified_creator", nickname: "Verified", is_verified: true },
+          music: { id: "sound-1", title: "original sound", author_name: "artist", is_original_sound: true },
+        }),
+        video("7569000000000000102", false, 15000, {
+          type: "photo",
+          is_ai_generated: null,
+          cover: "https://cdn.example/photo-102.jpg",
+          video: null,
+          author: { id: "author-2", username: "photo_user", nickname: "Photo", is_verified: false },
+          music: { id: "sound-2", title: "pop track", author_name: "band", is_original_sound: false },
+        }),
+        video("7569000000000000103", false, 10000, {
+          type: "carousel",
+          is_ai_generated: "yes",
+          cover: "not-a-url",
+          video: { duration_seconds: "twenty", cover: 123 },
+          author: { id: "author-3", username: "bad_types", nickname: "Bad", is_verified: "true" },
+          music: { id: "sound-3", title: "song", author_name: "artist", is_original_sound: null },
+        }),
+        video("7569000000000000104", false, 8000, {
+          type: 42,
+          is_ai_generated: null,
+          cover: null,
+          video: "unexpected-string",
+          author: { id: "author-4", username: "bad_video_obj", nickname: "BadObj", is_verified: null },
+          music: { id: "sound-4", title: "song", author_name: "artist", is_original_sound: 1 },
+        }),
+      ],
+    });
+    exploreBody = JSON.stringify({
+      country: "TH",
+      video_count: 1,
+      videos: [
+        video("7569000000000000105", false, 18000, {
+          type: "video",
+          is_ai_generated: false,
+          cover: "https://cdn.example/explore-105.jpg",
+          video: { duration_seconds: 12, cover: "https://cdn.example/explore-105.jpg" },
+          author: { id: "author-5", username: "explorer", nickname: "Explorer", is_verified: false },
+          music: { id: "sound-5", title: "orig", author_name: "explorer", is_original_sound: true },
+        }),
+      ],
+    });
+
+    const adapter = source();
+    const snapshot = await adapter.sample({ ...input, options: { explore: true } }, { signal });
+    expect(snapshot?.sightings).toHaveLength(5);
+    expect(snapshot?.sightings[0]).toMatchObject({
+      videoId: "7569000000000000101",
+      kind: "video",
+      aiGenerated: true,
+      durationSeconds: 18,
+      coverUrl: "https://cdn.example/video-101.jpg",
+      feed: "trending",
+      author: { handle: "verified_creator", verified: true },
+      music: { title: "original sound", original: true },
+    });
+    expect(snapshot?.sightings[1]).toMatchObject({
+      videoId: "7569000000000000102",
+      kind: "photo",
+      coverUrl: "https://cdn.example/photo-102.jpg",
+      feed: "trending",
+      author: { handle: "photo_user", verified: false },
+      music: { title: "pop track", original: false },
+    });
+    expect(snapshot?.sightings[1].durationSeconds).toBeUndefined();
+    expect(snapshot?.sightings[1].aiGenerated).toBeUndefined();
+
+    for (const malformed of [snapshot?.sightings[2], snapshot?.sightings[3]]) {
+      expect(malformed?.kind).toBeUndefined();
+      expect(malformed?.aiGenerated).toBeUndefined();
+      expect(malformed?.durationSeconds).toBeUndefined();
+      expect(malformed?.coverUrl).toBeUndefined();
+      expect(malformed?.author.verified).toBeUndefined();
+      expect(malformed?.music?.original).toBeUndefined();
+      expect(malformed?.feed).toBe("trending");
+    }
+
+    expect(snapshot?.sightings[4]).toMatchObject({
+      videoId: "7569000000000000105",
+      kind: "video",
+      aiGenerated: false,
+      durationSeconds: 12,
+      coverUrl: "https://cdn.example/explore-105.jpg",
+      feed: "explore:all",
+      author: { handle: "explorer", verified: false },
+      music: { title: "orig", original: true },
+    });
+
+    const sightings = snapshot?.sightings ?? [];
+    const stripped = sightings.map(({
+      durationSeconds: _durationSeconds,
+      coverUrl: _coverUrl,
+      kind: _kind,
+      aiGenerated: _aiGenerated,
+      feed: _feed,
+      author,
+      music,
+      ...rest
+    }) => {
+      const { verified: _verified, ...plainAuthor } = author;
+      const plainMusic = music ? { id: music.id, title: music.title, author: music.author } : undefined;
+      return { ...rest, author: plainAuthor, music: plainMusic };
+    });
+    for (const ranking of ["views", "consensus"] as const) {
+      const withFields = rankVideos(sightings, { ...schedule, ranking }, { cutAt: capturedAt });
+      const withoutFields = rankVideos(stripped, { ...schedule, ranking }, { cutAt: capturedAt });
+      expect(withFields.map((row) => [row.rank, row.videoId, row.metrics.views])).toEqual(
+        withoutFields.map((row) => [row.rank, row.videoId, row.metrics.views]),
+      );
+    }
+
+    books = new BookManager({ libraryDir: join(root, "books") });
+    const control = await ensureControlBook(books, {
+      ...schedule,
+      sources: [{ id: "omkar", options: { explore: true } }],
+    });
+    await sampleTrending(control.engine, capturedAt, signal, new Map([["omkar", source()]]));
+    const ledger = readLedger(control.engine, "2026-10-28");
+    expect(ledger.sightings).toHaveLength(5);
+    expect(ledger.sightings[0]).toMatchObject({
+      videoId: "7569000000000000101",
+      kind: "video",
+      aiGenerated: true,
+      durationSeconds: 18,
+      coverUrl: "https://cdn.example/video-101.jpg",
+      feed: "trending",
+      author: { verified: true },
+      music: { original: true },
+    });
+    expect(ledger.sightings[1]).toMatchObject({
+      videoId: "7569000000000000102",
+      kind: "photo",
+      coverUrl: "https://cdn.example/photo-102.jpg",
+      feed: "trending",
+    });
+    expect(ledger.sightings[4]).toMatchObject({
+      videoId: "7569000000000000105",
+      feed: "explore:all",
+      durationSeconds: 12,
+      aiGenerated: false,
+    });
+  }, testBudget(60_000));
 });
