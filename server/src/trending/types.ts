@@ -16,6 +16,15 @@ export interface TrendingVerdict {
   cover: boolean;
 }
 
+export interface TrendingVerdictEntry {
+  key: string;
+  at: string;
+  attempts: number;
+  verdict?: TrendingVerdict;
+}
+
+export type TrendingVerdictStore = Record<string, TrendingVerdictEntry>;
+
 export interface TrendingCriteria {
   brief?: string;
   minViews: number;

@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import type { Engine } from "videobook-engine";
 import { normalizeBookSlug } from "videobook-engine/book-slug";
 import type {
   SourceHealth, TrendingHistoryEntry, TrendingLedger, TrendingRetentionState, TrendingRunRecord, TrendingSchedule,
+  TrendingVerdictStore,
 } from "./types.js";
 
 const chains = new WeakMap<Engine, Promise<unknown>>();
@@ -149,4 +151,47 @@ export function writeSourceHealth(engine: Engine, source: string, health: Source
   return serialize(engine, () => write(engine, "trending.source-health.v1", {
     ...readSourceHealth(engine), [source]: health,
   }));
+}
+
+const VERDICTS_KEY = "trending.verdicts.v1";
+const MS_PER_DAY = 86_400_000;
+
+export function verdictCacheKey(brief: string, model: string, version: string): string {
+  return createHash("sha256")
+    .update(JSON.stringify([version, model, brief]))
+    .digest("hex")
+    .slice(0, 16);
+}
+
+export function readVerdicts(engine: Engine): TrendingVerdictStore {
+  return engine.settings.get<TrendingVerdictStore>(VERDICTS_KEY) ?? {};
+}
+
+function pruneVerdicts(store: TrendingVerdictStore, maxAgeDays: number, nowMs: number): TrendingVerdictStore {
+  const retentionDays = Math.max(0, maxAgeDays) + 2;
+  const cutoffMs = nowMs - retentionDays * MS_PER_DAY;
+  const kept: TrendingVerdictStore = {};
+  for (const [videoId, entry] of Object.entries(store)) {
+    const atMs = Date.parse(entry.at);
+    if (Number.isFinite(atMs) && atMs >= cutoffMs) {
+      kept[videoId] = entry;
+    }
+  }
+  return kept;
+}
+
+export function updateVerdicts(
+  engine: Engine,
+  options: { maxAgeDays: number; now?: string | Date },
+  update: (verdicts: TrendingVerdictStore) => TrendingVerdictStore,
+): Promise<TrendingVerdictStore> {
+  return serialize(engine, () => {
+    const nowMs = options.now === undefined
+      ? Date.now()
+      : (options.now instanceof Date ? options.now.getTime() : Date.parse(options.now));
+    if (!Number.isFinite(nowMs)) throw new Error("Invalid verdict timestamp");
+    const next = pruneVerdicts(update(readVerdicts(engine)), options.maxAgeDays, nowMs);
+    write(engine, VERDICTS_KEY, next);
+    return next;
+  });
 }
