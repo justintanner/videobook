@@ -6,6 +6,21 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- The Post review has a Copy caption button under the caption, which copies
+  the caption with its tags, and a Download clip button under the clip, which
+  downloads the clip and caption.txt without changing where Save sends it.
+
+### Changed
+
+- The Post review (`/post`, Save to iPhone, Download) shows the clip, the copy
+  and the delivery as numbered panels side by side, and fits a 1288×625
+  window. A Platform › Caption › Deliver › Link tracker replaces the shortcut
+  hints beside the title. Once the Post is delivered, the published-link form
+  becomes the next step under the caption. On phones the panels stack in one
+  column.
+
 ### Fixed
 
 - New HeyGen dubs made with captions off no longer include a partial subtitle

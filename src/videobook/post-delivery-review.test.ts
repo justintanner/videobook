@@ -12,6 +12,7 @@ import {
   icloudShareHint,
   postAwaitingLink,
   postDeliveryBadges,
+  postDeliveryStages,
   postLinkPrompt,
   postTileMetrics,
   postTileNextStep,
@@ -222,6 +223,16 @@ describe('post delivery review', () => {
     expect(postTileNextStep(delivered)).toBe('Paste TikTok link')
     expect(postTileStatus(postView())).toBe('draft')
     expect(postTileStatus(delivered)).toBe('needs_link')
+  })
+
+  it('tracks a Post from its caption through delivery to the published link', () => {
+    const states = (post: PostView) => postDeliveryStages(post).map(stage => `${stage.label}:${stage.state}`)
+    const delivered = { status: 'ready' as const, download: { completedAt: '2026-10-15T00:00:00.000Z' } }
+    expect(states(postView())).toEqual(['Platform:done', 'Caption:current', 'Deliver:todo', 'Link:todo'])
+    expect(states(postView({ icloud: { folder: 'phones/skate' } }))).toEqual(['Platform:done', 'Caption:current', 'Deliver:todo', 'Link:todo'])
+    expect(states(postView(delivered))).toEqual(['Platform:done', 'Caption:done', 'Deliver:done', 'Link:current'])
+    expect(states(postView({ ...delivered, url: 'https://www.tiktok.com/@jtbkk/video/1' }))).toEqual(['Platform:done', 'Caption:done', 'Deliver:done', 'Link:done'])
+    expect(states(postView({ url: 'https://www.tiktok.com/@jtbkk/video/1' }))).toEqual(['Platform:done', 'Caption:done', 'Deliver:todo', 'Link:done'])
   })
 
   it('shows a posted tile with its date and latest results', () => {

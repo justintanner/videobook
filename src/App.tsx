@@ -7,6 +7,7 @@ import type { PostView } from '../server/src/posts/post-contract'
 import type { GraphicsBlockText } from '../server/src/graphics/starters'
 import { ColdOpenBody } from '@/components/videobook/confirm/bodies/ColdOpenBody'
 import { PostDeliveryBody } from '@/components/videobook/confirm/bodies/PostDeliveryBody'
+import { PostDeliveryProgress } from '@/components/videobook/confirm/bodies/PostDeliveryProgress'
 import { useIcloudSyncPoll } from '@/videobook/use-icloud-sync-poll'
 import {
   copyWithCaption,
@@ -1145,6 +1146,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const voiceActiveRef = useRef(false)
   const [lastEditActionId, setLastEditActionId] = useState('')
   const [busy, setBusy] = useState(false)
+  const [postClipDownloading, setPostClipDownloading] = useState(false)
   const { turns: chatTurns, begin: beginChatTurn, observe: observeChat, cancelReview: cancelChatReview, claimVoice: claimVoiceTurn } = useChatTurns(bookId, notebook?.id ?? null)
   const voiceChatRef = useRef<ChatExecution | undefined>(undefined)
   const [previewTurnId, setPreviewTurnId] = useState<number | null>(null)
@@ -7326,12 +7328,38 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     void reviewPublicationOnX(post, deliveryCaptionLocked(post) ? post.definition.caption : copyCaption(review.copy))
   }
 
-  const copyPostCaption = async (caption: string) => {
+  const copyPostCaption = async (caption: string): Promise<boolean> => {
     try {
       await navigator.clipboard.writeText(caption)
       setNotice('Caption copied')
+      return true
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
+      return false
+    }
+  }
+
+  const postClipDownloadReview = (review: PostDeliveryReview): PostDeliveryReview => ({ ...review, destination: 'download' })
+
+  const downloadPostClip = async (post: PostView, review: PostDeliveryReview) => {
+    const downloadReview = postClipDownloadReview(review)
+    const blocking = postDeliveryValidation(post, downloadReview).blocking
+    if (blocking) {
+      setNotice(blocking, 'error')
+      return
+    }
+    setBusy(true)
+    setPostClipDownloading(true)
+    try {
+      const delivered = deliveredPostFromTool(await call('post', postDeliveryArgs(post, downloadReview)))
+      if (delivered.download) saveDownload(delivered.download.clip_url, delivered.download.filename)
+      await refreshBookData(review.bookId, review.notebookId)
+      setNotice(postDeliveryReceipt(delivered, 'download'))
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
+    } finally {
+      setPostClipDownloading(false)
+      setBusy(false)
     }
   }
 
@@ -10167,10 +10195,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           tag="POST"
           title={icloud ? 'Save to iPhone' : 'Download for manual upload'}
           address={post?.address ?? null}
-          effect={{ label: icloud ? 'iCloud · shared folder' : 'This computer · Downloads', tone: 'default' }}
+          headerActions={post ? <PostDeliveryProgress post={post} /> : null}
           validation={postDeliveryValidation(post, review)}
           busy={busy}
-          busyLabel={icloud ? 'Saving to iPhone…' : 'Preparing download…'}
+          busyLabel={icloud && !postClipDownloading ? 'Saving to iPhone…' : 'Preparing download…'}
           applyLabel={icloud ? 'Save to iPhone' : 'Download'}
           applyFormId={COMMAND_COMPOSER_FORM_ID}
           onCancel={dismissPendingCommandPlan}
@@ -10181,13 +10209,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               asset={postAsset}
               review={review}
               busy={busy}
+              downloadingClip={postClipDownloading}
+              downloadBlocked={postDeliveryValidation(post, postClipDownloadReview(review)).blocking}
               onCopyChange={copy => updatePendingDelivery({ copy })}
               onLanguage={language => choosePostCopyLanguage(post, review, language)}
               onRegen={() => regenPostCopy(post, review)}
               onFolderChange={folder => updatePendingDelivery({ icloudFolder: folder })}
               onDestination={chooseDeliveryDestination}
               onPostToX={() => postDeliveryToX(post, review)}
-              onCopyCaption={caption => void copyPostCaption(caption)}
+              onCopyCaption={copyPostCaption}
+              onDownloadClip={() => void downloadPostClip(post, review)}
               onOpenPost={() => openCellInspector(post.id)}
               onLink={async args => {
                 await call('update_post', { book_id: review.bookId, post_cell_id: post.id, ...postReviewDraftArgs(post, review), ...args })

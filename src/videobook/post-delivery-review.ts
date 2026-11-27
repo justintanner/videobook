@@ -207,6 +207,23 @@ export function postAwaitingLink(post: PostView): boolean {
   return !post.runtime.url && postDeliveryBadges(post).length > 0
 }
 
+export type PostStageId = 'platform' | 'caption' | 'deliver' | 'link'
+
+export type PostStageState = 'done' | 'current' | 'todo'
+
+export type PostStage = { id: PostStageId; label: string; state: PostStageState }
+
+export function postDeliveryStages(post: PostView): PostStage[] {
+  const delivered = postDeliveryBadges(post).length > 0
+  const linked = Boolean(post.runtime.url)
+  return [
+    { id: 'platform', label: 'Platform', state: 'done' },
+    { id: 'caption', label: 'Caption', state: delivered || linked ? 'done' : 'current' },
+    { id: 'deliver', label: 'Deliver', state: delivered ? 'done' : 'todo' },
+    { id: 'link', label: 'Link', state: linked ? 'done' : delivered ? 'current' : 'todo' },
+  ]
+}
+
 export function postLinkPrompt(post: PostView): string {
   const platform = post.definition.platform
   return platform === 'other' ? 'Posted it? Paste the link' : `Posted on ${PLATFORM_NAMES[platform]}? Paste the link`
