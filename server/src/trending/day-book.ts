@@ -2,7 +2,7 @@ import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import type { BookManager } from "../book-manager.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { dayBookSlug } from "./ledger.js";
-import type { RankedVideo, TrendingRunRecord, TrendingSchedule } from "./types.js";
+import type { RankedVideo, TrendingFunnel, TrendingRunRecord, TrendingSchedule } from "./types.js";
 
 export interface DayBookResult {
   bookId: string;
@@ -12,7 +12,15 @@ export interface DayBookResult {
 
 export interface DayBookOptions {
   cutAt: string;
+  ranking?: TrendingSchedule["ranking"];
+  funnel?: TrendingFunnel;
   createVideoArtifact: (rank: number, video: RankedVideo, engine: Engine) => Promise<string>;
+}
+
+interface SummaryContext {
+  cutAt: string;
+  ranking?: TrendingSchedule["ranking"];
+  funnel?: TrendingFunnel;
 }
 
 const builds = new WeakMap<BookManager, Map<string, Promise<unknown>>>();
@@ -25,24 +33,75 @@ function text(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
 }
 
-function summary(videos: readonly RankedVideo[], schedule: TrendingSchedule, cutAt: string, cells: NotebookCell[]): string {
+function formatScore(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(2) : "0.00";
+}
+
+function formatRate(count: number | undefined, views: number): string | undefined {
+  if (count === undefined || !Number.isFinite(count) || !Number.isFinite(views) || views <= 0) {
+    return undefined;
+  }
+  return `${((count / views) * 100).toFixed(2)}%`;
+}
+
+function formatFunnel(funnel: TrendingFunnel | undefined, rankedOnNumbers: boolean): string | undefined {
+  if (!funnel && !rankedOnNumbers) return undefined;
+  const parts: string[] = [];
+  if (funnel) {
+    const droppedEntries = Object.entries(funnel.screened)
+      .filter(([, count]) => count > 0)
+      .sort(([left], [right]) => left.localeCompare(right));
+    const droppedTotal = droppedEntries.reduce((sum, [, count]) => sum + count, 0);
+    const droppedText = droppedEntries.length > 0
+      ? `${droppedTotal} dropped (${droppedEntries.map(([reason, count]) => `${text(reason)}: ${count}`).join(", ")})`
+      : "0 dropped";
+    parts.push(`${funnel.seen} seen; ${droppedText}; ${funnel.checked} checked; ${funnel.fit} fit the brief.`);
+  }
+  if (rankedOnNumbers) {
+    parts.push("AI check did not run; ranked on numbers.");
+  }
+  return `Funnel: ${parts.join(" ")}`;
+}
+
+function summary(
+  videos: readonly RankedVideo[],
+  schedule: TrendingSchedule,
+  context: SummaryContext,
+  cells: NotebookCell[],
+): string {
   const sources = [...new Set(videos.flatMap((video) => video.sources))];
+  const method = context.ranking ?? schedule.ranking;
+  const hasAuthentic = videos.some((video) => video.authentic !== undefined);
+  const hasVerdict = videos.some((video) => video.authentic?.verdict !== undefined);
+  const funnelLine = formatFunnel(context.funnel, hasAuthentic && !hasVerdict);
+  const header = hasAuthentic
+    ? "| Rank | Handle | Views | Likes | Posted | Sources | Download status | Fallback | Score | Shares | Why |"
+    : "| Rank | Handle | Views | Likes | Posted | Sources | Download status | Fallback |";
+  const divider = hasAuthentic
+    ? "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    : "| --- | --- | --- | --- | --- | --- | --- | --- |";
   return [
     `# Top ${schedule.topN} research`,
-    `Method: ${schedule.ranking}; ${schedule.window} window: ${schedule.windowHours} hours; cutoff: ${cutAt} (${schedule.timezone}, ${schedule.cutoffLocalTime}).`,
+    `Method: ${method}; ${schedule.window} window: ${schedule.windowHours} hours; cutoff: ${context.cutAt} (${schedule.timezone}, ${schedule.cutoffLocalTime}).`,
     `Contributing sources: ${sources.join(", ") || "none"}.`,
+    ...(funnelLine ? [funnelLine] : []),
     "",
-    "| Rank | Handle | Views | Likes | Posted | Sources | Download status | Fallback |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    header,
+    divider,
     ...videos.map((video) => {
       const cell = cells.find((candidate) => candidate.inputs?.workflowRole === `trending-video-${video.rank}`);
-      return `| ${video.rank} | ${text(video.author.handle)} | ${video.metrics.views} | ${video.metrics.likes} | ${video.createdAt} | ${text(video.sources.join(", "))} | ${text(String(cell?.inputs?.state ?? "pending"))} | ${video.fallback ? "yes" : "no"} |`;
+      const base = `| ${video.rank} | ${text(video.author.handle)} | ${video.metrics.views} | ${video.metrics.likes} | ${video.createdAt} | ${text(video.sources.join(", "))} | ${text(String(cell?.inputs?.state ?? "pending"))} | ${video.fallback ? "yes" : "no"} |`;
+      if (!hasAuthentic) return base;
+      const score = video.authentic ? formatScore(video.authentic.score) : "";
+      const shares = formatRate(video.metrics.shares, video.metrics.views) ?? "";
+      const why = video.authentic?.verdict ? text(video.authentic.verdict.why) : "";
+      return `${base} ${score} | ${shares} | ${why} |`;
     }),
   ].join("\n");
 }
 
 function notes(video: RankedVideo): string {
-  return [
+  const lines = [
     `# Rank ${video.rank}: ${video.author.handle}`,
     video.caption,
     `Author: ${JSON.stringify(video.author)}`,
@@ -51,7 +110,21 @@ function notes(video: RankedVideo): string {
     `URL: ${video.url}`,
     `Sources: ${video.sources.join(", ")}`,
     `Music: ${JSON.stringify(video.music ?? null)}`,
-  ].join("\n\n");
+  ];
+  if (video.authentic) {
+    const { score, organic, verdict } = video.authentic;
+    if (verdict) {
+      lines.push(`Verdict: ${verdict.kind}, fit ${verdict.fit}/10, cover ${verdict.cover ? "seen" : "not seen"} — ${verdict.why}`);
+    } else {
+      lines.push("Verdict: none (AI check did not run)");
+    }
+    lines.push(`Score: ${formatScore(score)} (organic: ${formatScore(organic)})`);
+    lines.push(
+      `Rates: likes ${formatRate(video.metrics.likes, video.metrics.views) ?? "unknown"}, shares ${formatRate(video.metrics.shares, video.metrics.views) ?? "unknown"}, comments ${formatRate(video.metrics.comments, video.metrics.views) ?? "unknown"}, saves ${formatRate(video.metrics.saves, video.metrics.views) ?? "unknown"}`,
+    );
+    lines.push(`Duration: ${video.durationSeconds !== undefined ? `${video.durationSeconds}s` : "unknown"}`);
+  }
+  return lines.join("\n\n");
 }
 
 async function build(
@@ -101,6 +174,7 @@ async function build(
       const research = {
         videoId: video.videoId, rank: video.rank, metrics: video.metrics,
         sources: video.sources, url: video.url, createdAt: video.createdAt, fallback: video.fallback,
+        ...(video.authentic ? { authentic: video.authentic } : {}),
       };
       const previous = current.cells.find((cell) => owned(cell, schedule.scheduleId)
         && cell.inputs?.workflowRole === `trending-video-${video.rank}`);
@@ -123,15 +197,16 @@ async function build(
       });
       ranks.push({ rank: video.rank, videoId: video.videoId, videoCellId: videoCell.id, notesCellId: notesCell.id, artifactId: artifacts.get(video.rank)! });
     }
+    const method = options.ranking ?? schedule.ranking;
     upsert("trending-summary", {
       type: "prompt", label: "Trending summary", slot: { row: 0, column: 0 },
-      prompt: summary(videos, schedule, options.cutAt, cells),
+      prompt: summary(videos, schedule, { cutAt: options.cutAt, ranking: options.ranking, funnel: options.funnel }, cells),
       inputs: { trendingScheduleId: schedule.scheduleId, workflowRole: "trending-summary" },
     });
     const ids = new Set(cells.map((cell) => cell.id));
     const document: NotebookDocument = {
       ...current, name: `Top ${schedule.topN} · ${date}`,
-      description: `${schedule.windowHours}h ${schedule.window} window; cutoff ${options.cutAt} (${schedule.cutoffLocalTime} ${schedule.timezone}); sources: ${schedule.sources.map((source) => source.id).join(", ")}; method: ${schedule.ranking}`,
+      description: `${schedule.windowHours}h ${schedule.window} window; cutoff ${options.cutAt} (${schedule.cutoffLocalTime} ${schedule.timezone}); sources: ${schedule.sources.map((source) => source.id).join(", ")}; method: ${method}`,
       cells, edges: current.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)),
       execution: Object.fromEntries(Object.entries(current.execution ?? {}).filter(([id]) => {
         const cell = cells.find((candidate) => candidate.id === id);
@@ -166,7 +241,7 @@ export async function syncDayBookDownloads(engine: Engine, schedule: TrendingSch
     return {
       ...notebook,
       cells: cells.map((cell) => owned(cell, schedule.scheduleId) && cell.inputs?.workflowRole === "trending-summary"
-        ? { ...cell, prompt: summary(run.videos, schedule, run.cutAt, cells) }
+        ? { ...cell, prompt: summary(run.videos, schedule, { cutAt: run.cutAt, ranking: run.ranking, funnel: run.funnel }, cells) }
         : cell),
     };
   });

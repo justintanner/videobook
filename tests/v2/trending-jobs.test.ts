@@ -12,10 +12,10 @@ import { retryTrending } from "../../server/src/jobs/trending-retry.js";
 import { sampleTrending } from "../../server/src/jobs/trending-sample.js";
 import { trendingResearchDef } from "../../server/src/tools/trending-research.js";
 import { ensureControlBook } from "../../server/src/trending/control-book.js";
-import { localDate, readLedger, readRuns, readSchedule, readSourceHealth, updateLedger, writeRun } from "../../server/src/trending/ledger.js";
+import { localDate, readLedger, readRuns, readSchedule, readSourceHealth, updateLedger, writeRun, writeSchedule } from "../../server/src/trending/ledger.js";
 import { createTrendingScheduler } from "../../server/src/trending/scheduler.js";
 import type { TrendingSource } from "../../server/src/trending/sources.js";
-import type { TrendingRunRecord } from "../../server/src/trending/types.js";
+import type { Sighting, TrendingRunRecord } from "../../server/src/trending/types.js";
 import { testBudget } from "../../server/src/test-budget.js";
 import { cutAt, schedule, sighting } from "./trending-fixtures.js";
 
@@ -342,4 +342,143 @@ describe("trending research jobs", () => {
     expect(day.history.revisions(1000).length).toBe(revisions);
     await scheduler.stop();
   }, testBudget(60_000));
+
+  it("writes authentic provenance to jobs, cells and artifact metadata, and keeps legacy runs unchanged after switching to authentic", async () => {
+    const control = await setup();
+    await seed(control.engine);
+    const viewsRun = (await cutTrending(control.engine, books, "2026-10-28", cutAt, enqueue))!;
+    const viewsDay = dayEngine(viewsRun);
+    await completeQueued(viewsDay);
+    await retryTrending(control.engine, viewsDay, viewsRun.date, new Date(cutAt), enqueue);
+
+    for (const job of viewsDay.jobs.queue.list({ type: "download_video" })) {
+      expect("authentic" in (job.payload.research as Record<string, unknown>)).toBe(false);
+    }
+    const viewsNotebookBefore = viewsDay.notebooks.read(viewsRun.notebookId!);
+    if (!viewsNotebookBefore.ok) throw new Error(viewsNotebookBefore.error.message);
+    for (const download of viewsRun.downloads) {
+      const metadata = await viewsDay.metadata.artifacts.read(download.artifactId!, "original");
+      expect(metadata.ok).toBe(true);
+      if (metadata.ok) {
+        const value = metadata.value as { research: Record<string, unknown> };
+        expect("authentic" in value.research).toBe(false);
+      }
+      const videoCell = viewsNotebookBefore.value.cells.find((cell) => cell.outputArtifactId === download.artifactId)!;
+      expect("authentic" in (videoCell.inputs?.research as Record<string, unknown>)).toBe(false);
+    }
+    const viewsSummaryBefore = viewsNotebookBefore.value.cells.find((cell) => cell.inputs?.workflowRole === "trending-summary")!.prompt!;
+    const viewsNotesBefore = viewsNotebookBefore.value.cells.find((cell) => cell.inputs?.workflowRole === "trending-notes-1")!.prompt!;
+    const viewsRevisionsBefore = viewsDay.history.revisions(1000).length;
+
+    const currentSchedule = readSchedule(control.engine)!;
+    await writeSchedule(control.engine, { ...currentSchedule, ranking: "authentic" });
+    await retryTrending(control.engine, viewsDay, viewsRun.date, new Date(cutAt), enqueue);
+
+    const viewsNotebookAfter = viewsDay.notebooks.read(viewsRun.notebookId!);
+    if (!viewsNotebookAfter.ok) throw new Error(viewsNotebookAfter.error.message);
+    expect(viewsNotebookAfter.value.cells.find((cell) => cell.inputs?.workflowRole === "trending-summary")!.prompt).toBe(viewsSummaryBefore);
+    expect(viewsNotebookAfter.value.cells.find((cell) => cell.inputs?.workflowRole === "trending-notes-1")!.prompt).toBe(viewsNotesBefore);
+    expect(viewsDay.history.revisions(1000).length).toBe(viewsRevisionsBefore);
+
+    const day2CutAt = "2026-10-29T00:00:00.000Z";
+    const authenticClip = (videoId: string, patch: Partial<Sighting> = {}): Sighting => sighting(videoId, {
+      originRegion: "TH",
+      durationSeconds: 18,
+      kind: "video",
+      aiGenerated: false,
+      isAd: false,
+      observedAt: "2026-10-28T12:00:00.000Z",
+      createdAt: "2026-10-28T00:00:00.000Z",
+      metrics: { views: 500_000, likes: 50_000, shares: 10_000, saves: 2_000, comments: 250 },
+      ...patch,
+    });
+    await updateLedger(control.engine, "2026-10-28", (ledger) => ({
+      ...ledger,
+      sightings: [
+        authenticClip("auth-1", {
+          author: { handle: "marketclip" },
+          metrics: { views: 600_000, likes: 90_000, shares: 24_000, saves: 4_800, comments: 600 },
+        }),
+        authenticClip("auth-2", {
+          author: { handle: "streetdog" },
+          metrics: { views: 300_000, likes: 24_000, shares: 3_000, saves: 600, comments: 120 },
+        }),
+        authenticClip("paid-drop", {
+          metrics: { views: 50_000_000, likes: 20_000 },
+        }),
+      ],
+    }));
+
+    const authenticRun = (await cutTrending(control.engine, books, "2026-10-29", day2CutAt, enqueue))!;
+    const authenticDay = dayEngine(authenticRun);
+    expect(authenticRun.videos).toHaveLength(2);
+    expect(downloadView(authenticDay, authenticRun)).toEqual({
+      cells: [{ state: "pending", error: undefined }, { state: "pending", error: undefined }],
+      summary: ["pending", "pending"],
+    });
+
+    const authenticNotebook = authenticDay.notebooks.read(authenticRun.notebookId!);
+    if (!authenticNotebook.ok) throw new Error(authenticNotebook.error.message);
+    const summaryPrompt = authenticNotebook.value.cells.find((cell) => cell.inputs?.workflowRole === "trending-summary")!.prompt!;
+    expect(summaryPrompt).toContain("Method: authentic;");
+    expect(summaryPrompt).toContain("Funnel: 3 seen; 1 dropped (paid-reach: 1); 0 checked; 0 fit the brief. AI check did not run; ranked on numbers.");
+    expect(summaryPrompt).toContain("| Rank | Handle | Views | Likes | Posted | Sources | Download status | Fallback | Score | Shares | Why |");
+    const summaryRows = summaryPrompt.split("\n").filter((line) => /^\| \d/.test(line));
+    expect(summaryRows.every((line) => line.split(" | ").length === 11)).toBe(true);
+    expect(summaryRows[0].split(" | ")[9]).toBe("4.00%");
+
+    for (const video of authenticRun.videos) {
+      const download = authenticRun.downloads.find((entry) => entry.videoId === video.videoId)!;
+      const job = authenticDay.jobs.queue.get(download.queueJobId!)!;
+      expect(job.payload.research).toMatchObject({ authentic: video.authentic });
+      const metadata = await authenticDay.metadata.artifacts.read(download.artifactId!, "original");
+      expect(metadata.ok && metadata.value).toMatchObject({ research: { authentic: video.authentic } });
+      const videoCell = authenticNotebook.value.cells.find((cell) => cell.inputs?.workflowRole === `trending-video-${video.rank}`)!;
+      const notesCell = authenticNotebook.value.cells.find((cell) => cell.inputs?.workflowRole === `trending-notes-${video.rank}`)!;
+      expect(videoCell.inputs?.research).toMatchObject({ authentic: video.authentic });
+      expect(notesCell.inputs?.research).toMatchObject({ authentic: video.authentic });
+      expect(notesCell.prompt).toContain("Verdict: none (AI check did not run)");
+      expect(notesCell.prompt).toContain("Duration: 18s");
+    }
+
+    await completeQueued(authenticDay);
+    await retryTrending(control.engine, authenticDay, authenticRun.date, new Date(day2CutAt), enqueue);
+    expect(downloadView(authenticDay, authenticRun)).toEqual({
+      cells: [{ state: "completed", error: undefined }, { state: "completed", error: undefined }],
+      summary: ["completed", "completed"],
+    });
+    const authenticRevisions = authenticDay.history.revisions(1000).length;
+    await retryTrending(control.engine, authenticDay, authenticRun.date, new Date(day2CutAt), enqueue);
+    expect(authenticDay.history.revisions(1000).length).toBe(authenticRevisions);
+
+    const storedAuthentic = readRuns(control.engine).find((entry) => entry.date === "2026-10-29")!;
+    await writeRun(control.engine, {
+      ...storedAuthentic,
+      funnel: { ...storedAuthentic.funnel!, checked: 2, fit: 2 },
+      videos: storedAuthentic.videos.map((video, index) => ({
+        ...video,
+        authentic: {
+          ...video.authentic!,
+          verdict: {
+            kind: "candid",
+            fit: index === 0 ? 9 : 7,
+            why: index === 0 ? "Market vendor | flips roti\nin one take" : "Street dog naps in doorway",
+            cover: index === 0,
+          },
+        },
+      })),
+    });
+    await retryTrending(control.engine, authenticDay, authenticRun.date, new Date(day2CutAt), enqueue);
+    const verdictNotebook = authenticDay.notebooks.read(authenticRun.notebookId!);
+    if (!verdictNotebook.ok) throw new Error(verdictNotebook.error.message);
+    const verdictSummary = verdictNotebook.value.cells.find((cell) => cell.inputs?.workflowRole === "trending-summary")!.prompt!;
+    expect(verdictSummary).toContain("Funnel: 3 seen; 1 dropped (paid-reach: 1); 2 checked; 2 fit the brief.");
+    expect(verdictSummary).not.toContain("AI check did not run");
+    const verdictRows = verdictSummary.split("\n").filter((line) => /^\| \d/.test(line));
+    expect(verdictRows.map((line) => line.split(" | ")[6])).toEqual(["completed", "completed"]);
+    expect(verdictRows[0].split(" | ")[10]).toBe("Market vendor \\| flips roti in one take |");
+    const verdictRevisions = authenticDay.history.revisions(1000).length;
+    await retryTrending(control.engine, authenticDay, authenticRun.date, new Date(day2CutAt), enqueue);
+    expect(authenticDay.history.revisions(1000).length).toBe(verdictRevisions);
+  }, testBudget(90_000));
 });

@@ -17,6 +17,7 @@ function researchProvenance(schedule: TrendingSchedule, run: TrendingRunRecord, 
     window: schedule.window, windowHours: schedule.windowHours, country: schedule.country,
     scheduleId: schedule.scheduleId, date: run.date, cutAt: run.cutAt, fallback: video.fallback,
     downstream: schedule.downstream,
+    ...(video.authentic ? { authentic: video.authentic } : {}),
   };
 }
 
@@ -116,6 +117,8 @@ async function cut(
   const record = run;
   const result = await buildDayBook(books, schedule, date, record.videos, {
     cutAt: record.cutAt,
+    ranking: record.ranking,
+    funnel: record.funnel,
     createVideoArtifact: async (_rank, video, dayEngine) => {
       const download = record.downloads.find((entry) => entry.videoId === video.videoId)!;
       if (download.artifactId && dayEngine.artifacts.get(download.artifactId).ok) return download.artifactId;
