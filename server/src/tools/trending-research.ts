@@ -2,6 +2,7 @@ import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { BookManager, ManagedBook } from "../book-manager.js";
 import { queue } from "../queue.js";
+import { resolveCriteria } from "../trending/authenticity.js";
 import { ensureControlBook } from "../trending/control-book.js";
 import { defaultTrendingSources, omkarSourceAvailability } from "../trending/default-sources.js";
 import {
@@ -25,7 +26,14 @@ const schema = {
   window: z.enum(["trending", "posted"]).optional(),
   window_hours: z.number().int().min(1).max(168).optional(),
   exclude_promoted: z.boolean().optional(),
-  ranking: z.enum(["views", "consensus"]).optional(),
+  ranking: z.enum(["views", "consensus", "authentic"]).optional(),
+  criteria: z.strictObject({
+    brief: z.string().min(1).max(2000).optional(),
+    minViews: z.number().int().min(0).optional(),
+    maxAgeDays: z.number().int().min(1).max(365).optional(),
+    maxDurationSeconds: z.number().int().min(5).max(600).optional(),
+    judgeLimit: z.number().int().min(0).max(500).optional(),
+  }).optional(),
   sources: z.array(z.object({ id: z.string().min(1), options: z.record(z.string(), z.unknown()).optional() })).min(1).optional(),
   downstream: z.object({ transcribe: z.boolean().optional(), translateTo: z.array(z.string().min(1)).optional(), analyze: z.boolean().optional() }).optional(),
   substitute_failures: z.boolean().optional(),
@@ -45,6 +53,7 @@ function makeSchedule(args: Args, previous: TrendingSchedule | undefined, now: D
   const country = args.country ?? "TH";
   const timezone = args.timezone ?? previous?.timezone ?? (country === "TH" ? "Asia/Bangkok" : undefined);
   if (!timezone) throw new Error("timezone is required when creating a schedule outside TH");
+  const criteria = { ...previous?.criteria, ...args.criteria };
   return {
     scheduleId: previous?.scheduleId ?? uuidv7(), platform: "tiktok", country, timezone,
     cutoffLocalTime: args.cutoff_local_time ?? previous?.cutoffLocalTime ?? "00:30",
@@ -54,6 +63,7 @@ function makeSchedule(args: Args, previous: TrendingSchedule | undefined, now: D
     windowHours: args.window_hours ?? previous?.windowHours ?? 24,
     excludePromoted: args.exclude_promoted ?? previous?.excludePromoted ?? true,
     ranking: args.ranking ?? previous?.ranking ?? "views",
+    ...(Object.keys(criteria).length > 0 && { criteria }),
     sources: args.sources ?? previous?.sources ?? defaultTrendingSources(),
     downstream: { transcribe: false, translateTo: [], analyze: false, ...previous?.downstream, ...args.downstream },
     substituteFailures: args.substitute_failures ?? previous?.substituteFailures ?? false,
@@ -73,7 +83,7 @@ function status(book: ManagedBook, schedule: TrendingSchedule, date: string | un
   for (const sighting of ledger.sightings) counts[sighting.source] = (counts[sighting.source] ?? 0) + 1;
   const nextRuns = schedule.enabled ? nextTrendingEvents(schedule, now) : { sample: null, cut: null };
   return {
-    bookId: book.bookId, schedule, ledgerDate, ledgerCounts: counts, sourceHealth,
+    bookId: book.bookId, schedule, criteria: resolveCriteria(schedule), ledgerDate, ledgerCounts: counts, sourceHealth,
     optionalSources: { omkar: omkarSourceAvailability() },
     lastSample: [...ledger.completedSlots, ...Object.values(sourceHealth).flatMap((health) => health.lastOk ? [health.lastOk] : [])].sort().at(-1) ?? null,
     lastRun: [...runs].sort((a, b) => b.cutAt.localeCompare(a.cutAt))[0] ?? null,
@@ -114,7 +124,9 @@ export function trendingResearchDef(books: BookManager, options: {
 } = {}): ToolDef {
   return {
     name: "trending_research",
-    description: "Schedule, unschedule, list, run or inspect country TikTok research. The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. After each cutoff, day books older than retention_days are deleted once their rank list, sources and download outcomes are copied into the control book; archive_top_clips archives their completed clips first, and the archiving's provider usage is copied into the control book too. Sighting ledgers older than both retention_days and the cut's 8-day read window are pruned. Omitted arguments default to Thailand: platform tiktok, country TH, timezone Asia/Bangkok, cutoff 00:30, four samples a day, top 10, a trending window, promoted videos excluded, 30-day retention, Endless and TikTok Creative Center, and transcription off. Omkar is an optional source included only when OMKAR_API_KEY is set and @apicity/omkar is installed. Status reports omkar as not configured when that key is unset. Each sample makes one Omkar trending request and does not retry it; set the omkar source option explore to true to add one Explore request for category all. list, run, and status use the only existing schedule when there is exactly one; otherwise they use TH. Other countries require a timezone when first scheduled.",
+    description: "Schedule, unschedule, list, run or inspect country TikTok research. New schedules rank by views. Set ranking=authentic to skip clips picked on earlier days and screen out likely paid reach, photo posts, posts flagged as AI-generated, and clips outside the view, age or duration limits. It ranks the rest by earned engagement. "
+      + "The optional criteria object sets minViews (minimum views), maxAgeDays (maximum days since posting), maxDurationSeconds (maximum clip length), brief (what the researcher wants to find) and judgeLimit (budget for new candidate checks per cut). The brief and check budget are saved for future use. Status shows the effective criteria, including country-specific defaults. "
+      + "The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. After each cutoff, day books older than retention_days are deleted once their rank list, sources and download outcomes are copied into the control book; archive_top_clips archives their completed clips first, and the archiving's provider usage is copied into the control book too. Sighting ledgers older than both retention_days and the cut's 8-day read window are pruned. Omitted arguments default to Thailand: platform tiktok, country TH, timezone Asia/Bangkok, cutoff 00:30, four samples a day, top 10, a trending window, promoted videos excluded, 30-day retention, Endless and TikTok Creative Center, and transcription off. Omkar is an optional source included only when OMKAR_API_KEY is set and @apicity/omkar is installed. Status reports omkar as not configured when that key is unset. Each sample makes one Omkar trending request and does not retry it; set the omkar source option explore to true to add one Explore request for category all. list, run, and status use the only existing schedule when there is exactly one; otherwise they use TH. Other countries require a timezone when first scheduled.",
     scope: "global",
     schema,
     handler: async (input) => {

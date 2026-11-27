@@ -54,6 +54,7 @@ describe("trending_research", () => {
       sources: [{ id: "endless" }, { id: "tiktok-creative-center" }],
       downstream: { transcribe: false, translateTo: [], analyze: false }, retentionDays: 30, enabled: true,
     });
+    expect(first).not.toHaveProperty("criteria");
     await tool.handler({ op: "schedule", country: "TH", top_n: 5, downstream: { analyze: true } });
     expect(readSchedule(control().engine)).toMatchObject({ scheduleId: first.scheduleId, createdAt: first.createdAt, topN: 5, downstream: { transcribe: false, analyze: true, translateTo: [] } });
     const listed = JSON.parse((await tool.handler({ op: "list", country: "TH" })).content[0].text);
@@ -64,6 +65,41 @@ describe("trending_research", () => {
     await tool.handler({ op: "schedule", country: "TH", enabled: true });
     expect(books.list()).toHaveLength(1);
     expect(readSchedule(control().engine)?.scheduleId).toBe(first.scheduleId);
+  }, testBudget(60_000));
+
+  it("merges only explicit criteria and preserves the authentic ranking across updates", async () => {
+    const tool = await setup();
+    const initial = { brief: "Everyday street scenes", minViews: 75_000, maxDurationSeconds: 90 };
+    await tool.handler({ op: "schedule", ranking: "authentic", criteria: initial });
+    const { engine } = control();
+    expect(readSchedule(engine)).toMatchObject({ ranking: "authentic", criteria: initial });
+    await tool.handler({ op: "schedule", criteria: { minViews: 0, judgeLimit: 0 } });
+    await tool.handler({ op: "schedule", top_n: 3 });
+    const overrides = { ...initial, minViews: 0, judgeLimit: 0 };
+    expect(readSchedule(engine)?.criteria).toEqual(overrides);
+    const result = JSON.parse((await tool.handler({ op: "status" })).content[0].text).schedules[0];
+    expect(result.schedule.ranking).toBe("authentic");
+    expect(result.criteria).toEqual({ ...overrides, maxAgeDays: 30 });
+  }, testBudget(60_000));
+
+  it("rejects invalid criteria before changing the stored schedule", async () => {
+    const tool = await setup();
+    await tool.handler({ op: "schedule", ranking: "authentic", criteria: {} });
+    const { engine } = control();
+    const before = readSchedule(engine);
+    expect(before).not.toHaveProperty("criteria");
+    for (const criteria of [
+      { brief: "" }, { brief: "x".repeat(2001) }, { brief: 123 },
+      { minViews: -1 }, { minViews: 0.5 }, { minViews: "1000" },
+      { maxAgeDays: 0 }, { maxAgeDays: 366 }, { maxAgeDays: true },
+      { maxDurationSeconds: 4 }, { maxDurationSeconds: 601 }, { maxDurationSeconds: null },
+      { judgeLimit: -1 }, { judgeLimit: 501 }, { judgeLimit: 1.5 }, "invalid",
+    ]) {
+      const rejected = await tool.handler({ op: "schedule", ranking: "views", criteria });
+      expect(rejected.isError).toBe(true);
+      expect(rejected.content[0].text).toContain("criteria");
+    }
+    expect(readSchedule(engine)).toEqual(before);
   }, testBudget(60_000));
 
   it("enqueues samples and dated cuts with persisted job IDs and scheduler-compatible keys", async () => {

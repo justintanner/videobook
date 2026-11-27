@@ -8,6 +8,10 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- TikTok research schedules can opt into `ranking=authentic` to find new clips
+  by earned engagement. Set screening criteria per schedule and inspect their
+  effective values with `trending_research op=status`.
+
 - Leave out a storyboard frame that neither clean-up model will clean (or that
   did not run) so it stops blocking the rest of the short. The Storyboard tab
   shows **Leave this frame out** on an uncleaned failed or not-run frame and

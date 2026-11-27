@@ -36,15 +36,28 @@ describe("trending_research over HTTP", () => {
       samplesPerDay: 4,
       topN: 10,
       window: "trending",
+      ranking: "views",
       excludePromoted: true,
       retentionDays: 30,
       sources: [{ id: "endless" }, { id: "tiktok-creative-center" }],
       downstream: { transcribe: false, translateTo: [], analyze: false },
       enabled: true,
     });
-    const status = await callTool<{ schedules: Array<{ schedule: { country: string; enabled: boolean } }> }>(client, "trending_research", { op: "status" });
+    expect(scheduled.schedule).not.toHaveProperty("criteria");
+    const status = await callTool<{ schedules: Array<{ schedule: { country: string }; criteria: Record<string, unknown> }> }>(client, "trending_research", { op: "status" });
     expect(status.schedules).toHaveLength(1);
     expect(status.schedules[0]?.schedule.country).toBe("TH");
+    expect(status.schedules[0]?.criteria).toEqual({
+      brief: expect.stringContaining("Thailand"), minViews: 100_000, maxAgeDays: 30, maxDurationSeconds: 60, judgeLimit: 120,
+    });
+    await callTool(client, "trending_research", {
+      op: "schedule", ranking: "authentic", criteria: { minViews: 10_000, maxAgeDays: 7 },
+    });
+    const updated = await callTool<{ schedule: Record<string, unknown> }>(client, "trending_research", {
+      op: "schedule", criteria: { maxAgeDays: 14 },
+    });
+    expect(updated.schedule.ranking).toBe("authentic");
+    expect(updated.schedule.criteria).toEqual({ minViews: 10_000, maxAgeDays: 14 });
     await callTool(client, "trending_research", { op: "unschedule" });
     const disabled = await callTool<{ schedules: Array<{ schedule: { enabled: boolean } }> }>(client, "trending_research", { op: "status" });
     expect(disabled.schedules[0]?.schedule.enabled).toBe(false);

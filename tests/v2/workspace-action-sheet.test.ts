@@ -288,6 +288,7 @@ describe('workspace action sheet', () => {
     expect(fieldClass('Country')).toBe('workspace-action-field workspace-action-compact')
     expect(fieldClass('Samples per day')).toBe('workspace-action-field workspace-action-compact workspace-action-short')
     expect(fieldClass('Window')).toBe('workspace-action-field workspace-action-compact')
+    expect(fieldClass('Criteria')).toBeDefined()
     expect(fieldClass('Downstream')).toBe('workspace-action-field workspace-action-compact workspace-action-structure')
     expect(fieldClass('Sources')).toBe('workspace-action-field workspace-action-wide workspace-action-structure')
   })
