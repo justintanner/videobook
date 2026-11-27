@@ -15,7 +15,7 @@ import { goalNextStep } from '../../src/videobook/goal-next'
 import { SHORT_RULES } from '../../server/src/goal-short-rules'
 import { goalRemixAnalysisSchema, remixRules } from '../../server/src/goal-remix-model'
 import { goalShortPlanSchema, withShortFinishTitle, type ShortFinishTitle } from '../../server/src/goal-short-plan'
-import { legacyGoalFixture, legacyShortPlanFixture, remixPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, storyboardPlanFixture, withStoryboardFailures } from './goal-short-fixtures'
+import { legacyGoalFixture, legacyShortPlanFixture, remixPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, storyboardPlanFixture, withOmittedStoryboardFrames, withStoryboardFailures } from './goal-short-fixtures'
 
 const noop = async () => shortGoalFixture()
 
@@ -372,6 +372,7 @@ describe('GoalShortReview with a storyboard', () => {
     expect(button(html, 'Remove on-screen graphics')).toContain('Remove on-screen graphics · $0.84')
     expect(button(html, 'Remove on-screen graphics')).not.toContain('disabled')
     expect(button(html, 'Regenerate storyboard')).toBe('')
+    expect(button(html, 'Leave this frame out')).toBe('')
     expect(html).not.toContain('Storyboard 1 feedback')
     const partly = render(boardGoal({ stages: { storyboards: shortStage('storyboards', [{ index: 0, artifactId: 'clean-1' }]) } }))
     expect(button(partly, 'Remove on-screen graphics')).toContain('Remove on-screen graphics · $0.63')
@@ -420,6 +421,8 @@ describe('GoalShortReview with a storyboard', () => {
     expect(button(html, 'Clean with Nano Banana 2.1')).not.toContain('disabled')
     expect(button(html, 'Try again with Seedream 5.5')).toContain('Try again with Seedream 5.5 · $0.21')
     expect(html.indexOf('Clean with Nano Banana 2.1')).toBeLessThan(html.indexOf('Try again with Seedream 5.5'))
+    expect(html.match(/>Leave this frame out<\/button>/gu)).toHaveLength(2)
+    expect(button(html, 'Leave this frame out')).not.toContain('disabled')
     expect(button(html, 'Regenerate storyboard 1')).toBe('')
     expect(html).toContain('aria-label="Storyboard 1 feedback"')
     expect(button(html, 'Revise storyboard 1')).toContain('Revise storyboard 1 · $0.21')
@@ -445,6 +448,38 @@ describe('GoalShortReview with a storyboard', () => {
     const html = render(boardGoal({ stage: 'videos', stages: { ...cleaned(), frame: shortStage('frame', [{ index: 0, artifactId: 'frame-a', stale }]) } }), 'frame')
     expect(html).toContain(stale)
     expect(button(html, 'Regenerate frame')).not.toContain('disabled')
+  })
+
+  it('shows a left-out storyboard frame with Put this frame back, updates estimates and Frame reference, and disables Leave this frame out on the last remaining frame', () => {
+    const omittedFirst = withOmittedStoryboardFrames(storyboardPlanFixture(), [0])
+    const ready = shortGoalFixture({
+      stage: 'frame',
+      stages: { storyboards: shortStage('storyboards', [1, 2, 3].map(index => ({ index, artifactId: `clean-${index + 1}` }))) },
+    }, omittedFirst)
+    const boardHtml = render(ready, 'storyboard')
+    expect(boardHtml).toContain('3 of 4 frames of Umbrella walk (@d1), in order.')
+    expect(boardHtml).toContain('the frame is made from clean storyboard frame 2.')
+    expect(boardHtml).toContain('data-state="omitted"')
+    expect(boardHtml).toMatch(/Storyboard 1<\/strong><span>0\.8 s<\/span><span>Left out<\/span><\/div>/u)
+    expect(boardHtml).toContain('<span class="goal-media goal-media-pending">Left out of this short</span>')
+    expect(button(boardHtml, 'Put this frame back')).not.toContain('disabled')
+    expect(button(boardHtml, 'Leave this frame out')).toBe('')
+    expect(button(boardHtml, 'Remove on-screen graphics')).toBe('')
+
+    const frameHtml = render(ready)
+    expect(currentStep(frameHtml)).toBe('Frame')
+    expect(button(frameHtml, 'Generate frame')).not.toContain('disabled')
+    expect(frameHtml).toMatch(/aria-label="Frame references">.*aria-label="Open @image1 · @a1".*aria-label="Open @image2 · storyboard 2"/su)
+
+    const pendingThree = shortGoalFixture({ stage: 'storyboards' }, withOmittedStoryboardFrames(storyboardPlanFixture(), [1]))
+    expect(button(render(pendingThree, 'storyboard'), 'Remove on-screen graphics')).toContain('Remove on-screen graphics · $0.63')
+
+    const onlyOneLeft = withStoryboardFailures(shortGoalFixture({ stage: 'storyboards' }, withOmittedStoryboardFrames(storyboardPlanFixture(), [0, 1, 2])), {
+      3: { kind: 'failed', message: 'Rejected' },
+    })
+    const lastHtml = render(onlyOneLeft, 'storyboard')
+    expect(button(lastHtml, 'Leave this frame out')).toContain('disabled=""')
+    expect(lastHtml).toContain('Keep at least one storyboard frame in the short.')
   })
 })
 

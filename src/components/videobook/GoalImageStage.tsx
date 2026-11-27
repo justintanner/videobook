@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { formatShortSeconds, shortRemixOf, SHORT_WORD_CEILINGS } from '../../../server/src/goal-short-plan'
-import { goalStoryboardClean, shortEstimateText } from '@/videobook/goals'
+import { goalStoryboardClean, goalStoryboardReference, shortEstimateText } from '@/videobook/goals'
 import { GoalPromptInput } from './GoalPromptInput'
 import { GoalMedia } from './GoalStillCard'
 import { AlwaysAdded, GoalChecks, GoalNotes, GoalVersions, REALISM_NOTE, type GoalStageContext } from './GoalStageParts'
@@ -24,8 +24,6 @@ type Props = {
   onRevise: () => void
 }
 type Still = { artifactId: string, cellId: string | null, label: string }
-
-const STORYBOARD_FIRST = 'Remove the on-screen graphics from the storyboard first: the frame is made from clean storyboard frame 1.'
 
 function guidance(ctx: GoalStageContext, replacing: boolean, inputsReady: boolean): string | null {
   if (!shortRemixOf(ctx.plan)) return null
@@ -51,7 +49,9 @@ export function GoalImageStage({ ctx, characterReferences, stage, name, title, p
   const output = goal.stages[stage]?.outputs[0]
   const before = beforeStill(ctx, replacing)
   const storyboard = goal.storyboard
-  const cleanFirst = storyboard?.frames[0]?.clean ?? null
+  const firstStoryboard = goalStoryboardReference(goal)
+  const refNumber = (firstStoryboard?.index ?? 0) + 1
+  const cleanFirst = firstStoryboard?.clean ?? null
   const frameImages = plan.version === 4 ? [...plan.character.references, ...plan.frame.references] : plan.sourceImages
   const price = shortEstimateText(replacing ? goal.estimate.replacement : goal.estimate.frame)
   const actionable = ctx.canGenerate && inputsReady
@@ -86,9 +86,9 @@ export function GoalImageStage({ ctx, characterReferences, stage, name, title, p
       {output && !replacing && !analysis?.recipe.outputAssertions && <p className="goal-panel-muted">{REALISM_NOTE}</p>}
       {characterReferences ?? <div className="goal-reference-grid" role="group" aria-label={plan.version === 4 || storyboard ? 'Frame references' : 'Source images'}>
         {(!remix || replacing) && frameImages.map(ref => <GoalMedia key={ref.slot} artifactId={ref.artifactId} cellId={ref.cellId} label={`${ref.slot} · ${ref.address}`} resolveAsset={ctx.resolveAsset} onOpen={ctx.onPreviewCell} />)}
-        {cleanFirst && <GoalMedia artifactId={cleanFirst.artifactId} cellId={cleanFirst.cellId} label={`@image${frameImages.length + 1} · storyboard 1`} resolveAsset={ctx.resolveAsset} onOpen={ctx.onPreviewCell} />}
+        {cleanFirst && <GoalMedia artifactId={cleanFirst.artifactId} cellId={cleanFirst.cellId} label={`@image${frameImages.length + 1} · storyboard ${refNumber}`} resolveAsset={ctx.resolveAsset} onOpen={ctx.onPreviewCell} />}
       </div>}
-      {storyboard && !goalStoryboardClean(goal) && <p role="note" className="goal-panel-muted">{STORYBOARD_FIRST}</p>}
+      {storyboard && !goalStoryboardClean(goal) && <p role="note" className="goal-panel-muted">Remove the on-screen graphics from the storyboard first: the frame is made from clean storyboard frame {refNumber}.</p>}
     </aside>
   </div>
 }

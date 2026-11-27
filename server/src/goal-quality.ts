@@ -11,7 +11,7 @@ import { reviewedGoalOutput } from "./goal-generation-history.js";
 import { remixAssemblyReviewKey } from "./goal-remix-model.js";
 import { goalReferenceHashes } from "./goal-reference-images.js";
 import { goalQualityResultSchema, type GoalOutputCheck } from "./goal-quality-model.js";
-import { shortGenerationSegments, type GoalShortPlan } from "./goal-short-plan.js";
+import { firstActiveStoryboardFrame, shortGenerationSegments, shortStoryboardOf, type GoalShortPlan } from "./goal-short-plan.js";
 import { shortFingerprint, shortFrameStale, shortSegmentStale } from "./goal-short-runtime.js";
 import { requireGoalShortContent, saveGoal, type GoalEstimate, type GoalRecord } from "./goal-store.js";
 import { queue } from "./queue.js";
@@ -112,9 +112,13 @@ export async function makeGoalQualityRequest(engine: Engine, goal: GoalRecord, s
   const output = goal.stages[generationStage]?.outputs.find(value => value.index === generationIndex);
   const attempt = reviewedGoalOutput(goal, generationStage, generationIndex, output?.artifactId)
     ?? goal.stages[generationStage]?.attempts?.find(value => value.index === generationIndex && value.artifactId === output?.artifactId);
-  const upstream = generationStage === "replacement" ? null : generationStage === "frame" ? goal.stages.replacement?.outputs[0]?.artifactId ?? goal.stages.storyboards?.outputs[0]?.artifactId ?? null
+  const firstStoryboard = firstActiveStoryboardFrame(shortStoryboardOf(plan));
+  const storyboardOutput = firstStoryboard
+    ? goal.stages.storyboards?.outputs.find(value => value.index === firstStoryboard.index)
+    : goal.stages.storyboards?.outputs[0];
+  const upstream = generationStage === "replacement" ? null : generationStage === "frame" ? goal.stages.replacement?.outputs[0]?.artifactId ?? storyboardOutput?.artifactId ?? null
     : (generationIndex === 0 ? goal.stages.frame?.outputs[0] : goal.stages.videos?.outputs.find(value => value.index === generationIndex - 1))?.artifactId ?? null;
-  const stale = (generationStage === "replacement" ? false : generationStage === "frame" ? shortFrameStale(goal) : shortSegmentStale(goal, generationIndex))
+  const stale = (generationStage === "replacement" ? false : generationStage === "frame" ? shortFrameStale(goal, plan) : shortSegmentStale(goal, plan, generationIndex))
     || Boolean(attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, generationStage, generationIndex, upstream));
   const request = { version: 1, goalId: goal.goalId, slot: `${stage}:${index}`, stage, index, artifactId, mediaHash: file.objectHash, semantic, model,
     constraints: material, constraintHash: digest(material), references: pinned, expectedSeconds, retainedStart, retainedSeconds,

@@ -10,7 +10,7 @@ import { getChainRun, preflightAndAccept, retryChainRun, type ChainRunRecord } f
 import type { ChainStep } from "./chain-plan.js";
 import { probeVideo } from "./ffmpeg.js";
 import {
-  buildGoalShortPlan, compileShortClipStep, compileShortContinuationStep, compileShortFrameStep, compileShortReplacementStep, compileShortStoryboardStep, formatShortSeconds,
+  activeStoryboardFrames, buildGoalShortPlan, compileShortClipStep, compileShortContinuationStep, compileShortFrameStep, compileShortReplacementStep, compileShortStoryboardStep, firstActiveStoryboardFrame, formatShortSeconds,
   goalShortPlanSchema, isLegacyShortDraft, refreshGoalShortPlan, SOURCE_IMAGE_LIMIT, SHORT_STORYBOARD_MODELS, shortPlanTitleInput, shortGenerationSegments, shortRemixOf, shortRemixSourceOf, shortStoryboardOf, shortTiming, storyboardFallbackModel,
   type GoalShortDraft, type GoalShortImageRef, type GoalShortPlan, type ShortRemixSource, type ShortStoryboard, type ShortStoryboardModel, type ShortStoryboardVideo,
 } from "./goal-short-plan.js";
@@ -179,18 +179,22 @@ function shortImageIds(plan: GoalShortPlan, clip: boolean): string[] {
 export async function estimateShort(engine: Engine, plan: GoalShortPlan, short: GoalTitleShort): Promise<GoalEstimates> {
   const remix = shortRemixOf(plan);
   const storyboard = shortStoryboardOf(plan);
-  const firstFrame = storyboard?.frames[0] ?? null;
+  const firstFrame = firstActiveStoryboardFrame(storyboard);
   const frameIds = [...shortImageIds(plan, false), ...(firstFrame ? [firstFrame.artifactId] : [])];
   const clipIds = shortImageIds(plan, true);
   const clipRefs: Record<string, string[]> = remix
     ? { video: [plan.version === 5 ? plan.analysis?.recipe.referenceArtifactId ?? remix.video.artifactId : remix.video.artifactId], image: [PLACEHOLDER_FRAME] }
     : { first_frame: [PLACEHOLDER_FRAME], image: clipIds.length > 0 ? clipIds : [PLACEHOLDER_FRAME] };
   const storyboardFrames = storyboard
-    ? await Promise.all(storyboard.frames.map((frame) => priced(engine, compileShortStoryboardStep(storyboard, frame.index), { image: [frame.artifactId] })))
+    ? await Promise.all(storyboard.frames.map((frame) => frame.omitted
+      ? Promise.resolve({ usd: 0, warnings: [] })
+      : priced(engine, compileShortStoryboardStep(storyboard, frame.index), { image: [frame.artifactId] })))
     : [];
   const fallback = storyboard ? storyboardFallbackModel(storyboard.model) : null;
   const storyboardFallbackFrames = storyboard && fallback
-    ? await Promise.all(storyboard.frames.map((frame) => priced(engine, compileShortStoryboardStep(storyboard, frame.index, fallback), { image: [frame.artifactId] })))
+    ? await Promise.all(storyboard.frames.map((frame) => frame.omitted
+      ? Promise.resolve({ usd: 0, warnings: [] })
+      : priced(engine, compileShortStoryboardStep(storyboard, frame.index, fallback), { image: [frame.artifactId] })))
     : [];
   const replacement = remix ? await priced(engine, compileShortReplacementStep(plan), { image: [...shortImageIds(plan, false), remix.frame.artifactId] }) : null;
   const frame = await priced(engine, compileShortFrameStep(plan, remix ? PLACEHOLDER_FRAME : firstFrame?.address ?? null), remix ? { image: [PLACEHOLDER_FRAME] } : frameIds.length > 0 ? { image: frameIds } : {});
@@ -214,11 +218,16 @@ export function replacementFingerprint(plan: GoalShortPlan, references: { artifa
     references });
 }
 
+function omittedStoryboardIndexes(storyboard: ShortStoryboard | null): number[] {
+  return (storyboard?.frames ?? []).filter((frame) => frame.omitted).map((frame) => frame.index);
+}
+
 export async function shortFingerprint(
   engine: Engine, plan: GoalShortPlan, stage: GoalGenerationStage, index: number, sourceArtifactId: string | null, model?: ShortStoryboardModel,
 ): Promise<string> {
   const storyboard = shortStoryboardOf(plan);
   const remix = shortRemixOf(plan);
+  const omitted = omittedStoryboardIndexes(storyboard);
   if (stage === "replacement") {
     if (!remix) throw new Error("This short has no character replacement step.");
     return replacementFingerprint(plan, await goalReferenceHashes(engine, [...shortImageIds(plan, false), remix.frame.artifactId]));
@@ -229,6 +238,7 @@ export async function shortFingerprint(
       prompt: frame?.prompt ?? null,
       model: model ?? storyboard?.model ?? null,
       aspectRatio: frame?.aspectRatio ?? null,
+      ...(frame?.omitted ? { omitted: true } : {}),
       references: await goalReferenceHashes(engine, frame ? [frame.artifactId] : []),
     });
   }
@@ -243,6 +253,7 @@ export async function shortFingerprint(
       references: await goalReferenceHashes(engine, remix ? [sourceArtifactId ?? remix.frame.artifactId] : shortImageIds(plan, false)),
       ...(remix ? { replacement: sourceArtifactId } : {}),
       ...(storyboard ? { storyboardFrame: sourceArtifactId } : {}),
+      ...(omitted.length > 0 ? { storyboardOmitted: omitted } : {}),
     });
   }
   return JSON.stringify({
@@ -253,6 +264,7 @@ export async function shortFingerprint(
     settings: { ...plan.video, aspectRatio: plan.aspectRatio },
     references: await goalReferenceHashes(engine, shortImageIds(plan, true)),
     sourceArtifactId,
+    ...(omitted.length > 0 ? { storyboardOmitted: omitted } : {}),
     ...(remix && index === 0 ? { videoReferences: await goalReferenceHashes(engine, [remix.video.artifactId,
       ...(plan.version === 5 && plan.analysis?.recipe.referenceArtifactId ? [plan.analysis.recipe.referenceArtifactId] : []), ...(sourceArtifactId ? [sourceArtifactId] : [])]) } : {}),
   });
@@ -262,28 +274,54 @@ function selectedOutput(goal: GoalRecord, stage: GoalGenerationStage, index: num
   return goal.stages[stage]?.outputs.find((output) => output.index === index);
 }
 
-function stageSource(goal: GoalRecord, stage: GoalGenerationStage, index: number): string | null {
+function firstCleanStoryboardOutput(goal: GoalRecord, plan: GoalShortPlan | null): GoalStageOutput | undefined {
+  const storyboard = shortStoryboardOf(plan);
+  const first = firstActiveStoryboardFrame(storyboard);
+  if (first) return selectedOutput(goal, "storyboards", first.index);
+  return storyboard ? undefined : selectedOutput(goal, "storyboards", 0);
+}
+
+function stageSource(goal: GoalRecord, plan: GoalShortPlan | null, stage: GoalGenerationStage, index: number): string | null {
   if (stage === "storyboards" || stage === "replacement") return null;
-  if (stage === "frame") return selectedOutput(goal, "replacement", 0)?.artifactId ?? selectedOutput(goal, "storyboards", 0)?.artifactId ?? null;
+  if (stage === "frame") return selectedOutput(goal, "replacement", 0)?.artifactId ?? firstCleanStoryboardOutput(goal, plan)?.artifactId ?? null;
   return (index === 0 ? selectedOutput(goal, "frame", 0) : selectedOutput(goal, "videos", index - 1))?.artifactId ?? null;
 }
 
-function madeFromStaleSource(goal: GoalRecord, stage: "frame" | "videos", index: number): boolean {
+function fingerprintStoryboardOmitted(fingerprint: string | undefined): number[] {
+  if (!fingerprint) return [];
+  try {
+    const parsed = JSON.parse(fingerprint) as { storyboardOmitted?: unknown };
+    return Array.isArray(parsed.storyboardOmitted)
+      ? parsed.storyboardOmitted.filter((value): value is number => typeof value === "number")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function storyboardOmittedChanged(attempt: { fingerprint?: string } | undefined, plan: GoalShortPlan | null): boolean {
+  const storyboard = shortStoryboardOf(plan);
+  if (!storyboard || !attempt?.fingerprint) return false;
+  return JSON.stringify(fingerprintStoryboardOmitted(attempt.fingerprint)) !== JSON.stringify(omittedStoryboardIndexes(storyboard));
+}
+
+function madeFromStaleSource(goal: GoalRecord, plan: GoalShortPlan | null, stage: "frame" | "videos", index: number): boolean {
   const output = selectedOutput(goal, stage, index);
   if (!output) return false;
   const attempt = reviewedGoalOutput(goal, stage, index, output.artifactId) ?? goal.stages[stage]?.attempts?.find((candidate) => candidate.index === index && candidate.artifactId === output.artifactId);
-  return Boolean(attempt?.frameArtifactId && attempt.frameArtifactId !== stageSource(goal, stage, index));
+  if (attempt?.frameArtifactId && attempt.frameArtifactId !== stageSource(goal, plan, stage, index)) return true;
+  return storyboardOmittedChanged(attempt, plan);
 }
 
-export function shortFrameStale(goal: GoalRecord): boolean {
-  return madeFromStaleSource(goal, "frame", 0);
+export function shortFrameStale(goal: GoalRecord, plan: GoalShortPlan | null = null): boolean {
+  return madeFromStaleSource(goal, plan, "frame", 0);
 }
 
-export function shortSegmentStale(goal: GoalRecord, index: number): boolean {
+export function shortSegmentStale(goal: GoalRecord, plan: GoalShortPlan | null, index: number): boolean {
   if (!selectedOutput(goal, "videos", index)) return false;
-  if (shortFrameStale(goal)) return true;
-  if (index > 0 && shortSegmentStale(goal, index - 1)) return true;
-  return madeFromStaleSource(goal, "videos", index);
+  if (shortFrameStale(goal, plan)) return true;
+  if (index > 0 && shortSegmentStale(goal, plan, index - 1)) return true;
+  return madeFromStaleSource(goal, plan, "videos", index);
 }
 
 function assertStageKey(plan: GoalShortPlan, stage: GoalGenerationStage, model?: ShortStoryboardModel): void {
@@ -301,7 +339,10 @@ function cleanupModel(plan: GoalShortPlan, stage: GoalGenerationStage, args: Goa
 }
 
 function shortStoryboardClean(goal: GoalRecord, plan: GoalShortPlan | null): boolean {
-  return (shortStoryboardOf(plan)?.frames ?? []).every((frame) => selectedOutput(goal, "storyboards", frame.index));
+  const storyboard = shortStoryboardOf(plan);
+  if (!storyboard) return true;
+  const active = activeStoryboardFrames(storyboard);
+  return active.length > 0 && active.every((frame) => Boolean(selectedOutput(goal, "storyboards", frame.index)));
 }
 
 function notRunReason(chain: ChainRunRecord): string {
@@ -340,7 +381,7 @@ export function currentShortClip(goal: GoalRecord): GoalStageOutput | null {
 
 export function nextShortSegment(goal: GoalRecord, plan: GoalShortPlan): number | null {
   for (let index = 0; index < shortGenerationSegments(plan).length; index += 1) {
-    if (!selectedOutput(goal, "videos", index) || shortSegmentStale(goal, index)) return index;
+    if (!selectedOutput(goal, "videos", index) || shortSegmentStale(goal, plan, index)) return index;
   }
   return null;
 }
@@ -353,8 +394,9 @@ function outputAddress(document: NotebookDocument, output: GoalStageOutput | und
   return notebookGridTag(cell.slot);
 }
 
-function cleanStoryboardFrame(goal: GoalRecord): GoalStageOutput {
-  const output = selectedOutput(goal, "storyboards", 0);
+function cleanStoryboardFrame(goal: GoalRecord, plan: GoalShortPlan): GoalStageOutput {
+  if (!shortStoryboardClean(goal, plan)) throw new Error(STORYBOARD_FIRST);
+  const output = firstCleanStoryboardOutput(goal, plan);
   if (!output) throw new Error(STORYBOARD_FIRST);
   return output;
 }
@@ -497,10 +539,10 @@ async function clipSeconds(engine: Engine, artifactId: string): Promise<number> 
   return (await probeVideo(join(manifest.value.path, file.name))).duration;
 }
 
-async function continuationSource(engine: Engine, goal: GoalRecord, index: number): Promise<GoalStageOutput> {
+async function continuationSource(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, index: number): Promise<GoalStageOutput> {
   const previous = selectedOutput(goal, "videos", index - 1);
   if (!previous) throw new Error(`Generate segment ${index} before continuing the short.`);
-  if (shortSegmentStale(goal, index - 1)) throw new Error(`Segment ${index} is out of date. Approve it again before continuing the short.`);
+  if (shortSegmentStale(goal, plan, index - 1)) throw new Error(`Segment ${index} is out of date. Approve it again before continuing the short.`);
   const seconds = await clipSeconds(engine, previous.artifactId);
   if (seconds < EXTEND_SOURCE_SECONDS.minimum || seconds > EXTEND_SOURCE_SECONDS.maximum) {
     throw new Error(`The current clip runs ${seconds.toFixed(2)} seconds, and H3 Extend takes a source of ${EXTEND_SOURCE_SECONDS.minimum} to ${EXTEND_SOURCE_SECONDS.maximum} seconds.`);
@@ -517,7 +559,7 @@ export async function shortFinishSource(engine: Engine, goal: GoalRecord): Promi
     await assertRemixPreflight(engine, plan);
     const attempt = reviewedGoalOutput(goal, "videos", clip.index, clip.artifactId) ?? goal.stages.videos?.attempts?.find(candidate => candidate.artifactId === clip.artifactId && candidate.fingerprint);
     if (attempt && "mediaHash" in attempt && (await goalReferenceHashes(engine, [clip.artifactId]))[0]?.objectHash !== attempt.mediaHash) throw new Error("The reviewed take changed. Review its current media before finishing.");
-    if (attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, "videos", clip.index, stageSource(goal, "videos", clip.index))) {
+    if (attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, "videos", clip.index, stageSource(goal, plan, "videos", clip.index))) {
       throw new Error("The video prompt, timing or references changed. Review a compatible take before finishing.");
     }
   }
@@ -539,7 +581,7 @@ async function assertShortUpstream(engine: Engine, goal: GoalRecord, plan: GoalS
   if (stage !== "videos") return;
   const frame = selectedOutput(goal, "frame", 0);
   const attempt = reviewedGoalOutput(goal, "frame", 0, frame?.artifactId) ?? goal.stages.frame?.attempts?.find(candidate => candidate.artifactId === frame?.artifactId && candidate.fingerprint);
-  if (!frame || (attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, "frame", 0, stageSource(goal, "frame", 0)))) {
+  if (!frame || (attempt?.fingerprint && attempt.fingerprint !== await shortFingerprint(engine, plan, "frame", 0, stageSource(goal, plan, "frame", 0)))) {
     throw new Error(shortRemixOf(plan)
       ? "The twist prompt or character replacement changed. Regenerate the twist before continuing."
       : "The frame prompt, references or storyboard changed after this frame was made. Regenerate the frame before continuing.");
@@ -569,13 +611,18 @@ function approveOutOfOrder(goal: GoalRecord, plan: GoalShortPlan, active: GoalGe
 
 function approvedTarget(goal: GoalRecord, plan: GoalShortPlan, args: GoalArgs): ShortTarget {
   const active = activeGoalStage(goal);
-  const current = active === "storyboards" && shortStoryboardClean(goal, plan) ? "frame" : active;
+  const storyboard = shortStoryboardOf(plan);
+  const current = storyboard && !shortStoryboardClean(goal, plan)
+    ? "storyboards"
+    : active === "storyboards" && shortStoryboardClean(goal, plan)
+      ? "frame"
+      : active;
   if (args.stage !== undefined) {
     const requested = stageSchema.parse(args.stage);
     if (requested !== current) throw new Error(approveOutOfOrder(goal, plan, current, requested));
   }
   if (current === "storyboards") {
-    const missing = shortStoryboardOf(plan)!.frames.filter((frame) => !selectedOutput(goal, "storyboards", frame.index)).map((frame) => frame.index);
+    const missing = activeStoryboardFrames(storyboard).filter((frame) => !selectedOutput(goal, "storyboards", frame.index)).map((frame) => frame.index);
     return { stage: "storyboards", indexes: missing };
   }
   if (current === "frame" || current === "replacement") return { stage: current, indexes: [0] };
@@ -593,9 +640,11 @@ function shortTarget(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, args
   if (stage === "frame" && index !== 0) throw new Error("A short has one frame");
   if (stage === "videos" && index >= shortGenerationSegments(plan).length) throw new Error(`This short has ${shortGenerationSegments(plan).length} generated clips.`);
   if (stage === "storyboards") {
-    const count = shortStoryboardOf(plan)?.frames.length ?? 0;
+    const storyboard = shortStoryboardOf(plan);
+    const count = storyboard?.frames.length ?? 0;
     if (count === 0) throw new Error("This short has no storyboard.");
     if (index >= count) throw new Error(`The storyboard has ${count} frames.`);
+    if (storyboard!.frames[index]?.omitted) throw new Error(`Storyboard frame ${index + 1} was left out. Put it back before cleaning it.`);
   }
   if (!selectedOutput(goal, stage, index) && !(stage === "storyboards" && storyboardFrameFailure(engine, goal, index)?.kind === "failed")) {
     throw new Error("There is no current output to regenerate or revise");
@@ -618,7 +667,7 @@ function stageSteps(
   if (target.stage === "replacement") return [{ index: 0, step: compileShortReplacementStep(plan) }];
   if (target.stage === "storyboards") return target.indexes.map((index) => ({ index, step: compileShortStoryboardStep(storyboard!, index, model) }));
   const index = target.indexes[0]!;
-  if (target.stage === "frame") return [{ index, step: compileShortFrameStep(plan, remix ? outputAddress(document, selectedOutput(goal, "replacement", 0)) : storyboard ? outputAddress(document, cleanStoryboardFrame(goal)) : null) }];
+  if (target.stage === "frame") return [{ index, step: compileShortFrameStep(plan, remix ? outputAddress(document, selectedOutput(goal, "replacement", 0)) : storyboard ? outputAddress(document, cleanStoryboardFrame(goal, plan)) : null) }];
   return [{
     index,
     step: sourceClip
@@ -643,7 +692,7 @@ function assertStageInputs(goal: GoalRecord, plan: GoalShortPlan, target: ShortT
   }
   const storyboard = shortStoryboardOf(plan);
   if (target.stage === "storyboards") assertRawFrames(document, storyboard!, target.indexes);
-  if (target.stage === "frame" && storyboard) outputAddress(document, cleanStoryboardFrame(goal));
+  if (target.stage === "frame" && storyboard) outputAddress(document, cleanStoryboardFrame(goal, plan));
   if (target.stage === "videos") outputAddress(document, selectedOutput(goal, "frame", 0));
 }
 
@@ -657,7 +706,7 @@ export async function shortStageProposal(engine: Engine, goal: GoalRecord, stage
   assertStageKey(plan, stage);
   assertStageInputs(goal, plan, target, document);
   await assertShortUpstream(engine, goal, plan, stage);
-  const sourceClip = stage === "videos" && index > 0 ? await continuationSource(engine, goal, index) : null;
+  const sourceClip = stage === "videos" && index > 0 ? await continuationSource(engine, goal, plan, index) : null;
   const step = stageSteps(goal, plan, document, target, sourceClip)[0]!.step;
   const envKey = adapterFor(resolveModel(String(step.params.model))).envKey;
   if (!getApiKey(envKey)) throw new Error(`Set a valid ${envKey} in Settings before automatic generation.`);
@@ -672,7 +721,7 @@ export async function shortStageProposal(engine: Engine, goal: GoalRecord, stage
     });
   }
   return { step, estimate: await priced(engine, step, refs),
-    inputKey: await shortFingerprint(engine, plan, stage, index, stageSource(goal, stage, index)) };
+    inputKey: await shortFingerprint(engine, plan, stage, index, stageSource(goal, plan, stage, index)) };
 }
 
 export async function startShortStage(engine: Engine, goal: GoalRecord, args: GoalArgs, regenerate: boolean): Promise<GoalRecord> {
@@ -696,7 +745,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   assertStageKey(content.plan, stage, model);
   if (feedback && !getApiKey("OPENAI_API_KEY")) throw new Error(NO_OPENAI_KEY);
   assertStageInputs(goal, content.plan, target, readNotebook(engine, goal.notebookId));
-  const sourceClip = stage === "videos" && index > 0 ? await continuationSource(engine, goal, index) : null;
+  const sourceClip = stage === "videos" && index > 0 ? await continuationSource(engine, goal, content.plan, index) : null;
   await ensureShortSpace(engine, goal, stage, indexes.length);
   if (feedback) content = await revisedShortContent(engine, goal, content, stage, index, feedback);
   const document = readNotebook(engine, goal.notebookId);
@@ -705,7 +754,7 @@ export async function startShortStage(engine: Engine, goal: GoalRecord, args: Go
   await assertShortUpstream(engine, goal, plan, stage);
   goal = saveGoal(engine, await rememberUpstreamReviews(engine, goal, plan, stage, typeof args.automation_id === "string"));
   const steps = await Promise.all(stageSteps(goal, plan, document, target, sourceClip, model).map(async ({ index: position, step }) => {
-    const source = stageSource(goal, stage, position);
+    const source = stageSource(goal, plan, stage, position);
     return { index: position, step, source, fingerprint: await shortFingerprint(engine, plan, stage, position, source, model) };
   }));
   const previous = goal.stages[stage];
@@ -802,8 +851,9 @@ async function placeRecoveredTake(engine: Engine, goal: GoalRecord, entry: GoalH
 async function rememberReviewedOutput(engine: Engine, goal: GoalRecord, plan: GoalShortPlan, entry: GoalHistoryEntry): Promise<GoalRecord> {
   if (!entry.artifactId || !entry.mediaHash) throw new Error("Review a completed take before adopting it.");
   const { stage, index, artifactId, mediaHash } = entry;
-  const review = { stage, index, artifactId, mediaHash, fingerprint: await shortFingerprint(engine, plan, stage, index, stageSource(goal, stage, index)),
-    basePrompt: stagePrompt(plan, stage, index), frameArtifactId: stageSource(goal, stage, index), originGoalId: entry.originGoalId,
+  const source = stageSource(goal, plan, stage, index);
+  const review = { stage, index, artifactId, mediaHash, fingerprint: await shortFingerprint(engine, plan, stage, index, source),
+    basePrompt: stagePrompt(plan, stage, index), frameArtifactId: source, originGoalId: entry.originGoalId,
     ...(entry.generationId ? { generationId: entry.generationId } : {}), reviewedAt: new Date().toISOString() };
   return { ...goal, reviewedOutputs: [...(goal.reviewedOutputs ?? []).filter(item => !(item.stage === stage && item.index === index && item.artifactId === artifactId)), review] };
 }
@@ -839,7 +889,7 @@ export async function reviewedShortCandidates(engine: Engine, goal: GoalRecord, 
   let selected = goal;
   const stages: GoalGenerationStage[] = plan.remix ? ["replacement", "frame"] : ["frame"];
   for (const stage of stages) {
-    const fingerprint = contentFingerprint(await shortFingerprint(engine, plan, stage, 0, stageSource(selected, stage, 0)));
+    const fingerprint = contentFingerprint(await shortFingerprint(engine, plan, stage, 0, stageSource(selected, plan, stage, 0)));
     for (const entry of history.filter(value => value.stage === stage && value.index === 0 && value.review && value.mediaHash === value.review.mediaHash && value.status === "completed")) {
       if (contentFingerprint(entry.review!.fingerprint) !== fingerprint || await goalHistoryInputProblem(engine, entry, source)) continue;
       candidates.push(entry);
@@ -886,6 +936,7 @@ export async function selectShortVersion(engine: Engine, goal: GoalRecord, args:
   const problem = await goalHistoryInputProblem(engine, entry, source);
   if (problem) throw new Error(problem);
   if (stage === "videos" && index >= shortGenerationSegments(plan).length || stage !== "videos" && stage !== "storyboards" && index !== 0) throw new Error("This output has no matching stage in the current plan.");
+  if (stage === "storyboards" && shortStoryboardOf(plan)?.frames[index]?.omitted) throw new Error(`Storyboard frame ${index + 1} was left out. Put it back before selecting a version.`);
   const output = await placeRecoveredTake(engine, goal, entry);
   const changed = selectedOutput(goal, stage, index)?.artifactId !== artifactId;
   const outputs = [...(run?.outputs ?? []).filter(item => item.index !== index), output].sort((a, b) => a.index - b.index);
@@ -958,8 +1009,100 @@ function lockedStoryboard(plan: GoalShortPlan) {
     video: { artifactId: storyboard.video.artifactId, cellId: storyboard.video.cellId },
     model: storyboard.model,
     size: storyboard.size ?? null,
-    frames: storyboard.frames.map(({ index, atSeconds, aspectRatio, artifactId, cellId, objectHash }) => ({ index, atSeconds, aspectRatio, artifactId, cellId, objectHash })),
+    frames: storyboard.frames.map(({ index, atSeconds, aspectRatio, artifactId, cellId, objectHash, omitted }) => ({
+      index, atSeconds, aspectRatio, artifactId, cellId, objectHash, omitted: Boolean(omitted),
+    })),
   };
+}
+
+function assertStoryboardEditable(engine: Engine, goal: GoalRecord, args: GoalArgs) {
+  if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) {
+    throw new Error("Wait until generation stops before changing the storyboard.");
+  }
+  if (goal.finish?.status === "running") {
+    throw new Error("Wait until finishing stops before changing the storyboard.");
+  }
+  const content = assertShortRevision(engine, goal, args.revision);
+  const plan = content.plan;
+  const storyboard = shortStoryboardOf(plan);
+  if (plan.version !== 5 || !storyboard) throw new Error("This short has no storyboard.");
+  const index = z.number().int().nonnegative().parse(args.index);
+  const frame = storyboard.frames[index];
+  if (!frame) throw new Error(`The storyboard has ${storyboard.frames.length} frames.`);
+  return { content, plan, storyboard, index, frame };
+}
+
+export async function omitStoryboardFrame(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {
+  const { content, plan, storyboard, index, frame } = assertStoryboardEditable(engine, goal, args);
+  if (frame.omitted) return goal;
+  if (selectedOutput(goal, "storyboards", index)) {
+    throw new Error(`Storyboard frame ${index + 1} already has a clean image and cannot be left out.`);
+  }
+  if (!storyboardFrameFailure(engine, goal, index)) {
+    throw new Error(`Try cleaning storyboard frame ${index + 1} first. Only a frame whose clean-up failed or did not run can be left out.`);
+  }
+  if (activeStoryboardFrames(storyboard).length <= 1) {
+    throw new Error("Keep at least one storyboard frame in the short. The last remaining frame cannot be left out.");
+  }
+  const nextStoryboard: ShortStoryboard = {
+    ...storyboard,
+    frames: storyboard.frames.map((candidate) => candidate.index === index ? { ...candidate, omitted: true } : candidate),
+  };
+  const nextPlan = goalShortPlanSchema.parse({ ...plan, storyboard: nextStoryboard });
+  const draft = content.draft && !isLegacyShortDraft(content.draft) && content.draft.storyboard
+    ? { ...content.draft, storyboard: nextStoryboard }
+    : content.draft;
+  const estimate = await estimateShort(engine, nextPlan, content);
+  await writeGoalShortContent(engine, goal, { ...content, draft, plan: nextPlan, estimate, revision: content.revision + 1 });
+  const clean = shortStoryboardClean(goal, nextPlan);
+  const frameStale = shortFrameStale(goal, nextPlan);
+  const finish = frameStale ? null : goal.finish ?? goal.resumeFinish ?? null;
+  const stage: GoalGenerationStage = !clean
+    ? "storyboards"
+    : goal.stages.frame?.outputs.length && !frameStale
+      ? "videos"
+      : "frame";
+  return saveGoal(engine, {
+    ...goal,
+    stage,
+    status: finish?.status === "completed" && finish.finalArtifactId ? "completed" : "review",
+    error: null,
+    finish,
+    resumeStage: null,
+    resumeStatus: null,
+    resumeOutputs: null,
+    resumeFinish: null,
+  });
+}
+
+export async function restoreStoryboardFrame(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {
+  const { content, plan, storyboard, index, frame } = assertStoryboardEditable(engine, goal, args);
+  if (!frame.omitted) return goal;
+  const nextStoryboard: ShortStoryboard = {
+    ...storyboard,
+    frames: storyboard.frames.map((candidate) => {
+      if (candidate.index !== index) return candidate;
+      const { omitted: _omitted, ...rest } = candidate;
+      return rest;
+    }),
+  };
+  const nextPlan = goalShortPlanSchema.parse({ ...plan, storyboard: nextStoryboard });
+  const draft = content.draft && !isLegacyShortDraft(content.draft) && content.draft.storyboard
+    ? { ...content.draft, storyboard: nextStoryboard }
+    : content.draft;
+  const estimate = await estimateShort(engine, nextPlan, content);
+  await writeGoalShortContent(engine, goal, { ...content, draft, plan: nextPlan, estimate, revision: content.revision + 1 });
+  return saveGoal(engine, {
+    ...goal,
+    stage: shortStoryboardClean(goal, nextPlan) ? goal.stage : "storyboards",
+    status: "review",
+    error: null,
+    finish: null,
+    resumeStage: null,
+    resumeStatus: null,
+    resumeOutputs: null,
+    resumeFinish: null,
+  });
 }
 
 export async function updateShortGoal(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {
@@ -1137,9 +1280,19 @@ export async function retryShortGoal(engine: Engine, goal: GoalRecord): Promise<
   const repairClip = stage === "videos" && run?.shotIndexes.length === 1 && run.shotIndexes[0] === 0
     && !selectedOutput(goal, "videos", 0) && step?.tool === "generate_video" && refs.success
     && Boolean(refs.data.first_frame?.length) && !["image", "video", "audio"].some(role => refs.data[role]?.length);
+  const storyboard = shortStoryboardOf(plan);
+  if (stage === "storyboards" && storyboard) {
+    const chain = getChainRun(engine, goal.chainId);
+    const omits = chain?.steps.some((candidate) => {
+      const match = /^storyboard(\d+)$/u.exec(candidate.id);
+      const frameIndex = match ? Number(match[1]) - 1 : -1;
+      return Boolean(storyboard.frames[frameIndex]?.omitted) && candidate.status !== "completed";
+    });
+    if (omits) throw new Error(STALE_RETRY);
+  }
   for (const attempt of run?.attempts ?? []) {
     if (attempt.chainId !== goal.chainId || !attempt.fingerprint) continue;
-    const fingerprint = await shortFingerprint(engine, plan, stage, attempt.index, stageSource(goal, stage, attempt.index), attempt.model);
+    const fingerprint = await shortFingerprint(engine, plan, stage, attempt.index, stageSource(goal, plan, stage, attempt.index), attempt.model);
     if (attempt.fingerprint === fingerprint) continue;
     const { videoReferences: _videoReferences, ...previous } = JSON.parse(fingerprint) as Record<string, unknown>;
     if (!repairClip || attempt.fingerprint !== JSON.stringify(previous)) throw new Error(STALE_RETRY);

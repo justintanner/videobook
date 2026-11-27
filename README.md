@@ -201,7 +201,10 @@ A brief without a video keeps the simpler **Frame → Video → Finish** flow.
 Saved storyboard shorts keep their **Storyboard → Frame → Video → Finish**
 flow, cleanup models, prompts and versions. Their cleanup still removes
 on-screen graphics from every saved frame and offers the other cleanup model
-when a frame fails.
+when a frame fails. If a frame still has no clean image after an attempt,
+**Leave this frame out** skips it (keeping at least one frame, and using the
+first remaining clean frame as the Frame step's reference) and **Put this frame
+back** returns it to be cleaned.
 
 Shorts saved before source images keep their main character on a read-only
 **Character** tab and keep their stored prompts; they still continue and

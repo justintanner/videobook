@@ -12,19 +12,33 @@ type Props = {
   onFeedback: (index: number, value: string) => void
   onRegenerate: (index: number, model?: string) => void
   onRevise: (index: number) => void
+  onOmit: (index: number) => void
+  onRestore: (index: number) => void
 }
 
 function frameState(frame: Storyboard['frames'][number], cleaning: boolean): string {
+  if (frame.omitted) return 'Left out'
   if (frame.clean) return 'Clean'
   if (frame.failure) return frame.failure.kind === 'failed' ? 'Failed' : 'Not run'
   return cleaning ? 'Cleaning' : 'Not cleaned'
 }
 
-function StoryboardFrame({ props, frame }: { props: Props, frame: Storyboard['frames'][number] }) {
+function StoryboardFrame({ props, frame, activeCount, canEditBoard }: { props: Props, frame: Storyboard['frames'][number], activeCount: number, canEditBoard: boolean }) {
   const { ctx } = props
   const name = `Storyboard ${frame.index + 1}`
+  if (frame.omitted) {
+    return <li className="goal-short-segment" data-state="omitted">
+      <div className="goal-short-segment-head"><strong>{name}</strong><span>{formatShortSeconds(frame.atSeconds)} s</span><span>Left out</span></div>
+      <div className="goal-storyboard-pair">
+        <GoalMedia artifactId={frame.raw.artifactId} cellId={frame.raw.cellId} label={`${name} before · ${frame.raw.address}`} resolveAsset={ctx.resolveAsset} onOpen={ctx.onPreviewCell} />
+        <span className="goal-media goal-media-pending">Left out of this short</span>
+      </div>
+      <button type="button" className="goal-panel-button" disabled={!canEditBoard} onClick={() => props.onRestore(frame.index)}>Put this frame back</button>
+    </li>
+  }
   const failed = frame.failure?.kind === 'failed'
   const redo = Boolean(frame.clean) || failed
+  const canLeaveOut = !frame.clean && Boolean(frame.failure)
   const retry = goalStoryboardRetry(ctx.goal, frame.index)
   const price = shortEstimateText(frame.estimate ?? undefined)
   const note = props.feedback[frame.index] ?? ''
@@ -40,6 +54,8 @@ function StoryboardFrame({ props, frame }: { props: Props, frame: Storyboard['fr
     {frame.clean && <GoalVersions ctx={ctx} stage="storyboards" index={frame.index} label={name} />}
     {retry && <button type="button" className="goal-panel-button" disabled={!ctx.canGenerate} onClick={() => props.onRegenerate(frame.index, retry.other.model)}>Clean with {retry.other.title} · {shortEstimateText(retry.other.estimate)}</button>}
     {retry && <button type="button" className="goal-panel-button" disabled={!ctx.canGenerate} onClick={() => props.onRegenerate(frame.index, retry.same.model)}>Try again with {retry.same.title} · {shortEstimateText(retry.same.estimate)}</button>}
+    {canLeaveOut && <button type="button" className="goal-panel-button" disabled={!canEditBoard || activeCount <= 1} onClick={() => props.onOmit(frame.index)}>Leave this frame out</button>}
+    {canLeaveOut && activeCount <= 1 && <p className="goal-panel-muted">Keep at least one storyboard frame in the short.</p>}
     {redo && !retry && <button type="button" className="goal-panel-button" disabled={!ctx.canGenerate} onClick={() => props.onRegenerate(frame.index)}>Regenerate storyboard {frame.index + 1} · {price}</button>}
     {redo && <label><span>Revise storyboard {frame.index + 1}</span><textarea aria-label={`${name} feedback`} value={note} maxLength={2000} rows={2} disabled={!ctx.canGenerate} onChange={event => props.onFeedback(frame.index, event.target.value)} /></label>}
     {redo && <button type="button" className="goal-panel-button" disabled={!ctx.canGenerate || !note.trim()} onClick={() => props.onRevise(frame.index)}>Revise storyboard {frame.index + 1} · {price}</button>}
@@ -47,10 +63,16 @@ function StoryboardFrame({ props, frame }: { props: Props, frame: Storyboard['fr
 }
 
 export function GoalStoryboardStage(props: Props) {
-  const { storyboard } = props
-  const count = storyboard.frames.length === 1 ? 'A frame' : `${storyboard.frames.length} frames`
+  const { storyboard, ctx } = props
+  const active = storyboard.frames.filter(frame => !frame.omitted)
+  const omittedCount = storyboard.frames.length - active.length
+  const refNumber = (active[0]?.index ?? 0) + 1
+  const count = omittedCount > 0
+    ? `${active.length} of ${storyboard.frames.length} frames`
+    : storyboard.frames.length === 1 ? 'A frame' : `${storyboard.frames.length} frames`
+  const canEditBoard = !ctx.disabled && !props.running && ctx.goal.finish?.status !== 'running' && ['review', 'completed', 'failed', 'interrupted'].includes(ctx.goal.status)
   return <div className="goal-stage-wide">
-    <p className="goal-panel-muted">{count} of {storyboard.video.label}{storyboard.video.address ? ` (${storyboard.video.address})` : ''}, in order. The clean-up removes what was drawn on top of the picture, such as captions, stickers, logos, credits and shade, and the frame is made from clean storyboard frame 1. Clean-up runs on {SHORT_STORYBOARD_MODEL_TITLES[storyboard.model]}.</p>
-    <ol className="goal-short-segments" aria-label="Storyboard frames">{storyboard.frames.map(frame => <StoryboardFrame key={frame.index} props={props} frame={frame} />)}</ol>
+    <p className="goal-panel-muted">{count} of {storyboard.video.label}{storyboard.video.address ? ` (${storyboard.video.address})` : ''}, in order. The clean-up removes what was drawn on top of the picture, such as captions, stickers, logos, credits and shade, and the frame is made from clean storyboard frame {refNumber}. Clean-up runs on {SHORT_STORYBOARD_MODEL_TITLES[storyboard.model]}.</p>
+    <ol className="goal-short-segments" aria-label="Storyboard frames">{storyboard.frames.map(frame => <StoryboardFrame key={frame.index} props={props} frame={frame} activeCount={active.length} canEditBoard={canEditBoard} />)}</ol>
   </div>
 }

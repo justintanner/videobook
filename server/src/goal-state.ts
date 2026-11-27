@@ -6,7 +6,7 @@ import {
   type GoalEstimates, type GoalGenerationStage, type GoalRecord, type GoalStageOutput, type GoalStageRun, type GoalStillAttempt,
 } from "./goal-store.js";
 import { goalStageAttempts } from "./goal-stills.js";
-import { refreshGoalShortPlan, shortGenerationSegments, shortRemixOf, shortStoryboardOf, type GoalShortPlan, type ShortStoryboardModel } from "./goal-short-plan.js";
+import { firstActiveStoryboardFrame, refreshGoalShortPlan, shortGenerationSegments, shortRemixOf, shortStoryboardOf, type GoalShortPlan, type ShortStoryboardModel } from "./goal-short-plan.js";
 import {
   currentShortClip, nextShortSegment, replacementFingerprint, shortFrameStale, shortSegmentStale, storyboardFrameFailure, storyboardReview, type StoryboardFrameFailure,
 } from "./goal-short-runtime.js";
@@ -213,15 +213,27 @@ function outputStale(goal: GoalRecord, plan: GoalShortPlan | null, stage: GoalGe
       if (attempt?.fingerprint && attempt.fingerprint !== replacementFingerprint(plan, refs)) return "The character references or settings changed. Regenerate the character edit before continuing.";
     }
     if (stage !== "replacement" && plan && changed("frame", plan.frame.prompt)) return "The twist prompt changed. Regenerate the twist before continuing.";
-    if (stage === "frame" && shortFrameStale(goal)) return "The character replacement changed. Regenerate the twist before continuing.";
+    if (stage === "frame" && shortFrameStale(goal, plan)) return "The character replacement changed. Regenerate the twist before continuing.";
   }
   if (stage === "videos" && plan?.version === 5 && plan.analysis) {
     const selected = goal.stages.videos?.outputs.find(output => output.index === index);
     const attempt = reviewedGoalOutput(goal, "videos", index, selected?.artifactId) ?? goal.stages.videos?.attempts?.find(value => value.artifactId === selected?.artifactId);
     if (attempt && attempt.basePrompt !== shortGenerationSegments(plan)[index]?.prompt) return "The action prompt changed. Review a compatible take before continuing.";
   }
-  if (stage === "videos") return shortSegmentStale(goal, index) ? SHORT_STALE_MESSAGE : null;
-  return stage === "frame" && shortFrameStale(goal) ? FRAME_STALE_MESSAGE : null;
+  if (stage === "videos") return shortSegmentStale(goal, plan, index) ? SHORT_STALE_MESSAGE : null;
+  if (stage === "frame" && shortFrameStale(goal, plan)) {
+    const storyboard = shortStoryboardOf(plan);
+    if (!storyboard) return FRAME_STALE_MESSAGE;
+    const first = firstActiveStoryboardFrame(storyboard);
+    const selected = goal.stages.frame?.outputs[0];
+    const attempt = reviewedGoalOutput(goal, "frame", 0, selected?.artifactId) ?? goal.stages.frame?.attempts?.find(candidate => candidate.index === 0 && candidate.artifactId === selected?.artifactId);
+    const source = first ? goal.stages.storyboards?.outputs.find(candidate => candidate.index === first.index)?.artifactId ?? null : null;
+    if (first && attempt?.frameArtifactId && attempt.frameArtifactId !== source) {
+      return `Storyboard frame ${first.index + 1} changed after this frame was made.`;
+    }
+    return "The storyboard changed after this frame was made.";
+  }
+  return null;
 }
 
 function withFailureModel(failure: StoryboardFrameFailure | null, model: ShortStoryboardModel) {
@@ -237,12 +249,13 @@ function storyboardView<Output extends { index: number }>(
     video: storyboard.video,
     model: storyboard.model,
     estimate: estimate.storyboards,
-    frames: storyboard.frames.map(({ index, atSeconds, aspectRatio, prompt, artifactId, cellId, address, label }) => ({
+    frames: storyboard.frames.map(({ index, atSeconds, aspectRatio, prompt, omitted, artifactId, cellId, address, label }) => ({
       index, atSeconds, aspectRatio, prompt,
+      omitted: Boolean(omitted),
       raw: { artifactId, cellId, address, label },
-      clean: outputs.find(output => output.index === index) ?? null,
-      estimate: estimate.storyboardFrames?.[index] ?? null,
-      failure: withFailureModel(failureOf(index), storyboard.model),
+      clean: omitted ? null : outputs.find(output => output.index === index) ?? null,
+      estimate: omitted ? null : estimate.storyboardFrames?.[index] ?? null,
+      failure: omitted ? null : withFailureModel(failureOf(index), storyboard.model),
     })),
   };
 }

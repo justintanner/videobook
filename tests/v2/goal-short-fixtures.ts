@@ -101,12 +101,25 @@ function storyboardView(short: GoalShortPlan, stage: Stage | undefined, estimate
   if (!storyboard) return null
   return {
     video: storyboard.video, model: storyboard.model, estimate: estimate.storyboards,
-    frames: storyboard.frames.map(({ index, atSeconds, aspectRatio, prompt, artifactId, cellId, address, label }) => ({
-      index, atSeconds, aspectRatio, prompt, raw: { artifactId, cellId, address, label },
-      clean: stage?.outputs.find(output => output.index === index) ?? null,
-      estimate: estimate.storyboardFrames?.[index] ?? null,
+    frames: storyboard.frames.map(({ index, atSeconds, aspectRatio, prompt, omitted, artifactId, cellId, address, label }) => ({
+      index, atSeconds, aspectRatio, prompt, omitted: Boolean(omitted), raw: { artifactId, cellId, address, label },
+      clean: omitted ? null : stage?.outputs.find(output => output.index === index) ?? null,
+      estimate: omitted ? null : estimate.storyboardFrames?.[index] ?? null,
       failure: null,
     })),
+  }
+}
+
+export function withOmittedStoryboardFrames(plan: GoalShortPlan, indexes: readonly number[]): GoalShortPlan {
+  const storyboard = shortStoryboardOf(plan)
+  if (plan.version !== 5 || !storyboard) return plan
+  const omitted = new Set(indexes)
+  return {
+    ...plan,
+    storyboard: {
+      ...storyboard,
+      frames: storyboard.frames.map(frame => omitted.has(frame.index) ? { ...frame, omitted: true } : frame),
+    },
   }
 }
 
@@ -116,19 +129,20 @@ export function withStoryboardFailures(goal: ShortGoalSnapshot, failures: Readon
   const storyboard = goal.storyboard
   if (!storyboard) return goal
   const failureOf = (index: number) => failures[index] ? { ...failures[index], model: failures[index].model ?? storyboard.model } : null
-  return { ...goal, storyboard: { ...storyboard, frames: storyboard.frames.map(frame => ({ ...frame, failure: failureOf(frame.index) ?? frame.failure })) } }
+  return { ...goal, storyboard: { ...storyboard, frames: storyboard.frames.map(frame => ({ ...frame, failure: frame.omitted ? null : failureOf(frame.index) ?? frame.failure })) } }
 }
 
 export function shortGoalFixture(extra: Partial<ShortGoalSnapshot> = {}, short: GoalShortPlan = shortPlanFixture()): ShortGoalSnapshot {
-  const boards = shortStoryboardOf(short)?.frames.length ?? 0
+  const storyboardFramesList = shortStoryboardOf(short)?.frames ?? []
+  const activeBoards = storyboardFramesList.filter(frame => !frame.omitted).length
   const estimate: ShortGoalSnapshot['estimate'] = {
     ...(shortRemixOf(short) ? { replacement: { usd: 0.21, warnings: [] } } : {}),
-    frame: { usd: 0.21, warnings: [] }, storyboards: { usd: Math.round(boards * 21) / 100, warnings: [] }, videos: { usd: 1.2, warnings: [LOWER_BOUND] },
-    total: { usd: Math.round(141 + boards * 21) / 100, warnings: [LOWER_BOUND] },
+    frame: { usd: 0.21, warnings: [] }, storyboards: { usd: Math.round(activeBoards * 21) / 100, warnings: [] }, videos: { usd: 1.2, warnings: [LOWER_BOUND] },
+    total: { usd: Math.round(141 + activeBoards * 21) / 100, warnings: [LOWER_BOUND] },
     segments: short.segments.map(() => ({ usd: 0.6, warnings: [LOWER_BOUND] })),
-    ...(boards > 0 ? {
-      storyboardFrames: Array.from({ length: boards }, () => ({ usd: 0.21, warnings: [] })),
-      storyboardFallbackFrames: Array.from({ length: boards }, () => ({ usd: 0.18, warnings: [] })),
+    ...(storyboardFramesList.length > 0 ? {
+      storyboardFrames: storyboardFramesList.map(frame => ({ usd: frame.omitted ? 0 : 0.21, warnings: [] })),
+      storyboardFallbackFrames: storyboardFramesList.map(frame => ({ usd: frame.omitted ? 0 : 0.18, warnings: [] })),
     } : {}),
   }
   return {

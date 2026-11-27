@@ -8,6 +8,13 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Leave out a storyboard frame that neither clean-up model will clean (or that
+  did not run) so it stops blocking the rest of the short. The Storyboard tab
+  shows **Leave this frame out** on an uncleaned failed or not-run frame and
+  **Put this frame back** on a left-out frame; the last remaining frame stays
+  in the short, estimates drop left-out frames, and if frame 1 is left out the
+  first remaining clean frame becomes the Frame step's reference. Over MCP and
+  CLI, `video_goal` adds `omit_storyboard_frame` and `restore_storyboard_frame`.
 - The Post review has a Copy caption button under the caption, which copies
   the caption with its tags, and a Download clip button under the clip, which
   downloads the clip and caption.txt without changing where Save sends it.

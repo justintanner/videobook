@@ -222,7 +222,9 @@ export function GoalShortReview({ goal, characterInputs, plan, view, disabled, c
       {view === 'storyboard' && goal.storyboard && <GoalStoryboardStage ctx={ctx} storyboard={goal.storyboard} running={running} feedback={boardFeedback}
         onFeedback={(index, value) => setBoardFeedback(current => ({ ...current, [index]: value }))}
         onRegenerate={(index, model) => generate('regenerate', 'storyboards', index, undefined, model)}
-        onRevise={index => generate('revise', 'storyboards', index, boardFeedback[index]?.trim())} />}
+        onRevise={index => generate('revise', 'storyboards', index, boardFeedback[index]?.trim())}
+        onOmit={index => savedThen(revision => ({ action: 'omit_storyboard_frame', revision, index }))}
+        onRestore={index => savedThen(revision => ({ action: 'restore_storyboard_frame', revision, index }))} />}
       {(view === 'frame' || replacing && remix) && <GoalImageStage ctx={ctx} stage={imageStage} name={imageName} title={title} prompt={replacing ? replacementPrompt : framePrompt} feedback={imageFeedback}
         characterReferences={replacing && characterInputs ? <GoalCharacterReferences ctx={ctx} inputs={characterInputs} selected={characters} onAdd={addCharacter} onRemove={removeCharacter}
           disabled={disabled || running || finishing || goal.status === 'cancelled'} onRun={onRun} /> : undefined}

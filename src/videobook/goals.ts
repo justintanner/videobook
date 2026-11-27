@@ -78,7 +78,14 @@ export function goalNextSegment(goal: ShortGoalSnapshot, plan: GoalShortPlan): n
 }
 
 export function goalStoryboardClean(goal: ShortGoalSnapshot): boolean {
-  return (goal.storyboard?.frames ?? []).every(frame => frame.clean)
+  const storyboard = goal.storyboard
+  if (!storyboard) return true
+  const active = storyboard.frames.filter(frame => !frame.omitted)
+  return active.length > 0 && active.every(frame => Boolean(frame.clean))
+}
+
+export function goalStoryboardReference(goal: ShortGoalSnapshot) {
+  return goal.storyboard?.frames.find(frame => !frame.omitted) ?? null
 }
 
 export function goalSourceReady(plan: GoalShortPlan): boolean {
@@ -132,12 +139,13 @@ export function goalReviewTarget(goal: ShortGoalSnapshot, plan: GoalShortPlan, a
 }
 
 function goalStoryboardFailures(goal: ShortGoalSnapshot): number {
-  return (goal.storyboard?.frames ?? []).filter(frame => frame.failure?.kind === 'failed').length
+  return (goal.storyboard?.frames ?? []).filter(frame => !frame.omitted && frame.failure?.kind === 'failed').length
 }
 
 export function goalStoryboardRetry(goal: ShortGoalSnapshot, index: number) {
   const storyboard = goal.storyboard
-  const failure = storyboard?.frames.find(frame => frame.index === index)?.failure
+  const frame = storyboard?.frames.find(candidate => candidate.index === index)
+  const failure = frame && !frame.omitted ? frame.failure : null
   if (!storyboard || failure?.kind !== 'failed') return null
   const choice = (model: ShortStoryboardModel) => ({
     model, title: SHORT_STORYBOARD_MODEL_TITLES[model],
@@ -147,11 +155,12 @@ export function goalStoryboardRetry(goal: ShortGoalSnapshot, index: number) {
 }
 
 function storyboardFailureText(goal: ShortGoalSnapshot): string {
-  return `Storyboard: ${goalStoryboardFailures(goal)} of ${goal.storyboard?.frames.length ?? 0} failed`
+  const active = (goal.storyboard?.frames ?? []).filter(frame => !frame.omitted).length
+  return `Storyboard: ${goalStoryboardFailures(goal)} of ${active} failed`
 }
 
 export function goalStoryboardEstimate(goal: ShortGoalSnapshot): GoalEstimate {
-  const frames = goal.storyboard?.frames ?? []
+  const frames = (goal.storyboard?.frames ?? []).filter(frame => !frame.omitted)
   const missing = frames.filter(frame => !frame.clean)
   const parts = missing.flatMap(frame => frame.estimate ? [frame.estimate] : [])
   if (missing.length === frames.length || parts.length !== missing.length) return goal.estimate.storyboards
@@ -271,7 +280,9 @@ function shortRows(short: GoalShortPlan | null, stage: GoalGenerationStage) {
   const analysis = short.version === 5 ? short.analysis : undefined
   if (stage === 'replacement') return shortRemixOf(short) ? [{ index: 0, number: '01', title: characterActionLabel(short, analysis), prompt: shortRemixOf(short)!.replacement.prompt, seconds: 0 }] : []
   if (stage === 'storyboards') {
-    return (shortStoryboardOf(short)?.frames ?? []).map(frame => ({ index: frame.index, number: rowNumber(frame.index), title: `Storyboard ${frame.index + 1}`, prompt: frame.prompt, seconds: 0 }))
+    return (shortStoryboardOf(short)?.frames ?? [])
+      .filter(frame => !frame.omitted)
+      .map(frame => ({ index: frame.index, number: rowNumber(frame.index), title: `Storyboard ${frame.index + 1}`, prompt: frame.prompt, seconds: 0 }))
   }
   return stage === 'frame'
     ? [{ index: 0, number: '01', title: shortRemixOf(short) ? analysis ? 'Action setup' : 'Twist' : 'Frame', prompt: short.frame.prompt, seconds: 0 }]

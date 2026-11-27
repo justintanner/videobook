@@ -4,7 +4,7 @@ import type { GoalGenerationStage } from '../../server/src/goal-store'
 import {
   characterActionLabel, formatGoalClock, formatGoalSeconds, goalActionWindowReviewed, goalAssemblyClip, goalFrameName, goalNextSegment, goalPlanSeconds, goalProgress,
   goalRemixAnalysisOf, goalReviewTarget, goalRevisionLabel, goalSourceReady, goalStillVersions, goalStopLabel, goalStoryboardClean,
-  goalStoryboardEstimate, shortEstimateText,
+  goalStoryboardEstimate, goalStoryboardReference, shortEstimateText,
   type GoalReviewTarget, type ShortGoalSnapshot, type ShortView,
 } from './goals'
 
@@ -101,13 +101,14 @@ function recipeNext(goal: ShortGoalSnapshot, plan: GoalShortPlan, input: GoalNex
 }
 
 function storyboardNext(goal: ShortGoalSnapshot, blocked: string | null): GenerateNext {
-  const failures = (goal.storyboard?.frames ?? []).filter(frame => frame.failure?.kind === 'failed').length
+  const failures = (goal.storyboard?.frames ?? []).filter(frame => !frame.omitted && frame.failure?.kind === 'failed').length
+  const refNumber = (goalStoryboardReference(goal)?.index ?? 0) + 1
   const text = failures > 0
-    ? `${failures === 1 ? 'A storyboard frame' : `${failures} storyboard frames`} failed. Clean again, or use the other model on that frame below.`
+    ? `${failures === 1 ? 'A storyboard frame' : `${failures} storyboard frames`} failed. Clean again, use the other model, or leave that frame out below.`
     : 'Remove the captions, stickers and logos drawn over the storyboard frames.'
   return {
     kind: 'generate', step: 'storyboard', stage: 'storyboards', index: 0, action: 'approve', label: 'Remove on-screen graphics', price: shortEstimateText(goalStoryboardEstimate(goal)),
-    short: failures > 0 ? `${failures} failed` : `Clean · ${shortEstimateText(goalStoryboardEstimate(goal))}`, text, detail: 'The frame is made from clean storyboard frame 1.',
+    short: failures > 0 ? `${failures} failed` : `Clean · ${shortEstimateText(goalStoryboardEstimate(goal))}`, text, detail: `The frame is made from clean storyboard frame ${refNumber}.`,
     blocked: goal.stage === 'storyboards' ? blocked : 'Clean the remaining frames one at a time below.',
   }
 }
@@ -236,7 +237,7 @@ function nextTone(next: GoalNextAction): GoalStepTone {
 function stepArtifact(goal: ShortGoalSnapshot, plan: GoalShortPlan, analysis: GoalRemixAnalysis | undefined, key: GoalStepKey): string | null {
   if (key === 'plan') return analysis?.source?.artifactId ?? shortRemixOf(plan)?.video.artifactId ?? null
   if (key === 'storyboard') {
-    const first = goal.storyboard?.frames[0]
+    const first = goalStoryboardReference(goal) ?? goal.storyboard?.frames[0]
     return first ? first.clean?.artifactId ?? first.raw.artifactId : null
   }
   if (key === 'character') return plan.version === 4 ? plan.character.references[0]?.artifactId ?? null : null

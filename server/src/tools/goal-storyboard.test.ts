@@ -8,14 +8,14 @@ import type { Client } from "@modelcontextprotocol/client";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { getChainRun, waitForChainRun, type ChainRunRecord } from "../chain-executor.js";
 import { createEngineForTest } from "../engine.js";
-import { buildGoalShortPlan } from "../goal-short-plan.js";
+import { buildGoalShortPlan, formatShortSeconds } from "../goal-short-plan.js";
 import { captureStoryboardFrames, shortStoryboard, videoStoryboardMoments } from "../goal-short-storyboard.js";
 import { briefMention } from "../goal-short-references.js";
 import { estimateShort, shortFingerprint } from "../goal-short-runtime.js";
 import { readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent } from "../goal-store.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
 import { configureProviderEndpoints } from "../media/endpoints.js";
-import { configureProviderPollDriverForTests, resetProviderPollDriverForTests } from "../queue.js";
+import { configureProviderPollDriverForTests, queue, resetProviderPollDriverForTests } from "../queue.js";
 import { writeTaggingSettings } from "../tag-settings.js";
 import { testBudget } from "../test-budget.js";
 import { createTestClient } from "../test-client.js";
@@ -608,4 +608,181 @@ describe("video_goal storyboard stage", () => {
     expect(stepPrompt(frame.chainId, "frame")).not.toMatch(/storyboard/iu);
     expect(stub.submissions.map((submission) => submission.path)).toEqual([FRAME_EDIT]);
   });
+
+  it("lets a storyboard frame both clean-up models refuse be left out, updates estimates and fingerprints, continues with 3 frames, and puts it back to be cleaned", async () => {
+    const goal = await short(`based on @b1 with @a2, ${AUTHORED}`);
+    expect(storyboardOf(goal).frames.every((frame) => !("omitted" in frame))).toBe(true);
+    expect(await refusal({ action: "omit_storyboard_frame", goal_id: goal.goalId, revision: goal.revision, index: 1 }))
+      .toContain("Try cleaning storyboard frame 2 first");
+    expect(stub.submissions).toEqual([]);
+
+    stub.failSubmissionIndexes.add(1);
+    const partial = await approved(goal);
+    expect(partial).toMatchObject({ stage: "storyboards", status: "review", error: null });
+    expect(partial.stages.storyboards!.outputs.map((output) => output.index)).toEqual([0, 2, 3]);
+    expect(partial.storyboard!.frames[1]).toMatchObject({ omitted: false, clean: null, failure: { kind: "failed", model: CLEANUP_MODEL } });
+    expect(await refusal({ action: "omit_storyboard_frame", goal_id: goal.goalId, revision: partial.revision, index: 0 }))
+      .toBe("Storyboard frame 1 already has a clean image and cannot be left out.");
+
+    stub.refuseNext = true;
+    const refusedBoth = await settled(await invoke({ action: "regenerate", goal_id: goal.goalId, revision: partial.revision, stage: "storyboards", index: 1, model: LEGACY_CLEANUP_MODEL }));
+    expect(refusedBoth).toMatchObject({ stage: "storyboards", status: "review", error: null });
+    expect(refusedBoth.storyboard!.frames[1]).toMatchObject({ omitted: false, clean: null, failure: { kind: "failed", model: LEGACY_CLEANUP_MODEL } });
+    expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: refusedBoth.revision, stage: "frame" })).toBe(STORYBOARD_FIRST);
+
+    const frameOneCleanId = refusedBoth.stages.storyboards!.outputs.find((output) => output.index === 0)!.artifactId;
+    const beforeBoardFp = await shortFingerprint(engine, refusedBoth.shortPlan!, "storyboards", 1, null);
+    const beforeFrameFp = await shortFingerprint(engine, refusedBoth.shortPlan!, "frame", 0, frameOneCleanId);
+    const beforeVideoFp = await shortFingerprint(engine, refusedBoth.shortPlan!, "videos", 0, "frame-placeholder");
+    const frameTwoPrice = refusedBoth.estimate.storyboardFrames![1]!.usd!;
+    const beforeBoardUsd = refusedBoth.estimate.storyboards.usd!;
+    const beforeTotalUsd = refusedBoth.estimate.total.usd!;
+    const submissionsBeforeOmit = stub.submissions.length;
+
+    const omitted = await invoke({ action: "omit_storyboard_frame", goal_id: goal.goalId, revision: refusedBoth.revision, index: 1 });
+    expect(stub.submissions).toHaveLength(submissionsBeforeOmit);
+    expect(omitted).toMatchObject({ stage: "frame", status: "review", error: null, revision: refusedBoth.revision + 1 });
+    expect(storyboardOf(omitted).frames).toHaveLength(4);
+    expect(storyboardOf(omitted).frames.map((frame) => [frame.index, Boolean(frame.omitted)])).toEqual([[0, false], [1, true], [2, false], [3, false]]);
+    expect(omitted.storyboard!.frames[1]).toMatchObject({ omitted: true, clean: null, failure: null, estimate: null });
+    expect(omitted.estimate.storyboardFrames![1]!.usd).toBe(0);
+    expect(omitted.estimate.storyboards.usd).toBeCloseTo(beforeBoardUsd - frameTwoPrice);
+    expect(omitted.estimate.total.usd).toBeCloseTo(beforeTotalUsd - frameTwoPrice);
+
+    const omittedBoardFp = await shortFingerprint(engine, omitted.shortPlan!, "storyboards", 1, null);
+    const omittedFrameFp = await shortFingerprint(engine, omitted.shortPlan!, "frame", 0, frameOneCleanId);
+    const omittedVideoFp = await shortFingerprint(engine, omitted.shortPlan!, "videos", 0, "frame-placeholder");
+    expect(omittedBoardFp).not.toBe(beforeBoardFp);
+    expect(omittedFrameFp).not.toBe(beforeFrameFp);
+    expect(omittedVideoFp).not.toBe(beforeVideoFp);
+
+    expect(await refusal({ action: "regenerate", goal_id: goal.goalId, revision: omitted.revision, stage: "storyboards", index: 1 }))
+      .toBe("Storyboard frame 2 was left out. Put it back before cleaning it.");
+    expect(await refusal({ action: "update", goal_id: goal.goalId, revision: omitted.revision, plan: {
+      ...omitted.shortPlan!,
+      storyboard: { ...storyboardOf(omitted), frames: storyboardOf(omitted).frames.map((frame) => frame.index === 1 ? { ...frame, omitted: false } : frame) },
+    } })).toBe("The storyboard's video and frames stay with this short. Start a new /goal to change them.");
+
+    const frame = await settled(await invoke({ action: "approve", goal_id: goal.goalId, revision: omitted.revision, stage: "frame" }));
+    expect(frame).toMatchObject({ stage: "videos", status: "review" });
+    expect(mediaJobs(FRAME_MODEL)[0]?.payload).toMatchObject({ refs: { image: [imageIds[1], frameOneCleanId] } });
+    const clip = await approved(frame);
+    expect(clip.finish?.status).toBe("review");
+
+    const submissionsBeforeRestore = stub.submissions.length;
+    const restored = await invoke({ action: "restore_storyboard_frame", goal_id: goal.goalId, revision: clip.revision, index: 1 });
+    expect(stub.submissions).toHaveLength(submissionsBeforeRestore);
+    expect(restored).toMatchObject({ stage: "storyboards", status: "review", error: null, finish: null });
+    expect("omitted" in storyboardOf(restored).frames[1]!).toBe(false);
+    expect(restored.storyboard!.frames[1]).toMatchObject({ omitted: false, clean: null });
+    expect(restored.estimate.storyboards.usd).toBeCloseTo(beforeBoardUsd);
+    expect(restored.estimate.total.usd).toBeCloseTo(beforeTotalUsd);
+    expect(await shortFingerprint(engine, restored.shortPlan!, "storyboards", 1, null)).toBe(beforeBoardFp);
+    expect(await shortFingerprint(engine, restored.shortPlan!, "frame", 0, frameOneCleanId)).toBe(beforeFrameFp);
+    expect(await shortFingerprint(engine, restored.shortPlan!, "videos", 0, "frame-placeholder")).toBe(beforeVideoFp);
+    expect(restored.stages.frame!.outputs[0]!.stale).toBe("The storyboard changed after this frame was made.");
+    expect(restored.stages.videos!.outputs[0]!.stale).toBeTruthy();
+    expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: restored.revision, stage: "frame" })).toBe(STORYBOARD_FIRST);
+
+    const beforeCleanRestored = stub.submissions.length;
+    const cleanedAll = await approved(restored);
+    expect(stub.submissions.slice(beforeCleanRestored).map((submission) => submission.path)).toEqual([CLEANUP]);
+    expect(cleanedAll).toMatchObject({ stage: "frame", status: "review", error: null });
+    expect(cleanedAll.stages.storyboards!.outputs.map((output) => output.index)).toEqual([0, 1, 2, 3]);
+    expect(cleanedAll.stages.frame!.outputs[0]!.stale).toBe("The storyboard changed after this frame was made.");
+    expect(await refusal({ action: "regenerate", goal_id: goal.goalId, revision: cleanedAll.revision, stage: "videos", index: 0 }))
+      .toBe("The frame prompt, references or storyboard changed after this frame was made. Regenerate the frame before continuing.");
+    expect(stub.unexpected).toEqual([]);
+  }, testBudget(90_000));
+
+  it("uses frame 2 as the Frame reference when frame 1 is left out, refuses leaving out the last frame, never resends left-out frames, and skips them in the planner", async () => {
+    const firstOut = await short(`based on @b1 with @a2, ${AUTHORED}`);
+    stub.failNext = true;
+    const partial = await approved(firstOut);
+    expect(partial.stages.storyboards!.outputs.map((output) => output.index)).toEqual([1, 2, 3]);
+    const cleanTwoId = partial.stages.storyboards!.outputs.find((output) => output.index === 1)!.artifactId;
+
+    const omittedFirst = await invoke({ action: "omit_storyboard_frame", goal_id: firstOut.goalId, revision: partial.revision, index: 0 });
+    expect(omittedFirst).toMatchObject({ stage: "frame", status: "review" });
+    const frame = await settled(await invoke({ action: "approve", goal_id: firstOut.goalId, revision: omittedFirst.revision, stage: "frame" }));
+    expect(frame).toMatchObject({ stage: "videos", status: "review" });
+    expect(mediaJobs(FRAME_MODEL)[0]?.payload).toMatchObject({ refs: { image: [imageIds[1], cleanTwoId] } });
+    expect(frame.stages.frame!.outputs[0]!.stale).toBeNull();
+
+    const frameTwoRegen = await settled(await invoke({ action: "regenerate", goal_id: firstOut.goalId, revision: frame.revision, stage: "storyboards", index: 1 }));
+    expect(frameTwoRegen.stages.frame!.outputs[0]!.stale).toBe("Storyboard frame 2 changed after this frame was made.");
+    const backToTwo = await invoke({ action: "select", goal_id: firstOut.goalId, stage: "storyboards", index: 1, artifact_id: cleanTwoId });
+    expect(backToTwo.stages.frame!.outputs[0]!.stale).toBeNull();
+
+    const storedForPlanner = readGoal(engine, firstOut.goalId);
+    const plannerContent = requireGoalShortContent(engine, storedForPlanner);
+    const board = storyboardOf(omittedFirst);
+    const expectedLabels = board.frames
+      .filter((item) => !item.omitted)
+      .map((item, position) => `Storyboard frame ${position + 1} of 3 at ${formatShortSeconds(item.atSeconds)} s`);
+    await writeGoalShortContent(engine, storedForPlanner, {
+      ...plannerContent,
+      brief: UMBRELLA,
+      plan: null,
+      draft: {
+        aspectRatio: "9:16",
+        segmentSeconds: [12],
+        sourceImages: plannerContent.draft && !("character" in plannerContent.draft) ? plannerContent.draft.sourceImages : [],
+        storyboard: board,
+      },
+      revision: plannerContent.revision + 1,
+    });
+    saveGoal(engine, { ...storedForPlanner, status: "planning", error: null });
+    stub.plannerAnswers = [{ title: PLAN.title, frame: PLAN.frame, beats: PLAN.beats }];
+    await queue.enqueue(`goal-plan-${firstOut.goalId}-${uuidv7()}`, { type: "plan_goal", bookId, goalId: firstOut.goalId });
+    await planned(omittedFirst);
+    const plannerRequest = stub.plannerRequests.at(-1) as PlannerRequest;
+    expect(plannerRequest.instructions).toContain("the 3 storyboard frames, labelled Storyboard frame 1 of 3 and so on, each with its time in the video");
+    const textParts = plannerRequest.input[0]!.content.filter((part) => part.type === "input_text").slice(1).map((part) => part.text);
+    expect(textParts).toEqual(["Source image 1: Character 2", ...expectedLabels]);
+
+    const second = await short(`based on @b1 with @a2, ${AUTHORED}`);
+    const base = stub.submissions.length;
+    for (const offset of [0, 1, 2, 3]) stub.failSubmissionIndexes.add(base + offset);
+    let current = await approved(second);
+    expect(current.stages.storyboards!.outputs).toEqual([]);
+    for (const index of [0, 1, 2]) {
+      current = await invoke({ action: "omit_storyboard_frame", goal_id: second.goalId, revision: current.revision, index });
+    }
+    expect(await refusal({ action: "omit_storyboard_frame", goal_id: second.goalId, revision: current.revision, index: 3 }))
+      .toBe("Keep at least one storyboard frame in the short. The last remaining frame cannot be left out.");
+
+    current = await invoke({ action: "restore_storyboard_frame", goal_id: second.goalId, revision: current.revision, index: 2 });
+    const beforeTwo = stub.submissions.length;
+    stub.failSubmissionIndexes.add(beforeTwo);
+    const runWithTwo = await approved(current);
+    expect(stub.submissions.slice(beforeTwo)).toHaveLength(2);
+    expect(runWithTwo.stages.storyboards!.outputs.map((output) => output.index)).toEqual([3]);
+
+    const failedRecord = readGoal(engine, second.goalId);
+    const failedContent = requireGoalShortContent(engine, failedRecord);
+    const failedChainId = failedRecord.chainId!;
+    const chains = engine.settings.get<{ runs: Record<string, ChainRunRecord> }>("application.chain-runs.v1")!;
+    chains.runs[failedChainId] = {
+      ...chains.runs[failedChainId]!,
+      status: "interrupted",
+      steps: chains.runs[failedChainId]!.steps.map((step) => step.id === "storyboard3" ? { ...step, status: "interrupted", error: "Chain execution was interrupted" } : step),
+    };
+    engine.settings.set("application.chain-runs.v1", chains);
+    saveGoal(engine, {
+      ...failedRecord,
+      status: "interrupted",
+      error: "Chain execution was interrupted",
+      stages: {
+        ...failedRecord.stages,
+        storyboards: { ...failedRecord.stages.storyboards!, revision: failedContent.revision },
+      },
+    });
+    const beforeRetry = stub.submissions.length;
+    const retried = await settled(await invoke({ action: "retry", goal_id: second.goalId }));
+    expect(stub.submissions.slice(beforeRetry)).toHaveLength(1);
+    expect(retried).toMatchObject({ stage: "frame", status: "review" });
+    expect(retried.stages.storyboards!.outputs.map((output) => output.index)).toEqual([2, 3]);
+    expect(stub.unexpected).toEqual([]);
+  }, testBudget(90_000));
 });

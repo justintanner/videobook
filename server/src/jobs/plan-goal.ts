@@ -6,7 +6,7 @@ import { goalPlanningOutputTokens } from "../goal-planning-cost.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } from "../openai-intelligence.js";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
 import { isCurrentShort, readGoal, requireGoalShortContent, saveGoal, writeGoalShortContent, type GoalRecord } from "../goal-store.js";
-import { buildGoalShortPlan, buildLegacyGoalShortPlan, isLegacyShortDraft, shortRemixSourceOf, shortStoryboardOf, type GoalShortDraft } from "../goal-short-plan.js";
+import { activeStoryboardFrames, buildGoalShortPlan, buildLegacyGoalShortPlan, isLegacyShortDraft, shortRemixSourceOf, shortStoryboardOf, type GoalShortDraft } from "../goal-short-plan.js";
 import { shortWantsPhone, stripShortBannedWords, withoutShortPhoneSentences } from "../goal-short-rules.js";
 import { annotateShortReuse, estimateShort, mentionedSourceFrame } from "../goal-short-runtime.js";
 import {
@@ -55,9 +55,10 @@ async function askShortPlanner(engine: Engine, goal: GoalRecord, brief: string, 
   const phones = shortWantsPhone(brief);
   const sampled = analysis?.source && analysis.source.semanticStatus !== "sampled"
     ? await remixPlannerFrames(engine, analysis.source.artifactId, analysis.source, analysis.recipe.sourceFrameSeconds, signal) : null;
+  const activeStoryboard = activeStoryboardFrames(storyboard);
   const request = {
     instructions: await shortPlannerInstructions({
-      sourceImageCount: references.length, remix: Boolean(sourceVideo), storyboardFrameCount: storyboard?.frames.length ?? 0, aspectRatio: draft.aspectRatio, segmentSeconds: draft.segmentSeconds,
+      sourceImageCount: references.length, remix: Boolean(sourceVideo), storyboardFrameCount: activeStoryboard.length, aspectRatio: draft.aspectRatio, segmentSeconds: draft.segmentSeconds,
       ...(analysis ? { analysis } : {}),
     }),
     input: [{ role: "user" as const, content: [
@@ -69,7 +70,7 @@ async function askShortPlanner(engine: Engine, goal: GoalRecord, brief: string, 
         write: ["title", ...(authored.replacement === null ? ["replacement"] : []), ...(authored.frame === null ? ["frame"] : []), ...authored.beats.flatMap((beat, index) => beat === null ? [`beat ${index + 1}`] : [])],
         ...(analysis ? { sourceEvidence: analysis.source, intent: analysis.intent, recipe: analysis.recipe, uncertainties: analysis.findings } : {}),
       }) },
-      ...await goalPlannerImages(engine, references, storyboard?.frames ?? [], remix?.frame),
+      ...await goalPlannerImages(engine, references, activeStoryboard, remix?.frame),
       ...sampled?.content ?? [],
     ] }],
     text: { format: { type: "json_schema" as const, name: "short_plan", strict: true, schema: z.toJSONSchema(shortPlannerResponseSchema(count, Boolean(sourceVideo), Boolean(analysis?.source))) } },

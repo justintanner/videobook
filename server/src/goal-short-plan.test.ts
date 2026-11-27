@@ -19,12 +19,15 @@ import {
   SHORT_RESOLUTIONS,
   SHORT_VIDEO_MODELS,
   SHORT_WORD_CEILINGS,
+  activeStoryboardFrames,
   buildGoalShortPlan,
   buildLegacyGoalShortPlan,
   compileShortClipStep,
   compileShortContinuationStep,
   compileShortFrameStep,
   compileShortReplacementStep,
+  compileShortStoryboardStep,
+  firstActiveStoryboardFrame,
   goalShortPlanSchema,
   refreshGoalShortPlan,
   shortFinishTitleInput,
@@ -363,6 +366,51 @@ describe("goalShortPlanSchema", () => {
     const plan = shortPlan();
     expect(issues({ ...plan, style: "cinematic" })).toEqual([expect.stringMatching(/style/u)]);
     expect(issues({ ...plan, frame: { ...plan.frame, prompt: "  " } })).toEqual([expect.stringMatching(/^frame\.prompt: /u)]);
+  });
+
+  it("parses a stored storyboard without omitted unchanged, allows omitting some frames, and rejects omitting every frame", () => {
+    const storyboard = {
+      video: { artifactId: umbrella.artifactId, cellId: umbrella.cellId, address: "@b1", label: "Umbrella walk" },
+      model: "kie:seedream/5-5-image-to-image" as const,
+      size: "1K" as const,
+      frames: [0, 1, 2].map((index) => ({
+        ...imageRef(index + 5, `Storyboard ${index + 1} of 3`),
+        index,
+        atSeconds: index + 0.5,
+        aspectRatio: "9:16" as const,
+        prompt: "Remove every overlay.",
+      })),
+    };
+    const stored = saved(shortPlan({ storyboard })) as GoalShortPlanV5;
+    expect(stored.storyboard!.frames.every((frame) => !("omitted" in frame))).toBe(true);
+    expect(goalShortPlanSchema.parse(stored)).toEqual(stored);
+    expect(activeStoryboardFrames(stored.storyboard).map((frame) => frame.index)).toEqual([0, 1, 2]);
+    expect(firstActiveStoryboardFrame(stored.storyboard)?.index).toBe(0);
+
+    const omittedFirst = {
+      ...stored,
+      storyboard: {
+        ...stored.storyboard!,
+        frames: stored.storyboard!.frames.map((frame) => frame.index === 0 ? { ...frame, omitted: true } : frame),
+      },
+    };
+    const parsed = goalShortPlanSchema.parse(omittedFirst);
+    if (parsed.version !== 5 || !parsed.storyboard) throw new Error("expected storyboard");
+    const parsedBoard = parsed.storyboard;
+    expect(parsedBoard.frames).toHaveLength(3);
+    expect(activeStoryboardFrames(parsedBoard).map((frame) => frame.index)).toEqual([1, 2]);
+    expect(firstActiveStoryboardFrame(parsedBoard)?.index).toBe(1);
+    expect(() => compileShortStoryboardStep(parsedBoard, 0)).toThrow("Storyboard frame 1 was left out. Put it back before cleaning it.");
+    expect(compileShortStoryboardStep(parsedBoard, 1).id).toBe("storyboard2");
+
+    const allOmitted = {
+      ...stored,
+      storyboard: {
+        ...stored.storyboard!,
+        frames: stored.storyboard!.frames.map((frame) => ({ ...frame, omitted: true })),
+      },
+    };
+    expect(issues(allOmitted)).toEqual(["storyboard.frames: Keep at least one storyboard frame in the short."]);
   });
 });
 

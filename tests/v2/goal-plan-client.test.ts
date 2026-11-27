@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { asGoalTitleOptions, composerGoal, goalCanRetry, goalGenerationMarks, goalOutputEstimate, goalPlanSeconds, goalStatusLine, goalStillVersions, goalTileView, goalWake, LEGACY_GOAL_NOTE, shortEstimateText } from '../../src/videobook/goals'
+import { asGoalTitleOptions, composerGoal, goalCanRetry, goalGenerationMarks, goalOutputEstimate, goalPlanSeconds, goalStatusLine, goalStillVersions, goalStoryboardClean, goalStoryboardEstimate, goalStoryboardReference, goalStoryboardRetry, goalTileView, goalWake, LEGACY_GOAL_NOTE, shortEstimateText } from '../../src/videobook/goals'
 import { goalNextStep } from '../../src/videobook/goal-next'
-import { LOWER_BOUND, legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, shortStep, storyboardPlanFixture, withStoryboardFailures } from './goal-short-fixtures'
+import { LOWER_BOUND, legacyGoalFixture, legacyShortPlanFixture, shortGoalFixture, shortPlanFixture, shortStage, shortStep, storyboardPlanFixture, withOmittedStoryboardFrames, withStoryboardFailures } from './goal-short-fixtures'
 
 describe('legacy goal model', () => {
   it('keeps an earlier goal as a read-only tile that never wakes, marks cells or becomes the composer goal', () => {
@@ -185,5 +185,46 @@ describe('short goal model with a storyboard', () => {
     const board = shortStep('storyboard1', 'completed')
     const marked = shortGoalFixture({ stage: 'frame', stages: { storyboards: { ...shortStage('storyboards', [{ index: 0, artifactId: 'storyboard1-asset' }], [board]), allSteps: [board] } } }, plan)
     expect(goalGenerationMarks([marked]).get('storyboard1-output')).toBe('Storyboard 1/4 · @b1')
+  })
+
+  it('skips left-out storyboard frames in readiness, reference selection, failure counts and estimates', () => {
+    const omittedTwo = withOmittedStoryboardFrames(plan, [1])
+    const pending = shortGoalFixture({ stage: 'storyboards' }, omittedTwo)
+    expect(goalStoryboardClean(pending)).toBe(false)
+    expect(goalStoryboardEstimate(pending).usd).toBeCloseTo(0.63)
+    expect(goalStatusLine(pending).text).toBe('Clean the storyboard · $0.63')
+    expect(goalOutputEstimate(pending, 'storyboards', 1)).toBe(0)
+
+    const oneFailed = withStoryboardFailures(shortGoalFixture({
+      stage: 'storyboards',
+      stages: { storyboards: shortStage('storyboards', [0, 3].map(index => ({ index, artifactId: `clean-${index + 1}` }))) },
+    }, omittedTwo), { 1: { kind: 'failed', message: 'Old failure' }, 2: { kind: 'failed', message: 'Rejected' } })
+    expect(goalStatusLine(oneFailed)).toMatchObject({ text: 'Storyboard: 1 of 3 failed', tone: 'attention' })
+    expect(goalStoryboardRetry(oneFailed, 1)).toBeNull()
+    expect(goalStoryboardRetry(oneFailed, 2)).not.toBeNull()
+    expect(goalStoryboardEstimate(oneFailed).usd).toBeCloseTo(0.21)
+
+    const cleanThree = shortGoalFixture({
+      stage: 'frame',
+      stages: { storyboards: shortStage('storyboards', [0, 2, 3].map(index => ({ index, artifactId: `clean-${index + 1}` }))) },
+    }, omittedTwo)
+    expect(goalStoryboardClean(cleanThree)).toBe(true)
+    expect(goalNextStep(cleanThree, omittedTwo)).toBe('frame')
+    expect(goalStatusLine(cleanThree).text).toBe('Generate the frame · $0.21')
+    expect(goalTileView(cleanThree, undefined).rows.map(row => [row.title, row.state])).toEqual([['Storyboard', 'done'], ['Frame', 'planned']])
+
+    const omittedFirst = withOmittedStoryboardFrames(plan, [0])
+    const firstLeftOut = shortGoalFixture({
+      stage: 'frame',
+      stages: { storyboards: shortStage('storyboards', [1, 2, 3].map(index => ({ index, artifactId: `clean-${index + 1}` }))) },
+    }, omittedFirst)
+    expect(goalStoryboardReference(firstLeftOut)?.index).toBe(1)
+    expect(goalStoryboardClean(firstLeftOut)).toBe(true)
+
+    const noneLeft = {
+      ...pending,
+      storyboard: { ...pending.storyboard!, frames: pending.storyboard!.frames.map(frame => ({ ...frame, omitted: true })) },
+    }
+    expect(goalStoryboardClean(noneLeft)).toBe(false)
   })
 })

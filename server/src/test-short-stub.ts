@@ -14,6 +14,7 @@ export type ShortStub = {
   uploads: Map<string, Buffer>;
   media: ShortStubMedia;
   failNext: boolean;
+  failSubmissionIndexes: Set<number>;
   refuseNext: boolean;
   rejectNext: { status: number; message: string } | null;
   outputUnits: number | null;
@@ -67,6 +68,7 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
     uploads: new Map(),
     media,
     failNext: false,
+    failSubmissionIndexes: new Set(),
     refuseNext: false,
     rejectNext: null,
     outputUnits: null,
@@ -82,6 +84,7 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
       stub.unexpected = [];
       stub.uploads.clear();
       stub.failNext = false;
+      stub.failSubmissionIndexes.clear();
       failing.clear();
       refused.clear();
       stub.refuseNext = false;
@@ -101,7 +104,8 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
   const route = (method: string, path: string, body: Buffer, response: ServerResponse, query: URLSearchParams): void => {
     if (method === "POST" && path === "/api/v1/jobs/createTask") {
       const id = `frame-${++counter}`;
-      if (stub.failNext) failing.add(id);
+      const submissionIndex = stub.submissions.length;
+      if (stub.failNext || stub.failSubmissionIndexes.has(submissionIndex)) failing.add(id);
       stub.failNext = false;
       served.set(id, stub.media.frame);
       stub.submissions.push({ path, body: JSON.parse(body.toString()) as Record<string, unknown> });
@@ -133,9 +137,10 @@ export async function startShortStub(media: ShortStubMedia): Promise<ShortStub> 
       }
       const kind = kindOf(path);
       const id = `${kind}-${++counter}`;
+      const submissionIndex = stub.submissions.length;
       if (stub.refuseNext) refused.add(id);
       stub.refuseNext = false;
-      if (stub.failNext) failing.add(id);
+      if (stub.failNext || stub.failSubmissionIndexes.has(submissionIndex)) failing.add(id);
       stub.failNext = false;
       served.set(id, kind === "frame" ? stub.media.frame : kind === "clip" ? stub.media.clip : stub.media.extended);
       stub.submissions.push({ path, body: input });

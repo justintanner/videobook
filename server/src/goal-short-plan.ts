@@ -116,6 +116,7 @@ const storyboardSchema = z.object({
     atSeconds: z.number().nonnegative(),
     aspectRatio: z.enum(SHORT_STORYBOARD_ASPECT_RATIOS),
     prompt: z.string().trim().min(1).max(2000),
+    omitted: z.boolean().optional(),
   }).strict()).min(1).max(STORYBOARD_FRAME_LIMIT),
 }).strict().superRefine((storyboard, context) => {
   storyboard.frames.forEach((frame, position) => {
@@ -123,10 +124,21 @@ const storyboardSchema = z.object({
       context.addIssue({ code: "custom", path: ["frames", position, "index"], message: `Expected storyboard frame index ${position}` });
     }
   });
+  if (storyboard.frames.every((frame) => frame.omitted)) {
+    context.addIssue({ code: "custom", path: ["frames"], message: "Keep at least one storyboard frame in the short." });
+  }
 });
 
 export type ShortStoryboard = z.infer<typeof storyboardSchema>;
 export type ShortStoryboardVideo = ShortStoryboard["video"];
+
+export function activeStoryboardFrames(storyboard: ShortStoryboard | null | undefined): ShortStoryboard["frames"] {
+  return (storyboard?.frames ?? []).filter((frame) => !frame.omitted);
+}
+
+export function firstActiveStoryboardFrame(storyboard: ShortStoryboard | null | undefined): ShortStoryboard["frames"][number] | null {
+  return activeStoryboardFrames(storyboard)[0] ?? null;
+}
 
 const segmentsSchema = z.array(z.object({
   prompt: z.string().trim().min(1).max(2000),
@@ -600,6 +612,7 @@ function storyboardOptions(model: ShortStoryboardModel, size: ShortStoryboardSiz
 export function compileShortStoryboardStep(storyboard: ShortStoryboard, index: number, model: ShortStoryboardModel = storyboard.model): ChainStep {
   const frame = storyboard.frames[index];
   if (!frame) throw new RangeError(`The storyboard has ${storyboard.frames.length} frames.`);
+  if (frame.omitted) throw new Error(`Storyboard frame ${index + 1} was left out. Put it back before cleaning it.`);
   return {
     id: `storyboard${index + 1}`,
     tool: "generate_image",

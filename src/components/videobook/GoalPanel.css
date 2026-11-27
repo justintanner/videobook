@@ -581,6 +581,15 @@ span.goal-media.goal-media-pending {
   border-color: rgba(227, 184, 105, 0.6);
 }
 
+.goal-short-segment[data-state='omitted'] {
+  border-style: dashed;
+  border-color: rgba(143, 183, 160, 0.2);
+}
+
+.goal-short-segment[data-state='omitted'] .goal-media {
+  opacity: 0.6;
+}
+
 .goal-short-segment-head {
   display: flex;
   flex-wrap: wrap;
