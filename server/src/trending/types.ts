@@ -1,9 +1,35 @@
+export type TrendingVerdictKind =
+  | "candid"
+  | "staged"
+  | "ad"
+  | "news"
+  | "show"
+  | "performance"
+  | "edit"
+  | "animation"
+  | "other";
+
+export interface TrendingVerdict {
+  kind: TrendingVerdictKind;
+  fit: number;
+  why: string;
+  cover: boolean;
+}
+
 export interface TrendingCriteria {
   brief?: string;
   minViews: number;
   maxAgeDays: number;
   maxDurationSeconds: number;
   judgeLimit: number;
+}
+
+export interface TrendingFunnel {
+  seen: number;
+  screened: Record<string, number>;
+  candidates: number;
+  checked: number;
+  fit: number;
 }
 
 export interface TrendingSchedule {
@@ -17,7 +43,7 @@ export interface TrendingSchedule {
   topN: number;
   window: "trending" | "posted";
   excludePromoted: boolean;
-  ranking: "views" | "consensus";
+  ranking: "views" | "consensus" | "authentic";
   criteria?: Partial<TrendingCriteria>;
   sources: { id: string; options?: Record<string, unknown> }[];
   downstream: { transcribe: boolean; translateTo: string[]; analyze: boolean };
@@ -63,6 +89,11 @@ export interface RankedVideo extends Sighting {
   rank: number;
   sources: string[];
   fallback: boolean;
+  authentic?: {
+    score: number;
+    organic: number;
+    verdict?: TrendingVerdict;
+  };
 }
 
 export interface TrendingLedger {
@@ -75,6 +106,8 @@ export interface TrendingLedger {
 export interface TrendingRunRecord {
   date: string;
   cutAt: string;
+  ranking?: TrendingSchedule["ranking"];
+  funnel?: TrendingFunnel;
   dayBookId: string;
   videos: RankedVideo[];
   completed?: boolean;

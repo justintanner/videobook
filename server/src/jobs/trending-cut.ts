@@ -5,9 +5,9 @@ import { appendDiagnostic } from "../diagnostics.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { buildDayBook, syncDayBookDownloads } from "../trending/day-book.js";
-import { cutLedgerDates, readLedger, readRuns, readSchedule, writeRun } from "../trending/ledger.js";
-import { rankVideos } from "../trending/ranking.js";
-import type { RankedVideo, TrendingRunRecord, TrendingSchedule } from "../trending/types.js";
+import { cutLedgerDates, readHistory, readLedger, readRuns, readSchedule, writeRun } from "../trending/ledger.js";
+import { prepareAuthenticCandidates, rankAuthentic, rankVideos, validateRanking } from "../trending/ranking.js";
+import type { RankedVideo, TrendingFunnel, TrendingRunRecord, TrendingSchedule } from "../trending/types.js";
 
 const cuts = new WeakMap<Engine, Promise<unknown>>();
 
@@ -64,6 +64,15 @@ export async function enqueueResearchDownload(
   }
 }
 
+function excludedVideoIds(engine: Engine, date: string): Set<string> {
+  const excluded = new Set<string>();
+  for (const entry of [...readRuns(engine), ...readHistory(engine)]) {
+    if (entry.date === date) continue;
+    for (const video of entry.videos) excluded.add(video.videoId);
+  }
+  return excluded;
+}
+
 async function cut(
   engine: Engine, books: BookManager, date: string, cutAt: string, enqueue: typeof queue.enqueue,
 ): Promise<TrendingRunRecord | undefined> {
@@ -72,9 +81,36 @@ async function cut(
   let run = readRuns(engine).find((entry) => entry.date === date);
   if (run?.completed) return run;
   if (!run) {
+    validateRanking(schedule, cutAt);
     const sightings = cutLedgerDates(schedule, cutAt).flatMap((day) => readLedger(engine, day).sightings);
-    const videos = rankVideos(sightings, schedule, { cutAt, fallback: sightings.filter((row) => row.source === "tiktok-creative-center") });
-    run = { date, cutAt, dayBookId: "", videos, downloads: videos.map((video) => ({ videoId: video.videoId, status: "pending" })), spend: 0, errors: [] };
+    let videos: RankedVideo[];
+    let funnel: TrendingFunnel | undefined;
+    if (schedule.ranking === "authentic") {
+      const prepared = prepareAuthenticCandidates(sightings, schedule, {
+        cutAt,
+        exclude: excludedVideoIds(engine, date),
+      });
+      const ranked = rankAuthentic(prepared.candidates, schedule, new Map(), {
+        seen: prepared.seen,
+        screened: prepared.screened,
+        checked: 0,
+      });
+      videos = ranked.videos;
+      funnel = ranked.funnel;
+    } else {
+      videos = rankVideos(sightings, schedule, { cutAt, fallback: sightings.filter((row) => row.source === "tiktok-creative-center") });
+    }
+    run = {
+      date,
+      cutAt,
+      ranking: schedule.ranking,
+      ...(funnel ? { funnel } : {}),
+      dayBookId: "",
+      videos,
+      downloads: videos.map((video) => ({ videoId: video.videoId, status: "pending" })),
+      spend: 0,
+      errors: [],
+    };
     await writeRun(engine, run);
   }
   const record = run;
