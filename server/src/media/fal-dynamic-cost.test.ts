@@ -18,7 +18,6 @@ const DYNAMIC_MODELS = [
   "fal:fal-ai/kandinsky6-vsr",
   "fal:fal-ai/kandinsky6-vsr/lite",
   "fal:mirelo-ai/sfx2.0/video-to-video",
-  "fal:bytedance/seedance-2.5/us/image-to-video",
   "fal:minimax/h3-max/reframe-video",
   "fal:openai/gpt-image-2.6/sunburst/text-to-image",
   "fal:openai/gpt-image-2.6/flare/edit",
@@ -32,6 +31,12 @@ const FORMULA_GAPS = [
   "fal:bytedance/seedance-2.0/mini/reference-to-video",
   "fal:bytedance/seedance-2.5/draft/complete",
 ] as const;
+
+const HISTORICAL_FALLBACKS = new Set([
+  "fal:kling/v4/video-to-video/edit",
+  "fal:bytedance/seedance-2.5/image-to-video",
+  "fal:bytedance/seedance-2.5/us/image-to-video",
+]);
 
 const PER_SECOND_FLOORS = new Set([
   "fal:minimax/h3-max/extend-video",
@@ -111,7 +116,7 @@ describe("fal dynamic cost", () => {
         expect(added, entry.id).toEqual([]);
         expect(result.estimate.usd, entry.id).toBeGreaterThan(0);
         expect(lowerBoundWarnings(result.estimate.warnings), entry.id).toBe(true);
-      } else if (dynamic) {
+      } else if (dynamic || HISTORICAL_FALLBACKS.has(entry.id)) {
         expect(added, entry.id).toEqual([{
           estimate_type: "historical_api_price",
           endpoints: { [model.apiId]: { call_quantity: 1 } },
@@ -129,6 +134,10 @@ describe("fal dynamic cost", () => {
       expect(isFalDynamicPricingEndpoint(resolveModel(id).apiId), id).toBe(true);
     }
     for (const id of FORMULA_GAPS) {
+      expect(seen.has(id), id).toBe(true);
+      expect(isFalDynamicPricingEndpoint(resolveModel(id).apiId), id).toBe(false);
+    }
+    for (const id of HISTORICAL_FALLBACKS) {
       expect(seen.has(id), id).toBe(true);
       expect(isFalDynamicPricingEndpoint(resolveModel(id).apiId), id).toBe(false);
     }

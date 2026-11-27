@@ -1725,3 +1725,44 @@ The provider schemas also supply the 30-second fal HeyGen Video duration and
 the 20,000-character fal Wan 3.0 and Prime prompt limit. Offline checks live
 in `server/src/media/apicity-0311.test.ts`, `server/src/media/frontier.test.ts`
 and `server/src/tools/estimate-cost.test.ts`.
+
+## 61. Apicity 0.31.2 options, limits and 4K tiers (2026-11-27)
+
+`@apicity/*` 0.31.2 adds no endpoint. It widens options on models Videobook
+already lists, adds new resolution tiers with fal's published rates, and
+lowers one estimate.
+
+4K is offered and is not the default. fal Seedance 2.5 (text, image and
+reference video, standard and US, and both draft completions) and fal Kling 4
+(text, image and reference video and video edit) gain 4K. Videobook's
+defaults pick the highest video resolution, so each of these entries now
+keeps an explicit 1080p default. A default 12-second clip makes the same
+request as before and estimates at the same price. When 4K is chosen, a
+12-second clip estimates at about $22.08 on Seedance 2.5 (from about $13.70 at
+1080p) and $6.59 on Kling 4 (from $2.82).
+
+| Model | What changed |
+| --- | --- |
+| fal Kling 4 | 4K on all four video endpoints, an HDR switch (off by default; $3.38 at 1080p and $7.52 at 4K for 12 seconds), and 4:3 and 3:4 for text and reference video. HDR at 720p has no published rate, so Videobook refuses it before a run. A video edit is now priced from the source video's length (12 seconds: $3.38 at 1080p, $7.90 at 4K). |
+| fal Seedance 2.5 | 4K on standard and US generation and draft completion, with the 1080p default kept. |
+| fal FLUX 3 | 1.5K for generation and edits at $0.07 per image. The default stays 2K. |
+| KIE Seedream 5.5 | 3K for generation and edits at $0.071 per image, plus $0.0072 per source image for edits. A 3K edit needs a fixed aspect ratio. The default stays 2K. Layer decomposition has no 3K. |
+| fal Seedream 5 Lite | Up to 15 images per generation (`max_images`, was 6). The estimate counts `num_images` x `max_images` as an upper bound and says so. |
+| fal Seedream 5 Flash | The `auto_1.5K` image size for generation and edits. |
+| fal Ideogram 4.5 | The `auto` image size, and `provider_auto` for edits. High-quality generation now estimates at $0.10 per image (was $0.22). High-quality edits stay $0.22. |
+| fal Nano Banana Pro | Aspect ratios 4:1, 1:4, 8:1 and 1:8 for generation and edits. |
+| fal Grok Imagine Image | The `auto` aspect ratio. |
+| fal Grok Imagine Video 1.5 | Aspect ratios 21:9 and 5:2 for text, lite text and reference video. |
+| fal Kling 3 Pro | The `intelligent` shot type for image-to-video. |
+| fal Wan 2.7 image edit | Prompts up to 2,000 characters (was 500). |
+
+Not offered: the `auto` task of fal Seedance 2.5 reference-to-video (standard
+and US). `@apicity/cost` does not price it and fails closed with a warning,
+so Videobook keeps the task list at reference, editing and extension.
+
+Not listed in Videobook, so nothing changes: fal Wan 2.7 text-to-image and
+the Wan 2.7 Pro endpoints, fal Meshy 6 Lite and Meshy 7 / 7.1, fal Grok
+Imagine Image 2.0, and fal Seedream 5 Pro.
+
+Offline checks live in `server/src/media/apicity-0312.test.ts` and
+`server/src/media/fal-dynamic-cost.test.ts`. No provider was called.

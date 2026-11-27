@@ -168,10 +168,10 @@ describe("image edit adapters", () => {
     })).toThrow();
   });
 
-  it("rejects wan 2.7 prompts beyond 500 characters before submit", () => {
+  it("rejects wan 2.7 prompts beyond 2,000 characters before submit", () => {
     const adapter = imageEditAdapter("fal-ai/wan/v2.7/edit")!;
-    expect(() => adapter.buildSemanticRequest(semanticInput("a".repeat(500)))).not.toThrow();
-    expect(() => adapter.buildSemanticRequest(semanticInput("a".repeat(501)))).toThrow("fal:fal-ai/wan/v2.7/edit prompt is 501 characters; the limit is 500");
+    expect(() => adapter.buildSemanticRequest(semanticInput("a".repeat(2_000)))).not.toThrow();
+    expect(() => adapter.buildSemanticRequest(semanticInput("a".repeat(2_001)))).toThrow("fal:fal-ai/wan/v2.7/edit prompt is 2001 characters; the limit is 2000");
   });
 
   it("keeps the grok exact-mask route outside the swappable registry", () => {
@@ -223,7 +223,7 @@ describe("image edit adapters", () => {
       image_urls: [SOURCE],
     }).success).toBe(true);
     expect(FalWanV2p7EditRequestSchema.safeParse({
-      prompt: "x".repeat(501),
+      prompt: "x".repeat(2_001),
       image_urls: [SOURCE],
     }).success).toBe(false);
     expect(GptImage2ImageToImageRequestSchema.safeParse({

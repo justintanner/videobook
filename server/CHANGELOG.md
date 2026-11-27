@@ -22,9 +22,29 @@ and the package uses [Semantic Versioning](https://semver.org/).
 - The Post review has a Copy caption button under the caption, which copies
   the caption with its tags, and a Download clip button under the clip, which
   downloads the clip and caption.txt without changing where Save sends it.
+- With `@apicity/*@0.31.2`, fal Seedance 2.5 (text, image and reference video,
+  and draft completion) and fal Kling 4 (text, image and reference video, and
+  video edits) offer 4K. 4K is not the default: both keep 1080p, so a default
+  12-second clip still estimates at about $13.70 on Seedance 2.5 and $2.82 on
+  Kling 4 (about $22.08 and $6.59 at 4K). Kling 4 also has an HDR switch, off
+  by default, for 1080p and 4K ($3.38 and $7.52 for 12 seconds); HDR at 720p
+  is refused before a run.
+- More choices on models already listed: fal FLUX 3 1.5K ($0.07 per image),
+  KIE Seedream 5.5 3K ($0.071 per image, plus $0.0072 per source image for
+  edits, which need a fixed aspect ratio), up to 15 images per fal Seedream 5
+  Lite generation (estimated as an upper bound), fal Seedream 5 Flash
+  `auto_1.5K`, fal Ideogram 4.5 `auto` size (`provider_auto` for edits), fal
+  Nano Banana Pro 4:1, 1:4, 8:1 and 1:8, fal Grok Imagine Image `auto` aspect,
+  fal Grok Imagine Video 1.5 21:9 and 5:2, fal Kling 4 4:3 and 3:4, the fal
+  Kling 3 Pro `intelligent` shot type, and 2,000-character prompts for fal Wan
+  2.7 image edits. Image defaults stay at 2K or below.
 
 ### Changed
 
+- High-quality fal Ideogram 4.5 images now estimate at $0.10 each (was $0.22);
+  high-quality edits stay $0.22. A fal Kling 4 video edit is now priced from
+  the source video's length, and fal FLUX 3 images from fal's published
+  per-image rates.
 - The Post review (`/post`, Save to iPhone, Download) shows the clip, the copy
   and the delivery as numbered panels side by side, and fits a 1288×625
   window. A Platform › Caption › Deliver › Link tracker replaces the shortcut

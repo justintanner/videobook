@@ -266,8 +266,29 @@ function transparentNeedsAlpha(request: AnyObject): AnyObject {
   }) as unknown as AnyObject;
 }
 
+const KLING_4 = "kling/v4/";
+
+function klingHdrInput(request: AnyObject): AnyObject {
+  if (!("hdr" in request.shape)) return request;
+  return request.superRefine((value, ctx) => {
+    const record = value as Record<string, unknown>;
+    if (record.hdr === true && record.resolution === "720p") ctx.addIssue({ code: "custom", path: ["hdr"], message: "HDR needs 1080p or 4k" });
+  }) as unknown as AnyObject;
+}
+
+const SEEDANCE_25_REFERENCE = new Set(["bytedance/seedance-2.5/reference-to-video", "bytedance/seedance-2.5/us/reference-to-video"]);
+const SEEDANCE_PRICED_TASKS = ["reference", "editing", "extension"] as const;
+const SEEDANCE_TASK_DESCRIPTION = "The type of video generation task. Reference uses the supplied media as guidance. Editing modifies a reference video and automatically coerces aspect_ratio and duration to auto. Extension continues a reference video and automatically coerces aspect_ratio to auto.";
+
+function pricedSeedanceTasks(request: AnyObject): AnyObject {
+  const priced = z.enum(SEEDANCE_PRICED_TASKS).describe(SEEDANCE_TASK_DESCRIPTION);
+  return request.extend({ task: request.shape.task instanceof z.ZodDefault ? priced.default("reference") : priced.optional() });
+}
+
 function falInput(apiId: string, request: AnyObject): AnyObject {
   if (LUMA_RAY_32.has(apiId)) return lumaRayInput(request);
+  if (apiId.startsWith(KLING_4)) return klingHdrInput(request);
+  if (SEEDANCE_25_REFERENCE.has(apiId)) return pricedSeedanceTasks(request);
   if (apiId.startsWith(MAI_IMAGE_27) || apiId === SEEDREAM_55_EDIT) return transparentNeedsAlpha(request);
   if (apiId === GEMINI_OMNI_12_FRAMES) return geminiOmniFramesInput(request);
   return apiId.startsWith(GPT_IMAGE_26) ? markupWithoutMask(request) : request;
