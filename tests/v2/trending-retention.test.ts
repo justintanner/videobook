@@ -311,7 +311,7 @@ describe("trending day-book retention", () => {
     root = await mkdtemp(join(tmpdir(), "trending-retention-tool-"));
     books = new BookManager({ libraryDir: root });
     const tool = trendingResearchDef(books, { now: () => new Date("2026-10-28T03:00:00.000Z"), enqueue });
-    expect((await tool.handler({ op: "schedule", country: "TH", retention_days: 7, archive_top_clips: true })).isError).toBeUndefined();
+    expect((await tool.handler({ op: "schedule", country: "TH", ranking: "views", retention_days: 7, archive_top_clips: true })).isError).toBeUndefined();
     const selected = books.getByName("tiktok-th-research");
     if (!selected.ok) throw new Error(selected.error.message);
     const control = selected.value;

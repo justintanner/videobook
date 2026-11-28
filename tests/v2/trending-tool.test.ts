@@ -62,7 +62,7 @@ describe("trending_research", () => {
     expect(tool.scope).toBe("global");
     expect(z.object(tool.schema).toJSONSchema().properties?.country).toMatchObject({ type: "string" });
     expect((await tool.handler({ op: "list" })).content[0].text).toBe('{"schedules":[]}');
-    expect((await tool.handler({ op: "schedule", country: "th" })).isError).toBeUndefined();
+    expect((await tool.handler({ op: "schedule", country: "th", ranking: "views" })).isError).toBeUndefined();
     const first = readSchedule(control().engine)!;
     expect(first).toMatchObject({
       platform: "tiktok", country: "TH", timezone: "Asia/Bangkok", cutoffLocalTime: "00:30",
@@ -72,7 +72,7 @@ describe("trending_research", () => {
     });
     expect(first).not.toHaveProperty("criteria");
     await tool.handler({ op: "schedule", country: "TH", top_n: 5, downstream: { analyze: true } });
-    expect(readSchedule(control().engine)).toMatchObject({ scheduleId: first.scheduleId, createdAt: first.createdAt, topN: 5, downstream: { transcribe: false, analyze: true, translateTo: [] } });
+    expect(readSchedule(control().engine)).toMatchObject({ scheduleId: first.scheduleId, createdAt: first.createdAt, topN: 5, ranking: "views", downstream: { transcribe: false, analyze: true, translateTo: [] } });
     const listed = JSON.parse((await tool.handler({ op: "list", country: "TH" })).content[0].text);
     expect(listed.schedules).toHaveLength(1);
     await tool.handler({ op: "unschedule", country: "TH" });
@@ -182,7 +182,7 @@ describe("trending_research", () => {
   it("defaults an omitted schedule to Thailand and keeps list, run, and status on that schedule when another country exists", async () => {
     const tool = await setup();
     const created = JSON.parse((await tool.handler({ op: "schedule" })).content[0].text);
-    expect(created.schedule).toMatchObject({ country: "TH", timezone: "Asia/Bangkok", downstream: { transcribe: false } });
+    expect(created.schedule).toMatchObject({ country: "TH", timezone: "Asia/Bangkok", ranking: "authentic", downstream: { transcribe: false } });
     expect(JSON.parse((await tool.handler({ op: "status" })).content[0].text).schedules[0].schedule.country).toBe("TH");
     await tool.handler({ op: "schedule", country: "US", timezone: "America/New_York" });
     const listed = JSON.parse((await tool.handler({ op: "list" })).content[0].text).schedules;

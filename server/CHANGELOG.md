@@ -8,7 +8,7 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- TikTok research schedules can opt into `ranking=authentic` to screen new clips
+- TikTok research schedules support `ranking=authentic` to screen new clips
   and check their fit to a brief with a vision model. Each cut reuses cached
   verdicts and records usage for up to `criteria.judgeLimit` new checks on the
   control book (default 40). A zero limit, missing OpenAI key, or lack of usable
@@ -44,6 +44,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- New TikTok research schedules default to `authentic` ranking. Existing schedules
+  keep their ranking until you change it with `trending_research op=schedule`.
 - High-quality fal Ideogram 4.5 images now estimate at $0.10 each (was $0.22);
   high-quality edits stay $0.22. A fal Kling 4 video edit is now priced from
   the source video's length, and fal FLUX 3 images from fal's published
