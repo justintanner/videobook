@@ -1756,9 +1756,12 @@ request as before and estimates at the same price. When 4K is chosen, a
 | fal Kling 3 Pro | The `intelligent` shot type for image-to-video. |
 | fal Wan 2.7 image edit | Prompts up to 2,000 characters (was 500). |
 
-Not offered: the `auto` task of fal Seedance 2.5 reference-to-video (standard
-and US). `@apicity/cost` does not price it and fails closed with a warning,
-so Videobook keeps the task list at reference, editing and extension.
+Not offered: the `auto` task of fal Seedance 2.5 reference-to-video (standard,
+US and Flash). `@apicity/cost` does not price it and fails closed with a
+warning (the model may pick editing or extension, so no cost can be shown
+before the run), so Videobook keeps the task list at reference, editing and
+extension. Flash listed `auto` since `@apicity/fal` 0.31.1 and was matched to
+standard and US in vb-qms5g.
 
 Not listed in Videobook, so nothing changes: fal Wan 2.7 text-to-image and
 the Wan 2.7 Pro endpoints, fal Meshy 6 Lite and Meshy 7 / 7.1, fal Grok

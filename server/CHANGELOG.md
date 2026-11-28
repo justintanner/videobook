@@ -57,6 +57,9 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- fal Seedance 2.5 Flash reference-to-video no longer offers the unpriced
+  `auto` task; it offers `reference`, `editing`, and `extension`, matching the
+  standard and US endpoints, and refuses `auto` before a run.
 - New HeyGen dubs made with captions off no longer include a partial subtitle
   track when you play or download the original MP4.
 

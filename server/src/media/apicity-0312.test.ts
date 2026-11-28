@@ -108,11 +108,22 @@ describe("apicity 0.31.2", () => {
     expect(build(id, { resolution: "4k", hdr: true }, refUrls)).toMatchObject({ ok: true, request: { resolution: "4k", hdr: true } });
   });
 
-  it.each(["fal:bytedance/seedance-2.5/reference-to-video", "fal:bytedance/seedance-2.5/us/reference-to-video"])("does not offer the unpriced auto task on %s", async (id) => {
+  it.each([
+    "fal:bytedance/seedance-2.5/reference-to-video",
+    "fal:bytedance/seedance-2.5/us/reference-to-video",
+    "fal:bytedance/seedance-2.5/flash/reference-to-video",
+  ])("does not offer the unpriced auto task on %s", async (id) => {
     expect(option(id, "task")?.enumValues).toEqual(["reference", "editing", "extension"]);
     expect(build(id, { task: "auto" }, reference)).toMatchObject({ ok: false, error: expect.stringContaining("Task") });
     const unpriced = await estimateFalRequest(resolveModel(id).apiId, { prompt, task: "auto", image_urls: [image], resolution: "720p", duration: "12", aspect_ratio: "16:9" });
+    expect(unpriced.usd).toBe(0);
     expect(unpriced.warnings.join(" ")).toContain("task 'auto' is not priced");
+  });
+
+  it("keeps the default reference task on fal Seedance 2.5 Flash reference-to-video", () => {
+    const id = "fal:bytedance/seedance-2.5/flash/reference-to-video";
+    expect(option(id, "task")?.defaultValue).toBe("reference");
+    expect(build(id, {}, reference)).toMatchObject({ ok: true, request: { task: "reference" } });
   });
 
   it.each<[string, MediaRefs]>([["text-to-image", {}], ["edit", reference]])("takes up to 15 images per Seedream 5 Lite %s generation and prices the upper bound", async (suffix, refUrls) => {

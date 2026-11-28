@@ -276,7 +276,11 @@ function klingHdrInput(request: AnyObject): AnyObject {
   }) as unknown as AnyObject;
 }
 
-const SEEDANCE_25_REFERENCE = new Set(["bytedance/seedance-2.5/reference-to-video", "bytedance/seedance-2.5/us/reference-to-video"]);
+const SEEDANCE_25_REFERENCE = new Set([
+  "bytedance/seedance-2.5/reference-to-video",
+  "bytedance/seedance-2.5/us/reference-to-video",
+  "bytedance/seedance-2.5/flash/reference-to-video",
+]);
 const SEEDANCE_PRICED_TASKS = ["reference", "editing", "extension"] as const;
 const SEEDANCE_TASK_DESCRIPTION = "The type of video generation task. Reference uses the supplied media as guidance. Editing modifies a reference video and automatically coerces aspect_ratio and duration to auto. Extension continues a reference video and automatically coerces aspect_ratio to auto.";
 
